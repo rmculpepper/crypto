@@ -32,7 +32,7 @@
 (define/alloc DH)
 (define/ffi (DH_size _pointer) -> _int)
 (define/ffi (DH_generate_key _pointer) -> _int : check-error)
-(define/ffi (DH_compute_key _pointer _pointer _pointer) 
+(define/ffi (DH_compute_key _pointer _BIGNUM _pointer) 
   -> _int : check-error)
 (define/ffi (d2i_DHparams (_pointer = #f) (_ptr i _pointer) _long)
   -> _pointer : pointer/error)
@@ -42,7 +42,7 @@
   (bn->bytes
    (last 
     (ptr-ref (dhkey-p dh) 
-      (_list-struct _int _int _pointer _pointer _long _pointer)))))
+      (_list-struct _int _int _BIGNUM _BIGNUM _long _BIGNUM)))))
 
 (define (params->dhkey params)
   (let* ((bs (!dh-bs params))
@@ -50,9 +50,9 @@
          (dh (make-dhkey dhp)))
     (register-finalizer dh (compose DH_free dhkey-p))
     dh))
-  
+
 (define dhkey-size (compose DH_size dhkey-p))
-  
+
 (define (generate-dhkey params)
   (let ((dh (params->dhkey params)))
     (DH_generate_key (dhkey-p dh))
