@@ -41,15 +41,13 @@
 
 (define (err-wrap who ok? [convert values])
   (lambda (proc)
-    (procedure-rename
-     (lambda args
-       (call-as-atomic
-        (lambda ()
-          (let ([result (apply proc args)])
-            (if (ok? result)
-                (convert result)
-                (raise-crypto-error who))))))
-     (string->symbol (format "wrapper for ~a" who)))))
+    (lambda args
+      (call-as-atomic
+       (lambda ()
+         (let ([result (apply proc args)])
+           (if (ok? result)
+               (convert result)
+               (raise-crypto-error who))))))))
 
 (define (err-wrap/check who)
   (err-wrap who positive? void))

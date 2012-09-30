@@ -78,17 +78,17 @@
         -> _void
         -> r))
 
+;; ugh - no HMAC_CTX* maker in libcrypto
 (define HMAC_CTX_free
   ((deallocator)
    (lambda (p)
      (HMAC_CTX_cleanup p)
      (free p))))
-
 (define HMAC_CTX_new
   ((allocator HMAC_CTX_free)
    ((err-wrap/pointer 'HMAC_CTX_new)
     (lambda ()
-      (let ([hmac (malloc 'raw 256)])
+      (let ([hmac (malloc 'raw 256)]) ;; FIXME: check size
         (cpointer-push-tag! hmac HMAC_CTX-tag)
         (HMAC_CTX_init hmac)
         hmac)))))
@@ -105,24 +105,23 @@
         (keylen : _uint)
         _EVP_MD
         (_pointer = #f)
-        -> _int)
-  #:wrap (err-wrap/check 'HMAC_Init_ex))
+        -> _void) ;; _int since OpenSSL 1.0.0
+  #| #:wrap (err-wrap/check 'HMAC_Init_ex) |#)
 
 (define-crypto HMAC_Update
   (_fun _HMAC_CTX
         (data : _pointer)
         (len : _uint)
-        -> _int)
-  #:wrap (err-wrap/check 'HMAC_Update))
+        -> _void) ;; _int since OpenSSL 1.0.0
+  #| #:wrap (err-wrap/check 'HMAC_Update) |#)
 
 (define-crypto HMAC_Final
   (_fun _HMAC_CTX
         (md : _pointer)
         (r : (_ptr o _int))
-        -> (result : _int)
-        -> (and (= result 1) ;; okay
-                r))
-  #:wrap (err-wrap 'HMAC_Final values))
+        -> _void ;; _int since OpenSSL 1.0.0
+        -> r)
+  #| #:wrap (err-wrap 'HMAC_Final values) |#)
 
 ;; ----
 
@@ -235,15 +234,10 @@
     (HMAC evp kbs (bytes-length kbs) ibs (bytes-length ibs) obs)
     obs))
 
-(define (make-hmac-ctx)
-  (let ((ctx (make-bytes 256))) ; ugh - no HMAC_CTX* maker in libcrypto
-    (HMAC_CTX_init ctx)
-    ctx))
-
 (define (hmac-port type k inp)
   (let ((evp (!digest-evp type))
         (buf (make-bytes 4096)))
-    (let/fini ((ctx (make-hmac-ctx) HMAC_CTX_cleanup))
+    (let/fini ((ctx (HMAC_CTX_new) HMAC_CTX_cleanup))
       (HMAC_Init_ex ctx k (bytes-length k) evp)
       (let lp ((count (read-bytes-avail! buf inp)))
         (if (eof-object? count)
@@ -262,7 +256,7 @@
 
 ;; incremental hmac 
 (define (hmac-new type k)
-  (let ((ctx (make-hmac-ctx)))
+  (let ((ctx (HMAC_CTX_new)))
     (HMAC_Init_ex ctx k (bytes-length k) (!digest-evp type))
     (register-finalizer ctx HMAC_CTX_cleanup)
     (make-!hmac type ctx)))
