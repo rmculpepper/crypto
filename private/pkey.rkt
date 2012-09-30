@@ -141,7 +141,7 @@
       #:wrap (err-wrap 'i2d_PublicKey-length positive?))
     (define-crypto i2d_PrivateKey (_fun _EVP_PKEY (_pointer = #f) -> _int)
       #:wrap (err-wrap 'i2d_PrivateKey-length positive?))
-    values i2d_PublicKey i2d_PrivateKey))
+    (values i2d_PublicKey i2d_PrivateKey)))
 
 
 (define-struct !pkey (type keygen))
