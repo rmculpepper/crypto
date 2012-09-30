@@ -16,13 +16,17 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
-(require "macros.rkt" 
+(require ffi/unsafe
+         "macros.rkt" 
          "libcrypto.rkt")
 (provide (all-defined-out))
 
-(define/ffi (ENGINE_load_builtin_engines))
-(define/ffi (ENGINE_register_all_complete))
-(define/ffi (ENGINE_cleanup))
+(define-crypto ENGINE_load_builtin_engines
+  (_fun -> _void))
+(define-crypto ENGINE_register_all_complete
+  (_fun -> _void))
+(define-crypto ENGINE_cleanup
+  (_fun -> _void))
 
 (define (engine-load-builtin)
   (ENGINE_load_builtin_engines)
@@ -35,6 +39,3 @@
   engine-load-builtin
   engine-cleanup)
 (define-provider provide-engine engine.symbols)
-
-
-
