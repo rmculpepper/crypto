@@ -20,7 +20,6 @@
          ffi/unsafe/define
          ffi/unsafe/atomic
          openssl/libcrypto
-         "macros.rkt"
          (for-syntax racket/base))
 
 (provide define-crypto
@@ -89,32 +88,36 @@
 
 ;; ----
 
-(define-rule (with-fini fini body ...)
+(define-syntax-rule (with-fini fini body ...)
   (dynamic-wind
     void
     (lambda () body ...)
     (lambda () fini)))
 
-(define-rules let/fini ()
-  ((_ () body ...) (begin body ...))
-  ((self ((var exp) . rest) body ...)
-   (let ((var exp))
-     (self rest body ...)))
-  ((self ((var exp fini) . rest) body ...)
-   (let ((var exp))
-     (with-fini (fini var)
-       (self rest body ...)))))
+(define-syntax let/fini
+  (syntax-rules ()
+    [(let/fini () body ...)
+     (begin body ...)]
+    [(let/fini ((var exp) . rest) body ...)
+     (let ((var exp))
+       (let/fini rest body ...))]
+    [(let/fini ((var exp fini) . rest) body ...)
+     (let ((var exp))
+       (with-fini (fini var)
+         (let/fini rest body ...)))]))
 
-(define-rule (with-error fini body ...)
+(define-syntax-rule (with-error fini body ...)
   (with-handlers ((void (lambda (e) fini (raise e))))
     body ...))
 
-(define-rules let/error ()
-  ((_ () body ...) (begin body ...))
-  ((self ((var exp) . rest) body ...)
-   (let ((var exp))
-     (self rest body ...)))
-  ((self ((var exp fini) . rest) body ...)
-   (let ((var exp))
-     (with-error (fini var)
-       (self rest body ...)))))
+(define-syntax let/error
+  (syntax-rules ()
+    [(let/error () body ...)
+     (begin body ...)]
+    [(let/error ((var exp) . rest) body ...)
+     (let ((var exp))
+       (self rest body ...))]
+    [(let/error ((var exp fini) . rest) body ...)
+     (let ((var exp))
+       (with-error (fini var)
+         (let/error rest body ...)))]))
