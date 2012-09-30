@@ -86,51 +86,47 @@
 (define-struct cipher (type (ctx #:mutable) olen encrypt?))
 
 (define (generate-cipher-key type)
-  (let ((klen (!cipher-keylen type))
-        (ivlen (!cipher-ivlen type)))
+  (let ([klen (!cipher-keylen type)]
+        [ivlen (!cipher-ivlen type)])
     (values (random-bytes klen) 
             (and ivlen (pseudo-random-bytes ivlen)))))
 
 (define (cipher-init type key iv enc? pad?)
-  (let/error ((ctx (EVP_CIPHER_CTX_new) EVP_CIPHER_CTX_free))
+  (let/error ([ctx (EVP_CIPHER_CTX_new) EVP_CIPHER_CTX_free])
     (EVP_CipherInit_ex ctx (!cipher-evp type) key iv enc?)
     (EVP_CIPHER_CTX_set_padding ctx pad?)
-    (let ((c (make-cipher type ctx (!cipher-size type) enc?)))
-      (register-finalizer c
-        (lambda (o) (cond ((cipher-ctx o) => EVP_CIPHER_CTX_free))))
-      c)))
+    (make-cipher type ctx (!cipher-size type) enc?)))
 
 ;; obs len >= olen + ilen
 (define (cipher-update c obs ibs ilen)
-  (cond
-   ((cipher-ctx c) => (lambda (ctx) (EVP_CipherUpdate ctx obs ibs ilen)))
-   (else (mismatch-error 'cipher-update "finalized context"))))
+  (cond [(cipher-ctx c)
+         => (lambda (ctx) (EVP_CipherUpdate ctx obs ibs ilen))]
+        [else (error 'cipher-update "finalized context")]))
 
 (define (cipher-final c obs)
-  (cond
-   ((cipher-ctx c) =>
-    (lambda (ctx)
-      (let ((olen (EVP_CipherFinal_ex ctx obs)))
-        (EVP_CIPHER_CTX_free ctx)
-        (set-cipher-ctx! c #f)
-        olen)))
-   (else (mismatch-error 'cipher-final "finalized context"))))
+  (cond [(cipher-ctx c)
+         => (lambda (ctx)
+              (let ([olen (EVP_CipherFinal_ex ctx obs)])
+                (EVP_CIPHER_CTX_free ctx)
+                (set-cipher-ctx! c #f)
+                olen))]
+        [else (error 'cipher-final "finalized context")]))
 
 (define (cipher-new type key iv enc? pad?)
   (unless (>= (bytes-length key) (!cipher-keylen type))
-    (mismatch-error 'cipher-new "bad key"))
+    (error 'cipher-new "bad key"))
   (when (!cipher-ivlen type)
     (unless (and iv (>= (bytes-length iv) (!cipher-ivlen type)))
-      (mismatch-error 'cipher-new "bad iv")))
+      (error 'cipher-new "bad iv")))
   (cipher-init type key (if (!cipher-ivlen type) iv #f) enc? pad?))
 
 (define (cipher-maxlen c ilen) 
   (+ ilen (cipher-olen c)))
 
-(define (cipher-encrypt type key iv #:padding (pad? #t))
+(define (cipher-encrypt type key iv #:padding [pad? #t])
   (cipher-new type key iv #t pad?))
 
-(define (cipher-decrypt type key iv #:padding (pad? #t))
+(define (cipher-decrypt type key iv #:padding [pad? #t])
   (cipher-new type key iv #f pad?))
 
 ;; FIXME: interface
@@ -168,29 +164,28 @@
 
 (define-rule (define-cipher-getf getf op)
   (define (getf c)
-    (cond
-     ((!cipher? c) (op c))
-     ((cipher? c) (op (cipher-type c)))
-     (else (raise-type-error 'getf "cipher or cipher type" c)))))
+    (cond [(!cipher? c) (op c)]
+          [(cipher? c) (op (cipher-type c))]
+          [else (raise-type-error 'getf "cipher or cipher type" c)])))
 
 (define-cipher-getf cipher-block-size !cipher-size)
 (define-cipher-getf cipher-key-length !cipher-keylen)
 (define-cipher-getf cipher-iv-length !cipher-ivlen)
 
 (define (cipher-pipe cipher inp outp)
-  (let* ((1b (cipher-block-size cipher))
-         (2b (* 2 1b))
-         (ibuf (make-bytes 1b))
-         (obuf (make-bytes 2b)))
-    (let lp ((icount (read-bytes-avail! ibuf inp)))
+  (let* ([1b (cipher-block-size cipher)]
+         [2b (* 2 1b)]
+         [ibuf (make-bytes 1b)]
+         [obuf (make-bytes 2b)])
+    (let lp ([icount (read-bytes-avail! ibuf inp)])
       (if (eof-object? icount)
-        (let ((ocount (cipher-final! cipher obuf)))
-          (write-bytes obuf outp 0 ocount)
-          (flush-output outp)
-          (void))
-        (let ((ocount (cipher-update! cipher ibuf obuf 0 icount 0 2b)))
-          (write-bytes obuf outp 0 ocount)
-          (lp (read-bytes-avail! ibuf inp)))))))
+          (let ([ocount (cipher-final! cipher obuf)])
+            (write-bytes obuf outp 0 ocount)
+            (flush-output outp)
+            (void))
+          (let ([ocount (cipher-update! cipher ibuf obuf 0 icount 0 2b)])
+            (write-bytes obuf outp 0 ocount)
+            (lp (read-bytes-avail! ibuf inp)))))))
 
 (define-rule (define/cipher-pipe id init)
   (define* id
@@ -220,12 +215,11 @@
     ((algo key iv inp outp)
      (unless (output-port? outp)
        (raise-type-error 'id "output-port" outp))
-     (cond 
-      ((bytes? inp)
-       (cipher-pipe (init algo key iv) (open-input-bytes inp) outp))
-      ((input-port? inp)
-       (cipher-pipe (init algo key iv) inp outp))
-      (else (raise-type-error 'id "bytes or input-port" inp))))))
+     (cond ((bytes? inp)
+            (cipher-pipe (init algo key iv) (open-input-bytes inp) outp))
+           ((input-port? inp)
+            (cipher-pipe (init algo key iv) inp outp))
+           (else (raise-type-error 'id "bytes or input-port" inp))))))
 
 (define/cipher-pipe encrypt cipher-encrypt)
 (define/cipher-pipe decrypt cipher-decrypt)
@@ -233,8 +227,8 @@
 ;; EVP_CIPHER: struct evp_cipher_st {nid block_size key_len iv_len ...}
 (define (cipher->props evp)
   (match (ptr-ref evp (_list-struct _int _int _int _int))
-    ((list _ size keylen ivlen)
-     (values size keylen (and (> ivlen 0) ivlen)))))
+    [(list _ size keylen ivlen)
+     (values size keylen (and (> ivlen 0) ivlen))]))
 
 (define *ciphers* null)
 (define (available-ciphers) *ciphers*)
@@ -253,10 +247,9 @@
           (define cipher
             (if (ffi-available? evp)
                 (let ((evpp ((lambda/ffi (evp) -> _EVP_CIPHER))))
-                  (call/values 
-                   (lambda () (cipher->props evpp))
-                   (lambda (size keylen ivlen)
-                     (make-!cipher evpp size keylen ivlen))))
+                  (call-with-values (lambda () (cipher->props evpp))
+                    (lambda (size keylen ivlen)
+                      (make-!cipher evpp size keylen ivlen))))
                 #f))
           (put-symbols! cipher.symbols cipher))))
 
