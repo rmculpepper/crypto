@@ -23,50 +23,55 @@
          bytes-xor!)
 
 (define (bytes-xor in key)
-  (let* ((len (bytes-length in))
-         (r (make-bytes len)))
-    (do ((i 0 (add1 i)))
-        ((= i len) r)
-      (bytes-set! r i (bitwise-xor (bytes-ref in i) (bytes-ref key i))))))
+  (let* ([len (bytes-length in)]
+         [r (make-bytes len)])
+    (for ([i (in-range len)])
+      (bytes-set! r i (bitwise-xor (bytes-ref in i) (bytes-ref key i))))
+    r))
 
 (define (bytes-xor! in key)
-  (let ((len (bytes-length in)))
-    (do ((i 0 (add1 i)))
-        ((= i len) in)
-      (bytes-set! in i (bitwise-xor (bytes-ref in i) (bytes-ref key i))))))
+  (let ([len (bytes-length in)])
+    (for ([i (in-range len)])
+      (bytes-set! in i (bitwise-xor (bytes-ref in i) (bytes-ref key i)))))
+  in)
 
 (define (byte->hex b) (bytes-ref #"0123456789abcdef" b))
 
 (define (hex bs)
-  (let* ((len (bytes-length bs))
-         (obs (make-bytes (* 2 len))))
-    (do ((i 0 (add1 i))
-         (j 0 (+ 2 j)))
-        ((= i len) obs)
-      (let ((b (bytes-ref bs i)))
+  (let* ([len (bytes-length bs)]
+         [obs (make-bytes (* 2 len))])
+    (for ([i (in-range len)])
+      (let ([b (bytes-ref bs i)]
+            [j (* 2 i)])
         (bytes-set! obs j (byte->hex (arithmetic-shift b -4)))
-        (bytes-set! obs (add1 j) (byte->hex (bitwise-and b #x0f)))))))
+        (bytes-set! obs (add1 j) (byte->hex (bitwise-and b #x0f)))))
+    obs))
 
-(define digits
-  (make-immutable-hasheq
-   (append
-    (for/list ((b #"0123456789") (n (in-range 10))) (cons b n))
-    (for/list ((b #"abcdef") (n (in-range 10 16))) (cons b n))
-    (for/list ((b #"ABCDEF") (n (in-range 10 16))) (cons b n)))))
-
-(define (hex->byte c) (hash-ref digits c))
+(define (hex->byte c)
+  ;; (#\0 = 48) < (#\A = 65) < (#\a = 97)
+  (let ([b0 (char->integer #\0)]
+        [b9 (char->integer #\9)]
+        [bA (char->integer #\A)]
+        [bF (char->integer #\F)]
+        [ba (char->integer #\a)]
+        [bf (char->integer #\f)])
+    (cond [(<= b0 c b9) (- c b0)]
+          [(<= bA c bF) (+ 10 (- c bA))]
+          [(<= ba c bf) (+ 10 (- c ba))])))
 
 (define (unhex bs)
   (let ((len (bytes-length bs)))
     (unless (even? len)
       (error 'unhex "odd length byte string"))
-    (let ((obs (make-bytes (/ len 2))))
-      (do ((i 0 (+ 2 i))
-           (j 0 (add1 j)))
-          ((= i len) obs)
-        (bytes-set! obs j 
-          (bitwise-ior (arithmetic-shift (hex->byte (bytes-ref bs i)) 4)
-                       (hex->byte (bytes-ref bs (add1 i)))))))))
+    (let* ([olen (quotient len 2)]
+           [obs (make-bytes olen)])
+      (for ([j (in-range olen)])
+        (let ([i (* 2 j)])
+          (bytes-set! obs j
+                      (bitwise-ior
+                       (arithmetic-shift (hex->byte (bytes-ref bs i)) 4)
+                       (hex->byte (bytes-ref bs (add1 i)))))))
+      obs)))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))
