@@ -1,7 +1,7 @@
 #lang setup/infotab
 
 (define name "crypto2")
-(define scribblings '(("scribblings/crypto2.scrbl" ())))
+(define scribblings '(("scribblings/crypto2.scrbl" (multi-page))))
 (define blurb '("Cryptography library"))
 (define categories '(misc))
 (define can-be-loaded-with 'all)
