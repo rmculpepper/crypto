@@ -25,6 +25,7 @@
          "rand.rkt"
          "util.rkt"
          (for-syntax racket/base
+                     racket/syntax
                      "stx-util.rkt"))
 
 (define-cpointer-type _EVP_CIPHER_CTX)
@@ -125,7 +126,7 @@
       (mismatch-error 'cipher-new "bad iv")))
   (cipher-init type key (if (!cipher-ivlen type) iv #f) enc? pad?))
 
-(define-rule (cipher-maxlen c ilen) 
+(define (cipher-maxlen c ilen) 
   (+ ilen (cipher-olen c)))
 
 (define (cipher-encrypt type key iv #:padding (pad? #t))
@@ -134,6 +135,7 @@
 (define (cipher-decrypt type key iv #:padding (pad? #t))
   (cipher-new type key iv #f pad?))
 
+;; FIXME: interface
 (define* cipher-update!
   ((c ibs)
    (let* ((obs (make-bytes (cipher-maxlen c (bytes-length ibs))))
@@ -149,6 +151,7 @@
      obs ostart oend (cipher-maxlen c (- iend istart)))
    (cipher-update c (ptr-add obs ostart) (ptr-add ibs istart) (- iend istart))))
 
+;; FIXME: interface
 (define* cipher-final!
   ((c)
    (let* ((bs (make-bytes (cipher-olen c)))
@@ -246,24 +249,22 @@
     (regexp-replace* "-" (/string what) "_"))
 
   (define (make-cipher mode)
-    (with-syntax
-        ((evp (/identifier stx "EVP_" (unhyphen mode)))
-         (cipher (/identifier stx "cipher:" mode)))
+    (with-syntax ([evp (format-id stx "EVP_~a" (unhyphen mode))]
+                  [cipher (format-id stx "cipher:~a" mode)])
       #'(begin
           (define cipher
             (if (ffi-available? evp)
-              (let ((evpp ((lambda/ffi (evp) -> _EVP_CIPHER))))
-                (call/values 
-                  (lambda () (cipher->props evpp))
-                  (lambda (size keylen ivlen)
-                    (make-!cipher evpp size keylen ivlen))))
-              #f))
+                (let ((evpp ((lambda/ffi (evp) -> _EVP_CIPHER))))
+                  (call/values 
+                   (lambda () (cipher->props evpp))
+                   (lambda (size keylen ivlen)
+                     (make-!cipher evpp size keylen ivlen))))
+                #f))
           (put-symbols! cipher.symbols cipher))))
-  
+
   (define (make-def name)
-    (with-syntax 
-        ((cipher (/identifier stx "cipher:" name))
-         (alias (/identifier stx "cipher:" name "-" default-cipher-mode)))
+    (with-syntax ([cipher (format-id stx "cipher:~a" name)]
+                  [alias (format-id stx "cipher:~a-~a" name default-cipher-mode)])
       (let ((modes (for/list ((m cipher-modes)) (make-symbol name "-" m))))
         (with-syntax (((def ...) (map make-cipher modes)))
           #`(begin
@@ -272,7 +273,7 @@
                 (begin (when alias (push! *ciphers* (quote #,name)))
                        alias))
               (put-symbols! cipher.symbols cipher))))))
-  
+
   (syntax-case stx ()
     ((_ c) (make-def (syntax-e #'c)))
     ((_ c (klen ...))

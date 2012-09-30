@@ -25,8 +25,7 @@
          (only-in net/base64 base64-decode)
          (only-in racket/list last)
          (for-syntax racket/base
-                     racket/syntax
-                     "stx-util.rkt"))
+                     racket/syntax))
 
 (define-struct !dh (bits bs))
 (define-struct dhkey (p))
