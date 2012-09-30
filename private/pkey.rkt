@@ -28,7 +28,7 @@
 (define/alloc EVP_PKEY)
 (define/alloc RSA)
 (define/alloc DSA)
-  
+
 (define/ffi (EVP_PKEY_type _int) -> _int : int/error)
 (define/ffi (EVP_PKEY_size _pointer) -> _int : int/error)
 (define/ffi (EVP_PKEY_bits  _pointer) -> _int : int/error)

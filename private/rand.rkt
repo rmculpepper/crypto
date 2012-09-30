@@ -34,57 +34,23 @@
         -> _int)
   #:wrap (err-wrap/check 'RAND_pseudo_bytes))
 
-(define-crypto RAND_add
-  (_fun (bs : _bytes)
-        (len : _int = (bytes-length bs))
-        (entropy : _int)
-        -> _void))
+(define (rand!* randf bs start end)
+  (check-output-range who bs start end)
+  (randf (ptr-add bs start) (- end start)))
 
-(define-crypto RAND_seed
-  (_fun (bs : _bytes)
-        (len : _int = (bytes-length bs))
-        -> _void))
+(define (rand* rand! k)
+  (let ([bs (make-bytes k)])
+    (rand! bs)
+    bs))
 
-(define-crypto RAND_status
-  (_fun -> _bool))
+(define (random-bytes! bs [start 0] [end (bytes-length bs)])
+  (rand!* RAND_bytes bs start end))
+(define (pseudo-random-bytes! bs [start 0] [end (bytes-length bs)])
+  (rand!* RAND_pseudo_bytes bs start end))
+(define (random-bytes k)
+  (rand* random-bytes! k))
+(define (pseudo-random-bytes k)
+  (rand* pseudo-random-bytes! k))
 
-(define-crypto RAND_load_file
-  (_fun _path
-        _long
-        -> _int))
-
-(define-crypto RAND_write_file
-  (_fun _path
-        -> _int))
-
-(define-crypto RAND_file_name
-  (_fun -> _path))
-
-(define-rule (define-rand rand rand! randf)
-  (begin
-    (define* rand!
-      ((bs) (randf bs (bytes-length bs)))
-      ((bs start)
-       (check-output-range rand! bs start (bytes-length bs))
-       (randf (ptr-add bs start) (- (bytes-length bs) start)))
-      ((bs start end)
-       (check-output-range rand! bs start end)
-       (randf (ptr-add bs start) (- end start))))
-    (define (rand k)
-      (let ((bs (make-bytes k)))
-        (randf bs k)
-        bs))
-    (put-symbols! rand.symbols rand rand!)))
-
-(define-symbols rand.symbols
-  (RAND_status random-rnd-status)
-  (RAND_add random-rnd-add)
-  (RAND_seed random-rnd-seed)
-  (RAND_load_file random-rnd-read)
-  (RAND_write_file random-rnd-write)
-  (RAND_file_name random-rnd-filename))
-
-(define-rand random-bytes random-bytes! RAND_bytes)
-(define-rand pseudo-random-bytes pseudo-random-bytes! RAND_pseudo_bytes)
-
+(define-symbols rand.symbols random-bytes pseudo-random-bytes)
 (define-provider provide-rand rand.symbols)
