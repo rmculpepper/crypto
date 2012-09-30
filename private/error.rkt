@@ -22,10 +22,6 @@
          "libcrypto.rkt")
 (provide (all-defined-out))
 
-;; FIXME: race condition in retrieving error number
-;; A better approach would be to make wrapper functions that
-;; did the main FFI call in atomic mode.
-
 (define-crypto ERR_get_error
   (_fun -> _ulong))
 (define-crypto ERR_peek_last_error
@@ -38,6 +34,8 @@
   (_fun _ulong -> _string))
 
 ;; ----
+
+;; Use atomic wrapper around ffi calls to avoid race retrieving error info.
 
 (define (err-wrap who ok? [convert values])
   (lambda (proc)
@@ -70,41 +68,35 @@
 
 ;; ----
 
-(define (mismatch-error where fmt . args)
-  (raise 
-    (make-exn:fail:contract 
-     (string-append (symbol->string where) ": " (apply format fmt args))
-     (current-continuation-marks))))
-
 (define-rules check-input-range ()
   ((_ where bs maxlen)
    (unless (<= (bytes-length bs) maxlen)
-     (mismatch-error 'where "bad input range")))
+     (error 'where "bad input range")))
   ((_ where bs start end)
    (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs)))
-     (mismatch-error 'where "bad input range")))
+     (error 'where "bad input range")))
   ((_ where bs start end maxlen)
    (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs))
                 (<= (- end start) maxlen))
-     (mismatch-error 'where "bad input range"))))
+     (error 'where "bad input range"))))
 
 (define-rules check-output-range ()
   ((_ where bs minlen)
    (begin
      (when (or (not (bytes? bs)) (immutable? bs))
-       (mismatch-error 'where "expects mutable bytes"))
+       (error 'where "expects mutable bytes"))
      (unless (>= (bytes-length bs) minlen)
-       (mismatch-error 'where "bad output range"))))
+       (error 'where "bad output range"))))
   ((_ where bs start end)
    (begin
      (when (or (not (bytes? bs)) (immutable? bs))
-       (mismatch-error 'where "expects mutable bytes"))
+       (error 'where "expects mutable bytes"))
      (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs)))
-       (mismatch-error 'where "bad output range"))))
+       (error 'where "bad output range"))))
   ((_ where bs start end minlen)
    (begin
      (when (or (not (bytes? bs)) (immutable? bs))
-       (mismatch-error 'where "expects mutable bytes"))
+       (error 'where "expects mutable bytes"))
      (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs))
                   (>= (- end start) minlen))
-       (mismatch-error 'where "bad output range")))))
+       (error 'where "bad output range")))))

@@ -25,8 +25,7 @@
          "util.rkt"
          (only-in racket/list last)
          (for-syntax racket/base
-                     racket/syntax
-                     "stx-util.rkt"))
+                     racket/syntax))
 
 (define-cpointer-type _EVP_MD_CTX)
 (define-cpointer-type _EVP_MD)

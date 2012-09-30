@@ -283,7 +283,7 @@
   (begin
     (define (op pk ibs ilen)
       (unless (or public? (pkey-private? pk))
-        (mismatch-error 'crypt "not a private key"))
+        (error 'crypt "not a private key"))
       (let* ((obs (make-bytes (pkey-size pk)))
              (olen (evp-op obs ibs ilen (pkey-evp pk))))
         (shrink-bytes obs olen)))

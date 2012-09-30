@@ -16,8 +16,7 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
-(require "macros.rkt"
-         "error.rkt")
+(require "macros.rkt")
 (provide hex
          unhex
          shrink-bytes
@@ -66,7 +65,7 @@
 (define (unhex bs)
   (let ((len (bytes-length bs)))
     (unless (even? len)
-      (mismatch-error 'unhex "odd length byte string"))
+      (error 'unhex "odd length byte string"))
     (let ((obs (make-bytes (/ len 2))))
       (do ((i 0 (+ 2 i))
            (j 0 (1+ j)))
