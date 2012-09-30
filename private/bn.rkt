@@ -37,13 +37,13 @@
 (define-crypto BN_add_word
   (_fun _BIGNUM
         _ulong
-        -> _int
-        -> (make-check-error 'BN_add_word)))
+        -> (result : _int)
+        -> (check-error 'BN_add_word result)))
 
 (define-crypto BN_dup
   (_fun _BIGNUM
-        -> _BIGNUM
-        -> (make-pointer/error 'BN_dup)))
+        -> (result : _BIGNUM)
+        -> (pointer/error 'BN_dup result)))
 
 (define-crypto BN_num_bits
   (_fun _BIGNUM
@@ -58,8 +58,8 @@
   (_fun (bs : _bytes)
         (_int = (bytes-length bs))
         (_pointer = #f)
-        -> _pointer
-        -> (make-pointer/error 'BN_bin2bn)))
+        -> (result : _BIGNUM)
+        -> (pointer/error 'BN_bin2bn result)))
 
 (define (bn-size bn)
   (ceiling (/ (BN_num_bits bn) 8)))
