@@ -17,6 +17,7 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
 (require ffi/unsafe
+         ffi/unsafe/alloc
          racket/match
          "macros.rkt"
          "libcrypto.rkt"
@@ -26,26 +27,60 @@
          (for-syntax racket/base
                      "stx-util.rkt"))
 
-;; libcrypto < 0.9.8.d doesn't have EVP_CIPHER_CTX_new/free
-(define-values (EVP_CIPHER_CTX_new EVP_CIPHER_CTX_free)
-  (if (ffi-available? EVP_CIPHER_CTX_new)
-    (values
-      (lambda/ffi (EVP_CIPHER_CTX_new) -> _pointer : pointer/error)
-      (lambda/ffi (EVP_CIPHER_CTX_free _pointer)))
-    (values 
-      (lambda () (make-bytes 192)) ; a little bigger than needed
-      (lambda/ffi (EVP_CIPHER_CTX_cleanup _pointer) -> _int : void))))
+(define-cpointer-type _EVP_CIPHER_CTX)
+(define-cpointer-type _EVP_CIPHER)
 
-(define/ffi (EVP_CipherInit_ex _pointer _pointer (_pointer = #f)
-                               _pointer _pointer _bool) 
-  -> _int : check-error)
-(define/ffi (EVP_CipherUpdate _pointer _pointer 
-                              (olen : (_ptr o _int)) _pointer _int)
-  -> _int : (lambda (f r) (check-error f r) olen))
-(define/ffi (EVP_CipherFinal_ex _pointer _pointer (olen : (_ptr o _int)))
-  -> _int : (lambda (f r) (check-error f r) olen))
-(define/ffi (EVP_CIPHER_CTX_set_padding _pointer _bool) 
-  -> _int : check-error)
+;; libcrypto < 0.9.8.d doesn't have EVP_CIPHER_CTX_new/free
+(define-crypto EVP_CIPHER_CTX_free
+  (_fun _EVP_CIPHER_CTX -> _void)
+  #:fail (lambda (p) (EVP_CIPHER_CTX_cleanup p) (free p))
+  #:wrap (deallocator))
+(define-crypto EVP_CIPHER_CTX_new
+  (_fun -> _EVP_CIPHER_CTX/null)
+  #:fail (lambda () (malloc 'raw 192)) ;; a little bigger than needed
+  #:wrap (compose (allocator EVP_CIPHER_CTX_free) (err-wrap/pointer 'EVP_CIPHER_CTX_new)))
+
+(define-crypto EVP_CIPHER_CTX_cleanup
+  (_fun _EVP_CIPHER_CTX -> _void)
+  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_cleanup))
+
+(define-crypto EVP_CipherInit_ex
+  (_fun _EVP_CIPHER_CTX
+        _EVP_CIPHER
+        (_pointer = #f)
+        (key : _pointer)
+        (iv : _pointer)
+        (enc? : _bool)
+        -> _int)
+  #:wrap (err-wrap/check 'EVP_CipherInit_ex))
+
+(define-crypto EVP_CipherUpdate
+  (_fun _EVP_CIPHER_CTX
+        (out : _pointer)
+        (olen : (_ptr o _int))
+        (in : _pointer)
+        (ilen : _int)
+        -> (result : _int)
+        -> (and (= result 1) ;; okay
+                olen))
+  #:wrap (err-wrap 'EVP_CipherUpdate values))
+
+(define-crypto EVP_CipherFinal_ex
+  (_fun _EVP_CIPHER_CTX
+        (out : _pointer)
+        (olen : (_ptr o _int))
+        -> (result : _int)
+        -> (and (= result 1) ;; okay
+                olen))
+  #:wrap (err-wrap 'EVP_CipherFinal_ex values))
+
+(define-crypto EVP_CIPHER_CTX_set_padding
+  (_fun _EVP_CIPHER_CTX
+        _bool
+        -> _int)
+  #:wrap (err-wrap 'EVP_CIPHER_CTX_set_padding))
+
+;; ----
 
 ;; ivlen: #f when no iv (0 in the cipher)
 (define-struct !cipher (evp size keylen ivlen))

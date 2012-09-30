@@ -17,6 +17,7 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
 (require ffi/unsafe
+         ffi/unsafe/alloc
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
@@ -26,25 +27,104 @@
          (for-syntax racket/base
                      "stx-util.rkt"))
 
-(define/ffi (EVP_MD_CTX_create) -> _pointer : pointer/error)
-(define/ffi (EVP_DigestInit_ex _pointer _pointer (_pointer = #f))
-  -> _int : check-error)
-(define/ffi (EVP_DigestUpdate _pointer _pointer _ulong)
-  -> _int : check-error)
-(define/ffi (EVP_DigestFinal_ex _pointer _pointer (_pointer = #f))
-  -> _int : check-error)
-(define/ffi (EVP_MD_CTX_copy_ex _pointer _pointer)
-  -> _int : check-error)
-(define/ffi (EVP_MD_CTX_destroy _pointer))
-(define/ffi (HMAC _pointer _pointer _int _pointer _int 
-                  _pointer (r : (_ptr o _uint)))
-  -> _pointer : (lambda x r))
-(define/ffi (HMAC_CTX_init _pointer))
-(define/ffi (HMAC_CTX_cleanup _pointer))
-(define/ffi (HMAC_Init_ex _pointer _pointer _uint _pointer (_pointer = #f)))
-(define/ffi (HMAC_Update _pointer _pointer _uint))
-(define/ffi (HMAC_Final _pointer _pointer (r : (_ptr o _int)))
-  -> _void : (lambda x r))
+(define-cpointer-type _EVP_MD_CTX)
+(define-cpointer-type _EVP_MD)
+(define-cpointer-type _HMAC_CTX)
+(define EVP_MAX_MD_SIZE 64) ;; 512 bits
+
+(define-crypto EVP_MD_CTX_destroy
+  (_fun _EVP_MD_CTX -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_MD_CTX_create
+  (_fun -> _EVP_MD_CTX/null)
+  #:wrap (compose (allocator EVP_MD_CTX_destroy) (err-wrap/pointer 'EVP_MD_CTX_create)))
+
+(define-crypto EVP_DigestInit_ex
+  (_fun _EVP_MD_CTX
+        _EVP_MD
+        (_pointer = #f)
+        -> _int)
+  #:wrap (err-wrap/check 'EVP_DigestInit_ex))
+
+(define-crypto EVP_DigestUpdate
+  (_fun _EVP_MD_CTX
+        (d : _pointer)
+        (cnt : _ulong)
+        -> _int)
+  #:wrap (err-wrap/check 'EVP_DigestUpdate))
+
+(define-crypto EVP_DigestFinal_ex
+  (_fun _EVP_MD_CTX
+        (out : _pointer)
+        (_pointer = #f)
+        -> _int)
+  #:wrap (err-wrap/check 'EVP_DigestFinal_ex))
+
+(define-crypto EVP_MD_CTX_copy_ex
+  (_fun _EVP_MD_CTX
+        _EVP_MD_CTX
+        -> _int)
+  #:wrap (err-wrap/check 'EVP_MD_CTX_copy_ex))
+
+(define-crypto HMAC
+  (_fun _EVP_MD
+        (key : _pointer)
+        (keylen : _int)
+        (d : _pointer)
+        (n : _int)
+        (md : _pointer)
+        (r : (_ptr o _uint))
+        -> _void
+        -> r))
+
+(define HMAC_CTX_free
+  ((deallocator)
+   (lambda (p)
+     (HMAC_CTX_cleanup p)
+     (free p))))
+
+(define HMAC_CTX_new
+  ((allocator HMAC_CTX_free)
+   ((err-wrap/pointer 'HMAC_CTX_new)
+    (lambda ()
+      (let ([hmac (malloc 'raw 256)])
+        (cpointer-push-tag! hmac HMAC_CTX-tag)
+        (HMAC_CTX_init hmac)
+        hmac)))))
+
+(define-crypto HMAC_CTX_init
+  (_fun _HMAC_CTX -> _void))
+
+(define-crypto HMAC_CTX_cleanup
+  (_fun _HMAC_CTX -> _void))
+
+(define-crypto HMAC_Init_ex
+  (_fun _HMAC_CTX
+        (key : _pointer)
+        (keylen : _uint)
+        _EVP_MD
+        (_pointer = #f)
+        -> _int)
+  #:wrap (err-wrap/check 'HMAC_Init_ex))
+
+(define-crypto HMAC_Update
+  (_fun _HMAC_CTX
+        (data : _pointer)
+        (len : _uint)
+        -> _int)
+  #:wrap (err-wrap/check 'HMAC_Update))
+
+(define-crypto HMAC_Final
+  (_fun _HMAC_CTX
+        (md : _pointer)
+        (r : (_ptr o _int))
+        -> (result : _int)
+        -> (and (= result 1) ;; okay
+                r))
+  #:wrap (err-wrap 'HMAC_Final values))
+
+;; ----
 
 (define-struct !digest (evp size)) 
 (define-struct digest (type (ctx #:mutable)))
@@ -217,14 +297,18 @@
          ((evp (/identifier stx "EVP_" #'id))
           (type (/identifier stx "digest:" #'id)))
        #'(begin
+           (define-crypto evp (_fun -> _EVP_MD/null)
+             #:wrap (err-wrap/pointer 'evp))
            (define-values (type id)
-             (if (ffi-available? evp)
-               (let ((evpp ((lambda/ffi (evp) -> _pointer : pointer/error))))
-                 (push! *digests* 'id)
-                 (values (make-!digest evpp (md->size evpp))
-                         (lambda/name id (inp) (digest* type inp))))
-               (values #f (unavailable-function evp))))
+             (cond [(ffi-available? evp)
+                    (set! *digests* (cons 'id *digests*))
+                    (values (make-!digest evp (md->size evp))
+                            (lambda/name id (inp) (digest* type inp)))]
+                   [else (values #f (unavailable-function 'evp))]))
            (put-symbols! digest.symbols type id))))))
+
+(define (unavailable-function who)
+  (lambda x (error who "foreign function unavailable")))
 
 (define-symbols digest.symbols
   available-digests

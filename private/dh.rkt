@@ -38,31 +38,29 @@
   #:wrap (deallocator))
 
 (define-crypto DH_new
-  (_fun -> _DH)
+  (_fun -> _DH/null)
   #:wrap (allocator DH_free))
 
 (define-crypto DH_size
   (_fun _DH -> _int))
 
 (define-crypto DH_generate_key
-  (_fun _DH
-        -> (result : _int)
-        -> (check-error 'DH_generate_key result)))
+  (_fun _DH -> _int)
+  #:wrap (err-wrap/check 'DH_generate_key))
 
 (define-crypto DH_compute_key
   (_fun _pointer
         _BIGNUM
         _DH
-        -> (result : _int)
-        -> (check-error 'DH_compute_key result)))
+        -> _int)
+  #:wrap (err-wrap/check 'DH_compute_key))
 
 (define-crypto d2i_DHparams
   (_fun (_pointer = #f)
         (_ptr i _pointer)
         _long
-        -> (result : _DH)
-        -> (pointer/error 'd2i_DHparams result))
-  #:wrap (allocator DH_free))
+        -> (result : _DH/null))
+  #:wrap (compose (allocator DH_free) (err-wrap/pointer 'd2i_DHparams)))
 
 ;; DH: struct dh_st {pad version p g length pub_key ...}
 (define (dhkey-pubk dh)

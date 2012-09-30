@@ -17,57 +17,84 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
 (require ffi/unsafe
+         ffi/unsafe/atomic
          "macros.rkt"
          "libcrypto.rkt")
 (provide (all-defined-out))
 
-(define/ffi (ERR_get_error) -> _ulong)
-(define/ffi (ERR_peek_last_error) -> _ulong)
-(define/ffi (ERR_lib_error_string _ulong) -> _string)
-(define/ffi (ERR_func_error_string _ulong) -> _string)
-(define/ffi (ERR_reason_error_string _ulong) -> _string)
+;; FIXME: race condition in retrieving error number
+;; A better approach would be to make wrapper functions that
+;; did the main FFI call in atomic mode.
 
-(define (format-crypto-error e info)
-  (let ((errstr 
-         (alet* ((le (ERR_lib_error_string e))
-                 (fe (ERR_func_error_string e))
-                 (re (ERR_reason_error_string e)))
-           (format "~a [~a:~a:~a]"
-             (ERR_reason_error_string e)
-             (ERR_lib_error_string e) 
-             (ERR_func_error_string e) 
-             e))))
-    (format "libcrypto error: ~a ~a"
-      (or errstr "?")
-      (or info ""))))
+(define-crypto ERR_get_error
+  (_fun -> _ulong))
+(define-crypto ERR_peek_last_error
+  (_fun -> _ulong))
+(define-crypto ERR_lib_error_string
+  (_fun _ulong -> _string))
+(define-crypto ERR_func_error_string
+  (_fun _ulong -> _string))
+(define-crypto ERR_reason_error_string
+  (_fun _ulong -> _string))
+
+;; ----
+
+(define (((err-wrap who ok? [convert values]) proc) . args)
+  (call-as-atomic
+   (lambda ()
+     (let ([result (apply proc args)])
+       (if (ok? result)
+           (convert result)
+           (raise-crypto-error who))))))
+
+(define (err-wrap/check who)
+  (err-wrap who positive? void))
+
+(define (err-wrap/pointer who)
+  (err-wrap who values))
+
+#|
+** check-error -> (err-wrap _ positive? void)
+(define (check-error where r)
+  (unless (> r 0)
+    (raise-crypto-error where)))
+** pointer/error -> (err-wrap _ values)
+(define (pointer/error where r)
+  (or r (raise-crypto-error where "(nil)")))
+** int/error -> (err-wrap _ positive?)
+(define (int/error where r)
+  (if (> r 0) r (raise-crypto-error where)))
+** int/error* -> (err-wrap _ nonnegative-exact-integer?)
+(define (int/error* where r)
+  (if (< r 0) (raise-crypto-error where) r))
+** bool/error -> (err-wrap _ '(0 1) integer->boolean)
+(define (bool/error where r)
+  (case r
+    ((1) #t)
+    ((0) #f)
+    (else (raise-crypto-error where))))
+|#
 
 (define (raise-crypto-error where (info #f))
-  (error where (format-crypto-error (ERR_get_error) info)))
+  (let* ([e (ERR_get_error)]
+         [le (ERR_lib_error_string e)]
+         [fe (and le (ERR_func_error_string e))]
+         [re (and fe (ERR_reason_error_string e))])
+    (error where "~a [~a:~a:~a]~a~a"
+           (or (ERR_reason_error_string e) "?")
+           (or (ERR_lib_error_string e) "?")
+           (or (ERR_func_error_string e) "?")
+           e
+           (if info " " "")
+           (or info ""))))
+
+;; ----
 
 (define (mismatch-error where fmt . args)
   (raise 
     (make-exn:fail:contract 
      (string-append (symbol->string where) ": " (apply format fmt args))
      (current-continuation-marks))))
-
-(define (check-error where r)
-  (unless (> r 0)
-    (raise-crypto-error where)))
-
-(define (pointer/error where r)
-  (or r (raise-crypto-error where "(nil)")))
-
-(define (int/error where r)
-  (if (> r 0) r (raise-crypto-error where)))
-
-(define (int/error* where r)
-  (if (< r 0) (raise-crypto-error where) r))
-
-(define (bool/error where r)
-  (case r
-    ((1) #t)
-    ((0) #f)
-    (else (raise-crypto-error where))))
 
 (define-rules check-input-range ()
   ((_ where bs maxlen)

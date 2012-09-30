@@ -25,14 +25,10 @@
 (provide define-crypto
          ffi-available?
          define/ffi lambda/ffi
-         define/alloc let/fini let/error
-         unavailable-function)
+         define/alloc let/fini let/error)
 
 (define-ffi-definer define-crypto libcrypto
   #:default-make-fail make-not-available)
-
-(define-rule (unavailable-function name)
-  (lambda x (error 'name "foreign function unavailable")))
 
 (define-rule (ffi-available? id)
   (and (get-ffi-obj (@string id) libcrypto _pointer (lambda () #f)) 

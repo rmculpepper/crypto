@@ -22,15 +22,43 @@
          "error.rkt")
 (provide (all-defined-out))
 
-(define/ffi (RAND_bytes _pointer _uint) -> _int : check-error)
-(define/ffi (RAND_pseudo_bytes _pointer _uint) -> _int : check-error)
+(define-crypto RAND_bytes
+  (_fun (buf : _pointer)
+        (len : _uint)
+        -> _int)
+  #:wrap (err-wrap/check 'RAND_bytes))
 
-(define/ffi (RAND_add (bs : _bytes) (len : _int = (bytes-length bs)) _int))
-(define/ffi (RAND_seed (bs : _bytes) (len : _int = (bytes-length bs))))
-(define/ffi (RAND_status) -> _bool)
-(define/ffi (RAND_load_file _path _long) -> _int)
-(define/ffi (RAND_write_file _path) -> _int)
-(define/ffi (RAND_file_name) -> _path)
+(define-crypto RAND_pseudo_bytes
+  (_fun (buf : _pointer)
+        (len : _uint)
+        -> _int)
+  #:wrap (err-wrap/check 'RAND_pseudo_bytes))
+
+(define-crypto RAND_add
+  (_fun (bs : _bytes)
+        (len : _int = (bytes-length bs))
+        (entropy : _int)
+        -> _void))
+
+(define-crypto RAND_seed
+  (_fun (bs : _bytes)
+        (len : _int = (bytes-length bs))
+        -> _void))
+
+(define-crypto RAND_status
+  (_fun -> _bool))
+
+(define-crypto RAND_load_file
+  (_fun _path
+        _long
+        -> _int))
+
+(define-crypto RAND_write_file
+  (_fun _path
+        -> _int))
+
+(define-crypto RAND_file_name
+  (_fun -> _path))
 
 (define-rule (define-rand rand rand! randf)
   (begin

@@ -31,37 +31,32 @@
   #:wrap (deallocator))
 
 (define-crypto BN_new
-  (_fun -> _BIGNUM)
-  #:wrap (allocator BN_free))
+  (_fun -> _BIGNUM/null)
+  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_new)))
 
 (define-crypto BN_add_word
   (_fun _BIGNUM
         _ulong
-        -> (result : _int)
-        -> (check-error 'BN_add_word result)))
+        -> _int)
+  #:wrap (err-wrap/check 'BN_add_word))
 
 (define-crypto BN_dup
   (_fun _BIGNUM
-        -> (result : _BIGNUM)
-        -> (pointer/error 'BN_dup result))
-  #:wrap (allocator BN_free))
+        -> _BIGNUM/null)
+  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_dup)))
 
 (define-crypto BN_num_bits
-  (_fun _BIGNUM
-        -> _int))
+  (_fun _BIGNUM -> _int))
 
 (define-crypto BN_bn2bin
-  (_fun _BIGNUM
-        _bytes
-        -> _int))
+  (_fun _BIGNUM _bytes -> _int))
 
 (define-crypto BN_bin2bn
   (_fun (bs : _bytes)
         (_int = (bytes-length bs))
         (_pointer = #f)
-        -> (result : _BIGNUM)
-        -> (pointer/error 'BN_bin2bn result))
-  #:wrap (allocator BN_free))
+        -> _BIGNUM)
+  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_bin2bn)))
 
 (define (bn-size bn)
   (ceiling (/ (BN_num_bits bn) 8)))
