@@ -17,6 +17,7 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
 (require ffi/unsafe
+         ffi/unsafe/alloc
          "libcrypto.rkt"
          "macros.rkt"
          "error.rkt"
@@ -24,18 +25,43 @@
          (only-in net/base64 base64-decode)
          (only-in racket/list last)
          (for-syntax racket/base
+                     racket/syntax
                      "stx-util.rkt"))
 
 (define-struct !dh (bits bs))
 (define-struct dhkey (p))
 
-(define/alloc DH)
-(define/ffi (DH_size _pointer) -> _int)
-(define/ffi (DH_generate_key _pointer) -> _int : check-error)
-(define/ffi (DH_compute_key _pointer _BIGNUM _pointer) 
-  -> _int : check-error)
-(define/ffi (d2i_DHparams (_pointer = #f) (_ptr i _pointer) _long)
-  -> _pointer : pointer/error)
+(define-cpointer-type _DH)
+
+(define-crypto DH_free
+  (_fun _DH -> _void)
+  #:wrap (deallocator))
+
+(define-crypto DH_new
+  (_fun -> _DH)
+  #:wrap (allocator DH_free))
+
+(define-crypto DH_size
+  (_fun _DH -> _int))
+
+(define-crypto DH_generate_key
+  (_fun _DH
+        -> (result : _int)
+        -> (check-error 'DH_generate_key result)))
+
+(define-crypto DH_compute_key
+  (_fun _pointer
+        _BIGNUM
+        _DH
+        -> (result : _int)
+        -> (check-error 'DH_compute_key result)))
+
+(define-crypto d2i_DHparams
+  (_fun (_pointer = #f)
+        (_ptr i _pointer)
+        _long
+        -> (result : _DH)
+        -> (pointer/error 'd2i_DHparams result)))
 
 ;; DH: struct dh_st {pad version p g length pub_key ...}
 (define (dhkey-pubk dh)
@@ -46,12 +72,11 @@
 
 (define (params->dhkey params)
   (let* ((bs (!dh-bs params))
-         (dhp (d2i_DHparams bs (bytes-length bs)))
-         (dh (make-dhkey dhp)))
-    (register-finalizer dh (compose DH_free dhkey-p))
-    dh))
+         (dhp (d2i_DHparams bs (bytes-length bs))))
+    (make-dhkey dhp)))
 
-(define dhkey-size (compose DH_size dhkey-p))
+(define (dhkey-size dh)
+  (DH_size (dhkey-p dh)))
 
 (define (generate-dhkey params)
   (let ((dh (params->dhkey params)))
@@ -59,18 +84,19 @@
     (values dh (dhkey-pubk dh))))
 
 (define (compute-key dh pubk)
-  (let/fini ((bs (make-bytes (dhkey-size dh)))
-             (bn (bytes->bn pubk) BN_free))
+  (let* ([bs (make-bytes (dhkey-size dh))]
+         [bn (bytes->bn pubk)])
     (DH_compute_key bs bn (dhkey-p dh))
+    (BN_free bn)
     bs))
 
 (define-syntax (define-dh stx)
   (syntax-case stx ()
-    ((_ bits bbs)
-     (with-syntax ((params (/identifier stx "dh:" #'bits)))
+    [(_ bits bbs)
+     (with-syntax ([params (format-id stx "dh:~a" (syntax-e #'bits))])
        #'(begin
            (define params (make-!dh bits (base64-decode bbs)))
-           (put-symbols! dh.symbols params))))))
+           (put-symbols! dh.symbols params)))]))
 
 (define-symbols dh.symbols
   !dh? dhkey? (!dh-bits dh-bits) dhkey-size compute-key)
