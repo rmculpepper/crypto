@@ -136,12 +136,12 @@
           (len (cipher-update c obs ibs (bytes-length ibs))))
      (shrink-bytes obs len)))
   ((c ibs obs)
-   (check-output-range cipher-update! 
+   (check-output-range 'cipher-update! 
      obs (cipher-maxlen c (bytes-length ibs)))
    (cipher-update c obs ibs (bytes-length ibs)))
   ((c ibs obs istart iend ostart oend)
-   (check-input-range cipher-update! ibs istart iend)
-   (check-output-range cipher-update! 
+   (check-input-range 'cipher-update! ibs istart iend)
+   (check-output-range 'cipher-update! 
      obs ostart oend (cipher-maxlen c (- iend istart)))
    (cipher-update c (ptr-add obs ostart) (ptr-add ibs istart) (- iend istart))))
 
@@ -152,14 +152,14 @@
           (len (cipher-final c bs)))
      (shrink-bytes bs len)))
   ((c obs)
-   (check-output-range cipher-final! obs (cipher-olen c))
+   (check-output-range 'cipher-final! obs (cipher-olen c))
    (cipher-final c obs))
   ((c obs ostart)
-   (check-output-range cipher-final! 
+   (check-output-range 'cipher-final! 
      obs ostart (bytes-length obs) (cipher-olen c))
    (cipher-final c (ptr-add obs ostart)))
   ((c obs ostart oend)
-   (check-output-range cipher-final! obs ostart oend (cipher-olen c))
+   (check-output-range 'cipher-final! obs ostart oend (cipher-olen c))
    (cipher-final c (ptr-add obs ostart))))
 
 (define-rule (define-cipher-getf getf op)

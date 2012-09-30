@@ -34,7 +34,7 @@
         -> _int)
   #:wrap (err-wrap/check 'RAND_pseudo_bytes))
 
-(define (rand!* randf bs start end)
+(define (rand!* who randf bs start end)
   (check-output-range who bs start end)
   (randf (ptr-add bs start) (- end start)))
 
@@ -44,9 +44,9 @@
     bs))
 
 (define (random-bytes! bs [start 0] [end (bytes-length bs)])
-  (rand!* RAND_bytes bs start end))
+  (rand!* 'random-bytes! RAND_bytes bs start end))
 (define (pseudo-random-bytes! bs [start 0] [end (bytes-length bs)])
-  (rand!* RAND_pseudo_bytes bs start end))
+  (rand!* 'pseudo-random-bytes! RAND_pseudo_bytes bs start end))
 (define (random-bytes k)
   (rand* random-bytes! k))
 (define (pseudo-random-bytes k)
