@@ -15,19 +15,15 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require scheme/foreign
-         scheme/match
+#lang racket/base
+(require ffi/unsafe
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
-         "rand.rkt"
          "util.rkt"
          "digest.rkt"
          "cipher.rkt"
          "bn.rkt")
-(unsafe!)
 
 (define/alloc EVP_PKEY)
 (define/alloc RSA)

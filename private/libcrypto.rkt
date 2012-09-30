@@ -15,41 +15,30 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require scheme/foreign
+#lang racket/base
+(require ffi/unsafe
+         ffi/unsafe/define
+         openssl/libcrypto
          "macros.rkt"
-         (for-syntax scheme/base "stx-util.rkt"))
-(unsafe!)
+         (for-syntax racket/base
+                     "stx-util.rkt"))
 (provide ffi-available?
          define/ffi lambda/ffi
          define/alloc let/fini let/error
-         unavailable-function
-         )
+         unavailable-function)
 
-(define libcrypto 
-  (case (system-type)
-    ((windows) (ffi-lib "libeay32"))
-    (else (ffi-lib "libcrypto"))))
-
-(define *silent* #f)
+(define-ffi-definer define-crypto libcrypto
+  #:default-make-fail make-not-available)
 
 (define-rule (unavailable-function name)
   (lambda x (error 'name "foreign function unavailable")))
-
-(define-rule (unavailable-thunk name)
-  (lambda () 
-    (unless *silent*
-      (fprintf (current-error-port) 
-        "warning: foreign function unavailable: ~a~n" 'name))
-    (unavailable-function name)))
 
 (define-rule (ffi-available? id)
   (and (get-ffi-obj (@string id) libcrypto _pointer (lambda () #f)) 
        #t))
 
 (define-rule (ffi-lambda id sig)
-  (get-ffi-obj (@string id) libcrypto sig (unavailable-thunk id)))
+  (get-ffi-obj (@string id) libcrypto sig))
 
 (define-rules lambda/ffi (: ->)
   ((_ (id args ...))
@@ -107,11 +96,9 @@
        (self rest body ...)))))
 
 (let ()
-  (define/ffi (ERR_load_crypto_strings))
-  (define/ffi (OpenSSL_add_all_ciphers))
-  (define/ffi (OpenSSL_add_all_digests))
-    
+  (define-crypto ERR_load_crypto_strings (_fun -> _void))
+  (define-crypto OpenSSL_add_all_ciphers (_fun -> _void))
+  (define-crypto OpenSSL_add_all_digests (_fun -> _void))
   (ERR_load_crypto_strings)
   (OpenSSL_add_all_ciphers)
-  (OpenSSL_add_all_digests)
-  )
+  (OpenSSL_add_all_digests))

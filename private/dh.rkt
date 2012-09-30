@@ -15,19 +15,16 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require scheme/foreign
+#lang racket/base
+(require ffi/unsafe
          "libcrypto.rkt"
          "macros.rkt"
          "error.rkt"
-         "util.rkt"
          "bn.rkt"
          (only-in net/base64 base64-decode)
-         (only-in scheme/list last)
-         (for-syntax scheme/base "stx-util.rkt"))
-
-(unsafe!)
+         (only-in racket/list last)
+         (for-syntax racket/base
+                     "stx-util.rkt"))
 
 (define-struct !dh (bits bs))
 (define-struct dhkey (p))

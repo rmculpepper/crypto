@@ -15,9 +15,12 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require "macros.rkt" "digest.rkt" "cipher.rkt" "pkey.rkt" "dh.rkt")
+#lang racket/base
+(require "macros.rkt"
+         "digest.rkt"
+         "cipher.rkt"
+         "pkey.rkt"
+         "dh.rkt")
 (provide (all-defined-out))
 
 (define (generate-key algo . params)

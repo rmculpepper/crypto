@@ -15,18 +15,16 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require scheme/foreign
-         scheme/match
+#lang racket/base
+(require ffi/unsafe
+         racket/match
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
          "rand.rkt"
          "util.rkt"
-         (for-syntax scheme/base "stx-util.rkt"))
-
-(unsafe!)
+         (for-syntax racket/base
+                     "stx-util.rkt"))
 
 ;; libcrypto < 0.9.8.d doesn't have EVP_CIPHER_CTX_new/free
 (define-values (EVP_CIPHER_CTX_new EVP_CIPHER_CTX_free)

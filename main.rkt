@@ -15,7 +15,7 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
+#lang racket/base
 (require "private/rand.rkt"
          "private/digest.rkt"
          "private/cipher.rkt"

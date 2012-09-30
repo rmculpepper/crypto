@@ -15,18 +15,16 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require scheme/foreign
+#lang racket/base
+(require ffi/unsafe
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
          "rand.rkt"
          "util.rkt"
-         (only-in scheme/list last)
-         (for-syntax scheme/base "stx-util.rkt")
-         )
-(unsafe!)
+         (only-in racket/list last)
+         (for-syntax racket/base
+                     "stx-util.rkt"))
 
 (define/ffi (EVP_MD_CTX_create) -> _pointer : pointer/error)
 (define/ffi (EVP_DigestInit_ex _pointer _pointer (_pointer = #f))

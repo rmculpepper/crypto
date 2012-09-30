@@ -15,12 +15,10 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require scheme/base 
-         (for-syntax scheme/base "stx-util.rkt")
-         (for-template scheme/base))
-
+#lang racket/base
+(require (for-syntax racket/base
+                     "stx-util.rkt")
+         (for-template racket/base))
 (provide (all-defined-out)
          (rename-out (call-with-values call/values)
                      (add1 1+)

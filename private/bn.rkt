@@ -15,14 +15,11 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require scheme/foreign
+#lang racket/base
+(require ffi/unsafe
          "libcrypto.rkt"
-         "macros.rkt"
          "error.rkt"
          "util.rkt")
-
 (provide (all-defined-out))
 
 (define/alloc BN)

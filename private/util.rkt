@@ -15,10 +15,14 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
-#lang scheme/base
-
-(require "macros.rkt" "error.rkt")
-(provide hex unhex shrink-bytes bytes-xor bytes-xor!)
+#lang racket/base
+(require "macros.rkt"
+         "error.rkt")
+(provide hex
+         unhex
+         shrink-bytes
+         bytes-xor
+         bytes-xor!)
 
 (define (bytes-xor in key)
   (let* ((len (bytes-length in))
