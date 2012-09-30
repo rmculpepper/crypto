@@ -40,13 +40,6 @@
         -> _int)
   #:wrap (err-wrap/check 'BN_add_word))
 
-#|
-(define-crypto BN_dup
-  (_fun _BIGNUM
-        -> _BIGNUM/null)
-  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_dup)))
-|#
-
 (define-crypto BN_num_bits
   (_fun _BIGNUM -> _int))
 
@@ -60,11 +53,13 @@
         -> _BIGNUM/null)
   #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_bin2bn)))
 
+;; ----
+
 (define (bn-size bn)
   (ceiling (/ (BN_num_bits bn) 8)))
 
 (define (bn->bytes bn)
-  (let ((bs (make-bytes (bn-size bn))))
+  (let ([bs (make-bytes (bn-size bn))])
     (shrink-bytes bs (BN_bn2bin bn bs))))
 
 (define (bytes->bn bs)
