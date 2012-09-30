@@ -78,7 +78,7 @@
   (_fun _EVP_CIPHER_CTX
         _bool
         -> _int)
-  #:wrap (err-wrap 'EVP_CIPHER_CTX_set_padding))
+  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_padding))
 
 ;; ----
 
