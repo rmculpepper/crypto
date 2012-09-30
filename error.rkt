@@ -18,8 +18,8 @@
 #lang scheme/base
 
 (require scheme/foreign
-         "macros.ss"
-         "libcrypto.ss")
+         "macros.rkt"
+         "libcrypto.rkt")
 (provide (all-defined-out))
 
 (define/ffi (ERR_get_error) -> _ulong)

@@ -19,12 +19,12 @@
 
 (require scheme/foreign
          scheme/match
-         "macros.ss"
-         "libcrypto.ss"
-         "error.ss"
-         "rand.ss"
-         "util.ss"
-         (for-syntax scheme/base "stx-util.ss"))
+         "macros.rkt"
+         "libcrypto.rkt"
+         "error.rkt"
+         "rand.rkt"
+         "util.rkt"
+         (for-syntax scheme/base "stx-util.rkt"))
 
 (unsafe!)
 

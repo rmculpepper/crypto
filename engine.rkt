@@ -17,8 +17,8 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang scheme/base
 
-(require "macros.ss" 
-         "libcrypto.ss")
+(require "macros.rkt" 
+         "libcrypto.rkt")
 (provide (all-defined-out))
 
 (define/ffi (ENGINE_load_builtin_engines))

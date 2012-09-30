@@ -17,7 +17,7 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang scheme/base
 
-(require scheme/foreign "libcrypto.ss" "macros.ss" "error.ss")
+(require scheme/foreign "libcrypto.rkt" "macros.rkt" "error.rkt")
 (provide (all-defined-out))
 
 (define/ffi (RAND_bytes _pointer _uint) -> _int : check-error)

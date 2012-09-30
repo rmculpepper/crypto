@@ -18,13 +18,13 @@
 #lang scheme/base
 
 (require scheme/foreign
-         "macros.ss"
-         "libcrypto.ss"
-         "error.ss"
-         "rand.ss"
-         "util.ss"
+         "macros.rkt"
+         "libcrypto.rkt"
+         "error.rkt"
+         "rand.rkt"
+         "util.rkt"
          (only-in scheme/list last)
-         (for-syntax scheme/base "stx-util.ss")
+         (for-syntax scheme/base "stx-util.rkt")
          )
 (unsafe!)
 

@@ -18,10 +18,10 @@
 #lang scheme/base
 
 (require scheme/foreign
-         "libcrypto.ss"
-         "macros.ss"
-         "error.ss"
-         "util.ss")
+         "libcrypto.rkt"
+         "macros.rkt"
+         "error.rkt"
+         "util.rkt")
 
 (provide (all-defined-out))
 

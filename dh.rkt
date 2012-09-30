@@ -18,14 +18,14 @@
 #lang scheme/base
 
 (require scheme/foreign
-         "libcrypto.ss"
-         "macros.ss"
-         "error.ss"
-         "util.ss"
-         "bn.ss"
+         "libcrypto.rkt"
+         "macros.rkt"
+         "error.rkt"
+         "util.rkt"
+         "bn.rkt"
          (only-in net/base64 base64-decode)
          (only-in scheme/list last)
-         (for-syntax scheme/base "stx-util.ss"))
+         (for-syntax scheme/base "stx-util.rkt"))
 
 (unsafe!)
 

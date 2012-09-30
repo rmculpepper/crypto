@@ -18,7 +18,7 @@
 #lang scheme/base
 
 (require scheme/base 
-         (for-syntax scheme/base "stx-util.ss")
+         (for-syntax scheme/base "stx-util.rkt")
          (for-template scheme/base))
 
 (provide (all-defined-out)

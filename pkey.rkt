@@ -19,14 +19,14 @@
 
 (require scheme/foreign
          scheme/match
-         "macros.ss"
-         "libcrypto.ss"
-         "error.ss"
-         "rand.ss"
-         "util.ss"
-         "digest.ss"
-         "cipher.ss"
-         "bn.ss")
+         "macros.rkt"
+         "libcrypto.rkt"
+         "error.rkt"
+         "rand.rkt"
+         "util.rkt"
+         "digest.rkt"
+         "cipher.rkt"
+         "bn.rkt")
 (unsafe!)
 
 (define/alloc EVP_PKEY)

@@ -1,5 +1,5 @@
 ;; mzcrypto: libcrypto bindings for PLT-scheme
-;; main library file
+;; generic key generation
 ;; 
 ;; (C) Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
@@ -17,12 +17,17 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang scheme/base
 
-(require 
-  "rand.ss" "digest.ss" "cipher.ss" "pkey.ss" "dh.ss" "keygen.ss" "engine.ss")
-(provide-rand)
-(provide-digest)
-(provide-cipher)
-(provide-pkey)
-(provide-dh)
-(provide-keygen)
-(provide-engine)
+(require "macros.rkt" "digest.rkt" "cipher.rkt" "pkey.rkt" "dh.rkt")
+(provide (all-defined-out))
+
+(define (generate-key algo . params)
+  (apply (cond
+          ((!cipher? algo) generate-cipher-key)
+          ((!pkey? algo) generate-pkey)
+          ((!digest? algo) generate-hmac-key)
+          ((!dh? algo) generate-dhkey)
+          (else (raise-type-error 'generate-key "crypto type" algo)))
+    algo params))
+
+(define-symbols keygen.symbols generate-key)
+(define-provider provide-keygen keygen.symbols)

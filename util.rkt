@@ -17,7 +17,7 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang scheme/base
 
-(require "macros.ss" "error.ss")
+(require "macros.rkt" "error.rkt")
 (provide hex unhex shrink-bytes bytes-xor bytes-xor!)
 
 (define (bytes-xor in key)

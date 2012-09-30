@@ -18,8 +18,8 @@
 #lang scheme/base
 
 (require scheme/foreign
-         "macros.ss"
-         (for-syntax scheme/base "stx-util.ss"))
+         "macros.rkt"
+         (for-syntax scheme/base "stx-util.rkt"))
 (unsafe!)
 (provide ffi-available?
          define/ffi lambda/ffi

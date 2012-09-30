@@ -18,8 +18,8 @@
 #lang scheme/base
 
 (require srfi/78
-         "main.ss"
-         (only-in "util.ss" hex))
+         "main.rkt"
+         (only-in "util.rkt" hex))
 (provide run-tests)
   
 
