@@ -146,53 +146,36 @@
 (define-struct !pkey (type keygen))
 (define-struct pkey (type evp private?))
 
-(define (pkey-size pk)
-  (EVP_PKEY_size (pkey-evp pk)))
-  
-(define (pkey-bits pk)
-  (EVP_PKEY_bits (pkey-evp pk)))
+(define (pkey-size pk) (EVP_PKEY_size (pkey-evp pk)))
+(define (pkey-bits pk) (EVP_PKEY_bits (pkey-evp pk)))
 
 (define (pkey=? k1 . klst)
-  (let ((evp (pkey-evp k1)))
-    (let lp ((lst klst))
-      (cond
-       ((null? lst) #t)
-       ((EVP_PKEY_cmp evp (pkey-evp (car lst))) (lp (cdr lst)))
-       (else #f)))))
+  (let ([evp (pkey-evp k1)])
+    (for/and ([k (in-list klst)])
+      (EVP_PKEY_cmp evp (pkey-evp k)))))
 
 (define (read-pkey type public? bs)
-  (let* ((d2i (if public? d2i_PublicKey d2i_PrivateKey))
-         (evp (d2i (!pkey-type type) bs (bytes-length bs)))
-         (pk (make-pkey type evp (not public?))))
-    ;; (register-finalizer pk (compose EVP_PKEY_free pkey-evp))
-    pk))
+  (let* ([d2i (if public? d2i_PublicKey d2i_PrivateKey)]
+         [evp (d2i (!pkey-type type) bs (bytes-length bs))])
+    (make-pkey type evp (not public?))))
 
 (define (write-pkey pk public?)
-  (let*-values 
-      (((i2d i2d-len) 
-        (if public? 
-          (values i2d_PublicKey i2d_PublicKey-length)
-          (values i2d_PrivateKey i2d_PrivateKey-length)))
-       ((obs) (make-bytes (i2d-len (pkey-evp pk)))))
+  (let* ([i2d (if public? i2d_PublicKey i2d_PrivateKey)]
+         [i2d-len (if public? i2d_PublicKey-length i2d_PrivateKey-length)]
+         [obs (make-bytes (i2d-len (pkey-evp pk)))])
     (i2d (pkey-evp pk) obs)
     obs))
 
-(define-rule (define-bytes->pkey id public?)
-  (define (id type bs)
-    (read-pkey type public? bs)))
-(define-bytes->pkey bytes->private-key #f)
-(define-bytes->pkey bytes->public-key #t)
+(define (bytes->private-key type bs) (read-pkey type #f bs))
+(define (bytes->public-key type bs)  (read-pkey type #t bs))
 
-(define-rule (define-pkey->bytes id public?)
-  (define (id pk)
-    (write-pkey pk public?)))
-(define-pkey->bytes private-key->bytes #f)
-(define-pkey->bytes public-key->bytes #t)
+(define (private-key->bytes pk) (write-pkey pk #f))
+(define (public-key->bytes pk)  (write-pkey pk #t))
 
 (define (pkey->public-key pk)
   (if (pkey-private? pk)
-    (bytes->public-key (pkey-type pk) (public-key->bytes pk))
-    pk))
+      (bytes->public-key (pkey-type pk) (public-key->bytes pk))
+      pk))
 
 ;; libcrypto #defines for those are autogened...
 ;; EVP_PKEY: struct evp_pkey_st {type ...}
@@ -200,24 +183,24 @@
   (EVP_PKEY_type (car (ptr-ref evp (_list-struct _int)))))
 
 (define (rsa-keygen bits (exp 65537))
-  (let/fini ((ep (BN_new) BN_free))
+  (let/fini ([ep (BN_new) BN_free])
     (BN_add_word ep exp)
-    (let/error ((rsap (RSA_new) RSA_free)
-                (evp (EVP_PKEY_new) EVP_PKEY_free))
+    (let/error ([rsap (RSA_new) RSA_free]
+                [evp (EVP_PKEY_new) EVP_PKEY_free])
       (RSA_generate_key_ex rsap bits ep)
       (EVP_PKEY_set1_RSA evp rsap)
       (make-pkey pkey:rsa evp #t))))
 
 (define pkey:rsa
   (with-handlers (#|(exn:fail? (lambda x #f))|#)
-    (let/fini ((rsap (RSA_new) RSA_free)
-               (evp (EVP_PKEY_new) EVP_PKEY_free))
+    (let/fini ([rsap (RSA_new) RSA_free]
+               [evp (EVP_PKEY_new) EVP_PKEY_free])
       (EVP_PKEY_set1_RSA evp rsap)
       (make-!pkey (pk->type evp) rsa-keygen))))
 
 (define (dsa-keygen bits)
-  (let/error ((dsap (DSA_new) DSA_free)
-              (evp (EVP_PKEY_new) EVP_PKEY_free))
+  (let/error ([dsap (DSA_new) DSA_free]
+              [evp (EVP_PKEY_new) EVP_PKEY_free])
     (DSA_generate_parameters_ex dsap bits)
     (DSA_generate_key dsap)
     (EVP_PKEY_set1_DSA evp dsap)
@@ -225,8 +208,8 @@
 
 (define pkey:dsa
   (with-handlers (#|(exn:fail? (lambda x #f))|#)
-    (let/fini ((dsap (DSA_new) DSA_free)
-               (evp (EVP_PKEY_new) EVP_PKEY_free))
+    (let/fini ([dsap (DSA_new) DSA_free]
+               [evp (EVP_PKEY_new) EVP_PKEY_free])
       (EVP_PKEY_set1_DSA evp dsap)
       (make-!pkey (pk->type evp) dsa-keygen))))
 
@@ -235,15 +218,15 @@
 
 (define (pkey-sign dg pk bs)
   (unless (pkey-private? pk)
-    (mismatch-error 'sign "not a private key"))
-  (cond
-   ((digest-ctx dg) => (lambda (ctx) (EVP_SignFinal ctx bs (pkey-evp pk))))
-   (else (mismatch-error 'pkey-sign "finalized context"))))
+    (error 'pkey-sign "not a private key"))
+  (cond [(digest-ctx dg)
+         => (lambda (ctx) (EVP_SignFinal ctx bs (pkey-evp pk)))]
+        [else (error 'pkey-sign "finalized context")]))
 
 (define (pkey-verify dg pk bs len)
-  (cond
-   ((digest-ctx dg) => (lambda (ctx) (EVP_VerifyFinal ctx bs len (pkey-evp pk))))
-   (else (error 'pkey-verify "finalized context"))))
+  (cond [(digest-ctx dg)
+         => (lambda (ctx) (EVP_VerifyFinal ctx bs len (pkey-evp pk)))]
+        [else (error 'pkey-verify "finalized context")]))
 
 (define* digest-sign
   ((dg pk)
@@ -271,12 +254,12 @@
    (pkey-verify dg pk (ptr-add bs start) (- end start))))
 
 (define (sign-bytes dgt pk bs)
-  (let ((dg (digest-new dgt)))
+  (let ([dg (digest-new dgt)])
     (digest-update! dg bs)
     (digest-sign dg pk)))
 
 (define (verify-bytes dgt pk sigbs bs)
-  (let ((dg (digest-new dgt)))
+  (let ([dg (digest-new dgt)])
     (digest-update! dg bs)
     (digest-verify dg pk sigbs)))
 
@@ -287,16 +270,14 @@
   (digest-verify (digest-port* dgt inp) pk sigbs))
 
 (define (sign pk dgt inp)
-  (cond 
-   ((bytes? inp) (sign-bytes dgt pk inp))
-   ((input-port? inp) (sign-port dgt pk inp))
-   (else (raise-type-error 'sign "bytes or input-port" inp))))
+  (cond [(bytes? inp) (sign-bytes dgt pk inp)]
+        [(input-port? inp) (sign-port dgt pk inp)]
+        [else (raise-type-error 'sign "bytes or input-port" inp)]))
 
 (define (verify pk dgt sigbs inp)
-  (cond 
-   ((bytes? inp) (verify-bytes dgt pk sigbs inp))
-   ((input-port? inp) (verify-port dgt pk sigbs inp))
-   (else (raise-type-error 'verify "bytes or input-port" inp))))
+  (cond [(bytes? inp) (verify-bytes dgt pk sigbs inp)]
+        [(input-port? inp) (verify-port dgt pk sigbs inp)]
+        [else (raise-type-error 'verify "bytes or input-port" inp)]))
 
 (define-rule (define-pkey-crypt crypt op evp-op public?)
   (begin
@@ -322,10 +303,9 @@
 
 ;; sk: sealed key
 (define (encrypt/envelope pk cipher . cargs)
-  (let*-values (((k iv) (generate-cipher-key cipher))
-                ((sk) (encrypt/pkey pk k)))
-    (call/values
-      (lambda () (apply encrypt cipher k iv cargs))
+  (let*-values ([(k iv) (generate-cipher-key cipher)]
+                [(sk) (encrypt/pkey pk k)])
+    (call-with-values (lambda () (apply encrypt cipher k iv cargs))
       (lambda cvals (apply values sk iv cvals)))))
 
 (define (decrypt/envelope pk cipher sk iv  . cargs)
@@ -343,15 +323,13 @@
     (list digest:dss1))) ; sha1 with fancy name
 
 (define (pkey-digest? pk dgt)
-  (cond
-   ((!pkey? pk)
-    (memq dgt
-          (cond
-           ((eq? pk pkey:rsa) pkey:rsa:digests)
-           ((eq? pk pkey:dsa) pkey:dsa:digests)
-           (else #f))))
-   ((pkey? pk) (pkey-digest? (pkey-type pk) dgt))
-   (else (raise-type-error 'pkey-digest? "pkey or pkey type" pk))))
+  (cond [(!pkey? pk)
+         (memq dgt
+               (cond [(eq? pk pkey:rsa) pkey:rsa:digests]
+                     [(eq? pk pkey:dsa) pkey:dsa:digests]
+                     [else #f]))]
+        [(pkey? pk) (pkey-digest? (pkey-type pk) dgt)]
+        [else (raise-type-error 'pkey-digest? "pkey or pkey type" pk)]))
 
 ;; Note: dsa is only usable with dss1 in libcrypto-0.9.8
 (define-symbols pkey.symbols
