@@ -129,7 +129,7 @@
     (define-values (priv2 pub2) (generate-key params))
     (check (equal?(compute-key priv1 pub2) (compute-key priv2 pub1)) => #t))
 
-(define (run-tests)
+(define (run-tests [flags0 #f])
   (define digests 
     (filter values
       (list digest:md5 
@@ -168,12 +168,25 @@
   (define dhparams
     (list dh:192 dh:512 dh:1024 dh:2048 dh:4096))
 
-  (when digest:sha1 (test-sha1))
-  (for-each test-digest digests hashes)
-  (for-each (lambda (x) (test-pubkey pkey:rsa x)) pkey:rsa:digests)
-  (for-each (lambda (x) (test-pubkey pkey:dsa x)) pkey:dsa:digests)
-  (for-each test-cipher ciphers)
-  (for-each (lambda (x) (test-encrypt/pkey x)) ciphers)
-  (for-each test-dh dhparams)
+  (define flags
+    (or flags0 '(sha1 digests rsa dsa ciphers pkey dh)))
+
+  ;; '(sha1), '(digests), '(ciphers), '(dh) okay
+  ;; seg fault triggered by '(rsa) or '(dsa) or '(pkey) then collect-garbage
+
+  (when (memq 'sha1 flags)
+    (when digest:sha1 (test-sha1)))
+  (when (memq 'digests flags)
+    (for-each test-digest digests hashes))
+  (when (memq 'rsa flags)
+    (for-each (lambda (x) (test-pubkey pkey:rsa x)) pkey:rsa:digests))
+  (when (memq 'dsa flags)
+    (for-each (lambda (x) (test-pubkey pkey:dsa x)) pkey:dsa:digests))
+  (when (memq 'ciphers flags)
+    (for-each test-cipher ciphers))
+  (when (memq 'pkey flags)
+    (for-each (lambda (x) (test-encrypt/pkey x)) ciphers))
+  (when (memq 'dh flags)
+    (for-each test-dh dhparams))
 
   (check-report))
