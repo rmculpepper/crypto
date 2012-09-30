@@ -301,9 +301,10 @@
              #:wrap (err-wrap/pointer 'evp))
            (define-values (type id)
              (cond [(ffi-available? evp)
-                    (set! *digests* (cons 'id *digests*))
-                    (values (make-!digest evp (md->size evp))
-                            (lambda/name id (inp) (digest* type inp)))]
+                    (let ([evpp (evp)])
+                      (set! *digests* (cons 'id *digests*))
+                      (values (make-!digest evpp (md->size evpp))
+                              (lambda/name id (inp) (digest* type inp))))]
                    [else (values #f (unavailable-function 'evp))]))
            (put-symbols! digest.symbols type id))))))
 
