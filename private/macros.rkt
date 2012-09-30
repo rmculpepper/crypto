@@ -16,56 +16,17 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
-(require (for-syntax racket/base
-                     "stx-util.rkt")
-         (for-template racket/base))
-(provide (all-defined-out)
-         (rename-out (call-with-values call/values)
-                     (add1 1+)
-                     (sub1 1-)))
+(require (for-syntax racket/base))
+(provide define-symbols
+         put-symbols!
+         define-provider)
 
-(define-syntax (define-rule stx)
-  (syntax-case stx ()
-    ((_ (id . args) body)
-     (syntax/loc stx
-       (define-syntax id
-         (lambda (stx)
-           (syntax-case stx ()
-             ((_ . args) (syntax/loc stx body)))))))))
-
-(define-syntax (define-rules stx)
-  (syntax-case stx ()
-    ((_ id (lit ...) (pat res) ...)
-     (syntax/loc stx
-       (define-syntax id
-         (lambda (stx)
-           (syntax-case stx (lit ...)
-             (pat (syntax/loc stx res)) ...)))))))
-
-(define-syntax (@string stx)
-  (syntax-case stx ()
-    ((_ tgt) (datum->syntax stx (/string (syntax-e #'tgt))))))
-
-(define-rule (push! var obj)
-  (set! var (cons obj var)))
-
-(define-rules alet* ()
-  ((_ () body ...) (begin body ...))
-  ((self ((id expr) . rest) body ...)
-   (let ((id expr))
-     (if id (self rest body ...) #f))))
-
-(define-rule (define* id . body)
-  (define id (case-lambda . body)))
-
-(define-rule (lambda/name id hd . body)
-  (let ((id (lambda hd . body))) id))
-
-(define-rules define-symbols ()
-  ((_ id)
-   (define-syntax id (box null)))
-  ((self id sym ...)
-   (begin (self id) (put-symbols! id sym ...))))
+(define-syntax define-symbols
+  (syntax-rules ()
+    [(define-symbols id)
+     (define-syntax id (box null))]
+    [(define-symbols id sym ...)
+     (begin (define-symbols id) (put-symbols! id sym ...))]))
 
 (define-syntax (put-symbols! stx)
   (syntax-case stx ()
@@ -90,6 +51,5 @@
                              (id #'id)))
                       (unbox (syntax-local-value #'tgt)))))
      (syntax/loc stx
-       (define-rule (id)
+       (define-syntax-rule (id)
          (provide spec ...)))))))
-

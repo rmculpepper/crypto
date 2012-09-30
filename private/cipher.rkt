@@ -130,39 +130,41 @@
   (cipher-new type key iv #f pad?))
 
 ;; FIXME: interface
-(define* cipher-update!
-  ((c ibs)
-   (let* ((obs (make-bytes (cipher-maxlen c (bytes-length ibs))))
-          (len (cipher-update c obs ibs (bytes-length ibs))))
-     (shrink-bytes obs len)))
-  ((c ibs obs)
-   (check-output-range 'cipher-update! 
-     obs (cipher-maxlen c (bytes-length ibs)))
-   (cipher-update c obs ibs (bytes-length ibs)))
-  ((c ibs obs istart iend ostart oend)
-   (check-input-range 'cipher-update! ibs istart iend)
-   (check-output-range 'cipher-update! 
-     obs ostart oend (cipher-maxlen c (- iend istart)))
-   (cipher-update c (ptr-add obs ostart) (ptr-add ibs istart) (- iend istart))))
+(define cipher-update!
+  (case-lambda
+    [(c ibs)
+     (let* ([obs (make-bytes (cipher-maxlen c (bytes-length ibs)))]
+            [len (cipher-update c obs ibs (bytes-length ibs))])
+       (shrink-bytes obs len))]
+    [(c ibs obs)
+     (check-output-range 'cipher-update! 
+                         obs (cipher-maxlen c (bytes-length ibs)))
+     (cipher-update c obs ibs (bytes-length ibs))]
+    [(c ibs obs istart iend ostart oend)
+     (check-input-range 'cipher-update! ibs istart iend)
+     (check-output-range 'cipher-update! 
+                         obs ostart oend (cipher-maxlen c (- iend istart)))
+     (cipher-update c (ptr-add obs ostart) (ptr-add ibs istart) (- iend istart))]))
 
 ;; FIXME: interface
-(define* cipher-final!
-  ((c)
-   (let* ((bs (make-bytes (cipher-olen c)))
-          (len (cipher-final c bs)))
-     (shrink-bytes bs len)))
-  ((c obs)
-   (check-output-range 'cipher-final! obs (cipher-olen c))
-   (cipher-final c obs))
-  ((c obs ostart)
-   (check-output-range 'cipher-final! 
-     obs ostart (bytes-length obs) (cipher-olen c))
-   (cipher-final c (ptr-add obs ostart)))
-  ((c obs ostart oend)
-   (check-output-range 'cipher-final! obs ostart oend (cipher-olen c))
-   (cipher-final c (ptr-add obs ostart))))
+(define cipher-final!
+  (case-lambda
+    [(c)
+     (let* ([bs (make-bytes (cipher-olen c))]
+            [len (cipher-final c bs)])
+       (shrink-bytes bs len))]
+    [(c obs)
+     (check-output-range 'cipher-final! obs (cipher-olen c))
+     (cipher-final c obs)]
+    [(c obs ostart)
+     (check-output-range 'cipher-final! 
+                         obs ostart (bytes-length obs) (cipher-olen c))
+     (cipher-final c (ptr-add obs ostart))]
+    [(c obs ostart oend)
+     (check-output-range 'cipher-final! obs ostart oend (cipher-olen c))
+     (cipher-final c (ptr-add obs ostart))]))
 
-(define-rule (define-cipher-getf getf op)
+(define-syntax-rule (define-cipher-getf getf op)
   (define (getf c)
     (cond [(!cipher? c) (op c)]
           [(cipher? c) (op (cipher-type c))]
@@ -187,39 +189,39 @@
             (write-bytes obuf outp 0 ocount)
             (lp (read-bytes-avail! ibuf inp)))))))
 
-(define-rule (define/cipher-pipe id init)
-  (define* id
-    ((algo key iv)
-     (let-values (((cipher) (init algo key iv))
-                  ((rd1 wr1) (make-pipe))
-                  ((rd2 wr2) (make-pipe)))
-       (thread (lambda ()
-                 (cipher-pipe cipher rd1 wr2)
-                 (close-input-port rd1)
-                 (close-output-port wr2)))
-       (values rd2 wr1)))
-    ((algo key iv inp)
-     (cond 
-      ((bytes? inp) 
-       (let ((outp (open-output-bytes)))
-         (cipher-pipe (init algo key iv) (open-input-bytes inp) outp)
-         (get-output-bytes outp)))
-      ((input-port? inp)
-       (let-values (((cipher) (init algo key iv))
-                    ((rd wr) (make-pipe)))
-         (thread (lambda () 
-                   (cipher-pipe cipher inp wr)
-                   (close-output-port wr)))
-         rd))
-      (else (raise-type-error 'id "bytes or input-port" inp))))
-    ((algo key iv inp outp)
-     (unless (output-port? outp)
-       (raise-type-error 'id "output-port" outp))
-     (cond ((bytes? inp)
-            (cipher-pipe (init algo key iv) (open-input-bytes inp) outp))
-           ((input-port? inp)
-            (cipher-pipe (init algo key iv) inp outp))
-           (else (raise-type-error 'id "bytes or input-port" inp))))))
+(define-syntax-rule (define/cipher-pipe id init)
+  (define id
+    (case-lambda
+      [(algo key iv)
+       (let-values ([(cipher) (init algo key iv)]
+                    [(rd1 wr1) (make-pipe)]
+                    [(rd2 wr2) (make-pipe)])
+         (thread (lambda ()
+                   (cipher-pipe cipher rd1 wr2)
+                   (close-input-port rd1)
+                   (close-output-port wr2)))
+         (values rd2 wr1))]
+      [(algo key iv inp)
+       (cond [(bytes? inp) 
+              (let ([outp (open-output-bytes)])
+                (cipher-pipe (init algo key iv) (open-input-bytes inp) outp)
+                (get-output-bytes outp))]
+             [(input-port? inp)
+              (let-values ([(cipher) (init algo key iv)]
+                           [(rd wr) (make-pipe)])
+                (thread (lambda () 
+                          (cipher-pipe cipher inp wr)
+                          (close-output-port wr)))
+                rd)]
+             [else (raise-type-error 'id "bytes or input-port" inp)])]
+      [(algo key iv inp outp)
+       (unless (output-port? outp)
+         (raise-type-error 'id "output-port" outp))
+       (cond [(bytes? inp)
+              (cipher-pipe (init algo key iv) (open-input-bytes inp) outp)]
+             [(input-port? inp)
+              (cipher-pipe (init algo key iv) inp outp)]
+             [else (raise-type-error 'id "bytes or input-port" inp)])])))
 
 (define/cipher-pipe encrypt cipher-encrypt)
 (define/cipher-pipe decrypt cipher-decrypt)
@@ -263,7 +265,7 @@
           #`(begin
               def ...
               (define cipher
-                (begin (when alias (push! *ciphers* (quote #,name)))
+                (begin (when alias (set! *ciphers* (cons (quote #,name) *ciphers*)))
                        alias))
               (put-symbols! cipher.symbols cipher))))))
 

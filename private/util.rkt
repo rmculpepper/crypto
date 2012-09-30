@@ -16,7 +16,6 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
-(require "macros.rkt")
 (provide hex
          unhex
          shrink-bytes
@@ -26,31 +25,27 @@
 (define (bytes-xor in key)
   (let* ((len (bytes-length in))
          (r (make-bytes len)))
-    (do ((i 0 (1+ i)))
+    (do ((i 0 (add1 i)))
         ((= i len) r)
       (bytes-set! r i (bitwise-xor (bytes-ref in i) (bytes-ref key i))))))
 
 (define (bytes-xor! in key)
   (let ((len (bytes-length in)))
-    (do ((i 0 (1+ i)))
+    (do ((i 0 (add1 i)))
         ((= i len) in)
       (bytes-set! in i (bitwise-xor (bytes-ref in i) (bytes-ref key i))))))
 
-(define hexes
-  (list->vector (bytes->list #"0123456789abcdef")))
-
-(define-rule (byte->hex b)
-  (vector-ref hexes b))
+(define (byte->hex b) (bytes-ref #"0123456789abcdef" b))
 
 (define (hex bs)
   (let* ((len (bytes-length bs))
          (obs (make-bytes (* 2 len))))
-    (do ((i 0 (1+ i))
+    (do ((i 0 (add1 i))
          (j 0 (+ 2 j)))
         ((= i len) obs)
       (let ((b (bytes-ref bs i)))
         (bytes-set! obs j (byte->hex (arithmetic-shift b -4)))
-        (bytes-set! obs (1+ j) (byte->hex (bitwise-and b #x0f)))))))
+        (bytes-set! obs (add1 j) (byte->hex (bitwise-and b #x0f)))))))
 
 (define digits
   (make-immutable-hasheq
@@ -59,8 +54,7 @@
     (for/list ((b #"abcdef") (n (in-range 10 16))) (cons b n))
     (for/list ((b #"ABCDEF") (n (in-range 10 16))) (cons b n)))))
 
-(define-rule (hex->byte c)
-  (hash-ref digits c))
+(define (hex->byte c) (hash-ref digits c))
 
 (define (unhex bs)
   (let ((len (bytes-length bs)))
@@ -68,11 +62,11 @@
       (error 'unhex "odd length byte string"))
     (let ((obs (make-bytes (/ len 2))))
       (do ((i 0 (+ 2 i))
-           (j 0 (1+ j)))
+           (j 0 (add1 j)))
           ((= i len) obs)
         (bytes-set! obs j 
           (bitwise-ior (arithmetic-shift (hex->byte (bytes-ref bs i)) 4)
-                       (hex->byte (bytes-ref bs (1+ i)))))))))
+                       (hex->byte (bytes-ref bs (add1 i)))))))))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))

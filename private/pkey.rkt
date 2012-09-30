@@ -228,30 +228,32 @@
          => (lambda (ctx) (EVP_VerifyFinal ctx bs len (pkey-evp pk)))]
         [else (error 'pkey-verify "finalized context")]))
 
-(define* digest-sign
-  ((dg pk)
-   (let* ((bs (make-bytes (pkey-size pk)))
-          (len (pkey-sign dg pk bs)))
-     (shrink-bytes bs len)))
-  ((dg pk bs)
-   (check-output-range 'digest-sign bs (pkey-size pk))
-   (pkey-sign dg pk bs))
-  ((dg pk bs start)
-   (check-output-range 'digest-sign bs start (bytes-length bs) (pkey-size pk))
-   (pkey-sign dg pk (ptr-add bs start)))
-  ((dg pk bs start end)
-   (check-output-range 'digest-sign bs start end (pkey-size pk))
-   (pkey-sign dg pk (ptr-add bs start))))
+(define digest-sign
+  (case-lambda
+    [(dg pk)
+     (let* ([bs (make-bytes (pkey-size pk))]
+            [len (pkey-sign dg pk bs)])
+       (shrink-bytes bs len))]
+    [(dg pk bs)
+     (check-output-range 'digest-sign bs (pkey-size pk))
+     (pkey-sign dg pk bs)]
+    [(dg pk bs start)
+     (check-output-range 'digest-sign bs start (bytes-length bs) (pkey-size pk))
+     (pkey-sign dg pk (ptr-add bs start))]
+    [(dg pk bs start end)
+     (check-output-range 'digest-sign bs start end (pkey-size pk))
+     (pkey-sign dg pk (ptr-add bs start))]))
 
-(define* digest-verify
-  ((dg pk bs)
-   (pkey-verify dg pk bs (bytes-length bs)))
-  ((dg pk bs start)
-   (check-input-range 'digest-verify bs start (bytes-length bs))
-   (pkey-verify dg pk (ptr-add bs start) (- (bytes-length bs) start)))
-  ((dg pk bs start end)
-   (check-input-range 'digest-verify bs start end)
-   (pkey-verify dg pk (ptr-add bs start) (- end start))))
+(define digest-verify
+  (case-lambda
+    [(dg pk bs)
+     (pkey-verify dg pk bs (bytes-length bs))]
+    [(dg pk bs start)
+     (check-input-range 'digest-verify bs start (bytes-length bs))
+     (pkey-verify dg pk (ptr-add bs start) (- (bytes-length bs) start))]
+    [(dg pk bs start end)
+     (check-input-range 'digest-verify bs start end)
+     (pkey-verify dg pk (ptr-add bs start) (- end start))]))
 
 (define (sign-bytes dgt pk bs)
   (let ([dg (digest-new dgt)])
@@ -279,7 +281,7 @@
         [(input-port? inp) (verify-port dgt pk sigbs inp)]
         [else (raise-type-error 'verify "bytes or input-port" inp)]))
 
-(define-rule (define-pkey-crypt crypt op evp-op public?)
+(define-syntax-rule (define-pkey-crypt crypt op evp-op public?)
   (begin
     (define (op pk ibs ilen)
       (unless (or public? (pkey-private? pk))
@@ -287,16 +289,17 @@
       (let* ((obs (make-bytes (pkey-size pk)))
              (olen (evp-op obs ibs ilen (pkey-evp pk))))
         (shrink-bytes obs olen)))
-    (define* crypt
-      ((pk ibs)
-       (check-input-range 'crypt ibs (pkey-size pk))
-       (op pk ibs (bytes-length ibs)))
-      ((pk ibs istart)
-       (check-input-range 'crypt ibs istart (bytes-length ibs) (pkey-size pk))
-       (op pk (ptr-add ibs istart) (- (bytes-length ibs) istart)))
-      ((pk ibs istart iend)
-       (check-input-range 'crypt ibs istart iend (pkey-size pk))
-       (op pk (ptr-add ibs istart) (- iend istart))))))
+    (define crypt
+      (case-lambda
+        [(pk ibs)
+         (check-input-range 'crypt ibs (pkey-size pk))
+         (op pk ibs (bytes-length ibs))]
+        [(pk ibs istart)
+         (check-input-range 'crypt ibs istart (bytes-length ibs) (pkey-size pk))
+         (op pk (ptr-add ibs istart) (- (bytes-length ibs) istart))]
+        [(pk ibs istart iend)
+         (check-input-range 'crypt ibs istart iend (pkey-size pk))
+         (op pk (ptr-add ibs istart) (- iend istart))]))))
 
 (define-pkey-crypt encrypt/pkey pkey-encrypt EVP_PKEY_encrypt #t)
 (define-pkey-crypt decrypt/pkey pkey-decrypt EVP_PKEY_decrypt #f)

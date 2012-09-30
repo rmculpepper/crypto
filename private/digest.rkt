@@ -129,35 +129,30 @@
 (define-struct digest (type (ctx #:mutable)))
 (define-struct !hmac (type (ctx #:mutable)))
 
-(define-rule (define-digest-update id update)
-  (define* id
-    ((x data)
-     (update x data (bytes-length data)))
-    ((x data start)
-     (check-input-range 'id data start (bytes-length data))
-     (update x (ptr-add data start) (- (bytes-length) start)))
-    ((x data start end)
-     (check-input-range 'id data start end)
-     (update x (ptr-add data start) (- end start)))))
+(define-syntax-rule (define-digest-update id update)
+  (define (id x data [start 0] [end (bytes-length data)])
+    (check-input-range 'id data start end)
+    (update x (ptr-add data start) (- end start))))
 
-(define-rule (define-digest-final id final)
-  (define* id
-    ((dg)
-     (let ((bs (make-bytes (digest-size dg))))
+(define-syntax-rule (define-digest-final id final)
+  (define id
+    (case-lambda
+      ((dg)
+       (let ((bs (make-bytes (digest-size dg))))
+         (final dg bs)
+         bs))
+      ((dg bs)
+       (check-output-range 'id bs (digest-size dg))
        (final dg bs)
-       bs))
-    ((dg bs)
-     (check-output-range 'id bs (digest-size dg))
-     (final dg bs)
-     (digest-size dg))
-    ((dg bs start)
-     (check-output-range 'id bs start (bytes-length bs) (digest-size dg))
-     (final dg (ptr-add bs start))
-     (digest-size dg))
-    ((dg bs start end)
-     (check-output-range 'id bs start end (digest-size dg))
-     (final dg (ptr-add bs start))
-     (digest-size dg))))
+       (digest-size dg))
+      ((dg bs start)
+       (check-output-range 'id bs start (bytes-length bs) (digest-size dg))
+       (final dg (ptr-add bs start))
+       (digest-size dg))
+      ((dg bs start end)
+       (check-output-range 'id bs start end (digest-size dg))
+       (final dg (ptr-add bs start))
+       (digest-size dg)))))
 
 (define (digest-size o)
   (cond [(!digest? o) (!digest-size o)]
@@ -288,7 +283,7 @@
                     => (lambda (evpp)
                          (set! *digests* (cons 'id *digests*))
                          (values (make-!digest evpp (md->size evpp))
-                                 (lambda/name id (inp) (digest* type inp))))]
+                                 (let ([id (lambda (inp) (digest* type inp))]) id)))]
                    [else (values #f (unavailable-function 'evp))]))
            (put-symbols! digest.symbols type id)))]))
 
