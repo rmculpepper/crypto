@@ -34,6 +34,8 @@
         -> _int)
   #:wrap (err-wrap/check 'RAND_pseudo_bytes))
 
+;; ----
+
 (define (rand!* who randf bs start end)
   (check-output-range who bs start end)
   (randf (ptr-add bs start) (- end start)))

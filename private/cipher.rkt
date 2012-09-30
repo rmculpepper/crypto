@@ -25,8 +25,7 @@
          "rand.rkt"
          "util.rkt"
          (for-syntax racket/base
-                     racket/syntax
-                     "stx-util.rkt"))
+                     racket/syntax))
 
 (define-cpointer-type _EVP_CIPHER_CTX)
 (define-cpointer-type _EVP_CIPHER)
@@ -240,7 +239,7 @@
 
 (define-syntax (define-cipher stx)
   (define (unhyphen what) 
-    (regexp-replace* "-" (/string what) "_"))
+    (regexp-replace* "-" (format "~a" what) "_"))
 
   (define (make-cipher mode)
     (with-syntax ([evp (format-id stx "EVP_~a" (unhyphen mode))]
@@ -260,8 +259,8 @@
   (define (make-def name)
     (with-syntax ([cipher (format-id stx "cipher:~a" name)]
                   [alias (format-id stx "cipher:~a-~a" name default-cipher-mode)])
-      (let ((modes (for/list ((m cipher-modes)) (make-symbol name "-" m))))
-        (with-syntax (((def ...) (map make-cipher modes)))
+      (let ([modes (for/list ([m cipher-modes]) (format-symbol "~a-~a" name m))])
+        (with-syntax ([(def ...) (map make-cipher modes)])
           #`(begin
               def ...
               (define cipher
@@ -270,12 +269,13 @@
               (put-symbols! cipher.symbols cipher))))))
 
   (syntax-case stx ()
-    ((_ c) (make-def (syntax-e #'c)))
-    ((_ c (klen ...))
-     (with-syntax (((def ...) 
+    [(_ c)
+     (make-def (syntax-e #'c))]
+    [(_ c (klen ...))
+     (with-syntax ([(def ...) 
                     (for/list ((k (syntax->list #'(klen ...))))
-                      (make-def (make-symbol #'c "-" k)))))
-       #'(begin def ...)))))
+                      (make-def (format-symbol "~a-~a" #'c (syntax-e k))))])
+       #'(begin def ...))]))
 
 (define-symbols cipher.symbols
   available-ciphers 
