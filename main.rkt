@@ -21,12 +21,10 @@
          "private/cipher.rkt"
          "private/pkey.rkt"
          "private/dh.rkt"
-         "private/keygen.rkt"
-         "private/engine.rkt")
+         "private/keygen.rkt")
 (provide-rand)
 (provide-digest)
 (provide-cipher)
 (provide-pkey)
 (provide-dh)
 (provide-keygen)
-(provide-engine)

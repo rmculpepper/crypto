@@ -72,20 +72,6 @@ automatically refreshes the entropy pool using OS-provided cryptographic
 facilities.
 }
 
-
-@section{Engine Support}
-
-@deftogether[(
-@defproc[(engine-load-builtin) _]
-@defproc[(engine-cleanup) _]
-)]{
-@scheme[engine-load-builtin] loads the builtin accelerated libcrypto engine 
-implementations. 
-
-The application must cleanup by explicitly calling @scheme[engine-cleanup] 
-as there is currently no reliable way to automatically cleanup using ffi.
-}
-
 @section{Miscellaneous}
 @defmodule*/no-declare[(crypto/util (planet vyzo/crypto/util))]
 @declare-exporting{util.ss}
