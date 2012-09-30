@@ -43,7 +43,8 @@
 (define-crypto BN_dup
   (_fun _BIGNUM
         -> (result : _BIGNUM)
-        -> (pointer/error 'BN_dup result)))
+        -> (pointer/error 'BN_dup result))
+  #:wrap (allocator BN_free))
 
 (define-crypto BN_num_bits
   (_fun _BIGNUM
@@ -59,7 +60,8 @@
         (_int = (bytes-length bs))
         (_pointer = #f)
         -> (result : _BIGNUM)
-        -> (pointer/error 'BN_bin2bn result)))
+        -> (pointer/error 'BN_bin2bn result))
+  #:wrap (allocator BN_free))
 
 (define (bn-size bn)
   (ceiling (/ (BN_num_bits bn) 8)))
