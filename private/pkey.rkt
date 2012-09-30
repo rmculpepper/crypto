@@ -73,7 +73,7 @@
   #:wrap (err-wrap/check 'EVP_PKEY_set1_RSA))
 
 (define-crypto EVP_PKEY_set1_DSA
-  (_fun _EVP_PKEY _RSA -> _int)
+  (_fun _EVP_PKEY _DSA -> _int)
   #:wrap (err-wrap/check 'EVP_PKEY_set1_DSA))
 
 (define-crypto EVP_SignFinal
@@ -215,7 +215,7 @@
       (evp->pkey evp pkey:rsa rsap))))
 
 (define pkey:rsa
-  (with-handlers ((exn:fail? (lambda x #f)))
+  (with-handlers (#|(exn:fail? (lambda x #f))|#)
     (let/fini ((rsap (RSA_new) RSA_free)
                (evp (EVP_PKEY_new) EVP_PKEY_free))
       (EVP_PKEY_set1_RSA evp rsap)
@@ -229,7 +229,7 @@
     (evp->pkey evp pkey:dsa dsap)))
 
 (define pkey:dsa
-  (with-handlers ((exn:fail? (lambda x #f)))
+  (with-handlers (#|(exn:fail? (lambda x #f))|#)
     (let/fini ((dsap (DSA_new) DSA_free)
                (evp (EVP_PKEY_new) EVP_PKEY_free))
       (EVP_PKEY_set1_DSA evp dsap)
