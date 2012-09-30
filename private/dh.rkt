@@ -61,12 +61,14 @@
         -> (result : _DH/null))
   #:wrap (compose (allocator DH_free) (err-wrap/pointer 'd2i_DHparams)))
 
+;; ----
+
 ;; DH: struct dh_st {pad version p g length pub_key ...}
 (define (dhkey-pubk dh)
   (bn->bytes
    (last 
     (ptr-ref (dhkey-p dh) 
-      (_list-struct _int _int _BIGNUM _BIGNUM _long _BIGNUM)))))
+             (_list-struct _int _int _BIGNUM _BIGNUM _long _BIGNUM)))))
 
 (define (params->dhkey params)
   (let* ([bs (!dh-bs params)]
