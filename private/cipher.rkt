@@ -252,7 +252,7 @@
       #'(begin
           (define cipher
             (if (ffi-available? evp)
-              (let ((evpp ((lambda/ffi (evp) -> _pointer))))
+              (let ((evpp ((lambda/ffi (evp) -> _EVP_CIPHER))))
                 (call/values 
                   (lambda () (cipher->props evpp))
                   (lambda (size keylen ivlen)
