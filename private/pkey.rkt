@@ -52,7 +52,7 @@
 
 (define-crypto RSA_new
   (_fun -> _RSA/null)
-  #:wrap (compose #|(allocator RSA_free)|# (err-wrap/pointer 'RSA_new)))
+  #:wrap (compose (allocator RSA_free) (err-wrap/pointer 'RSA_new)))
 
 (define-crypto DSA_free
   (_fun _DSA -> _void)
@@ -60,7 +60,7 @@
 
 (define-crypto DSA_new
   (_fun -> _DSA/null)
-  #:wrap (compose #|(allocator DSA_free)|# (err-wrap/pointer 'DSA_new)))
+  #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'DSA_new)))
 
 (define-crypto EVP_PKEY_type
   (_fun _int -> _int)
@@ -73,10 +73,6 @@
 (define-crypto EVP_PKEY_bits
   (_fun _EVP_PKEY -> _int)
   #:wrap (err-wrap 'EVP_PKEY_bits positive?))
-
-(define-crypto EVP_PKEY_assign
-  (_fun _EVP_PKEY (type : _int) (key : _pointer) -> _int)
-  #:wrap (err-wrap/check 'EVP_PKEY_assign))
 
 (define-crypto EVP_PKEY_set1_RSA
   (_fun _EVP_PKEY _RSA -> _int)
@@ -211,19 +207,14 @@
 (define (pk->type evp)
   (EVP_PKEY_type (car (ptr-ref evp (_list-struct _int)))))
 
-(define (evp->pkey evp pkt pkp)
-  (EVP_PKEY_assign evp (!pkey-type pkt) pkp)
-  (let ((pk (make-pkey pkt evp #t)))
-    ;; (register-finalizer pk (compose EVP_PKEY_free pkey-evp)) ; auto-frees pkp
-    pk))
-
 (define (rsa-keygen bits (exp 65537))
   (let/fini ((ep (BN_new) BN_free))
     (BN_add_word ep exp)
     (let/error ((rsap (RSA_new) RSA_free)
                 (evp (EVP_PKEY_new) EVP_PKEY_free))
       (RSA_generate_key_ex rsap bits ep)
-      (evp->pkey evp pkey:rsa rsap))))
+      (EVP_PKEY_set1_RSA evp rsap)
+      (make-pkey pkey:rsa evp #t))))
 
 (define pkey:rsa
   (with-handlers (#|(exn:fail? (lambda x #f))|#)
@@ -237,7 +228,8 @@
               (evp (EVP_PKEY_new) EVP_PKEY_free))
     (DSA_generate_parameters_ex dsap bits)
     (DSA_generate_key dsap)
-    (evp->pkey evp pkey:dsa dsap)))
+    (EVP_PKEY_set1_DSA evp dsap)
+    (make-pkey pkey:dsa evp #t)))
 
 (define pkey:dsa
   (with-handlers (#|(exn:fail? (lambda x #f))|#)
