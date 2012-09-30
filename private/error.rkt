@@ -25,10 +25,10 @@
      (unless (<= (bytes-length bs) maxlen)
        (error where "bad input range"))]
     [(where bs start end)
-     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs)))
+     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs)))
        (error where "bad input range"))]
     [(where bs start end maxlen)
-     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs))
+     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs))
                   (<= (- end start) maxlen))
        (error where "bad input range"))]))
 
