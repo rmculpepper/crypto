@@ -57,28 +57,6 @@
 (define (err-wrap/pointer who)
   (err-wrap who values))
 
-#|
-** check-error -> (err-wrap _ positive? void)
-(define (check-error where r)
-  (unless (> r 0)
-    (raise-crypto-error where)))
-** pointer/error -> (err-wrap _ values)
-(define (pointer/error where r)
-  (or r (raise-crypto-error where "(nil)")))
-** int/error -> (err-wrap _ positive?)
-(define (int/error where r)
-  (if (> r 0) r (raise-crypto-error where)))
-** int/error* -> (err-wrap _ nonnegative-exact-integer?)
-(define (int/error* where r)
-  (if (< r 0) (raise-crypto-error where) r))
-** bool/error -> (err-wrap _ '(0 1) integer->boolean)
-(define (bool/error where r)
-  (case r
-    ((1) #t)
-    ((0) #f)
-    (else (raise-crypto-error where))))
-|#
-
 (define (raise-crypto-error where (info #f))
   (let* ([e (ERR_get_error)]
          [le (ERR_lib_error_string e)]
