@@ -39,14 +39,9 @@
 
 ;; ----
 
-(define used (make-hasheq))
-
 (define (err-wrap who ok? [convert values])
   (lambda (proc)
     (lambda args
-      (unless (hash-ref used who #f)
-        (hash-set! used who #t)
-        (eprintf "used '~a'\n" who))
       (call-as-atomic
        (lambda ()
          (let ([result (apply proc args)])
