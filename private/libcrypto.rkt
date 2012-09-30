@@ -18,49 +18,76 @@
 #lang racket/base
 (require ffi/unsafe
          ffi/unsafe/define
+         ffi/unsafe/atomic
          openssl/libcrypto
          "macros.rkt"
-         (for-syntax racket/base
-                     "stx-util.rkt"))
+         (for-syntax racket/base))
+
 (provide define-crypto
-         ffi-available?
-         define/ffi lambda/ffi
-         define/alloc let/fini let/error)
+
+         err-wrap
+         err-wrap/check
+         err-wrap/pointer
+
+         let/fini
+         let/error)
 
 (define-ffi-definer define-crypto libcrypto
   #:default-make-fail make-not-available)
 
-(define-rule (ffi-available? id)
-  (and (get-ffi-obj (@string id) libcrypto _pointer (lambda () #f)) 
-       #t))
+;; ----
 
-(define-rule (ffi-lambda id sig)
-  (get-ffi-obj (@string id) libcrypto sig))
+(let ()
+  (define-crypto ERR_load_crypto_strings (_fun -> _void))
+  (define-crypto OpenSSL_add_all_ciphers (_fun -> _void))
+  (define-crypto OpenSSL_add_all_digests (_fun -> _void))
+  (ERR_load_crypto_strings)
+  (OpenSSL_add_all_ciphers)
+  (OpenSSL_add_all_digests))
 
-(define-rules lambda/ffi (: ->)
-  ((_ (id args ...))
-   (ffi-lambda id (_fun args ... -> _void)))
-  ((_ (id args ...) -> type)
-   (ffi-lambda id (_fun args ... -> type)))
-  ((_ (id args ...) -> type : guard)
-   (ffi-lambda id (_fun args ... -> (r : type) -> (guard 'id r)))))
+(define-crypto ERR_get_error
+  (_fun -> _ulong))
+(define-crypto ERR_peek_last_error
+  (_fun -> _ulong))
+(define-crypto ERR_lib_error_string
+  (_fun _ulong -> _string))
+(define-crypto ERR_func_error_string
+  (_fun _ulong -> _string))
+(define-crypto ERR_reason_error_string
+  (_fun _ulong -> _string))
 
-(define-rule (define/ffi (f args ...) rest ...)
-  (define f (lambda/ffi (f args ...) rest ...)))
+;; Use atomic wrapper around ffi calls to avoid race retrieving error info.
 
-(define-syntax (define/alloc stx)
-  (syntax-case stx ()
-    ((_ id)
-     (with-syntax ((new (/identifier stx #'id "_new"))
-                   (free (/identifier stx #'id "_free")))
-       #'(begin
-           (define new
-             (ffi-lambda new
-               (_fun -> (r : _pointer)
-                     -> (if r r (error 'new "libcrypto: out of memory")))))
-           (define free
-             (ffi-lambda free 
-               (_fun _pointer -> _void))))))))
+(define (err-wrap who ok? [convert values])
+  (lambda (proc)
+    (lambda args
+      (call-as-atomic
+       (lambda ()
+         (let ([result (apply proc args)])
+           (if (ok? result)
+               (convert result)
+               (raise-crypto-error who))))))))
+
+(define (err-wrap/check who)
+  (err-wrap who positive? void))
+
+(define (err-wrap/pointer who)
+  (err-wrap who values))
+
+(define (raise-crypto-error where (info #f))
+  (let* ([e (ERR_get_error)]
+         [le (ERR_lib_error_string e)]
+         [fe (and le (ERR_func_error_string e))]
+         [re (and fe (ERR_reason_error_string e))])
+    (error where "~a [~a:~a:~a]~a~a"
+           (or (ERR_reason_error_string e) "?")
+           (or (ERR_lib_error_string e) "?")
+           (or (ERR_func_error_string e) "?")
+           e
+           (if info " " "")
+           (or info ""))))
+
+;; ----
 
 (define-rule (with-fini fini body ...)
   (dynamic-wind
@@ -91,11 +118,3 @@
    (let ((var exp))
      (with-error (fini var)
        (self rest body ...)))))
-
-(let ()
-  (define-crypto ERR_load_crypto_strings (_fun -> _void))
-  (define-crypto OpenSSL_add_all_ciphers (_fun -> _void))
-  (define-crypto OpenSSL_add_all_digests (_fun -> _void))
-  (ERR_load_crypto_strings)
-  (OpenSSL_add_all_ciphers)
-  (OpenSSL_add_all_digests))

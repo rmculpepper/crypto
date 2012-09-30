@@ -19,7 +19,6 @@
 (require ffi/unsafe
          ffi/unsafe/alloc
          "libcrypto.rkt"
-         "error.rkt"
          "util.rkt")
 (provide (all-defined-out))
 

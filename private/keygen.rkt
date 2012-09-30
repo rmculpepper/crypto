@@ -24,13 +24,12 @@
 (provide (all-defined-out))
 
 (define (generate-key algo . params)
-  (apply (cond
-          ((!cipher? algo) generate-cipher-key)
-          ((!pkey? algo) generate-pkey)
-          ((!digest? algo) generate-hmac-key)
-          ((!dh? algo) generate-dhkey)
-          (else (raise-type-error 'generate-key "crypto type" algo)))
-    algo params))
+  (apply (cond [(!cipher? algo) generate-cipher-key]
+               [(!pkey? algo) generate-pkey]
+               [(!digest? algo) generate-hmac-key]
+               [(!dh? algo) generate-dhkey]
+               [else (raise-type-error 'generate-key "crypto type" algo)])
+         algo params))
 
 (define-symbols keygen.symbols generate-key)
 (define-provider provide-keygen keygen.symbols)

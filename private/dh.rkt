@@ -20,7 +20,6 @@
          ffi/unsafe/alloc
          "libcrypto.rkt"
          "macros.rkt"
-         "error.rkt"
          "bn.rkt"
          (only-in net/base64 base64-decode)
          (only-in racket/list last)

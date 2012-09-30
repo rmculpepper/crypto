@@ -16,56 +16,8 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
-(require ffi/unsafe
-         ffi/unsafe/atomic
-         "libcrypto.rkt")
-(provide (all-defined-out))
-
-(define-crypto ERR_get_error
-  (_fun -> _ulong))
-(define-crypto ERR_peek_last_error
-  (_fun -> _ulong))
-(define-crypto ERR_lib_error_string
-  (_fun _ulong -> _string))
-(define-crypto ERR_func_error_string
-  (_fun _ulong -> _string))
-(define-crypto ERR_reason_error_string
-  (_fun _ulong -> _string))
-
-;; ----
-
-;; Use atomic wrapper around ffi calls to avoid race retrieving error info.
-
-(define (err-wrap who ok? [convert values])
-  (lambda (proc)
-    (lambda args
-      (call-as-atomic
-       (lambda ()
-         (let ([result (apply proc args)])
-           (if (ok? result)
-               (convert result)
-               (raise-crypto-error who))))))))
-
-(define (err-wrap/check who)
-  (err-wrap who positive? void))
-
-(define (err-wrap/pointer who)
-  (err-wrap who values))
-
-(define (raise-crypto-error where (info #f))
-  (let* ([e (ERR_get_error)]
-         [le (ERR_lib_error_string e)]
-         [fe (and le (ERR_func_error_string e))]
-         [re (and fe (ERR_reason_error_string e))])
-    (error where "~a [~a:~a:~a]~a~a"
-           (or (ERR_reason_error_string e) "?")
-           (or (ERR_lib_error_string e) "?")
-           (or (ERR_func_error_string e) "?")
-           e
-           (if info " " "")
-           (or info ""))))
-
-;; ----
+(provide check-input-range
+         check-output-range)
 
 (define check-input-range
   (case-lambda

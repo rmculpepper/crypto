@@ -244,13 +244,15 @@
     (with-syntax ([evp (format-id stx "EVP_~a" (unhyphen mode))]
                   [cipher (format-id stx "cipher:~a" mode)])
       #'(begin
+          (define-crypto evp (_fun -> _EVP_CIPHER/null)
+            #:fail (lambda () #f))
           (define cipher
-            (if (ffi-available? evp)
-                (let ((evpp ((lambda/ffi (evp) -> _EVP_CIPHER))))
-                  (call-with-values (lambda () (cipher->props evpp))
-                    (lambda (size keylen ivlen)
-                      (make-!cipher evpp size keylen ivlen))))
-                #f))
+            (cond [(and evp (evp))
+                   => (lambda (evpp)
+                        (call-with-values (lambda () (cipher->props evpp))
+                          (lambda (size keylen ivlen)
+                            (make-!cipher evpp size keylen ivlen))))]
+                  [else #f]))
           (put-symbols! cipher.symbols cipher))))
 
   (define (make-def name)

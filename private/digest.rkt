@@ -282,18 +282,18 @@
                    [type (format-id stx "digest:~a" #'id)])
        #'(begin
            (define-crypto evp (_fun -> _EVP_MD/null)
-             #:wrap (err-wrap/pointer 'evp))
+             #:fail (lambda () #f))
            (define-values (type id)
-             (cond [(ffi-available? evp)
-                    (let ([evpp (evp)])
-                      (set! *digests* (cons 'id *digests*))
-                      (values (make-!digest evpp (md->size evpp))
-                              (lambda/name id (inp) (digest* type inp))))]
+             (cond [(and evp (evp))
+                    => (lambda (evpp)
+                         (set! *digests* (cons 'id *digests*))
+                         (values (make-!digest evpp (md->size evpp))
+                                 (lambda/name id (inp) (digest* type inp))))]
                    [else (values #f (unavailable-function 'evp))]))
            (put-symbols! digest.symbols type id)))]))
 
 (define (unavailable-function who)
-  (lambda x (error who "foreign function unavailable")))
+  (lambda x (error who "unavailable")))
 
 (define-symbols digest.symbols
   available-digests
