@@ -124,10 +124,10 @@
              (decrypt/envelope pubk algo sk iv ct)) => 'fail)
     (check (decrypt/envelope privk algo sk iv ct) => msg)))
 
-  (define (test-dh params)
-    (define-values (priv1 pub1) (generate-key params))
-    (define-values (priv2 pub2) (generate-key params))
-    (check (equal?(compute-key priv1 pub2) (compute-key priv2 pub1)) => #t))
+(define (test-dh params)
+  (define-values (priv1 pub1) (generate-key params))
+  (define-values (priv2 pub2) (generate-key params))
+  (check (equal?(compute-key priv1 pub2) (compute-key priv2 pub1)) => #t))
 
 (define (run-tests [flags0 #f])
   (define digests 

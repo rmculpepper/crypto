@@ -26,6 +26,14 @@
          "cipher.rkt"
          "bn.rkt")
 
+;; FIXME: need to sort out memory management
+;; PKEY can contain an RSA and DSA
+
+;; Scenario: allocate PKEY, allocate RSA, put RSA in PKEY, RSA cpointer gets GC'd:
+;; The *_set1_* functions SHOULD increment the refcount on the RSA structure,
+;; so when the Racket reference to the RSA becomes unreachable, it should be okay
+;; to call RSA_free on it; the refcount is at least 1 because of the PKEY ref.
+
 (define-cpointer-type _EVP_PKEY)
 (define-cpointer-type _RSA)
 (define-cpointer-type _DSA)
@@ -41,16 +49,18 @@
 (define-crypto RSA_free
   (_fun _RSA -> _void)
   #:wrap (deallocator))
+
 (define-crypto RSA_new
-  (_fun -> _RSA)
-  #:wrap (compose (allocator RSA_free) (err-wrap/pointer 'RSA_new)))
+  (_fun -> _RSA/null)
+  #:wrap (compose #|(allocator RSA_free)|# (err-wrap/pointer 'RSA_new)))
 
 (define-crypto DSA_free
   (_fun _DSA -> _void)
   #:wrap (deallocator))
+
 (define-crypto DSA_new
-  (_fun -> _DSA)
-  #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'DSA_new)))
+  (_fun -> _DSA/null)
+  #:wrap (compose #|(allocator DSA_free)|# (err-wrap/pointer 'DSA_new)))
 
 (define-crypto EVP_PKEY_type
   (_fun _int -> _int)
@@ -143,6 +153,7 @@
       #:wrap (err-wrap 'i2d_PrivateKey-length positive?))
     (values i2d_PublicKey i2d_PrivateKey)))
 
+;; ----
 
 (define-struct !pkey (type keygen))
 (define-struct pkey (type evp private?))
@@ -165,7 +176,7 @@
   (let* ((d2i (if public? d2i_PublicKey d2i_PrivateKey))
          (evp (d2i (!pkey-type type) bs (bytes-length bs)))
          (pk (make-pkey type evp (not public?))))
-    (register-finalizer pk (compose EVP_PKEY_free pkey-evp))
+    ;; (register-finalizer pk (compose EVP_PKEY_free pkey-evp))
     pk))
 
 (define (write-pkey pk public?)
@@ -203,7 +214,7 @@
 (define (evp->pkey evp pkt pkp)
   (EVP_PKEY_assign evp (!pkey-type pkt) pkp)
   (let ((pk (make-pkey pkt evp #t)))
-    (register-finalizer pk (compose EVP_PKEY_free pkey-evp)) ; auto-frees pkp
+    ;; (register-finalizer pk (compose EVP_PKEY_free pkey-evp)) ; auto-frees pkp
     pk))
 
 (define (rsa-keygen bits (exp 65537))
