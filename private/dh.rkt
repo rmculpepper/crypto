@@ -61,7 +61,8 @@
         (_ptr i _pointer)
         _long
         -> (result : _DH)
-        -> (pointer/error 'd2i_DHparams result)))
+        -> (pointer/error 'd2i_DHparams result))
+  #:wrap (allocator DH_free))
 
 ;; DH: struct dh_st {pad version p g length pub_key ...}
 (define (dhkey-pubk dh)
@@ -71,15 +72,15 @@
       (_list-struct _int _int _BIGNUM _BIGNUM _long _BIGNUM)))))
 
 (define (params->dhkey params)
-  (let* ((bs (!dh-bs params))
-         (dhp (d2i_DHparams bs (bytes-length bs))))
+  (let* ([bs (!dh-bs params)]
+         [dhp (d2i_DHparams bs (bytes-length bs))])
     (make-dhkey dhp)))
 
 (define (dhkey-size dh)
   (DH_size (dhkey-p dh)))
 
 (define (generate-dhkey params)
-  (let ((dh (params->dhkey params)))
+  (let ([dh (params->dhkey params)])
     (DH_generate_key (dhkey-p dh))
     (values dh (dhkey-pubk dh))))
 
