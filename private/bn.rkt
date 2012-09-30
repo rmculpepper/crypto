@@ -17,19 +17,49 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
 (require ffi/unsafe
+         ffi/unsafe/alloc
          "libcrypto.rkt"
          "error.rkt"
          "util.rkt")
 (provide (all-defined-out))
 
-(define/alloc BN)
-(define/ffi (BN_add_word _pointer _ulong) -> _int : check-error)
-(define/ffi (BN_dup _pointer) -> _pointer : pointer/error)
-(define/ffi (BN_num_bits _pointer) -> _int)
-(define/ffi (BN_bn2bin _pointer _bytes) -> _int)
-(define/ffi (BN_bin2bn (bs : _bytes) (_int = (bytes-length bs)) 
-                       (_pointer = #f) ) 
-  -> _pointer : pointer/error)
+(define-cpointer-type _BIGNUM)
+
+(define-crypto BN_free
+  (_fun _BIGNUM
+        -> _void)
+  #:wrap (deallocator))
+
+(define-crypto BN_new
+  (_fun -> _BIGNUM)
+  #:wrap (allocator BN_free))
+
+(define-crypto BN_add_word
+  (_fun _BIGNUM
+        _ulong
+        -> _int
+        -> (make-check-error 'BN_add_word)))
+
+(define-crypto BN_dup
+  (_fun _BIGNUM
+        -> _BIGNUM
+        -> (make-pointer/error 'BN_dup)))
+
+(define-crypto BN_num_bits
+  (_fun _BIGNUM
+        -> _int))
+
+(define-crypto BN_bn2bin
+  (_fun _BIGNUM
+        _bytes
+        -> _int))
+
+(define-crypto BN_bin2bn
+  (_fun (bs : _bytes)
+        (_int = (bytes-length bs))
+        (_pointer = #f)
+        -> _pointer
+        -> (make-pointer/error 'BN_bin2bn)))
 
 (define (bn-size bn)
   (ceiling (/ (BN_num_bits bn) 8)))

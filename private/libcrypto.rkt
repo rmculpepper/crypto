@@ -22,7 +22,8 @@
          "macros.rkt"
          (for-syntax racket/base
                      "stx-util.rkt"))
-(provide ffi-available?
+(provide define-crypto
+         ffi-available?
          define/ffi lambda/ffi
          define/alloc let/fini let/error
          unavailable-function)

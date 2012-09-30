@@ -50,9 +50,15 @@
      (string-append (symbol->string where) ": " (apply format fmt args))
      (current-continuation-marks))))
 
+(define ((make-check-error where) r)
+  (check-error where r))
+
 (define (check-error where r)
   (unless (> r 0)
     (raise-crypto-error where)))
+
+(define ((make-pointer/error where) r)
+  (pointer/error where r))
 
 (define (pointer/error where r)
   (or r (raise-crypto-error where "(nil)")))
