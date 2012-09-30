@@ -17,6 +17,7 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang racket/base
 (require ffi/unsafe
+         ffi/unsafe/alloc
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
@@ -25,54 +26,127 @@
          "cipher.rkt"
          "bn.rkt")
 
-(define/alloc EVP_PKEY)
-(define/alloc RSA)
-(define/alloc DSA)
+(define-cpointer-type _EVP_PKEY)
+(define-cpointer-type _RSA)
+(define-cpointer-type _DSA)
 
-(define/ffi (EVP_PKEY_type _int) -> _int : int/error)
-(define/ffi (EVP_PKEY_size _pointer) -> _int : int/error)
-(define/ffi (EVP_PKEY_bits  _pointer) -> _int : int/error)
-(define/ffi (EVP_PKEY_assign _pointer _int _pointer) -> _int : check-error)
-(define/ffi (EVP_PKEY_set1_RSA _pointer _pointer) -> _int : check-error)
-(define/ffi (EVP_PKEY_set1_DSA _pointer _pointer) -> _int : check-error)
-(define/ffi 
-  (EVP_SignFinal _pointer _pointer (count : (_ptr o _uint)) _pointer)
-  -> _int : (lambda (f r) (check-error f r) count))
-(define/ffi (EVP_VerifyFinal _pointer _pointer _uint _pointer)
-  -> _int : bool/error)
-(define/ffi (EVP_PKEY_cmp _pointer _pointer) -> _int : bool/error)
-(define/ffi (EVP_PKEY_encrypt _pointer _pointer _int _pointer)
-  -> _int : int/error*)
-(define/ffi (EVP_PKEY_decrypt _pointer _pointer _int _pointer)
-  -> _int : int/error*)
+(define-crypto EVP_PKEY_free
+  (_fun _EVP_PKEY -> _void)
+  #:wrap (deallocator))
 
-(define/ffi (RSA_generate_key_ex _pointer _int _pointer (_pointer = #f))
-  -> _int : check-error)
-(define/ffi 
-  (DSA_generate_parameters_ex _pointer _int 
-    (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) 
-    (_pointer = #f))
-  -> _int : check-error)
-(define/ffi (DSA_generate_key _pointer) -> _int : check-error)
+(define-crypto EVP_PKEY_new
+  (_fun -> _EVP_PKEY/null)
+  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'EVP_PKEY_new)))
+
+(define-crypto RSA_free
+  (_fun _RSA -> _void)
+  #:wrap (deallocator))
+(define-crypto RSA_new
+  (_fun -> _RSA)
+  #:wrap (compose (allocator RSA_free) (err-wrap/pointer 'RSA_new)))
+
+(define-crypto DSA_free
+  (_fun _DSA -> _void)
+  #:wrap (deallocator))
+(define-crypto DSA_new
+  (_fun -> _DSA)
+  #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'DSA_new)))
+
+(define-crypto EVP_PKEY_type
+  (_fun _int -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_type positive?))
+
+(define-crypto EVP_PKEY_size
+  (_fun _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_size positive?))
+
+(define-crypto EVP_PKEY_bits
+  (_fun _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_bits positive?))
+
+(define-crypto EVP_PKEY_assign
+  (_fun _EVP_PKEY (type : _int) (key : _pointer) -> _int)
+  #:wrap (err-wrap/check 'EVP_PKEY_assign))
+
+(define-crypto EVP_PKEY_set1_RSA
+  (_fun _EVP_PKEY _RSA -> _int)
+  #:wrap (err-wrap/check 'EVP_PKEY_set1_RSA))
+
+(define-crypto EVP_PKEY_set1_DSA
+  (_fun _EVP_PKEY _RSA -> _int)
+  #:wrap (err-wrap/check 'EVP_PKEY_set1_DSA))
+
+(define-crypto EVP_SignFinal
+  (_fun _EVP_MD_CTX
+        (sig : _pointer)
+        (count : (_ptr o _uint))
+        _EVP_PKEY
+        -> (result : _int)
+        -> (and (= result 1) count))
+  #:wrap (err-wrap 'EVP_SignFinal values))
+
+(define-crypto EVP_VerifyFinal
+  (_fun _EVP_MD_CTX (buf : _pointer) (len : _uint) _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_VerifyFinal
+                   (lambda (r) (member r '(0 1)))
+                   (lambda (r) (case r ((0) #f) ((1) #t)))))
+
+(define-crypto EVP_PKEY_cmp
+  (_fun _EVP_PKEY _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_cmp
+                   (lambda (r) (member r '(0 1)))
+                   (lambda (r) (case r ((0) #f) ((1) #t)))))
+
+(define-crypto EVP_PKEY_encrypt
+  (_fun _pointer _pointer _int _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_encrypt exact-nonnegative-integer?))
+
+(define-crypto EVP_PKEY_decrypt
+  (_fun _pointer _pointer _int _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_decrypt exact-nonnegative-integer?))
+
+(define-crypto RSA_generate_key_ex
+  (_fun _RSA _int _BIGNUM (_pointer = #f) -> _int)
+  #:wrap (err-wrap/check 'RSA_generate_key_ex))
+
+(define-crypto DSA_generate_parameters_ex
+  (_fun _DSA _int
+        (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) (_pointer = #f)
+        -> _int)
+  #:wrap (err-wrap/check 'DSA_generate_parameters_ex))
+
+(define-crypto DSA_generate_key
+  (_fun _DSA -> _int)
+  #:wrap (err-wrap/check 'DSA_generate_key))
+
+(define-crypto d2i_PublicKey
+  (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
+  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PublicKey)))
+
+(define-crypto d2i_PrivateKey
+  (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
+  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PrivateKey)))
+
+(define-crypto i2d_PublicKey
+  (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_PublicKey positive?))
+
+(define-crypto i2d_PrivateKey
+  (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_PrivateKey positive?))
+
+(define-values (i2d_PublicKey-length i2d_PrivateKey-length)
+  (let ()
+    (define-crypto i2d_PublicKey (_fun _EVP_PKEY (_pointer = #f) -> _int)
+      #:wrap (err-wrap 'i2d_PublicKey-length positive?))
+    (define-crypto i2d_PrivateKey (_fun _EVP_PKEY (_pointer = #f) -> _int)
+      #:wrap (err-wrap 'i2d_PrivateKey-length positive?))
+    values i2d_PublicKey i2d_PrivateKey))
+
 
 (define-struct !pkey (type keygen))
 (define-struct pkey (type evp private?))
 
-(define/ffi (d2i_PublicKey _int (_pointer = #f) (_ptr i _pointer) _long)
-  -> _pointer : pointer/error)
-(define/ffi (d2i_PrivateKey _int (_pointer = #f) (_ptr i _pointer) _long)
-  -> _pointer : pointer/error)
-
-(define/ffi (i2d_PublicKey _pointer (_ptr i _pointer)) -> _int : int/error)
-(define/ffi (i2d_PrivateKey _pointer (_ptr i _pointer)) -> _int : int/error)
-
-(define i2d_PublicKey-length
-  (lambda/ffi (i2d_PublicKey _pointer (_pointer = #f)) 
-    -> _int : int/error))
-(define i2d_PrivateKey-length
-  (lambda/ffi (i2d_PrivateKey _pointer (_pointer = #f)) 
-    -> _int : int/error))
-  
 (define (pkey-size pk)
   (EVP_PKEY_size (pkey-evp pk)))
   

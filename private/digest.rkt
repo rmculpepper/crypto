@@ -328,13 +328,4 @@
 
 (define-provider provide-digest digest.symbols)
 
-(provide-digest)
-(provide provide-digest
-         (struct-out !digest)
-         (struct-out !hmac)
-         digest*
-         digest-ctx
-         digest-port
-         digest-port*
-         generate-hmac-key
-         )
+(provide (all-defined-out))
