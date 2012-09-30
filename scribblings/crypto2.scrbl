@@ -1,12 +1,14 @@
 #lang scribble/doc
-@(require 
-  scribble/manual
-  scribble/basic
-  ;;(for-label "main.ss" "util.ss" scheme) ; fucking piece of shit scribble
-  (for-label scheme)
-  )
+@(require scribble/manual
+          scribble/basic
+          planet/scribble
+          (for-label racket/base
+                     racket/contract
+                     (this-package-in main)))
 
-@title{mzcrypto}
+@title{Crypto2}
+
+@defmodule/this-package[main]
 
 @section{Overview}
 
@@ -60,8 +62,6 @@ You should have received a copy of the GNU Lesser General Public License
 
 @section{API Organization}
 
-@defmodule*/no-declare[(crypto (planet vyzo/crypto))]
-
 The API provided by mzcrypto is conceptually organized in 5 sections:
 @itemize{
 @item{@secref{digest}}
@@ -75,7 +75,6 @@ Each section documents the relevant scheme bindings, with
 tutorial-style examples  in @secref{examples}
 
 @section[#:tag "digest"]{Message Digests}
-@declare-exporting{digest.ss}
 
 @subsection{Digest Algorithms}
 
@@ -203,7 +202,6 @@ True if @scheme[o] is an hmac context.
 }
 
 @section[#:tag "cipher"]{Symmetric Ciphers}
-@declare-exporting{cipher.ss}
 
 @subsection{Cipher Algorithms}
 
@@ -358,7 +356,6 @@ True if @scheme[o] is a cipher-context used for encryption.
 
 
 @section[#:tag "pkey"]{Public Key Cryptography}
-@declare-exporting{pkey.ss}
 
 @subsection{Algorithms and Keys}
 
@@ -478,7 +475,6 @@ sealed key @scheme[sk] decrypted with the @emph{private} key @scheme[pk].
 }
 
 @section[#:tag "dh"]{Diffie-Hellman Key Exchange}
-@declare-exporting{dh.ss}
 
 Diffie-Hellman key parameters are encapsulated in instances of @scheme[<dh>].
 Keys can be generated from a parameter instance using @scheme[generate-key].
@@ -513,7 +509,6 @@ The size in bits of the keys generated from @scheme[o].
 @section[#:tag "util"]{Utilities}
 
 @subsection{Key Generation}
-@declare-exporting["keygen.ss"]
 
 @defproc*[(
 [(generate-key (t <cipher>)) (values bytes? bytes?)]
@@ -540,7 +535,6 @@ the private @scheme[dh] key and the public key part for the exchange.
 }
 
 @subsection{Randomness}
-@declare-exporting{rand.ss}
 
 @deftogether[(
 @defproc[(random-bytes (len exact-nonnegative-integer?)) bytes?]
@@ -580,7 +574,6 @@ facilities.
 
 
 @subsection{Engine Support}
-@declare-exporting{engine.ss}
 
 @deftogether[(
 @defproc[(engine-load-builtin) _]

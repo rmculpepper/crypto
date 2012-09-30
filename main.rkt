@@ -16,9 +16,13 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 #lang scheme/base
-
-(require 
-  "rand.rkt" "digest.rkt" "cipher.rkt" "pkey.rkt" "dh.rkt" "keygen.rkt" "engine.rkt")
+(require "private/rand.rkt"
+         "private/digest.rkt"
+         "private/cipher.rkt"
+         "private/pkey.rkt"
+         "private/dh.rkt"
+         "private/keygen.rkt"
+         "private/engine.rkt")
 (provide-rand)
 (provide-digest)
 (provide-cipher)

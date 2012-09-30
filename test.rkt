@@ -19,7 +19,7 @@
 
 (require srfi/78
          "main.rkt"
-         (only-in "util.rkt" hex))
+         (only-in "private/util.rkt" hex))
 (provide run-tests)
   
 
