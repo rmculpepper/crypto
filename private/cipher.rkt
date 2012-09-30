@@ -34,11 +34,9 @@
 ;; libcrypto < 0.9.8.d doesn't have EVP_CIPHER_CTX_new/free
 (define-crypto EVP_CIPHER_CTX_free
   (_fun _EVP_CIPHER_CTX -> _void)
-  #:fail (lambda (p) (EVP_CIPHER_CTX_cleanup p) (free p))
   #:wrap (deallocator))
 (define-crypto EVP_CIPHER_CTX_new
   (_fun -> _EVP_CIPHER_CTX/null)
-  #:fail (lambda () (malloc 'raw 192)) ;; a little bigger than needed
   #:wrap (compose (allocator EVP_CIPHER_CTX_free) (err-wrap/pointer 'EVP_CIPHER_CTX_new)))
 
 (define-crypto EVP_CIPHER_CTX_cleanup
