@@ -26,14 +26,6 @@
          "cipher.rkt"
          "bn.rkt")
 
-;; FIXME: need to sort out memory management
-;; PKEY can contain an RSA and DSA
-
-;; Scenario: allocate PKEY, allocate RSA, put RSA in PKEY, RSA cpointer gets GC'd:
-;; The *_set1_* functions SHOULD increment the refcount on the RSA structure,
-;; so when the Racket reference to the RSA becomes unreachable, it should be okay
-;; to call RSA_free on it; the refcount is at least 1 because of the PKEY ref.
-
 (define-cpointer-type _EVP_PKEY)
 (define-cpointer-type _RSA)
 (define-cpointer-type _DSA)
