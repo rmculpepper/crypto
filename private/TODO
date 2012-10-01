@@ -1,0 +1,103 @@
+To Do
+=====
+
+- Reorganize into multiple layers:
+  - ffi
+  - low-level
+  - public
+  - convenience (eg, ciphers, digests defined here)
+- Add contracts to public layer
+
+- Fix interface infelicities
+  - better struct names
+  - eg eliminate case-lambda, use Racket opt args
+  - related: split allocate-new-result and update-existing variants
+    into separate functions
+
+- encrypt: split up variants (likewise decrypt)
+
+- Add support for gnutls, etc (?)
+
+------------------------------------------------------------
+
+API Reorganization
+==================
+
+Digests
+-------
+
+- DigestAlgo (digest-algo)
+  eg md5, sha1, sha256
+- DigestImpl (digest-impl)
+  eg sha1 from OpenSSL (existing digest:sha1)
+- DigestContext (digest-ctx)
+  an algo impl together with some state
+
+get-digest-impl : DigestAlgo -> DigestImpl
+digest-info : DigestImpl -> ....
+
+make-digest-ctx : DigestImpl -> DigestCtx
+digest-ctx-update! : DigestCtx data ... -> void
+digest-ctx-final : DigestCtx -> bytes
+digest-ctx-copy : DigestCtx -> DigestCtx
+digest-ctx-state : DigestCtx -> bytes
+  -- is this always the same as final?
+
+digest-bytes : DigestImpl bytes [start end] -> bytes
+digest-input-port : DigestImpl input-port -> bytes
+  closes input port
+
+HMAC
+----
+
+Two alternatives:
+
+  - HMACImpl, HMACContext, etc; or
+  - HMAC is a digest-constructor
+    - GOOD: reuse similar interface
+    - BAD: doesn't support digest-copy, digest-state, etc operations (?)
+    - BAD: abuse of cryptography vocabulary?
+
+Symmetric-Key Crypto
+--------------------
+
+- CipherAlgo
+  - eg blowfish, aes
+  - parameters
+    - key size
+    - block size (?)
+    - mode (ECB, CBC, etc)
+      NOTE: may want to have Racket impl of modes based on 
+      other modes, eg futures-parallelized CTR mode?
+    - "other", eg DES-EDE, etc
+- CipherImpl
+- CipherContext (cipher-ctx)
+
+get-cipher-impl : CipherAlgo [params] -> CipherImpl
+cipher-info : CipherImpl -> ....
+
+make-cipher-ctx : CipherImpl [IV etc] -> CipherContext
+cipher-ctx-update! : CipherContext data buffer [...] -> nat
+cipher-ctx-final! : CipherContext buffer -> nat
+ -- bleh... handle blocks at a time?
+
+Public-Key Crypto
+-----------------
+
+????
+
+Diffie-Hellman Key Exchange
+---------------------------
+
+????
+
+Random Number Generation
+------------------------
+
+????
+
+Utilities
+---------
+
+bytes->hex-string : bytes -> string
+hex-string->bytes : string -> bytes
