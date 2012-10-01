@@ -21,11 +21,22 @@
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
-         "dh.rkt"
-         "keygen.rkt")
+         "dh.rkt")
+
 (provide-rand)
 (provide-digest)
 (provide-cipher)
 (provide-pkey)
 (provide-dh)
-(provide-keygen)
+
+;; ------------------------------------------------------------
+
+(define (generate-key algo . params)
+  (apply (cond [(!cipher? algo) generate-cipher-key]
+               [(!pkey? algo) generate-pkey]
+               [(!digest? algo) generate-hmac-key]
+               [(!dh? algo) generate-dhkey]
+               [else (raise-type-error 'generate-key "crypto type" algo)])
+         algo params))
+
+(provide generate-key)
