@@ -220,29 +220,34 @@
 
 ;; ============================================================
 
-(define *digests* null)
-(define (available-digests) *digests*)
+(define digest-table (make-hasheq))
+(define (available-digests) (hash-keys digest-table))
 
-(define (make-digest+op name proc)
-  (cond [(and proc (proc))
+(define (intern-digest-impl name)
+  (cond [(hash-ref digest-table name #f)
+         => values]
+        [(EVP_get_digestbyname (symbol->string name))
          => (lambda (md)
-              (set! *digests* (cons name *digests*))
-              (let* ([di (new digest-impl% (md md) (name name))]
-                     [op (lambda (inp) (digest* di inp))])
-                (values di (procedure-rename op name))))]
-        [else (values #f (unavailable-function name))]))
+              (let ([di (new digest-impl% (md md) (name name))])
+                (hash-set! digest-table name di)
+                di))]
+        [else #f]))
+
+(define (make-digest-op name di)
+  (procedure-rename
+   (if di
+       (lambda (inp) (digest* di inp))
+       (unavailable-function name))
+   name))
 
 (define-syntax (define-digest stx)
   (syntax-case stx ()
     [(_ id)
-     (with-syntax ([evp (format-id stx "EVP_~a" #'id)]
-                   [type (format-id stx "digest:~a" #'id)])
+     (with-syntax ([di (format-id stx "digest:~a" #'id)])
        #'(begin
-           (define-crypto evp (_fun -> _EVP_MD/null)
-             #:fail (lambda () #f))
-           (define-values (type id)
-             (make-digest+op 'id evp))
-           (put-symbols! digest.symbols type id)))]))
+           (define di (intern-digest-impl 'id))
+           (define id (make-digest-op 'id di))
+           (put-symbols! digest.symbols di id)))]))
 
 (define (unavailable-function who)
   (lambda x (error who "unavailable")))

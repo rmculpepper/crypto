@@ -131,6 +131,9 @@
   (_fun -> _EVP_MD_CTX/null)
   #:wrap (compose (allocator EVP_MD_CTX_destroy) (err-wrap/pointer 'EVP_MD_CTX_create)))
 
+(define-crypto EVP_get_digestbyname
+  (_fun _string -> _EVP_MD/null))
+
 (define-crypto EVP_DigestInit_ex
   (_fun _EVP_MD_CTX
         _EVP_MD
