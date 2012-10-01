@@ -19,8 +19,7 @@
 #lang racket/base
 (require ffi/unsafe
          "ffi.rkt"
-         "macros.rkt"
-         "error.rkt")
+         "macros.rkt")
 (provide (all-defined-out))
 
 ;; ----

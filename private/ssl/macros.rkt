@@ -55,6 +55,8 @@
        (define-syntax-rule (id)
          (provide spec ...)))))))
 
+;; ------------------------------------------------------------
+
 (provide let/fini
          let/error)
 
@@ -91,3 +93,40 @@
      (let ((var exp))
        (with-error (fini var)
          (let/error rest body ...)))]))
+
+;; ------------------------------------------------------------
+
+(provide check-input-range
+         check-output-range)
+
+(define check-input-range
+  (case-lambda
+    [(where bs maxlen)
+     (unless (<= (bytes-length bs) maxlen)
+       (error where "bad input range"))]
+    [(where bs start end)
+     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs)))
+       (error where "bad input range"))]
+    [(where bs start end maxlen)
+     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs))
+                  (<= (- end start) maxlen))
+       (error where "bad input range"))]))
+
+(define check-output-range
+  (case-lambda
+    [(where bs minlen)
+     (when (or (not (bytes? bs)) (immutable? bs))
+       (error where "expects mutable bytes"))
+     (unless (>= (bytes-length bs) minlen)
+       (error where "bad output range"))]
+    [(where bs start end)
+     (when (or (not (bytes? bs)) (immutable? bs))
+       (error where "expects mutable bytes"))
+     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs)))
+       (error where "bad output range"))]
+    [(where bs start end minlen)
+     (when (or (not (bytes? bs)) (immutable? bs))
+       (error where "expects mutable bytes"))
+     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs))
+                  (>= (- end start) minlen))
+       (error where "bad output range"))]))

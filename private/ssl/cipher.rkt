@@ -21,7 +21,6 @@
          racket/match
          "ffi.rkt"
          "macros.rkt"
-         "error.rkt"
          "rand.rkt"
          "util.rkt"
          (for-syntax racket/base

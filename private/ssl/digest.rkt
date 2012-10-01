@@ -20,7 +20,6 @@
 (require ffi/unsafe
          "ffi.rkt"
          "macros.rkt"
-         "error.rkt"
          "rand.rkt"
          "util.rkt"
          (only-in racket/list last)
