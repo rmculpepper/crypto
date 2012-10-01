@@ -18,7 +18,10 @@
 
 #lang racket/base
 (require ffi/unsafe
+         racket/class
          racket/match
+         "../common/interfaces.rkt"
+         "../common/common.rkt"
          "ffi.rkt"
          "macros.rkt"
          "rand.rkt"
@@ -26,17 +29,29 @@
          (for-syntax racket/base
                      racket/syntax))
 
-;; ----
+;; ============================================================
+#|
+(define cipher-impl%
+  (class* object% (cipher-impl<%>)
+    (init-field cipher)
+
+    (super-new)
+    ))
+
+(define cipher-ctx%
+  (class* base-ctx% (cipher-ctx<%>)
+    (init-field ctx)
+
+    (super-new)
+    ))
+|#
+;; ============================================================
+
+;; ============================================================
 
 ;; ivlen: #f when no iv (0 in the cipher)
 (define-struct !cipher (evp size keylen ivlen))
 (define-struct cipher (type (ctx #:mutable) olen encrypt?))
-
-(define (generate-cipher-key type)
-  (let ([klen (!cipher-keylen type)]
-        [ivlen (!cipher-ivlen type)])
-    (values (random-bytes klen) 
-            (and ivlen (pseudo-random-bytes ivlen)))))
 
 (define (cipher-init type key iv enc? pad?)
   (let/error ([ctx (EVP_CIPHER_CTX_new) EVP_CIPHER_CTX_free])
@@ -173,60 +188,17 @@
 (define/cipher-pipe encrypt cipher-encrypt)
 (define/cipher-pipe decrypt cipher-decrypt)
 
-;; EVP_CIPHER: struct evp_cipher_st {nid block_size key_len iv_len ...}
-(define (cipher->props evp)
-  (match (ptr-ref evp (_list-struct _int _int _int _int))
-    [(list _ size keylen ivlen)
-     (values size keylen (and (> ivlen 0) ivlen))]))
+;; ============================================================
 
-(define *ciphers* null)
-(define (available-ciphers) *ciphers*)
+(define (generate-cipher-key type)
+  (let ([klen (!cipher-keylen type)]
+        [ivlen (!cipher-ivlen type)])
+    (values (random-bytes klen) 
+            (and ivlen (pseudo-random-bytes ivlen)))))
 
-(define-for-syntax cipher-modes '(ecb cbc cfb ofb))
-(define-for-syntax default-cipher-mode 'cbc)
-
-(define-syntax (define-cipher stx)
-  (define (unhyphen what) 
-    (regexp-replace* "-" (format "~a" what) "_"))
-
-  (define (make-cipher mode)
-    (with-syntax ([evp (format-id stx "EVP_~a" (unhyphen mode))]
-                  [cipher (format-id stx "cipher:~a" mode)])
-      #'(begin
-          (define-crypto evp (_fun -> _EVP_CIPHER/null)
-            #:fail (lambda () #f))
-          (define cipher
-            (cond [(and evp (evp))
-                   => (lambda (evpp)
-                        (call-with-values (lambda () (cipher->props evpp))
-                          (lambda (size keylen ivlen)
-                            (make-!cipher evpp size keylen ivlen))))]
-                  [else #f]))
-          (put-symbols! cipher.symbols cipher))))
-
-  (define (make-def name)
-    (with-syntax ([cipher (format-id stx "cipher:~a" name)]
-                  [alias (format-id stx "cipher:~a-~a" name default-cipher-mode)])
-      (let ([modes (for/list ([m cipher-modes]) (format-symbol "~a-~a" name m))])
-        (with-syntax ([(def ...) (map make-cipher modes)])
-          #`(begin
-              def ...
-              (define cipher
-                (begin (when alias (set! *ciphers* (cons (quote #,name) *ciphers*)))
-                       alias))
-              (put-symbols! cipher.symbols cipher))))))
-
-  (syntax-case stx ()
-    [(_ c)
-     (make-def (syntax-e #'c))]
-    [(_ c (klen ...))
-     (with-syntax ([(def ...) 
-                    (for/list ((k (syntax->list #'(klen ...))))
-                      (make-def (format-symbol "~a-~a" #'c (syntax-e k))))])
-       #'(begin def ...))]))
+;; ============================================================
 
 (define-symbols cipher.symbols
-  available-ciphers 
   !cipher?
   cipher?
   cipher-encrypt?
@@ -234,16 +206,11 @@
   cipher-encrypt cipher-decrypt cipher-update! cipher-final!
   encrypt decrypt)
 
-(define-cipher des)
-(define-cipher des-ede)
-(define-cipher des-ede3)
-(define-cipher idea)
-(define-cipher bf)
-(define-cipher cast5)
-(define-cipher aes (128 192 256))
-(define-cipher camellia (128 192 256))
-
 (define-provider provide-cipher cipher.symbols)
 
+(provide (all-defined-out))
+
+#|
 (provide-cipher)
 (provide provide-cipher generate-cipher-key)
+|#

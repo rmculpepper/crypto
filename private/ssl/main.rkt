@@ -20,6 +20,8 @@
 (require (for-syntax racket/base
                      racket/syntax)
          racket/class
+         racket/match
+         ffi/unsafe
          "ffi.rkt"
          "macros.rkt"
          "rand.rkt"
@@ -33,6 +35,7 @@
 (provide-cipher)
 (provide-pkey)
 (provide-dh)
+
 
 ;; ============================================================
 ;; Available Digests
@@ -83,6 +86,7 @@
 (define-provider provide-avail-digests avail-digests.symbols)
 (provide-avail-digests)
 
+
 ;; ============================================================
 ;; Public Key - Available Digests
 
@@ -110,6 +114,77 @@
 (provide pkey:rsa:digests
          pkey:dsa:digests
          pkey-digest?)
+
+
+;; ============================================================
+;; Available Ciphers
+
+(define *ciphers* null)
+(define (available-ciphers) *ciphers*)
+
+(define-for-syntax cipher-modes '(ecb cbc cfb ofb))
+(define-for-syntax default-cipher-mode 'cbc)
+
+(define-syntax (define-cipher stx)
+  (define (unhyphen what) 
+    (regexp-replace* "-" (format "~a" what) "_"))
+
+  (define (make-cipher mode)
+    (with-syntax ([evp (format-id stx "EVP_~a" (unhyphen mode))]
+                  [cipher (format-id stx "cipher:~a" mode)])
+      #'(begin
+          (define-crypto evp (_fun -> _EVP_CIPHER/null)
+            #:fail (lambda () #f))
+          (define cipher
+            (cond [(and evp (evp))
+                   => (lambda (evpp)
+                        (call-with-values (lambda () (cipher->props evpp))
+                          (lambda (size keylen ivlen)
+                            (make-!cipher evpp size keylen ivlen))))]
+                  [else #f]))
+          (put-symbols! avail-ciphers.symbols cipher))))
+
+  (define (make-def name)
+    (with-syntax ([cipher (format-id stx "cipher:~a" name)]
+                  [alias (format-id stx "cipher:~a-~a" name default-cipher-mode)])
+      (let ([modes (for/list ([m cipher-modes]) (format-symbol "~a-~a" name m))])
+        (with-syntax ([(def ...) (map make-cipher modes)])
+          #`(begin
+              def ...
+              (define cipher
+                (begin (when alias (set! *ciphers* (cons (quote #,name) *ciphers*)))
+                       alias))
+              (put-symbols! avail-ciphers.symbols cipher))))))
+
+  (syntax-case stx ()
+    [(_ c)
+     (make-def (syntax-e #'c))]
+    [(_ c (klen ...))
+     (with-syntax ([(def ...) 
+                    (for/list ((k (syntax->list #'(klen ...))))
+                      (make-def (format-symbol "~a-~a" #'c (syntax-e k))))])
+       #'(begin def ...))]))
+
+;; EVP_CIPHER: struct evp_cipher_st {nid block_size key_len iv_len ...}
+(define (cipher->props evp)
+  (match (ptr-ref evp (_list-struct _int _int _int _int))
+    [(list _ size keylen ivlen)
+     (values size keylen (and (> ivlen 0) ivlen))]))
+
+(define-symbols avail-ciphers.symbols available-ciphers)
+
+(define-cipher des)
+(define-cipher des-ede)
+(define-cipher des-ede3)
+(define-cipher idea)
+(define-cipher bf)
+(define-cipher cast5)
+(define-cipher aes (128 192 256))
+(define-cipher camellia (128 192 256))
+
+(define-provider provide-avail-ciphers avail-ciphers.symbols)
+(provide-avail-ciphers)
+
 
 ;; ============================================================
 ;; Key Generation
