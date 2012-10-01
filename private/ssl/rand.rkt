@@ -15,24 +15,13 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang racket/base
 (require ffi/unsafe
-         "libcrypto.rkt"
+         "ffi.rkt"
          "macros.rkt"
          "error.rkt")
 (provide (all-defined-out))
-
-(define-crypto RAND_bytes
-  (_fun (buf : _pointer)
-        (len : _uint)
-        -> _int)
-  #:wrap (err-wrap/check 'RAND_bytes))
-
-(define-crypto RAND_pseudo_bytes
-  (_fun (buf : _pointer)
-        (len : _uint)
-        -> _int)
-  #:wrap (err-wrap/check 'RAND_pseudo_bytes))
 
 ;; ----
 

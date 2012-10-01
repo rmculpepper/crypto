@@ -15,10 +15,11 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang scheme/base
 (require srfi/78
          "main.rkt"
-         (only-in "private/util.rkt" hex))
+         (only-in "util.rkt" hex))
 (provide run-tests)
 
 (define (test-sha1)

@@ -15,10 +15,11 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/alloc
          racket/match
+         "ffi.rkt"
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
@@ -26,57 +27,6 @@
          "util.rkt"
          (for-syntax racket/base
                      racket/syntax))
-
-(define-cpointer-type _EVP_CIPHER_CTX)
-(define-cpointer-type _EVP_CIPHER)
-
-;; libcrypto < 0.9.8.d doesn't have EVP_CIPHER_CTX_new/free
-(define-crypto EVP_CIPHER_CTX_free
-  (_fun _EVP_CIPHER_CTX -> _void)
-  #:wrap (deallocator))
-(define-crypto EVP_CIPHER_CTX_new
-  (_fun -> _EVP_CIPHER_CTX/null)
-  #:wrap (compose (allocator EVP_CIPHER_CTX_free) (err-wrap/pointer 'EVP_CIPHER_CTX_new)))
-
-(define-crypto EVP_CIPHER_CTX_cleanup
-  (_fun _EVP_CIPHER_CTX -> _void)
-  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_cleanup))
-
-(define-crypto EVP_CipherInit_ex
-  (_fun _EVP_CIPHER_CTX
-        _EVP_CIPHER
-        (_pointer = #f)
-        (key : _pointer)
-        (iv : _pointer)
-        (enc? : _bool)
-        -> _int)
-  #:wrap (err-wrap/check 'EVP_CipherInit_ex))
-
-(define-crypto EVP_CipherUpdate
-  (_fun _EVP_CIPHER_CTX
-        (out : _pointer)
-        (olen : (_ptr o _int))
-        (in : _pointer)
-        (ilen : _int)
-        -> (result : _int)
-        -> (and (= result 1) ;; okay
-                olen))
-  #:wrap (err-wrap 'EVP_CipherUpdate values))
-
-(define-crypto EVP_CipherFinal_ex
-  (_fun _EVP_CIPHER_CTX
-        (out : _pointer)
-        (olen : (_ptr o _int))
-        -> (result : _int)
-        -> (and (= result 1) ;; okay
-                olen))
-  #:wrap (err-wrap 'EVP_CipherFinal_ex values))
-
-(define-crypto EVP_CIPHER_CTX_set_padding
-  (_fun _EVP_CIPHER_CTX
-        _bool
-        -> _int)
-  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_padding))
 
 ;; ----
 

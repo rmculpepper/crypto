@@ -15,131 +15,16 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/alloc
+         "ffi.rkt"
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
          "util.rkt"
          "digest.rkt"
-         "cipher.rkt"
-         "bn.rkt")
-
-(define-cpointer-type _EVP_PKEY)
-(define-cpointer-type _RSA)
-(define-cpointer-type _DSA)
-
-(define-crypto EVP_PKEY_free
-  (_fun _EVP_PKEY -> _void)
-  #:wrap (deallocator))
-
-(define-crypto EVP_PKEY_new
-  (_fun -> _EVP_PKEY/null)
-  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'EVP_PKEY_new)))
-
-(define-crypto RSA_free
-  (_fun _RSA -> _void)
-  #:wrap (deallocator))
-
-(define-crypto RSA_new
-  (_fun -> _RSA/null)
-  #:wrap (compose (allocator RSA_free) (err-wrap/pointer 'RSA_new)))
-
-(define-crypto DSA_free
-  (_fun _DSA -> _void)
-  #:wrap (deallocator))
-
-(define-crypto DSA_new
-  (_fun -> _DSA/null)
-  #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'DSA_new)))
-
-(define-crypto EVP_PKEY_type
-  (_fun _int -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_type positive?))
-
-(define-crypto EVP_PKEY_size
-  (_fun _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_size positive?))
-
-(define-crypto EVP_PKEY_bits
-  (_fun _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_bits positive?))
-
-(define-crypto EVP_PKEY_set1_RSA
-  (_fun _EVP_PKEY _RSA -> _int)
-  #:wrap (err-wrap/check 'EVP_PKEY_set1_RSA))
-
-(define-crypto EVP_PKEY_set1_DSA
-  (_fun _EVP_PKEY _DSA -> _int)
-  #:wrap (err-wrap/check 'EVP_PKEY_set1_DSA))
-
-(define-crypto EVP_SignFinal
-  (_fun _EVP_MD_CTX
-        (sig : _pointer)
-        (count : (_ptr o _uint))
-        _EVP_PKEY
-        -> (result : _int)
-        -> (and (= result 1) count))
-  #:wrap (err-wrap 'EVP_SignFinal values))
-
-(define-crypto EVP_VerifyFinal
-  (_fun _EVP_MD_CTX (buf : _pointer) (len : _uint) _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_VerifyFinal
-                   (lambda (r) (member r '(0 1)))
-                   (lambda (r) (case r ((0) #f) ((1) #t)))))
-
-(define-crypto EVP_PKEY_cmp
-  (_fun _EVP_PKEY _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_cmp
-                   (lambda (r) (member r '(0 1)))
-                   (lambda (r) (case r ((0) #f) ((1) #t)))))
-
-(define-crypto EVP_PKEY_encrypt
-  (_fun _pointer _pointer _int _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_encrypt exact-nonnegative-integer?))
-
-(define-crypto EVP_PKEY_decrypt
-  (_fun _pointer _pointer _int _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_decrypt exact-nonnegative-integer?))
-
-(define-crypto RSA_generate_key_ex
-  (_fun _RSA _int _BIGNUM (_pointer = #f) -> _int)
-  #:wrap (err-wrap/check 'RSA_generate_key_ex))
-
-(define-crypto DSA_generate_parameters_ex
-  (_fun _DSA _int
-        (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) (_pointer = #f)
-        -> _int)
-  #:wrap (err-wrap/check 'DSA_generate_parameters_ex))
-
-(define-crypto DSA_generate_key
-  (_fun _DSA -> _int)
-  #:wrap (err-wrap/check 'DSA_generate_key))
-
-(define-crypto d2i_PublicKey
-  (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
-  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PublicKey)))
-
-(define-crypto d2i_PrivateKey
-  (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
-  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PrivateKey)))
-
-(define-crypto i2d_PublicKey
-  (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_PublicKey positive?))
-
-(define-crypto i2d_PrivateKey
-  (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_PrivateKey positive?))
-
-(define-values (i2d_PublicKey-length i2d_PrivateKey-length)
-  (let ()
-    (define-crypto i2d_PublicKey (_fun _EVP_PKEY (_pointer = #f) -> _int)
-      #:wrap (err-wrap 'i2d_PublicKey-length positive?))
-    (define-crypto i2d_PrivateKey (_fun _EVP_PKEY (_pointer = #f) -> _int)
-      #:wrap (err-wrap 'i2d_PrivateKey-length positive?))
-    (values i2d_PublicKey i2d_PrivateKey)))
+         "cipher.rkt")
 
 ;; ----
 

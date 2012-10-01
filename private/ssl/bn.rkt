@@ -15,44 +15,11 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang racket/base
-(require ffi/unsafe
-         ffi/unsafe/alloc
-         "libcrypto.rkt"
+(require "ffi.rkt"
          "util.rkt")
 (provide (all-defined-out))
-
-(define-cpointer-type _BIGNUM)
-
-(define-crypto BN_free
-  (_fun _BIGNUM
-        -> _void)
-  #:wrap (deallocator))
-
-(define-crypto BN_new
-  (_fun -> _BIGNUM/null)
-  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_new)))
-
-(define-crypto BN_add_word
-  (_fun _BIGNUM
-        _ulong
-        -> _int)
-  #:wrap (err-wrap/check 'BN_add_word))
-
-(define-crypto BN_num_bits
-  (_fun _BIGNUM -> _int))
-
-(define-crypto BN_bn2bin
-  (_fun _BIGNUM _bytes -> _int))
-
-(define-crypto BN_bin2bn
-  (_fun (bs : _bytes)
-        (_int = (bytes-length bs))
-        (_pointer = #f)
-        -> _BIGNUM/null)
-  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_bin2bn)))
-
-;; ----
 
 (define (bn-size bn)
   (ceiling (/ (BN_num_bits bn) 8)))

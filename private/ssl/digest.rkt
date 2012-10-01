@@ -15,9 +15,10 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/alloc
+         "ffi.rkt"
          "macros.rkt"
          "libcrypto.rkt"
          "error.rkt"
@@ -26,102 +27,6 @@
          (only-in racket/list last)
          (for-syntax racket/base
                      racket/syntax))
-
-(define-cpointer-type _EVP_MD_CTX)
-(define-cpointer-type _EVP_MD)
-(define-cpointer-type _HMAC_CTX)
-(define EVP_MAX_MD_SIZE 64) ;; 512 bits
-
-(define-crypto EVP_MD_CTX_destroy
-  (_fun _EVP_MD_CTX -> _void)
-  #:wrap (deallocator))
-
-(define-crypto EVP_MD_CTX_create
-  (_fun -> _EVP_MD_CTX/null)
-  #:wrap (compose (allocator EVP_MD_CTX_destroy) (err-wrap/pointer 'EVP_MD_CTX_create)))
-
-(define-crypto EVP_DigestInit_ex
-  (_fun _EVP_MD_CTX
-        _EVP_MD
-        (_pointer = #f)
-        -> _int)
-  #:wrap (err-wrap/check 'EVP_DigestInit_ex))
-
-(define-crypto EVP_DigestUpdate
-  (_fun _EVP_MD_CTX
-        (d : _pointer)
-        (cnt : _ulong)
-        -> _int)
-  #:wrap (err-wrap/check 'EVP_DigestUpdate))
-
-(define-crypto EVP_DigestFinal_ex
-  (_fun _EVP_MD_CTX
-        (out : _pointer)
-        (_pointer = #f)
-        -> _int)
-  #:wrap (err-wrap/check 'EVP_DigestFinal_ex))
-
-(define-crypto EVP_MD_CTX_copy_ex
-  (_fun _EVP_MD_CTX
-        _EVP_MD_CTX
-        -> _int)
-  #:wrap (err-wrap/check 'EVP_MD_CTX_copy_ex))
-
-(define-crypto HMAC
-  (_fun _EVP_MD
-        (key : _pointer)
-        (keylen : _int)
-        (d : _pointer)
-        (n : _int)
-        (md : _pointer)
-        (r : (_ptr o _uint))
-        -> _void
-        -> r))
-
-;; ugh - no HMAC_CTX* maker in libcrypto
-(define HMAC_CTX_free
-  ((deallocator)
-   (lambda (p)
-     (HMAC_CTX_cleanup p)
-     (free p))))
-(define HMAC_CTX_new
-  ((allocator HMAC_CTX_free)
-   ((err-wrap/pointer 'HMAC_CTX_new)
-    (lambda ()
-      (let ([hmac (malloc 'raw 256)]) ;; FIXME: check size
-        (cpointer-push-tag! hmac HMAC_CTX-tag)
-        (HMAC_CTX_init hmac)
-        hmac)))))
-
-(define-crypto HMAC_CTX_init
-  (_fun _HMAC_CTX -> _void))
-
-(define-crypto HMAC_CTX_cleanup
-  (_fun _HMAC_CTX -> _void))
-
-(define-crypto HMAC_Init_ex
-  (_fun _HMAC_CTX
-        (key : _pointer)
-        (keylen : _uint)
-        _EVP_MD
-        (_pointer = #f)
-        -> _void) ;; _int since OpenSSL 1.0.0
-  #| #:wrap (err-wrap/check 'HMAC_Init_ex) |#)
-
-(define-crypto HMAC_Update
-  (_fun _HMAC_CTX
-        (data : _pointer)
-        (len : _uint)
-        -> _void) ;; _int since OpenSSL 1.0.0
-  #| #:wrap (err-wrap/check 'HMAC_Update) |#)
-
-(define-crypto HMAC_Final
-  (_fun _HMAC_CTX
-        (md : _pointer)
-        (r : (_ptr o _int))
-        -> _void ;; _int since OpenSSL 1.0.0
-        -> r)
-  #| #:wrap (err-wrap 'HMAC_Final values) |#)
 
 ;; ----
 

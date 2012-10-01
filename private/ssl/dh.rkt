@@ -15,10 +15,10 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/alloc
-         "libcrypto.rkt"
+         "ffi.rkt"
          "macros.rkt"
          "bn.rkt"
          (only-in net/base64 base64-decode)
@@ -28,37 +28,6 @@
 
 (define-struct !dh (bits bs))
 (define-struct dhkey (p))
-
-(define-cpointer-type _DH)
-
-(define-crypto DH_free
-  (_fun _DH -> _void)
-  #:wrap (deallocator))
-
-(define-crypto DH_new
-  (_fun -> _DH/null)
-  #:wrap (allocator DH_free))
-
-(define-crypto DH_size
-  (_fun _DH -> _int))
-
-(define-crypto DH_generate_key
-  (_fun _DH -> _int)
-  #:wrap (err-wrap/check 'DH_generate_key))
-
-(define-crypto DH_compute_key
-  (_fun _pointer
-        _BIGNUM
-        _DH
-        -> _int)
-  #:wrap (err-wrap/check 'DH_compute_key))
-
-(define-crypto d2i_DHparams
-  (_fun (_pointer = #f)
-        (_ptr i _pointer)
-        _long
-        -> (result : _DH/null))
-  #:wrap (compose (allocator DH_free) (err-wrap/pointer 'd2i_DHparams)))
 
 ;; ----
 

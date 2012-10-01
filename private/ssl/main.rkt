@@ -15,13 +15,14 @@
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+
 #lang racket/base
-(require "private/rand.rkt"
-         "private/digest.rkt"
-         "private/cipher.rkt"
-         "private/pkey.rkt"
-         "private/dh.rkt"
-         "private/keygen.rkt")
+(require "rand.rkt"
+         "digest.rkt"
+         "cipher.rkt"
+         "pkey.rkt"
+         "dh.rkt"
+         "keygen.rkt")
 (provide-rand)
 (provide-digest)
 (provide-cipher)
