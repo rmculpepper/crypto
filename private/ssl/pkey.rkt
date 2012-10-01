@@ -18,68 +18,135 @@
 
 #lang racket/base
 (require ffi/unsafe
+         racket/class
+         "../common/interfaces.rkt"
+         "../common/common.rkt"
          "ffi.rkt"
          "macros.rkt"
          "util.rkt"
          "digest.rkt"
          "cipher.rkt")
 
-;; ----
+(define pkey-impl%
+  (class* object% (#|pkey-impl<%>|#)
+    (init-field pktype
+                keygen)
+    (super-new)
 
-(define-struct !pkey (type keygen))
-(define-struct pkey (type evp private?))
+    (define/public (read-key who public? buf start end)
+      (check-input-range who buf start end)
+      (let* ([d2i (if public? d2i_PublicKey d2i_PrivateKey)]
+             [evp (d2i pktype (ptr-add buf start) (- end start))])
+        (new pkey-ctx% (impl this) (evp evp) (private? (not public?)))))
 
-(define (pkey-size pk) (EVP_PKEY_size (pkey-evp pk)))
-(define (pkey-bits pk) (EVP_PKEY_bits (pkey-evp pk)))
+    (define/public (generate-key args)
+      (apply keygen args))
 
-(define (pkey=? k1 . klst)
-  (let ([evp (pkey-evp k1)])
-    (for/and ([k (in-list klst)])
-      (EVP_PKEY_cmp evp (pkey-evp k)))))
+    ))
 
-(define (read-pkey type public? bs)
-  (let* ([d2i (if public? d2i_PublicKey d2i_PrivateKey)]
-         [evp (d2i (!pkey-type type) bs (bytes-length bs))])
-    (make-pkey type evp (not public?))))
+(define pkey-ctx%
+  (class* base-ctx% (pkey-ctx<%>)
+    (init-field evp
+                private?)
+    (super-new)
 
+    (define/public (is-private?) private?)
+
+    (define/public (get-max-signature-size) (EVP_PKEY_size evp))
+    (define/public (get-key-size/bits) (EVP_PKEY_bits evp))
+
+    (define/public (write-key who public?)
+      (let* ([i2d (if public? i2d_PublicKey i2d_PrivateKey)]
+             [i2d-length (if public? i2d_PublicKey-length i2d_PrivateKey-length)]
+             [buf (make-bytes (i2d-length evp))])
+        (i2d evp buf)
+        buf))
+
+    (define/public (equal-to-key? other)
+      (and (is-a? other pkey-ctx%)
+           (EVP_PKEY_cmp evp (get-field evp other))))
+
+    ;; From headers, EVP_{Sign,Verify}{Init_ex,Update} are just macros for
+    ;; EVP_Digest{Init_ex,Update}. So digest state is compatible.
+
+    (define/public (sign! who digest-ctx buf start end)
+      (unless private?
+        (error who "not a private key"))
+      ;; FIXME: add method to digest-ctx% instead (?)
+      (unless (is-a? digest-ctx digest-ctx%)
+        (error who "invalid digest context, not compatible with libcrypto"))
+      (check-output-range who buf start end (get-max-signature-size))
+      (let ([dctx (get-field ctx digest-ctx)])
+        (unless dctx (error who "digest context is closed"))
+        (EVP_SignFinal dctx (ptr-add buf start) evp)))
+
+    (define/public (verify who digest-ctx buf start end)
+      ;; FIXME: add methdo to digest-ctx% instead (?)
+      (unless (is-a? digest-ctx digest-ctx%)
+        (error who "invalid digest context, not compatible with libcrypto"))
+      (check-input-range who buf start end)
+      (let ([dctx (get-field ctx digest-ctx)])
+        (unless dctx (error who "digest context is closed"))
+        (EVP_VerifyFinal dctx (ptr-add buf start) (- end start) evp)))
+
+    (define/public (encrypt/decrypt who encrypt? public? inbuf instart inend)
+      (unless (or public? (is-private?))
+        (error who "not a private key"))
+      (check-input-range who inbuf instart inend)
+      (let* ([outbuf (make-bytes (get-max-signature-size))]
+             [e/d (if encrypt? EVP_PKEY_encrypt EVP_PKEY_decrypt)]
+             [outlen (e/d outbuf (ptr-add inbuf instart) (- inend instart) evp)])
+        (shrink-bytes outbuf outlen)))
+
+    ))
+
+;; ============================================================
+
+;; ============================================================
+
+;; (define-struct !pkey (type keygen))
+;; (define-struct pkey (type evp private?))
+(define (!pkey? x) (is-a? x pkey-impl%))
+(define (pkey? x) (is-a? x pkey-ctx%))
+(define (pkey-private? x) (send x is-private?))
+(define (-pkey-type x) (send x get-impl))
+
+(define (pkey-size pk) (send pk get-max-signature-size))
+(define (pkey-bits pk) (send pk get-key-size/bits))
+
+(define (pkey=? k1 . ks)
+  (for/and ([k (in-list ks)])
+    (send k1 equal-to-key? k)))
+
+(define (read-pkey pki public? bs)
+  (send pki read-key 'read-pkey public? bs 0 (bytes-length bs)))
 (define (write-pkey pk public?)
-  (let* ([i2d (if public? i2d_PublicKey i2d_PrivateKey)]
-         [i2d-len (if public? i2d_PublicKey-length i2d_PrivateKey-length)]
-         [obs (make-bytes (i2d-len (pkey-evp pk)))])
-    (i2d (pkey-evp pk) obs)
-    obs))
+  (send pk write-key 'write-pkey public?))
 
-(define (bytes->private-key type bs) (read-pkey type #f bs))
-(define (bytes->public-key type bs)  (read-pkey type #t bs))
+(define (bytes->private-key pki bs) (read-pkey pki #f bs))
+(define (bytes->public-key pki bs)  (read-pkey pki #t bs))
 
 (define (private-key->bytes pk) (write-pkey pk #f))
 (define (public-key->bytes pk)  (write-pkey pk #t))
 
 (define (pkey->public-key pk)
   (if (pkey-private? pk)
-      (bytes->public-key (pkey-type pk) (public-key->bytes pk))
+      (bytes->public-key (send pk get-impl) (public-key->bytes pk))
       pk))
 
-;; libcrypto #defines for those are autogened...
-;; EVP_PKEY: struct evp_pkey_st {type ...}
-(define (pk->type evp)
-  (EVP_PKEY_type (car (ptr-ref evp (_list-struct _int)))))
+(define (generate-pkey pki bits . args)
+  (send pki generate-key (cons bits args)))
 
-(define (rsa-keygen bits (exp 65537))
+;; ============================================================
+
+(define (rsa-keygen bits [exp 65537])
   (let/fini ([ep (BN_new) BN_free])
     (BN_add_word ep exp)
     (let/error ([rsap (RSA_new) RSA_free]
                 [evp (EVP_PKEY_new) EVP_PKEY_free])
       (RSA_generate_key_ex rsap bits ep)
       (EVP_PKEY_set1_RSA evp rsap)
-      (make-pkey pkey:rsa evp #t))))
-
-(define pkey:rsa
-  (with-handlers (#|(exn:fail? (lambda x #f))|#)
-    (let/fini ([rsap (RSA_new) RSA_free]
-               [evp (EVP_PKEY_new) EVP_PKEY_free])
-      (EVP_PKEY_set1_RSA evp rsap)
-      (make-!pkey (pk->type evp) rsa-keygen))))
+      (new pkey-ctx% (impl pkey:rsa) (evp evp) (private? #t)))))
 
 (define (dsa-keygen bits)
   (let/error ([dsap (DSA_new) DSA_free]
@@ -87,56 +154,52 @@
     (DSA_generate_parameters_ex dsap bits)
     (DSA_generate_key dsap)
     (EVP_PKEY_set1_DSA evp dsap)
-    (make-pkey pkey:dsa evp #t)))
+    (new pkey-ctx% (impl pkey:dsa) (evp evp) (private? #t))))
+
+;; ============================================================
+
+;; FIXME: get pktype constants from C headers
+
+;; libcrypto #defines for those are autogened...
+;; EVP_PKEY: struct evp_pkey_st {type ...}
+(define (pk->type evp)
+  (EVP_PKEY_type (car (ptr-ref evp (_list-struct _int)))))
+
+(define pkey:rsa
+  (with-handlers (#|(exn:fail? (lambda x #f))|#)
+    (let ([pktype (let/fini ([rsap (RSA_new) RSA_free]
+                             [evp (EVP_PKEY_new) EVP_PKEY_free])
+                    (EVP_PKEY_set1_RSA evp rsap)
+                    (pk->type evp))])
+      (new pkey-impl% (pktype pktype) (keygen rsa-keygen)))))
 
 (define pkey:dsa
   (with-handlers (#|(exn:fail? (lambda x #f))|#)
-    (let/fini ([dsap (DSA_new) DSA_free]
-               [evp (EVP_PKEY_new) EVP_PKEY_free])
-      (EVP_PKEY_set1_DSA evp dsap)
-      (make-!pkey (pk->type evp) dsa-keygen))))
+    (let ([pktype (let/fini ([dsap (DSA_new) DSA_free]
+                             [evp (EVP_PKEY_new) EVP_PKEY_free])
+                    (EVP_PKEY_set1_DSA evp dsap)
+                    (pk->type evp))])
+      (new pkey-impl% (pktype pktype) (keygen dsa-keygen)))))
 
-(define (generate-pkey type bits . args)
-  (apply (!pkey-keygen type) bits args))
-
-(define (pkey-sign dg pk bs)
-  (unless (pkey-private? pk)
-    (error 'pkey-sign "not a private key"))
-  (cond [(-digest-ctx dg)
-         => (lambda (ctx) (EVP_SignFinal ctx bs (pkey-evp pk)))]
-        [else (error 'pkey-sign "finalized context")]))
-
-(define (pkey-verify dg pk bs len)
-  (cond [(-digest-ctx dg)
-         => (lambda (ctx) (EVP_VerifyFinal ctx bs len (pkey-evp pk)))]
-        [else (error 'pkey-verify "finalized context")]))
+;; ============================================================
 
 (define digest-sign
   (case-lambda
     [(dg pk)
      (let* ([bs (make-bytes (pkey-size pk))]
-            [len (pkey-sign dg pk bs)])
+            [len (digest-sign dg pk bs)])
        (shrink-bytes bs len))]
-    [(dg pk bs)
-     (check-output-range 'digest-sign bs (pkey-size pk))
-     (pkey-sign dg pk bs)]
-    [(dg pk bs start)
-     (check-output-range 'digest-sign bs start (bytes-length bs) (pkey-size pk))
-     (pkey-sign dg pk (ptr-add bs start))]
-    [(dg pk bs start end)
-     (check-output-range 'digest-sign bs start end (pkey-size pk))
-     (pkey-sign dg pk (ptr-add bs start))]))
+    [(dg pk buf)
+     (send pk sign! 'digest-sign dg buf 0 (bytes-length buf))]
+    [(dg pk buf start)
+     (send pk sign! 'digest-sign dg buf start (bytes-length buf))]
+    [(dg pk buf start end)
+     (send pk sign! 'digest-sign dg buf start end)]))
 
-(define digest-verify
-  (case-lambda
-    [(dg pk bs)
-     (pkey-verify dg pk bs (bytes-length bs))]
-    [(dg pk bs start)
-     (check-input-range 'digest-verify bs start (bytes-length bs))
-     (pkey-verify dg pk (ptr-add bs start) (- (bytes-length bs) start))]
-    [(dg pk bs start end)
-     (check-input-range 'digest-verify bs start end)
-     (pkey-verify dg pk (ptr-add bs start) (- end start))]))
+(define (digest-verify dg pk buf [start 0] [end (bytes-length buf)])
+  (send pk verify 'digest-verify dg buf start end))
+
+;; ============================================================
 
 (define (sign-bytes dgt pk bs)
   (let ([dg (digest-new dgt)])
@@ -164,28 +227,15 @@
         [(input-port? inp) (verify-port dgt pk sigbs inp)]
         [else (raise-type-error 'verify "bytes or input-port" inp)]))
 
-(define-syntax-rule (define-pkey-crypt crypt op evp-op public?)
-  (begin
-    (define (op pk ibs ilen)
-      (unless (or public? (pkey-private? pk))
-        (error 'crypt "not a private key"))
-      (let* ((obs (make-bytes (pkey-size pk)))
-             (olen (evp-op obs ibs ilen (pkey-evp pk))))
-        (shrink-bytes obs olen)))
-    (define crypt
-      (case-lambda
-        [(pk ibs)
-         (check-input-range 'crypt ibs (pkey-size pk))
-         (op pk ibs (bytes-length ibs))]
-        [(pk ibs istart)
-         (check-input-range 'crypt ibs istart (bytes-length ibs) (pkey-size pk))
-         (op pk (ptr-add ibs istart) (- (bytes-length ibs) istart))]
-        [(pk ibs istart iend)
-         (check-input-range 'crypt ibs istart iend (pkey-size pk))
-         (op pk (ptr-add ibs istart) (- iend istart))]))))
+;; ============================================================
 
-(define-pkey-crypt encrypt/pkey pkey-encrypt EVP_PKEY_encrypt #t)
-(define-pkey-crypt decrypt/pkey pkey-decrypt EVP_PKEY_decrypt #f)
+(define (encrypt/pkey pk buf [start 0] [end (bytes-length buf)])
+  (send pk encrypt/decrypt 'encrypt/pkey #t #t buf start end))
+
+(define (decrypt/pkey pk buf [start 0] [end (bytes-length buf)])
+  (send pk encrypt/decrypt 'encrypt/pkey #f #f buf start end))
+
+;; ============================================================
 
 ;; sk: sealed key
 (define (encrypt/envelope pk cipher . cargs)
@@ -196,6 +246,8 @@
 
 (define (decrypt/envelope pk cipher sk iv  . cargs)
   (apply decrypt cipher (decrypt/pkey pk sk) iv cargs))
+
+;; ============================================================
 
 ;; Note: dsa is only usable with dss1 in libcrypto-0.9.8
 (define-symbols pkey.symbols
@@ -213,4 +265,4 @@
 (provide-pkey)
 (provide provide-pkey
          generate-pkey
-         (rename-out [pkey-type -pkey-type]))
+         -pkey-type)

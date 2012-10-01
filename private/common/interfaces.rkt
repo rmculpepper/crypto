@@ -9,7 +9,9 @@
          digest-impl<%>
          digest-ctx<%>
          cipher-impl<%>
-         cipher-ctx<%>)
+         cipher-ctx<%>
+         pkey-impl<%>
+         pkey-ctx<%>)
 
 ;; ============================================================
 ;; General Implementation & Contexts
@@ -85,4 +87,28 @@ eg, (send a-sha1-impl get-size) => 20
 
     update!  ;; sym bytes nat nat bytes nat nat -> nat
     final!   ;; sym bytes nat nat -> nat
+    ))
+
+;; ============================================================
+;; Public-Key Cryptography
+
+(define pkey-impl<%>
+  (interface (impl<%>)
+    read-key ;; sym boolean bytes nat nat -> pkey-ctx<%>
+    generate-key ;; (listof ???) -> pkey-ctx<%>
+    ))
+
+(define pkey-ctx<%>
+  (interface (ctx<%>)
+    is-private?             ;; -> boolean
+    get-max-signature-size  ;; -> nat
+    get-key-size/bits       ;; -> nat
+
+    write-key       ;; sym boolean -> bytes
+    equal-to-key?   ;; pkey-ctx<%> -> boolean
+
+    sign!           ;; sym digest-ctx<%> bytes nat nat -> nat
+    verify          ;; sym digest-ctx<%> bytes nat nat -> boolean
+
+    encrypt/decrypt ;; sym boolean boolean bytes nat nat -> bytes
     ))
