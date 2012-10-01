@@ -20,16 +20,28 @@
 (require ffi/unsafe
          "ffi.rkt"
          "macros.rkt"
-         "bn.rkt"
+         "util.rkt"
          (only-in net/base64 base64-decode)
          (only-in racket/list last)
          (for-syntax racket/base
                      racket/syntax))
 
+;; ------------------------------------------------------------
+
+(define (bn-size bn)
+  (ceiling (/ (BN_num_bits bn) 8)))
+
+(define (bn->bytes bn)
+  (let ([bs (make-bytes (bn-size bn))])
+    (shrink-bytes bs (BN_bn2bin bn bs))))
+
+(define (bytes->bn bs)
+  (BN_bin2bn bs))
+
+;; ------------------------------------------------------------
+
 (define-struct !dh (bits bs))
 (define-struct dhkey (p))
-
-;; ----
 
 ;; DH: struct dh_st {pad version p g length pub_key ...}
 (define (dhkey-pubk dh)

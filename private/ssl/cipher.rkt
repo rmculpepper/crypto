@@ -21,7 +21,6 @@
          racket/match
          "ffi.rkt"
          "macros.rkt"
-         "libcrypto.rkt"
          "error.rkt"
          "rand.rkt"
          "util.rkt"

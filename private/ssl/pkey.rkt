@@ -20,7 +20,6 @@
 (require ffi/unsafe
          "ffi.rkt"
          "macros.rkt"
-         "libcrypto.rkt"
          "error.rkt"
          "util.rkt"
          "digest.rkt"
