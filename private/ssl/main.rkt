@@ -119,51 +119,52 @@
 ;; ============================================================
 ;; Available Ciphers
 
-(define *ciphers* null)
-(define (available-ciphers) *ciphers*)
+(define cipher-table (make-hasheq))
+(define (available-ciphers) (hash-keys cipher-table))
 
 (define-for-syntax cipher-modes '(ecb cbc cfb ofb))
-(define-for-syntax default-cipher-mode 'cbc)
+;; (define-for-syntax default-cipher-mode 'cbc)
 
-(define-syntax (define-cipher stx)
-  (define (unhyphen what) 
-    (regexp-replace* "-" (format "~a" what) "_"))
+;; Full cipher names look like "<FAMILY>(-<PARAM>)?-<MODE>?"
+;; where key length is the most common parameter.
+;; eg "aes-128-cbc", "bf-ecb", "des-ede-cbc"
 
-  (define (make-cipher mode)
-    (with-syntax ([evp (format-id stx "EVP_~a" (unhyphen mode))]
-                  [cipher (format-id stx "cipher:~a" mode)])
-      #'(begin
-          (define-crypto evp (_fun -> _EVP_CIPHER/null)
-            #:fail (lambda () #f))
-          (define cipher
-            (cond [(and evp (evp))
-                   => (lambda (evpp)
-                        (call-with-values (lambda () (cipher->props evpp))
-                          (lambda (size keylen ivlen)
-                            (make-!cipher evpp size keylen ivlen))))]
-                  [else #f]))
-          (put-symbols! avail-ciphers.symbols cipher))))
+(define-syntax define-cipher
+  (syntax-rules ()
+    [(define-cipher c)
+     (define-cipher1 c #f)]
+    [(define-cipher c (p ...))
+     (begin (define-cipher1 c p) ...)]))
 
-  (define (make-def name)
-    (with-syntax ([cipher (format-id stx "cipher:~a" name)]
-                  [alias (format-id stx "cipher:~a-~a" name default-cipher-mode)])
-      (let ([modes (for/list ([m cipher-modes]) (format-symbol "~a-~a" name m))])
-        (with-syntax ([(def ...) (map make-cipher modes)])
-          #`(begin
-              def ...
-              (define cipher
-                (begin (when alias (set! *ciphers* (cons (quote #,name) *ciphers*)))
-                       alias))
-              (put-symbols! avail-ciphers.symbols cipher))))))
-
+(define-syntax (define-cipher1 stx)
   (syntax-case stx ()
-    [(_ c)
-     (make-def (syntax-e #'c))]
-    [(_ c (klen ...))
-     (with-syntax ([(def ...) 
-                    (for/list ((k (syntax->list #'(klen ...))))
-                      (make-def (format-symbol "~a-~a" #'c (syntax-e k))))])
-       #'(begin def ...))]))
+    [(define-cipher1 c klen)
+     (with-syntax ([(mode ...) (cons #f cipher-modes)])
+       #'(begin (define-cipher1/mode c klen mode) ...))]))
+
+(define-syntax (define-cipher1/mode stx)
+  (syntax-case stx ()
+    [(define-cipher1/mode c p mode)
+     (let* ([p (syntax-e #'p)]
+            [mode (syntax-e #'mode)]
+            [c-p (if p (format-id #'c "~a-~a" #'c p) #'c)]
+            [c-p-mode (if mode (format-id #'c "~a-~a" c-p mode) c-p)])
+       (with-syntax ([c-p-mode c-p-mode]
+                     [cipher:c-p-mode (format-id #'c "cipher:~a" c-p-mode)])
+         #'(begin
+             (define cipher:c-p-mode (intern-cipher 'c-p-mode))
+             (put-symbols! avail-ciphers.symbols cipher:c-p-mode))))]))
+
+(define (intern-cipher name-sym)
+  (cond [(hash-ref cipher-table name-sym #f)
+         => values]
+        [(EVP_get_cipherbyname (symbol->string name-sym))
+         => (lambda (ci)
+              (let-values ([(size keylen ivlen) (cipher->props ci)])
+                (let ([ci (make-!cipher ci size keylen ivlen)])
+                  (hash-set! cipher-table name-sym ci)
+                  ci)))]
+        [else #f]))
 
 ;; EVP_CIPHER: struct evp_cipher_st {nid block_size key_len iv_len ...}
 (define (cipher->props evp)
@@ -173,14 +174,12 @@
 
 (define-symbols avail-ciphers.symbols available-ciphers)
 
-(define-cipher des)
-(define-cipher des-ede)
-(define-cipher des-ede3)
+(define-cipher des (#f ede ede3))
 (define-cipher idea)
 (define-cipher bf)
 (define-cipher cast5)
-(define-cipher aes (128 192 256))
-(define-cipher camellia (128 192 256))
+(define-cipher aes (#f 128 192 256))
+(define-cipher camellia (#f 128 192 256))
 
 (define-provider provide-avail-ciphers avail-ciphers.symbols)
 (provide-avail-ciphers)
