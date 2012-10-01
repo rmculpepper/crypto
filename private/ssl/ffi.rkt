@@ -223,6 +223,9 @@
 (define-cpointer-type _EVP_CIPHER_CTX)
 (define-cpointer-type _EVP_CIPHER)
 
+(define-crypto EVP_get_cipherbyname
+  (_fun _string -> _EVP_CIPHER/null))
+
 ;; libcrypto < 0.9.8.d doesn't have EVP_CIPHER_CTX_new/free
 (define-crypto EVP_CIPHER_CTX_free
   (_fun _EVP_CIPHER_CTX -> _void)
