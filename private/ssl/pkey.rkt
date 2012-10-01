@@ -197,26 +197,6 @@
 (define (decrypt/envelope pk cipher sk iv  . cargs)
   (apply decrypt cipher (decrypt/pkey pk sk) iv cargs))
 
-;; XXX As of openssl-0.9.8 pkeys can only be used with certain types of
-;;     digests.
-;;     openssl-0.9.9 is supposed to remove the restriction for digest types
-(define pkey:rsa:digests 
-  (filter values
-    (list digest:ripemd160 
-          digest:sha1 digest:sha224 digest:sha256 digest:sha384 digest:sha512)))
-(define pkey:dsa:digests
-  (filter values
-    (list digest:dss1))) ; sha1 with fancy name
-
-(define (pkey-digest? pk dgt)
-  (cond [(!pkey? pk)
-         (memq dgt
-               (cond [(eq? pk pkey:rsa) pkey:rsa:digests]
-                     [(eq? pk pkey:dsa) pkey:dsa:digests]
-                     [else #f]))]
-        [(pkey? pk) (pkey-digest? (pkey-type pk) dgt)]
-        [else (raise-type-error 'pkey-digest? "pkey or pkey type" pk)]))
-
 ;; Note: dsa is only usable with dss1 in libcrypto-0.9.8
 (define-symbols pkey.symbols
   !pkey? pkey? pkey-private? pkey-size pkey-bits pkey=?
@@ -226,12 +206,11 @@
   sign verify
   encrypt/pkey decrypt/pkey
   encrypt/envelope decrypt/envelope
-  pkey:rsa pkey:dsa
-  pkey:rsa:digests pkey:dsa:digests
-  pkey-digest?)
+  pkey:rsa pkey:dsa)
 
 (define-provider provide-pkey pkey.symbols)
 
 (provide-pkey)
 (provide provide-pkey
-         generate-pkey)
+         generate-pkey
+         (rename-out [pkey-type -pkey-type]))

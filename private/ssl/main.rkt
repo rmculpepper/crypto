@@ -17,7 +17,12 @@
 ;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require "rand.rkt"
+(require (for-syntax racket/base
+                     racket/syntax)
+         racket/class
+         "ffi.rkt"
+         "macros.rkt"
+         "rand.rkt"
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
@@ -29,7 +34,85 @@
 (provide-pkey)
 (provide-dh)
 
-;; ------------------------------------------------------------
+;; ============================================================
+;; Available Digests
+
+(define digest-table (make-hasheq))
+(define (available-digests) (hash-keys digest-table))
+
+(define (intern-digest-impl name)
+  (cond [(hash-ref digest-table name #f)
+         => values]
+        [(EVP_get_digestbyname (symbol->string name))
+         => (lambda (md)
+              (let ([di (new digest-impl% (md md) (name name))])
+                (hash-set! digest-table name di)
+                di))]
+        [else #f]))
+
+(define (make-digest-op name di)
+  (procedure-rename
+   (if di
+       (lambda (inp) (digest* di inp))
+       (unavailable-function name))
+   name))
+
+(define-syntax (define-digest stx)
+  (syntax-case stx ()
+    [(_ id)
+     (with-syntax ([di (format-id stx "digest:~a" #'id)])
+       #'(begin
+           (define di (intern-digest-impl 'id))
+           (define id (make-digest-op 'id di))
+           (put-symbols! avail-digests.symbols di id)))]))
+
+(define (unavailable-function who)
+  (lambda x (error who "unavailable")))
+
+(define-symbols avail-digests.symbols)
+
+(define-digest md5)
+(define-digest ripemd160)
+(define-digest dss1) ; sha1...
+(define-digest sha1)
+(define-digest sha224)
+(define-digest sha256)
+(define-digest sha384)
+(define-digest sha512)
+
+(define-provider provide-avail-digests avail-digests.symbols)
+(provide-avail-digests)
+
+;; ============================================================
+;; Public Key - Available Digests
+
+;; XXX As of openssl-0.9.8 pkeys can only be used with certain types of
+;;     digests.
+;;     openssl-0.9.9 is supposed to remove the restriction for digest types
+(define pkey:rsa:digests 
+  (filter values
+    (list digest:ripemd160 
+          digest:sha1 digest:sha224 digest:sha256 digest:sha384 digest:sha512)))
+
+(define pkey:dsa:digests
+  (filter values
+    (list digest:dss1))) ; sha1 with fancy name
+
+(define (pkey-digest? pk dgt)
+  (cond [(!pkey? pk)
+         (memq dgt
+               (cond [(eq? pk pkey:rsa) pkey:rsa:digests]
+                     [(eq? pk pkey:dsa) pkey:dsa:digests]
+                     [else #f]))]
+        [(pkey? pk) (pkey-digest? (-pkey-type pk) dgt)]
+        [else (raise-type-error 'pkey-digest? "pkey or pkey type" pk)]))
+
+(provide pkey:rsa:digests
+         pkey:dsa:digests
+         pkey-digest?)
+
+;; ============================================================
+;; Key Generation
 
 (define (generate-key algo . params)
   (apply (cond [(!cipher? algo) generate-cipher-key]

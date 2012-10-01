@@ -25,9 +25,7 @@
          "macros.rkt"
          "rand.rkt"
          "util.rkt"
-         (only-in racket/list last)
-         (for-syntax racket/base
-                     racket/syntax))
+         (only-in racket/list last))
 
 ;; FIXME: potential races all over the place
 
@@ -220,53 +218,12 @@
 
 ;; ============================================================
 
-(define digest-table (make-hasheq))
-(define (available-digests) (hash-keys digest-table))
-
-(define (intern-digest-impl name)
-  (cond [(hash-ref digest-table name #f)
-         => values]
-        [(EVP_get_digestbyname (symbol->string name))
-         => (lambda (md)
-              (let ([di (new digest-impl% (md md) (name name))])
-                (hash-set! digest-table name di)
-                di))]
-        [else #f]))
-
-(define (make-digest-op name di)
-  (procedure-rename
-   (if di
-       (lambda (inp) (digest* di inp))
-       (unavailable-function name))
-   name))
-
-(define-syntax (define-digest stx)
-  (syntax-case stx ()
-    [(_ id)
-     (with-syntax ([di (format-id stx "digest:~a" #'id)])
-       #'(begin
-           (define di (intern-digest-impl 'id))
-           (define id (make-digest-op 'id di))
-           (put-symbols! digest.symbols di id)))]))
-
-(define (unavailable-function who)
-  (lambda x (error who "unavailable")))
-
 (define-symbols digest.symbols
   available-digests
   !digest? digest? digest-new digest-size
   digest-update! digest-final! digest-copy digest->bytes
   (!hmac? hmac?) hmac-new hmac-update! hmac-final!
   (digest* digest) hmac)
-
-(define-digest md5)
-(define-digest ripemd160)
-(define-digest dss1) ; sha1...
-(define-digest sha1)
-(define-digest sha224)
-(define-digest sha256)
-(define-digest sha384)
-(define-digest sha512)
 
 (define-provider provide-digest digest.symbols)
 
