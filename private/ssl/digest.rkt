@@ -18,6 +18,9 @@
 
 #lang racket/base
 (require ffi/unsafe
+         racket/class
+         "../common/interfaces.rkt"
+         "../common/common.rkt"
          "ffi.rkt"
          "macros.rkt"
          "rand.rkt"
@@ -26,79 +29,136 @@
          (for-syntax racket/base
                      racket/syntax))
 
-;; ----
+;; FIXME: potential races all over the place
 
-(define-struct !digest (evp size)) 
-(define-struct digest (type (ctx #:mutable)))
-(define-struct !hmac (type (ctx #:mutable)))
+;; ============================================================
 
-(define-syntax-rule (define-digest-update id update)
-  (define (id x data [start 0] [end (bytes-length data)])
-    (check-input-range 'id data start end)
-    (update x (ptr-add data start) (- end start))))
+(define digest-impl%
+  (class* object% (digest-impl<%>)
+    (init-field md    ;; EVP_MD
+                name) ;; symbol
+    (define size (last (ptr-ref md (_list-struct _int _int _int))))
+    (super-new)
 
-(define-syntax-rule (define-digest-final id final)
-  (define id
-    (case-lambda
-      ((dg)
-       (let ((bs (make-bytes (digest-size dg))))
-         (final dg bs)
-         bs))
-      ((dg bs)
-       (check-output-range 'id bs (digest-size dg))
-       (final dg bs)
-       (digest-size dg))
-      ((dg bs start)
-       (check-output-range 'id bs start (bytes-length bs) (digest-size dg))
-       (final dg (ptr-add bs start))
-       (digest-size dg))
-      ((dg bs start end)
-       (check-output-range 'id bs start end (digest-size dg))
-       (final dg (ptr-add bs start))
-       (digest-size dg)))))
+    (define/public (get-name) (symbol->string name))
+    (define/public (get-size) size)
+
+    (define/public (new-ctx)
+      (let ([ctx (EVP_MD_CTX_create)])
+        (EVP_DigestInit_ex ctx md)
+        (new digest-ctx% (impl this) (ctx ctx))))
+    ))
+
+
+(define digest-ctx%
+  (class* base-ctx% (digest-ctx<%>)
+    (init-field ctx)
+    (inherit-field impl)
+
+    (super-new)
+
+    (define/public (update! who buf start end)
+      (unless ctx (error who "digest context is closed"))
+      (check-input-range who buf start end)
+      (EVP_DigestUpdate ctx (ptr-add buf start) (- end start)))
+
+    (define/public (final! who buf start end)
+      (unless ctx (error who "digest context is closed"))
+      (let ([size (send impl get-size)])
+        (check-output-range who buf start end size)
+        (EVP_DigestFinal_ex ctx (ptr-add buf start))
+        (EVP_MD_CTX_destroy ctx)
+        (set! ctx #f)
+        size))
+
+    (define/public (copy who)
+      (and ctx
+           (let ([other (send impl new-ctx)])
+             (EVP_MD_CTX_copy_ex (get-field ctx other) ctx)
+             other)))
+    ))
+
+;; ============================================================
+
+(define hmac-impl%
+  (class* object% (digest-impl<%>)
+    (init-field digest)
+
+    (define/public (new-ctx key)
+      (let ([ctx (HMAC_CTX_new)])
+        (HMAC_Init_ex ctx key (bytes-length key) (get-field md digest))
+        (new hmac-ctx% (impl this) (ctx ctx))))
+
+    (define/public (get-name) (format "HMAC-~a" (send digest get-name)))
+    (define/public (get-size) (send digest get-size))
+
+    (super-new)
+    ))
+
+
+(define hmac-ctx%
+  (class* base-ctx% (digest-ctx<%>)
+    (init-field ctx)
+    (inherit-field impl)
+
+    (define/public (update! who buf start end)
+      (check-input-range who buf start end)
+      (HMAC_Update ctx (ptr-add buf start) end))
+
+    (define/public (final! who buf start end)
+      (unless ctx (error who "HMAC context is closed"))
+      (let ([size (send impl get-size)])
+        (check-output-range who buf start end size)
+        (HMAC_Final ctx (ptr-add buf start))
+        (HMAC_CTX_free ctx)
+        (set! ctx #f)
+        size))
+
+    (define/public (copy) #f)
+
+    (super-new)
+    ))
+
+;; ============================================================
+
+(define (!digest? x) (is-a? x digest-impl%))
+(define (digest? x) (is-a? x digest-ctx%))
+(define (!hmac? x) (is-a? x hmac-ctx%))
+
+(define (-digest-ctx x) (get-field ctx x))  ;; used by pkey.rkt
+
+(define (digest-new di)
+  (send di new-ctx))
 
 (define (digest-size o)
-  (cond [(!digest? o) (!digest-size o)]
-        [(digest? o) (!digest-size (digest-type o))]
-        [(!hmac? o) (!digest-size (!hmac-type o))]
-        [else (raise-type-error 'digest-size "digest, hmac or digest algorithm" o)]))
+  (cond [(is-a? o digest-impl<%>) (send o get-size)]
+        [(is-a? o digest-ctx<%>) (digest-size (send o get-impl))]
+        [else (raise-type-error 'digest-size "digest implementation or digest context" o)]))
 
-(define (digest-new type)
-  (let* ([evp (!digest-evp type)]
-         [ctx (EVP_MD_CTX_create)])
-    (EVP_DigestInit_ex ctx evp)
-    (make-digest type ctx)))
+(define (digest-update! x buf [start 0] [end (bytes-length buf)])
+  (send x update! 'digest-update! buf start end))
 
-(define (digest-update dg bs len)
-  (cond [(digest-ctx dg)
-         => (lambda (ctx) (EVP_DigestUpdate ctx bs len))]
-        [else (error 'digest-update "finalized context")]))
-
-(define-digest-update digest-update! digest-update)
-
-(define (digest-final dg bs)
-  (cond [(digest-ctx dg)
-         => (lambda (ctx)
-              (EVP_DigestFinal_ex ctx bs)
-              (EVP_MD_CTX_destroy ctx)
-              (set-digest-ctx! dg #f))]
-        [else (error 'digest-final "finalized context")]))
-
-(define-digest-final digest-final! digest-final)
+(define digest-final!
+  (case-lambda
+    [(dg)
+     (let ([bs (make-bytes (digest-size dg))])
+       (digest-final! dg bs)
+       bs)]
+    [(dg bs)
+     (digest-final! dg bs 0 (bytes-length bs))]
+    [(dg bs start)
+     (digest-final! dg bs start (bytes-length bs))]
+    [(dg bs start end)
+     (send dg final! 'digest-final! bs start end)]))
 
 (define (digest-copy idg)
-  (cond [(digest-ctx idg)
-         => (lambda (ictx)
-              (let ([odg (digest-new (digest-type idg))])
-                (EVP_MD_CTX_copy_ex (digest-ctx odg) ictx)
-                odg))]
-        [else (error 'digest-copy "finalized context")]))
+  (send idg copy 'digest-copy))
 
 (define (digest->bytes dg)
   (digest-final! (digest-copy dg)))
 
-(define (digest-port* type inp)
-  (let ([dg (digest-new type)]
+(define (digest-port* di inp)
+  (let ([dg (digest-new di)]
         [ibuf (make-bytes 4096)])
     (let lp ([count (read-bytes-avail! ibuf inp)])
       (cond [(eof-object? count)
@@ -110,34 +170,37 @@
 (define (digest-port type inp)
   (digest-final! (digest-port* type inp)))
 
-(define (digest-bytes type bs)
-  (let ([dg (digest-new type)])
+(define (digest-bytes di bs)
+  (let ([dg (digest-new di)])
     (digest-update! dg bs)
     (digest-final! dg)))
 
-(define (digest* type inp)
-  (cond [(bytes? inp) (digest-bytes type inp)]
-        [(input-port? inp) (digest-port type inp)]
+(define (digest* di inp)
+  (cond [(bytes? inp) (digest-bytes di inp)]
+        [(input-port? inp) (digest-port di inp)]
         [else (raise-type-error 'digest "bytes or input-port" inp)]))
 
-(define (hmac-bytes type kbs ibs)
-  (let ([evp (!digest-evp type)]
-        [obs (make-bytes (!digest-size type))])
-    (HMAC evp kbs (bytes-length kbs) ibs (bytes-length ibs) obs)
+;; ============================================================
+
+(define (hmac-bytes di key ibs)
+  (let ([evp (get-field md di)]
+        [obs (make-bytes (send di get-size))])
+    (HMAC evp key (bytes-length key) ibs (bytes-length ibs) obs)
     obs))
 
-(define (hmac-port type k inp)
-  (let ([evp (!digest-evp type)]
-        [buf (make-bytes 4096)])
-    (let/fini ([ctx (HMAC_CTX_new) HMAC_CTX_cleanup])
-      (HMAC_Init_ex ctx k (bytes-length k) evp)
-      (let lp ([count (read-bytes-avail! buf inp)])
+(define (hmac-port di key inp)
+  (let* ([buf (make-bytes 4096)]
+         [himpl (new hmac-impl% (digest di))]
+         [hctx (send himpl new-ctx key)]
+         [size (send himpl get-size)])
+    (let loop ()
+      (let ([count (read-bytes-avail! buf inp)])
         (cond [(eof-object? count)
-               (HMAC_Final ctx buf) 
-               (shrink-bytes buf (digest-size type))]
+               (send hctx final! 'hmac-port buf 0 size)
+               (shrink-bytes buf size)]
               [else
-               (HMAC_Update ctx buf count)
-               (lp (read-bytes-avail! buf inp))])))))
+               (send hctx update! 'hmac-port buf 0 count)
+               (loop)])))))
 
 (define (hmac type key inp)
   (cond [(bytes? inp) (hmac-bytes type key inp)]
@@ -145,33 +208,29 @@
         [else (raise-type-error 'hmac "bytes or input-port" inp)]))
 
 ;; incremental hmac 
-(define (hmac-new type k)
-  (let ([ctx (HMAC_CTX_new)])
-    (HMAC_Init_ex ctx k (bytes-length k) (!digest-evp type))
-    (make-!hmac type ctx)))
+(define (hmac-new di key)
+  (let* ([himpl (new hmac-impl% (digest di))])
+    (send himpl new-ctx key)))
 
-(define (hmac-update hx bs len)
-  (cond [(!hmac-ctx hx)
-         => (lambda (ctx) (HMAC_Update ctx bs len))]
-        [else (error 'hmac-update "finalized context")]))
-
-(define-digest-update hmac-update! hmac-update)
-
-(define (hmac-final hx bs)
-  (cond [(!hmac-ctx hx)
-         => (lambda (ctx) (HMAC_Final ctx bs) (set-!hmac-ctx! hx #f))]
-        [else (error 'hmac-update "finalized context")]))
-
-(define-digest-final hmac-final! hmac-final)
+(define hmac-update! digest-update!)
+(define hmac-final! digest-final!)
 
 (define (generate-hmac-key t)
   (random-bytes (digest-size t)))
 
-(define (md->size evp)
-  (last (ptr-ref evp (_list-struct _int _int _int))))
+;; ============================================================
 
 (define *digests* null)
 (define (available-digests) *digests*)
+
+(define (make-digest+op name proc)
+  (cond [(and proc (proc))
+         => (lambda (md)
+              (set! *digests* (cons name *digests*))
+              (let* ([di (new digest-impl% (md md) (name name))]
+                     [op (lambda (inp) (digest* di inp))])
+                (values di (procedure-rename op name))))]
+        [else (values #f (unavailable-function name))]))
 
 (define-syntax (define-digest stx)
   (syntax-case stx ()
@@ -182,12 +241,7 @@
            (define-crypto evp (_fun -> _EVP_MD/null)
              #:fail (lambda () #f))
            (define-values (type id)
-             (cond [(and evp (evp))
-                    => (lambda (evpp)
-                         (set! *digests* (cons 'id *digests*))
-                         (values (make-!digest evpp (md->size evpp))
-                                 (let ([id (lambda (inp) (digest* type inp))]) id)))]
-                   [else (values #f (unavailable-function 'evp))]))
+             (make-digest+op 'id evp))
            (put-symbols! digest.symbols type id)))]))
 
 (define (unavailable-function who)

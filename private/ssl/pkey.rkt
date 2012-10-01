@@ -102,12 +102,12 @@
 (define (pkey-sign dg pk bs)
   (unless (pkey-private? pk)
     (error 'pkey-sign "not a private key"))
-  (cond [(digest-ctx dg)
+  (cond [(-digest-ctx dg)
          => (lambda (ctx) (EVP_SignFinal ctx bs (pkey-evp pk)))]
         [else (error 'pkey-sign "finalized context")]))
 
 (define (pkey-verify dg pk bs len)
-  (cond [(digest-ctx dg)
+  (cond [(-digest-ctx dg)
          => (lambda (ctx) (EVP_VerifyFinal ctx bs len (pkey-evp pk)))]
         [else (error 'pkey-verify "finalized context")]))
 

@@ -4,6 +4,12 @@
 
 #lang racket/base
 (require racket/class)
+(provide impl<%>
+         ctx<%>
+         digest-impl<%>
+         digest-ctx<%>
+         cipher-impl<%>
+         cipher-ctx<%>)
 
 ;; ============================================================
 ;; General Implementation & Contexts
@@ -36,17 +42,15 @@ eg, (send a-sha1-impl get-size) => 20
 
 (define digest-impl<%>
   (interface (impl<%>)
-    get-name ;; -> string -- eg, "MD5", "SHA-1", "SHA-256"
-    get-size ;; -> nat
+    ;; get-name ;; -> string -- eg, "MD5", "SHA-1", "SHA-256"
+    get-size    ;; -> nat
     ))
 
 (define digest-ctx<%>
   (interface (ctx<%>)
-    get-impl ;; -> digest-impl<%>
-
     ;; Usage: { update! }* final!
     update!  ;; sym bytes nat nat -> void
-    final!   ;; sym bytes nat -> void
+    final!   ;; sym bytes nat nat -> nat
 
     copy     ;; sym -> digest-ctx<%>/#f
     ))
@@ -57,7 +61,7 @@ eg, (send a-sha1-impl get-size) => 20
 (define cipher-impl<%>
   (interface (impl<%>)
     get-family     ;; -> string -- eg, "Blowfish", "AES"
-    get-name       ;; -> string -- eg, "AES-128", "DES-EDE" (???)
+    ;; get-name    ;; -> string -- eg, "AES-128", "DES-EDE" (???)
     get-mode       ;; -> symbol -- eg, 'ecb, 'cbc
     get-key-size   ;; -> nat
     get-block-size ;; -> nat
