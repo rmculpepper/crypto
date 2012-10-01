@@ -60,12 +60,12 @@ eg, (send a-sha1-impl get-size) => 20
 
 (define cipher-impl<%>
   (interface (impl<%>)
-    get-family     ;; -> string -- eg, "Blowfish", "AES"
+    ;; get-family  ;; -> string -- eg, "Blowfish", "AES"
     ;; get-name    ;; -> string -- eg, "AES-128", "DES-EDE" (???)
-    get-mode       ;; -> symbol -- eg, 'ecb, 'cbc
+    ;; get-mode    ;; -> symbol -- eg, 'ecb, 'cbc
     get-key-size   ;; -> nat
     get-block-size ;; -> nat
-    get-iv-size    ;; -> nat
+    get-iv-size    ;; -> nat/#f
     ))
 
 ;; FIXME: Perhaps impl should offer list of key sizes,
@@ -77,9 +77,12 @@ eg, (send a-sha1-impl get-size) => 20
     ;; Usage: interleaved Writing and Reading
     ;;   where Writing =  set-key! set-iv! { update! }* close!
     ;;         Reading = { read! }*
-    set-key!  ;; sym bytes nat nat -> void
-    set-iv!   ;; sym bytes nat nat -> void
-    update!   ;; sym bytes nat nat -> void
-    close!    ;; sym -> void
-    read!     ;; sym bytes nat nat bool -> nat
+    ;;set-key!  ;; sym bytes nat nat -> void
+    ;;set-iv!   ;; sym bytes nat nat -> void
+    ;;update!   ;; sym bytes nat nat -> void
+    ;;close!    ;; sym -> void
+    ;;read!     ;; sym bytes nat nat bool -> nat
+
+    update!  ;; sym bytes nat nat bytes nat nat -> nat
+    final!   ;; sym bytes nat nat -> nat
     ))

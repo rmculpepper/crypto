@@ -159,18 +159,11 @@
   (cond [(hash-ref cipher-table name-sym #f)
          => values]
         [(EVP_get_cipherbyname (symbol->string name-sym))
-         => (lambda (ci)
-              (let-values ([(size keylen ivlen) (cipher->props ci)])
-                (let ([ci (make-!cipher ci size keylen ivlen)])
-                  (hash-set! cipher-table name-sym ci)
-                  ci)))]
+         => (lambda (cipher)
+              (let ([ci (new cipher-impl% (cipher cipher) (name name-sym))])
+                (hash-set! cipher-table name-sym ci)
+                ci))]
         [else #f]))
-
-;; EVP_CIPHER: struct evp_cipher_st {nid block_size key_len iv_len ...}
-(define (cipher->props evp)
-  (match (ptr-ref evp (_list-struct _int _int _int _int))
-    [(list _ size keylen ivlen)
-     (values size keylen (and (> ivlen 0) ivlen))]))
 
 (define-symbols avail-ciphers.symbols available-ciphers)
 
