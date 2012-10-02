@@ -22,6 +22,7 @@
          racket/class
          racket/match
          ffi/unsafe
+         (only-in "../common/digest.rkt" digest)
          "ffi.rkt"
          "macros.rkt"
          "rand.rkt"
@@ -30,12 +31,10 @@
          "pkey.rkt"
          "dh.rkt")
 
-(provide-rand)
-(provide-digest)
-(provide-cipher)
-(provide-pkey)
-(provide-dh)
+(provide random-bytes
+         pseudo-random-bytes)
 
+(provide-dh)
 
 ;; ============================================================
 ;; Available Digests
@@ -56,7 +55,7 @@
 (define (make-digest-op name di)
   (procedure-rename
    (if di
-       (lambda (inp) (digest* di inp))
+       (lambda (inp) (digest di inp))
        (unavailable-function name))
    name))
 
@@ -85,36 +84,6 @@
 
 (define-provider provide-avail-digests avail-digests.symbols)
 (provide-avail-digests)
-
-
-;; ============================================================
-;; Public Key - Available Digests
-
-;; XXX As of openssl-0.9.8 pkeys can only be used with certain types of
-;;     digests.
-;;     openssl-0.9.9 is supposed to remove the restriction for digest types
-(define pkey:rsa:digests 
-  (filter values
-    (list digest:ripemd160 
-          digest:sha1 digest:sha224 digest:sha256 digest:sha384 digest:sha512)))
-
-(define pkey:dsa:digests
-  (filter values
-    (list digest:dss1))) ; sha1 with fancy name
-
-(define (pkey-digest? pk dgt)
-  (cond [(!pkey? pk)
-         (memq dgt
-               (cond [(eq? pk pkey:rsa) pkey:rsa:digests]
-                     [(eq? pk pkey:dsa) pkey:dsa:digests]
-                     [else #f]))]
-        [(pkey? pk) (pkey-digest? (-pkey-type pk) dgt)]
-        [else (raise-type-error 'pkey-digest? "pkey or pkey type" pk)]))
-
-(provide pkey:rsa:digests
-         pkey:dsa:digests
-         pkey-digest?)
-
 
 ;; ============================================================
 ;; Available Ciphers
@@ -177,6 +146,79 @@
 (define-provider provide-avail-ciphers avail-ciphers.symbols)
 (provide-avail-ciphers)
 
+;; ============================================================
+;; Public Key - Available Digests
+
+;; XXX As of openssl-0.9.8 pkeys can only be used with certain types of
+;;     digests.
+;;     openssl-0.9.9 is supposed to remove the restriction for digest types
+(define pkey:rsa:digests 
+  (filter values
+    (list digest:ripemd160 
+          digest:sha1 digest:sha224 digest:sha256 digest:sha384 digest:sha512)))
+
+(define pkey:dsa:digests
+  (filter values
+    (list digest:dss1))) ; sha1 with fancy name
+
+(define (pkey-digest? pk dgt)
+  (cond [(!pkey? pk)
+         (memq dgt
+               (cond [(eq? pk pkey:rsa) pkey:rsa:digests]
+                     [(eq? pk pkey:dsa) pkey:dsa:digests]
+                     [else #f]))]
+        [(pkey? pk) (pkey-digest? (-pkey-type pk) dgt)]
+        [else (raise-type-error 'pkey-digest? "pkey or pkey type" pk)]))
+
+(provide pkey:rsa:digests
+         pkey:dsa:digests
+         pkey-digest?)
+
+;; ============================================================
+;; Public-Key Available Cryptosystems
+
+(define (rsa-keygen bits [exp 65537])
+  (let/fini ([ep (BN_new) BN_free])
+    (BN_add_word ep exp)
+    (let/error ([rsap (RSA_new) RSA_free]
+                [evp (EVP_PKEY_new) EVP_PKEY_free])
+      (RSA_generate_key_ex rsap bits ep)
+      (EVP_PKEY_set1_RSA evp rsap)
+      (new pkey-ctx% (impl pkey:rsa) (evp evp) (private? #t)))))
+
+(define (dsa-keygen bits)
+  (let/error ([dsap (DSA_new) DSA_free]
+              [evp (EVP_PKEY_new) EVP_PKEY_free])
+    (DSA_generate_parameters_ex dsap bits)
+    (DSA_generate_key dsap)
+    (EVP_PKEY_set1_DSA evp dsap)
+    (new pkey-ctx% (impl pkey:dsa) (evp evp) (private? #t))))
+
+;; FIXME: get pktype constants from C headers
+
+;; libcrypto #defines for those are autogened...
+;; EVP_PKEY: struct evp_pkey_st {type ...}
+(define (pk->type evp)
+  (EVP_PKEY_type (car (ptr-ref evp (_list-struct _int)))))
+
+(define pkey:rsa
+  (with-handlers (#|(exn:fail? (lambda x #f))|#)
+    (let ([pktype (let/fini ([rsap (RSA_new) RSA_free]
+                             [evp (EVP_PKEY_new) EVP_PKEY_free])
+                    (EVP_PKEY_set1_RSA evp rsap)
+                    (pk->type evp))])
+      (new pkey-impl% (pktype pktype) (keygen rsa-keygen)))))
+
+(define pkey:dsa
+  (with-handlers (#|(exn:fail? (lambda x #f))|#)
+    (let ([pktype (let/fini ([dsap (DSA_new) DSA_free]
+                             [evp (EVP_PKEY_new) EVP_PKEY_free])
+                    (EVP_PKEY_set1_DSA evp dsap)
+                    (pk->type evp))])
+      (new pkey-impl% (pktype pktype) (keygen dsa-keygen)))))
+
+(provide pkey:rsa
+         pkey:dsa)
 
 ;; ============================================================
 ;; Key Generation

@@ -41,6 +41,3 @@
   (rand* random-bytes! k))
 (define (pseudo-random-bytes k)
   (rand* pseudo-random-bytes! k))
-
-(define-symbols rand.symbols random-bytes pseudo-random-bytes)
-(define-provider provide-rand rand.symbols)
