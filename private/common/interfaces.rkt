@@ -29,18 +29,11 @@
 
 (define impl<%>
   (interface ()
-    new-ctx   ;; sym ??? -> ctx<%>
-    get-name  ;; -> string
     ))
 
 (define ctx<%>
   (interface ()
     get-impl    ;; -> impl<%>
-
-    ;; A State is a symbol, usually one of 'need-init, 'ready, 'closed.
-    get-state   ;; -> State
-    set-state!  ;; State/#f -> void
-    check-state! ;; sym (listof State) -> void
     ))
 
 #|
@@ -55,22 +48,19 @@ eg, (send a-sha1-impl get-size) => 20
 
 (define digest-impl<%>
   (interface (impl<%>)
-    ;; get-name   ;; -> string -- eg, "MD5", "SHA-1", "SHA-256"
+    get-name      ;; -> any -- eg, 'md5, 'sha1, 'sha256
     get-size      ;; -> nat
-
     get-hmac-impl ;; who -> digest-impl<%>
     hmac-buffer   ;; sym bytes bytes nat nat -> bytes/#f
                   ;;  -- fast/convenience method, may return #f
-
-    generate-hmac-key  ;; -> bytes
+    new-ctx       ;; -> digest-ctx<%>
+    generate-hmac-key ;; -> bytes
     ))
 
 (define digest-ctx<%>
   (interface (ctx<%>)
-    ;; Usage: { update! }* final!
     update!  ;; sym bytes nat nat -> void
     final!   ;; sym bytes nat nat -> nat
-
     copy     ;; sym -> digest-ctx<%>/#f
     ))
 
@@ -79,31 +69,18 @@ eg, (send a-sha1-impl get-size) => 20
 
 (define cipher-impl<%>
   (interface (impl<%>)
-    ;; get-family  ;; -> string -- eg, "Blowfish", "AES"
-    ;; get-name    ;; -> string -- eg, "AES-128", "DES-EDE" (???)
-    ;; get-mode    ;; -> symbol -- eg, 'ecb, 'cbc
+    get-name       ;; -> any -- eg, "AES-128", "DES-EDE" (???)
     get-key-size   ;; -> nat
     get-block-size ;; -> nat
     get-iv-size    ;; -> nat/#f
 
+    new-ctx         ;; sym bytes bytes/#f boolean boolean -> cipher-ctx<%>
+                    ;; who key   iv       enc?    pad?
     generate-key+iv ;; -> (values bytes bytes/#f)
     ))
 
-;; FIXME: Perhaps impl should offer list of key sizes,
-;; wait until set-key! in context to decide?
-
 (define cipher-ctx<%>
   (interface (ctx<%>)
-    ;; Interface assumes internal buffer for output.
-    ;; Usage: interleaved Writing and Reading
-    ;;   where Writing =  set-key! set-iv! { update! }* close!
-    ;;         Reading = { read! }*
-    ;;set-key!  ;; sym bytes nat nat -> void
-    ;;set-iv!   ;; sym bytes nat nat -> void
-    ;;update!   ;; sym bytes nat nat -> void
-    ;;close!    ;; sym -> void
-    ;;read!     ;; sym bytes nat nat bool -> nat
-
     update!  ;; sym bytes nat nat bytes nat nat -> nat
     final!   ;; sym bytes nat nat -> nat
     ))
@@ -113,10 +90,9 @@ eg, (send a-sha1-impl get-size) => 20
 
 (define pkey-impl<%>
   (interface (impl<%>)
-    read-key ;; sym boolean bytes nat nat -> pkey-ctx<%>
+    read-key     ;; sym boolean bytes nat nat -> pkey-ctx<%>
     generate-key ;; (listof ???) -> pkey-ctx<%>
-
-    digest-ok? ;; digest-impl<%> -> boolean
+    digest-ok?   ;; digest-impl<%> -> boolean
     ))
 
 (define pkey-ctx<%>

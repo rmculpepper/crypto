@@ -35,7 +35,6 @@
     (super-new)
 
     (define/public (get-name) name)
-    (define/public (new-ctx) (error 'new-ctx "not supported"))
 
     (define/public (read-key who public? buf start end)
       (check-input-range who buf start end)

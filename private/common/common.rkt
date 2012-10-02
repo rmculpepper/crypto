@@ -25,16 +25,7 @@
 (define base-ctx%
   (class* object% (ctx<%>)
     (init-field impl)
-    (init-field [state 'ready])
-
     (define/public (get-impl) impl)
-
-    (define/public (get-state) state)
-    (define/public (set-state! s) (set! state s))
-    (define/public (check-state! who allowed)
-      (unless (memq state allowed)
-        (error who "called in invalid state: ~e" state)))
-
     (super-new)))
 
 ;; ----
