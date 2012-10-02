@@ -34,11 +34,11 @@
   (class* object% (cipher-impl<%>)
     (init-field cipher
                 name)
-
     (define-values (block-size key-size iv-size)
       (match (ptr-ref cipher (_list-struct _int _int _int _int))
         [(list _ size keylen ivlen)
          (values size keylen (and (> ivlen 0) ivlen))]))
+    (super-new)
 
     (define/public (get-name) (symbol->string name))
     (define/public (get-key-size) key-size)
@@ -56,7 +56,9 @@
         (EVP_CIPHER_CTX_set_padding ctx pad?)
         (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
 
-    (super-new)
+    (define/public (generate-key+iv)
+      (values (random-bytes key-size)
+              (and iv-size (pseudo-random-bytes iv-size))))
     ))
 
 (define cipher-ctx%
@@ -85,5 +87,4 @@
 
     (define/private (maxlen inlen)
       (+ inlen (send impl get-block-size)))
-
     ))

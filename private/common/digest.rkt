@@ -34,7 +34,9 @@
    (-> digest-impl? bytes? (or/c bytes? input-port?)
        bytes?)]
   [make-hmac-ctx
-   (-> digest-impl? bytes? digest-ctx?)]))
+   (-> digest-impl? bytes? digest-ctx?)]
+  [generate-hmac-key
+   (-> digest-impl? bytes?)]))
 
 (define nat? exact-nonnegative-integer?)
 
@@ -125,3 +127,6 @@
               [else
                (send hctx update! 'hmac-port buf 0 count)
                (loop)])))))
+
+(define (generate-hmac-key di)
+  (send di generate-hmac-key))

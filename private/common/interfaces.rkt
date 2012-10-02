@@ -50,6 +50,8 @@ eg, (send a-sha1-impl get-size) => 20
     get-hmac-impl ;; who -> digest-impl<%>
     hmac-buffer   ;; sym bytes bytes -> bytes/#f
                   ;;  -- fast/convenience method, may return #f
+
+    generate-hmac-key  ;; -> bytes
     ))
 
 (define digest-ctx<%>
@@ -72,6 +74,8 @@ eg, (send a-sha1-impl get-size) => 20
     get-key-size   ;; -> nat
     get-block-size ;; -> nat
     get-iv-size    ;; -> nat/#f
+
+    generate-key+iv ;; -> (values bytes bytes/#f)
     ))
 
 ;; FIXME: Perhaps impl should offer list of key sizes,

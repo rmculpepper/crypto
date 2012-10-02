@@ -231,15 +231,6 @@
                [else (raise-type-error 'generate-key "crypto type" algo)])
          algo params))
 
-(define (generate-hmac-key di)
-  (random-bytes (send di get-size)))
-
-(define (generate-cipher-key ci)
-  (let ([klen (send ci get-key-size)]
-        [ivlen (send ci get-iv-size)])
-    (values (random-bytes klen) 
-            (and ivlen (pseudo-random-bytes ivlen)))))
-
 (define (generate-pkey pki bits . args)
   (send pki generate-key (cons bits args)))
 

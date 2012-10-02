@@ -50,7 +50,9 @@
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?)
         input-port?)
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?) output-port?
-        void?))]))
+        void?))]
+  [generate-cipher-key+iv
+   (-> cipher-impl? (values key/c iv/c))]))
 
 (define nat? exact-nonnegative-integer?)
 (define key/c bytes?)
@@ -187,3 +189,8 @@
 (define (decrypt->bytes ci key iv inp)
   (let ([dec-inp (*crypt-input 'decrypt->bytes make-decrypt-cipher-ctx ci key iv inp)])
     (port->bytes dec-inp)))
+
+;; ----
+
+(define (generate-cipher-key+iv ci)
+  (send ci generate-key+iv))

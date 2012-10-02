@@ -3,7 +3,8 @@
          racket/contract/base
          "interfaces.rkt"
          "common.rkt"
-         "digest.rkt")
+         "digest.rkt"
+         "cipher.rkt")
 (provide
  (contract-out
   [pkey-impl?
@@ -148,7 +149,7 @@
 
 ;; sk: sealed key
 (define (encrypt/envelope pk cipher . cargs)
-  (let*-values ([(k iv) (generate-cipher-key cipher)]
+  (let*-values ([(k iv) (generate-cipher-key+iv cipher)]
                 [(sk) (encrypt/pkey pk k)])
     (call-with-values (lambda () (apply encrypt cipher k iv cargs))
       (lambda cvals (apply values sk iv cvals)))))

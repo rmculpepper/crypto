@@ -52,11 +52,14 @@
       (unless hmac-impl (set! hmac-impl (new hmac-impl% (digest this))))
       hmac-impl)
 
-    (define/public (hmac-buffer who key buf)
+    (define/public (hmac-buffer who key buf start end)
       (let ([outbuf (make-bytes size)])
-        (HMAC md key (bytes-length key) buf (bytes-length buf) outbuf)
+        (check-input-range who buf start end)
+        (HMAC md key (bytes-length key) start end outbuf)
         obs))
 
+    (define/public (generate-hmac-key)
+      (random-bytes size))
     ))
 
 (define digest-ctx%
@@ -103,6 +106,12 @@
 
     (define/public (get-hmac-impl who)
       (error who "expected digest implementation, given HMAC implementation: ~e" this))
+
+    (define/public (hmac-buffer who key buf start end)
+      (send digest hmac-buffer who key buf start))
+
+    (define/public (generate-hmac-key)
+      (send digest generate-hmac-key))
     ))
 
 (define hmac-ctx%
