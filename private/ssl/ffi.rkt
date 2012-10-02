@@ -1,7 +1,5 @@
-;; FFI bindings for libcrypto
-;;
 ;; Copyright 2012 Ryan Culpepper
-;; (C) Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
+;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
