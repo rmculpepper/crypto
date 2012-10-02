@@ -40,11 +40,11 @@
   [public-key->bytes
    (-> pkey-ctx? bytes?)]
   [bytes->public-key
-   (-> bytes? pkey-ctx?)]
+   (-> pkey-impl? bytes? pkey-ctx?)]
   [private-key->bytes
    (-> pkey-ctx? bytes?)]
   [bytes->private-key
-   (-> bytes? pkey-ctx?)]
+   (-> pkey-impl? bytes? pkey-ctx?)]
   [digest-sign
    (-> digest-ctx? pkey-ctx?
        bytes?)]
@@ -71,17 +71,17 @@
     (-> pkey-ctx? cipher-impl?
         (values key/c iv/c input-port? output-port?))
     (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?)
-        (values key/c iv/c input-port?))
+        (values key/c iv/c (or/c input-port? bytes?)))
     (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?) output-port?
         (values key/c iv/c)))]
   [decrypt/envelope
    (case->
-    (-> pkey-ctx? cipher-impl?
-        (values key/c iv/c input-port? output-port?))
-    (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?)
-        (values key/c iv/c input-port?))
-    (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?) output-port?
-        (values key/c iv/c)))]
+    (-> pkey-ctx? cipher-impl? key/c iv/c
+        (values input-port? output-port?))
+    (-> pkey-ctx? cipher-impl? key/c iv/c (or/c input-port? bytes?)
+        (or/c input-port? bytes?))
+    (-> pkey-ctx? cipher-impl? key/c iv/c (or/c input-port? bytes?) output-port?
+        void?))]
   [generate-pkey
    (->* (pkey-impl? nat?) () #:rest any/c
         pkey-ctx?)]
@@ -142,7 +142,7 @@
       (digest-update! dg bs)
       (digest-sign dg pk)))
   (define (sign-port dgt pk inp)
-    (digest-sign (digest dgt inp) pk))
+    (digest-sign (-digest-port* dgt inp) pk))
   (cond [(bytes? inp) (sign-bytes dgt pk inp)]
         [(input-port? inp) (sign-port dgt pk inp)]
         [else (raise-type-error 'sign "bytes or input-port" inp)]))
@@ -153,7 +153,7 @@
       (digest-update! dg bs)
       (digest-verify dg pk sigbs)))
   (define (verify-port dgt pk sigbs inp)
-    (digest-verify (digest dgt inp) pk sigbs))
+    (digest-verify (-digest-port* dgt inp) pk sigbs))
   (cond [(bytes? inp) (verify-bytes dgt pk sigbs inp)]
         [(input-port? inp) (verify-port dgt pk sigbs inp)]
         [else (raise-type-error 'verify "bytes or input-port" inp)]))
@@ -173,7 +173,11 @@
   (let*-values ([(k iv) (generate-cipher-key+iv ci)]
                 [(sk) (encrypt/pkey pk k)])
     (call-with-values (lambda () (apply encrypt ci k iv cargs))
-      (lambda cvals (apply values sk iv cvals)))))
+      (case-lambda
+        [(val) (if (void? val)
+                   (values sk iv)
+                   (values sk iv val))]
+        [vals (apply values sk iv vals)]))))
 
 (define (decrypt/envelope pk ci sk iv  . cargs)
   (apply decrypt ci (decrypt/pkey pk sk) iv cargs))

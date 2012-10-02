@@ -53,7 +53,7 @@
     (define/public (hmac-buffer who key buf start end)
       (let ([outbuf (make-bytes size)])
         (check-input-range who buf start end)
-        (HMAC md key (bytes-length key) start end outbuf)
+        (HMAC md key (bytes-length key) (ptr-add buf start) (- end start) outbuf)
         outbuf))
 
     (define/public (generate-hmac-key)

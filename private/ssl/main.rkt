@@ -33,6 +33,7 @@
          pseudo-random-bytes)
 
 (provide-dh)
+(provide generate-dhkey)
 
 ;; ============================================================
 ;; Available Digests
@@ -191,6 +192,7 @@
                     (EVP_PKEY_set1_RSA evp rsap)
                     (pk->type evp))])
       (new pkey-impl%
+           (name "RSA")
            (pktype pktype)
            (keygen rsa-keygen)
            (ok-digests pkey:rsa:digests)))))
@@ -202,11 +204,15 @@
                     (EVP_PKEY_set1_DSA evp dsap)
                     (pk->type evp))])
       (new pkey-impl%
+           (name "RSA")
            (pktype pktype)
            (keygen dsa-keygen)
            (ok-digests pkey:dsa:digests)))))
 
-(provide pkey:rsa
+(provide pkey:rsa:digests
+         pkey:dsa:digests
+
+         pkey:rsa
          pkey:dsa)
 
 ;; ============================================================

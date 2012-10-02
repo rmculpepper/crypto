@@ -27,11 +27,15 @@
 (provide (all-defined-out))
 
 (define pkey-impl%
-  (class* object% (#|pkey-impl<%>|#)
-    (init-field pktype
+  (class* object% (pkey-impl<%>)
+    (init-field name
+                pktype
                 keygen
                 ok-digests)
     (super-new)
+
+    (define/public (get-name) name)
+    (define/public (new-ctx) (error 'new-ctx "not supported"))
 
     (define/public (read-key who public? buf start end)
       (check-input-range who buf start end)
@@ -77,7 +81,8 @@
         (error who "not a private key"))
       ;; FIXME: add method to digest-ctx% instead (?)
       (unless (is-a? digest-ctx digest-ctx%)
-        (error who "invalid digest context, not compatible with libcrypto"))
+        (eprintf "args = ~s\n" (list who digest-ctx buf start end))
+        (error who "invalid digest context, not compatible with libcrypto: ~e" digest-ctx))
       (check-output-range who buf start end (get-max-signature-size))
       (let ([dctx (get-field ctx digest-ctx)])
         (unless dctx (error who "digest context is closed"))

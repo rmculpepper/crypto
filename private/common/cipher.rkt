@@ -56,7 +56,7 @@
     (-> cipher-impl? key/c iv/c
         (values input-port? output-port?))
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?)
-        input-port?)
+        (or/c input-port? bytes?))
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?) output-port?
         void?))]
   [decrypt
@@ -64,7 +64,7 @@
     (-> cipher-impl? key/c iv/c
         (values input-port? output-port?))
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?)
-        input-port?)
+        (or/c input-port? bytes?))
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?) output-port?
         void?))]
   [generate-cipher-key+iv
@@ -76,8 +76,8 @@
 
 ;; ----
 
-(define (cipher-impl? x) (is-a? cipher-impl<%>))
-(define (cipher-ctx? x) (is-a? cipher-ctx?))
+(define (cipher-impl? x) (is-a? x cipher-impl<%>))
+(define (cipher-ctx? x) (is-a? x cipher-ctx?))
 (define (cipher-encrypt? x) (send x get-encrypt?))
 
 (define (cipher-block-size obj)
@@ -155,7 +155,8 @@
     (let ([enc-len (cipher-final! cipher enc-buf)])
       (write-bytes enc-buf enc-out 0 enc-len)
       (close-output-port enc-out)))
-  (make-output-port name evt write-out close))
+  (values enc-in
+          (make-output-port name evt write-out close)))
 
 #|
 (define (*crypt-pipe who init ci key iv)

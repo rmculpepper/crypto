@@ -19,6 +19,9 @@
 #lang scheme/base
 (require srfi/78
          "main.rkt"
+         "../common/digest.rkt"
+         "../common/cipher.rkt"
+         "../common/pkey.rkt"
          (only-in "util.rkt" hex))
 (provide run-tests)
 
@@ -29,29 +32,27 @@
          => #"a9993e364706816aba3e25717850c26c9cd0d89d")
   (check (hex (sha1 #"abcdef")) 
          => #"1f8ac10f23c5b5bc1167bda84b833e5c057a77d2")
-
-  (let ((x (digest-new digest:sha1)))
+  (let ((x (make-digest-ctx digest:sha1)))
     (digest-update! x #"abc")
-    (check (hex (digest->bytes x))
+    (check (hex (digest-peek-final x))
            => #"a9993e364706816aba3e25717850c26c9cd0d89d")
     (digest-update! x #"abcdef" 3 (bytes-length #"abcdef"))
-    (check (hex (digest-final! x))
+    (check (hex (digest-final x))
            => #"1f8ac10f23c5b5bc1167bda84b833e5c057a77d2")))
 
 (define (test-digest dt df)
-  (define x (digest-new dt))
+  (define x (make-digest-ctx dt))
   (let* ((bs (random-bytes 128))
          (xbs (df bs)))
     (digest-update! x bs)
-    (check (digest->bytes x) => xbs)
-    (check (digest-final! x) => xbs))
-
+    (check (digest-peek-final x) => xbs)
+    (check (digest-final x) => xbs))
   (let ((k (random-bytes 20))
         (msg #"The cat is in the box."))
     (check (hmac dt k (open-input-bytes msg)) => (hmac dt k msg))))
 
 (define (test-pubkey ktype dgtype)
-  (define k (generate-key ktype 1024))
+  (define k (generate-pkey ktype 1024))
   (define privkbs (private-key->bytes k))
   (define privk (bytes->private-key ktype privkbs))
   (define pubkbs (public-key->bytes k))
@@ -62,15 +63,15 @@
   (check (= (bytes-length privkbs) (bytes-length pubkbs)) => #f)
   (check (pkey=? k pubk privk) => #t) ; libcrypto cmps only public components
 
-  (let ((x (digest-new dgtype)))
+  (let ((x (make-digest-ctx dgtype)))
     (digest-update! x (random-bytes 128))
-    (check (with-handlers* ((exn:fail? (lambda x 'fail)))
+    (check (with-handlers ((exn:fail? (lambda x 'fail)))
              (digest-sign x pubk)) => 'fail)
     (let ((sig (digest-sign x privk)))
       (check (digest-verify x pubk sig) => #t)))
 
   (let ((bs (random-bytes 128)))
-    (check (with-handlers* ((exn:fail? (lambda x 'fail)))
+    (check (with-handlers ((exn:fail? (lambda x 'fail)))
              (sign pubk dgtype bs)) => 'fail)
     (check (verify pubk dgtype (sign privk dgtype bs) bs) => #t))
 
@@ -83,7 +84,7 @@
 (define (test-cipher algo)
   (define msg 
     #"Maybe the cat is out of the box! Where is the cat?")
-  (define-values (k iv) (generate-key algo))
+  (define-values (k iv) (generate-cipher-key+iv algo))
 
   (check (decrypt algo k iv (encrypt algo k iv msg)) => msg)
 
@@ -113,21 +114,21 @@
     (check (read-bytes (bytes-length msg) pin) => msg)))
 
 (define (test-encrypt/pkey algo)
-  (define privk (generate-key pkey:rsa 1024))
+  (define privk (generate-pkey pkey:rsa 1024))
   (define pubk (pkey->public-key privk))
   (define msg #"the cat is still alive...")
   (let ((ct (encrypt/pkey pubk msg)))
-    (check (with-handlers* ((exn:fail? (lambda x 'fail)))
+    (check (with-handlers ((exn:fail? (lambda x 'fail)))
              (decrypt/pkey pubk ct)) => 'fail)
     (check (decrypt/pkey privk ct) => msg))
   (let-values (((sk iv ct) (encrypt/envelope pubk algo msg)))
-    (check (with-handlers* ((exn:fail? (lambda x 'fail)))
+    (check (with-handlers ((exn:fail? (lambda x 'fail)))
              (decrypt/envelope pubk algo sk iv ct)) => 'fail)
     (check (decrypt/envelope privk algo sk iv ct) => msg)))
 
 (define (test-dh params)
-  (define-values (priv1 pub1) (generate-key params))
-  (define-values (priv2 pub2) (generate-key params))
+  (define-values (priv1 pub1) (generate-dhkey params))
+  (define-values (priv2 pub2) (generate-dhkey params))
   (check (equal?(compute-key priv1 pub2) (compute-key priv2 pub1)) => #t))
 
 (define (run-tests [flags0 #f])

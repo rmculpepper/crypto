@@ -34,10 +34,16 @@
 (define hmac-final! digest-final!)
 (define hmac? !hmac?)
 
+;; split digest-final from digest-final!
+;; split digest-peek-final from digest-peek-final!
+
 ;; ----
 
 (define !cipher? cipher-impl?)
 (define cipher? cipher-ctx?)
+
+;; split cipher-update from cipher-update!, changed args (???)
+;; cipher-final (???)
 
 (define cipher-encrypt cipher-new-encrypt)
 (define cipher-decrypt cipher-new-decrypt)

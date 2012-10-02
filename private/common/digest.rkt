@@ -22,7 +22,7 @@
 (provide
  (contract-out
   [digest
-   (-> (or/c input-port? bytes?) bytes?)]
+   (-> digest-impl? (or/c input-port? bytes?) bytes?)]
   [digest-impl?
    (-> any/c boolean?)]
   [digest-ctx?
@@ -53,6 +53,7 @@
    (-> digest-impl? bytes? digest-ctx?)]
   [generate-hmac-key
    (-> digest-impl? bytes?)]))
+(provide -digest-port*) ;; for pkey.rkt
 
 (define nat? exact-nonnegative-integer?)
 
@@ -127,7 +128,7 @@
         [(input-port? inp) (-hmac-port di key inp)]))
 
 (define (-hmac-bytes di key buf)
-  (or (send di hmac-buffer 'hmac key buf)
+  (or (send di hmac-buffer 'hmac key buf 0 (bytes-length buf))
       (-hmac-port di key (open-input-bytes buf))))
 
 (define (-hmac-port di key inp)
