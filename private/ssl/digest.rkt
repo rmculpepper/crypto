@@ -56,7 +56,7 @@
       (let ([outbuf (make-bytes size)])
         (check-input-range who buf start end)
         (HMAC md key (bytes-length key) start end outbuf)
-        obs))
+        outbuf))
 
     (define/public (generate-hmac-key)
       (random-bytes size))

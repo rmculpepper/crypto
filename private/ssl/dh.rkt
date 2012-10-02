@@ -21,6 +21,7 @@
          "ffi.rkt"
          "macros.rkt"
          "util.rkt"
+         (only-in "../common/common.rkt" shrink-bytes)
          (only-in net/base64 base64-decode)
          (only-in racket/list last)
          (for-syntax racket/base

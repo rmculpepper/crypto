@@ -65,7 +65,12 @@
     (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?)
         (values key/c iv/c input-port?))
     (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?) output-port?
-        (values key/c iv/c)))]))
+        (values key/c iv/c)))]
+  [generate-pkey
+   (->* (pkey-impl? nat?) () #:rest any/c
+        pkey-ctx?)]
+  [pkey-digest?
+   (-> (or/c pkey-impl? pkey-ctx?) digest-impl? boolean?)]))
 
 (define nat? exact-nonnegative-integer?)
 (define key/c bytes?)
@@ -148,11 +153,24 @@
 ;; ============================================================
 
 ;; sk: sealed key
-(define (encrypt/envelope pk cipher . cargs)
-  (let*-values ([(k iv) (generate-cipher-key+iv cipher)]
+(define (encrypt/envelope pk ci . cargs)
+  (let*-values ([(k iv) (generate-cipher-key+iv ci)]
                 [(sk) (encrypt/pkey pk k)])
-    (call-with-values (lambda () (apply encrypt cipher k iv cargs))
+    (call-with-values (lambda () (apply encrypt ci k iv cargs))
       (lambda cvals (apply values sk iv cvals)))))
 
-(define (decrypt/envelope pk cipher sk iv  . cargs)
-  (apply decrypt cipher (decrypt/pkey pk sk) iv cargs))
+(define (decrypt/envelope pk ci sk iv  . cargs)
+  (apply decrypt ci (decrypt/pkey pk sk) iv cargs))
+
+;; ============================================================
+
+(define (pkey-digest? pk di)
+  (cond [(is-a? pk pkey-impl<%>)
+         (send pk digest-ok? di)]
+        [(is-a? pk pkey-ctx<%>)
+         (pkey-digest? (send pk get-impl) di)]))
+
+;; ============================================================
+
+(define (generate-pkey pki bits . args)
+  (send pki generate-key (cons bits args)))

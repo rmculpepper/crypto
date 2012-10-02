@@ -147,11 +147,12 @@
 (provide-avail-ciphers)
 
 ;; ============================================================
-;; Public Key - Available Digests
+;; Public-Key Available Cryptosystems
 
 ;; XXX As of openssl-0.9.8 pkeys can only be used with certain types of
 ;;     digests.
 ;;     openssl-0.9.9 is supposed to remove the restriction for digest types
+
 (define pkey:rsa:digests 
   (filter values
     (list digest:ripemd160 
@@ -160,22 +161,6 @@
 (define pkey:dsa:digests
   (filter values
     (list digest:dss1))) ; sha1 with fancy name
-
-(define (pkey-digest? pk dgt)
-  (cond [(!pkey? pk)
-         (memq dgt
-               (cond [(eq? pk pkey:rsa) pkey:rsa:digests]
-                     [(eq? pk pkey:dsa) pkey:dsa:digests]
-                     [else #f]))]
-        [(pkey? pk) (pkey-digest? (-pkey-type pk) dgt)]
-        [else (raise-type-error 'pkey-digest? "pkey or pkey type" pk)]))
-
-(provide pkey:rsa:digests
-         pkey:dsa:digests
-         pkey-digest?)
-
-;; ============================================================
-;; Public-Key Available Cryptosystems
 
 (define (rsa-keygen bits [exp 65537])
   (let/fini ([ep (BN_new) BN_free])
@@ -207,7 +192,10 @@
                              [evp (EVP_PKEY_new) EVP_PKEY_free])
                     (EVP_PKEY_set1_RSA evp rsap)
                     (pk->type evp))])
-      (new pkey-impl% (pktype pktype) (keygen rsa-keygen)))))
+      (new pkey-impl%
+           (pktype pktype)
+           (keygen rsa-keygen)
+           (ok-digests pkey:rsa:digests)))))
 
 (define pkey:dsa
   (with-handlers (#|(exn:fail? (lambda x #f))|#)
@@ -215,7 +203,10 @@
                              [evp (EVP_PKEY_new) EVP_PKEY_free])
                     (EVP_PKEY_set1_DSA evp dsap)
                     (pk->type evp))])
-      (new pkey-impl% (pktype pktype) (keygen dsa-keygen)))))
+      (new pkey-impl%
+           (pktype pktype)
+           (keygen dsa-keygen)
+           (ok-digests pkey:dsa:digests)))))
 
 (provide pkey:rsa
          pkey:dsa)
@@ -223,6 +214,7 @@
 ;; ============================================================
 ;; Key Generation
 
+#|
 (define (generate-key algo . params)
   (apply (cond [(!cipher? algo) generate-cipher-key]
                [(!pkey? algo) generate-pkey]
@@ -231,7 +223,5 @@
                [else (raise-type-error 'generate-key "crypto type" algo)])
          algo params))
 
-(define (generate-pkey pki bits . args)
-  (send pki generate-key (cons bits args)))
-
 (provide generate-key)
+|#

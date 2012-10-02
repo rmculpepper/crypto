@@ -19,7 +19,6 @@
 #lang racket/base
 (provide hex
          unhex
-         shrink-bytes
          bytes-xor
          bytes-xor!)
 

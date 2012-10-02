@@ -26,11 +26,13 @@
          "util.rkt"
          "digest.rkt"
          "cipher.rkt")
+(provide (all-defined-out))
 
 (define pkey-impl%
   (class* object% (#|pkey-impl<%>|#)
     (init-field pktype
-                keygen)
+                keygen
+                ok-digests)
     (super-new)
 
     (define/public (read-key who public? buf start end)
@@ -42,6 +44,9 @@
     (define/public (generate-key args)
       (apply keygen args))
 
+    (define/public (digest-ok? di)
+      (or (not ok-digests)
+          (memq di ok-digests)))
     ))
 
 (define pkey-ctx%
