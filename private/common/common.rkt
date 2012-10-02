@@ -5,7 +5,10 @@
 #lang racket/base
 (require racket/class
          "interfaces.rkt")
-(provide base-ctx%)
+(provide base-ctx%
+         shrink-bytes)
+
+;; ----
 
 (define base-ctx%
   (class* object% (ctx<%>)
@@ -21,3 +24,10 @@
         (error who "called in invalid state: ~e" state)))
 
     (super-new)))
+
+;; ----
+
+(define (shrink-bytes bs len)
+  (if (< len (bytes-length bs))
+    (subbytes bs 0 len)
+    bs))

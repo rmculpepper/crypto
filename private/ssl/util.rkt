@@ -73,8 +73,3 @@
                        (arithmetic-shift (hex->byte (bytes-ref bs i)) 4)
                        (hex->byte (bytes-ref bs (add1 i)))))))
       obs)))
-
-(define (shrink-bytes bs len)
-  (if (< len (bytes-length bs))
-    (subbytes bs 0 len)
-    bs))

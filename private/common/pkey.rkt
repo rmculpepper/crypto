@@ -1,7 +1,9 @@
 #lang racket/base
 (require racket/class
          racket/contract/base
-         "interfaces.rkt")
+         "interfaces.rkt"
+         "common.rkt"
+         "digest.rkt")
 (provide
  (contract-out
   [pkey-impl?
@@ -62,10 +64,7 @@
     (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?)
         (values key/c iv/c input-port?))
     (-> pkey-ctx? cipher-impl? (or/c input-port? bytes?) output-port?
-        (values key/c iv/c)))]
-  [generate-pkey
-   (->* (pkey-impl? nat?) () #:rest any/c
-        pkey-ctx?)]))
+        (values key/c iv/c)))]))
 
 (define nat? exact-nonnegative-integer?)
 (define key/c bytes?)
@@ -91,16 +90,13 @@
 
 (define (-read-pkey who pki public? bs)
   (send pki read-key who public? bs 0 (bytes-length bs)))
-(define (-write-pkey pk public?)
+(define (-write-pkey who pk public?)
   (send pk write-key who public?))
 
 (define (pkey->public-key pk)
   (if (pkey-private? pk)
       (bytes->public-key (send pk get-impl) (public-key->bytes pk))
       pk))
-
-(define (generate-pkey pki bits . args)
-  (send pki generate-key (cons bits args)))
 
 ;; ============================================================
 
@@ -120,22 +116,22 @@
 
 (define (sign pk dgt inp)
   (define (sign-bytes dgt pk bs)
-    (let ([dg (digest-new dgt)])
+    (let ([dg (make-digest-ctx dgt)])
       (digest-update! dg bs)
       (digest-sign dg pk)))
   (define (sign-port dgt pk inp)
-    (digest-sign (digest-port* dgt inp) pk))
+    (digest-sign (digest dgt inp) pk))
   (cond [(bytes? inp) (sign-bytes dgt pk inp)]
         [(input-port? inp) (sign-port dgt pk inp)]
         [else (raise-type-error 'sign "bytes or input-port" inp)]))
 
 (define (verify pk dgt sigbs inp)
   (define (verify-bytes dgt pk sigbs bs)
-    (let ([dg (digest-new dgt)])
+    (let ([dg (make-digest-ctx dgt)])
       (digest-update! dg bs)
       (digest-verify dg pk sigbs)))
   (define (verify-port dgt pk sigbs inp)
-    (digest-verify (digest-port* dgt inp) pk sigbs))
+    (digest-verify (digest dgt inp) pk sigbs))
   (cond [(bytes? inp) (verify-bytes dgt pk sigbs inp)]
         [(input-port? inp) (verify-port dgt pk sigbs inp)]
         [else (raise-type-error 'verify "bytes or input-port" inp)]))

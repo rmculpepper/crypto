@@ -1,7 +1,9 @@
 #lang racket/base
 (require racket/class
          racket/contract/base
-         "interfaces.rkt")
+         racket/port
+         "interfaces.rkt"
+         "common.rkt")
 (provide
  (contract-out
   [cipher-impl?
@@ -48,10 +50,7 @@
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?)
         input-port?)
     (-> cipher-impl? key/c iv/c (or/c input-port? bytes?) output-port?
-        void?))]
-  [generate-cipher-key
-   (-> cipher-impl?
-       (values key/c iv/c))]))
+        void?))]))
 
 (define nat? exact-nonnegative-integer?)
 (define key/c bytes?)
@@ -65,9 +64,9 @@
 
 (define (cipher-block-size obj)
   (get-cipher-prop obj (lambda (o) (send o get-block-size))))
-(define (cipher-key-length obj)
+(define (cipher-key-size obj)
   (get-cipher-prop obj (lambda (o) (send o get-key-size))))
-(define (cipher-iv-length obj)
+(define (cipher-iv-size obj)
   (get-cipher-prop obj (lambda (o) (send o get-iv-size))))
 
 (define (get-cipher-prop obj getter)
@@ -93,7 +92,7 @@
 (define (cipher-update! c ibuf obuf
                         [istart 0] [iend (bytes-length ibuf)]
                         [ostart 0] [oend (bytes-length obuf)])
-  (send c update! 'cipher-update! ibuf istart iend obuf ostart oend)]))
+  (send c update! 'cipher-update! ibuf istart iend obuf ostart oend))
 
 (define (cipher-final c)
   (let* ([buf (make-bytes (cipher-block-size c))]
@@ -146,7 +145,7 @@
                [(rd1 wr1) (make-pipe)]
                [(rd2 wr2) (make-pipe)])
     (thread (lambda ()
-              (cipher-pipe cipher rd1 wr2)
+              (cipher-pump cipher rd1 wr2)
               (close-input-port rd1)
               (close-output-port wr2)))
     (values rd2 wr1)))
@@ -155,19 +154,19 @@
 (define (*crypt-input who init ci key iv inp)
   (cond [(bytes? inp) 
          (let ([outp (open-output-bytes)])
-           (cipher-pipe (init ci key iv) (open-input-bytes inp) outp)
+           (cipher-pump (init ci key iv) (open-input-bytes inp) outp)
            (get-output-bytes outp))]
         [(input-port? inp)
          (let-values ([(cipher) (init ci key iv)]
                       [(rd wr) (make-pipe)])
            (thread (lambda () 
-                     (cipher-pipe cipher inp wr)
+                     (cipher-pump cipher inp wr)
                      (close-output-port wr)))
            rd)]))
 
 (define (*crypt-pump who init ci key iv inp outp)
   (let ([inp (if (bytes? inp) (open-input-bytes inp) inp)])
-    (cipher-pipe (init ci key iv) inp outp)))
+    (cipher-pump (init ci key iv) inp outp)))
 
 (define (-make-cipher-pipe-fun who init)
   (case-lambda
@@ -178,8 +177,8 @@
     [(ci key iv inp outp)
      (*crypt-pump who init ci key iv inp outp)]))
 
-(define encrypt (make-cipher-pipe-fun 'encrypt make-encrypt-cipher-ctx))
-(define decrypt (make-cipher-pipe-fun 'decrypt make-decrypt-cipher-ctx))
+(define encrypt (-make-cipher-pipe-fun 'encrypt make-encrypt-cipher-ctx))
+(define decrypt (-make-cipher-pipe-fun 'decrypt make-decrypt-cipher-ctx))
 
 (define (encrypt->bytes ci key iv inp)
   (let ([enc-inp (*crypt-input 'encrypt->bytes make-encrypt-cipher-ctx ci key iv inp)])
@@ -187,12 +186,4 @@
 
 (define (decrypt->bytes ci key iv inp)
   (let ([dec-inp (*crypt-input 'decrypt->bytes make-decrypt-cipher-ctx ci key iv inp)])
-    (port->bytes enc-inp)))
-
-;; ----
-
-(define (generate-cipher-key ci)
-  (let ([klen (send ci get-key-size)]
-        [ivlen (send ci get-iv-size)])
-    (values (random-bytes klen) 
-            (and ivlen (pseudo-random-bytes ivlen)))))
+    (port->bytes dec-inp)))

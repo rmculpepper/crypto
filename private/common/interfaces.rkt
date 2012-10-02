@@ -44,8 +44,12 @@ eg, (send a-sha1-impl get-size) => 20
 
 (define digest-impl<%>
   (interface (impl<%>)
-    ;; get-name ;; -> string -- eg, "MD5", "SHA-1", "SHA-256"
-    get-size    ;; -> nat
+    ;; get-name   ;; -> string -- eg, "MD5", "SHA-1", "SHA-256"
+    get-size      ;; -> nat
+
+    get-hmac-impl ;; who -> digest-impl<%>
+    hmac-buffer   ;; sym bytes bytes -> bytes/#f
+                  ;;  -- fast/convenience method, may return #f
     ))
 
 (define digest-ctx<%>

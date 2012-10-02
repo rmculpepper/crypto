@@ -1,7 +1,8 @@
 #lang racket/base
 (require racket/class
          racket/contract/base
-         "interfaces.rkt")
+         "interfaces.rkt"
+         "common.rkt")
 (provide
  (contract-out
   [digest
@@ -11,7 +12,7 @@
   [digest-ctx?
    (-> any/c boolean?)]
   [make-digest-ctx
-   (-> digest-impl? digect-ctx?)]
+   (-> digest-impl? digest-ctx?)]
   [digest-size
    (-> (or/c digest-impl? digest-ctx?) nat?)]
   [digest-update!
@@ -33,9 +34,7 @@
    (-> digest-impl? bytes? (or/c bytes? input-port?)
        bytes?)]
   [make-hmac-ctx
-   (-> digest-impl? bytes? digest-ctx?)]
-  [generate-hmac-key
-   (-> digest-impl? bytes?)]))
+   (-> digest-impl? bytes? digest-ctx?)]))
 
 (define nat? exact-nonnegative-integer?)
 
@@ -82,10 +81,10 @@
         [(input-port? inp) (-digest-port di inp)]))
 
 (define (-digest-port type inp)
-  (digest-final! (-digest-port* type inp)))
+  (digest-final (-digest-port* type inp)))
 
 (define (-digest-port* di inp)
-  (let ([dg (digest-new di)]
+  (let ([dg (make-digest-ctx di)]
         [ibuf (make-bytes 4096)])
     (let lp ([count (read-bytes-avail! ibuf inp)])
       (cond [(eof-object? count)
@@ -95,29 +94,27 @@
              (lp (read-bytes-avail! ibuf inp))]))))
 
 (define (-digest-bytes di bs)
-  (let ([dg (digest-new di)])
+  (let ([dg (make-digest-ctx di)])
     (digest-update! dg bs)
-    (digest-final! dg)))
+    (digest-final dg)))
 
 ;; ----
 
 (define (make-hmac-ctx di key)
-  (let* ([himpl (new hmac-impl% (digest di))])
+  (let* ([himpl (send di get-hmac-impl 'make-hmac-ctx)])
     (send himpl new-ctx key)))
 
 (define (hmac di key inp)
-  (cond [(bytes? inp) (hmac-bytes di key inp)]
-        [(input-port? inp) (hmac-port di key inp)]))
+  (cond [(bytes? inp) (-hmac-bytes di key inp)]
+        [(input-port? inp) (-hmac-port di key inp)]))
 
-(define (-hmac-bytes di key ibs)
-  (let ([evp (get-field md di)]
-        [obs (make-bytes (send di get-size))])
-    (HMAC evp key (bytes-length key) ibs (bytes-length ibs) obs)
-    obs))
+(define (-hmac-bytes di key buf)
+  (or (send di hmac-buffer 'hmac key buf)
+      (-hmac-port di key (open-input-bytes buf))))
 
 (define (-hmac-port di key inp)
-  (let* ([buf (make-bytes 4096)]
-         [himpl (new hmac-impl% (digest di))]
+  (let* ([buf (make-bytes 4000)]
+         [himpl (send di get-hmac-impl 'hmac)]
          [hctx (send himpl new-ctx key)]
          [size (send himpl get-size)])
     (let loop ()
@@ -128,6 +125,3 @@
               [else
                (send hctx update! 'hmac-port buf 0 count)
                (loop)])))))
-
-(define (generate-hmac-key t)
-  (random-bytes (digest-size t)))

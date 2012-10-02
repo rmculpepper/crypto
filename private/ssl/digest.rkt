@@ -37,6 +37,7 @@
     (init-field md    ;; EVP_MD
                 name) ;; symbol
     (define size (last (ptr-ref md (_list-struct _int _int _int))))
+    (define hmac-impl #f)
     (super-new)
 
     (define/public (get-name) (symbol->string name))
@@ -46,14 +47,22 @@
       (let ([ctx (EVP_MD_CTX_create)])
         (EVP_DigestInit_ex ctx md)
         (new digest-ctx% (impl this) (ctx ctx))))
-    ))
 
+    (define/public (get-hmac-impl who)
+      (unless hmac-impl (set! hmac-impl (new hmac-impl% (digest this))))
+      hmac-impl)
+
+    (define/public (hmac-buffer who key buf)
+      (let ([outbuf (make-bytes size)])
+        (HMAC md key (bytes-length key) buf (bytes-length buf) outbuf)
+        obs))
+
+    ))
 
 (define digest-ctx%
   (class* base-ctx% (digest-ctx<%>)
     (init-field ctx)
     (inherit-field impl)
-
     (super-new)
 
     (define/public (update! who buf start end)
@@ -82,23 +91,25 @@
 (define hmac-impl%
   (class* object% (digest-impl<%>)
     (init-field digest)
+    (super-new)
+
+    (define/public (get-name) (format "HMAC-~a" (send digest get-name)))
+    (define/public (get-size) (send digest get-size))
 
     (define/public (new-ctx key)
       (let ([ctx (HMAC_CTX_new)])
         (HMAC_Init_ex ctx key (bytes-length key) (get-field md digest))
         (new hmac-ctx% (impl this) (ctx ctx))))
 
-    (define/public (get-name) (format "HMAC-~a" (send digest get-name)))
-    (define/public (get-size) (send digest get-size))
-
-    (super-new)
+    (define/public (get-hmac-impl who)
+      (error who "expected digest implementation, given HMAC implementation: ~e" this))
     ))
-
 
 (define hmac-ctx%
   (class* base-ctx% (digest-ctx<%>)
     (init-field ctx)
     (inherit-field impl)
+    (super-new)
 
     (define/public (update! who buf start end)
       (check-input-range who buf start end)
@@ -114,6 +125,4 @@
         size))
 
     (define/public (copy) #f)
-
-    (super-new)
     ))
