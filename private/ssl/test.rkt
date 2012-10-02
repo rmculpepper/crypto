@@ -172,9 +172,6 @@
   (define flags
     (or flags0 '(sha1 digests rsa dsa ciphers pkey dh)))
 
-  ;; '(sha1), '(digests), '(ciphers), '(dh) okay
-  ;; seg fault triggered by '(rsa) or '(dsa) or '(pkey) then collect-garbage
-
   (when (memq 'sha1 flags)
     (when digest:sha1 (test-sha1)))
   (when (memq 'digests flags)
