@@ -156,10 +156,17 @@
         dg2))
     ))
 
-(define (di name size) (new digest-impl% (name name) (size size)))
+(define (di name size block-size)
+  (new digest-impl% (name name) (size size) (block-size block-size)))
 
 (define digest:md5 (di "md5" 16))
+(define digest:ripemd160 (di "rmd160" 20))
+(define digest:dss1 (di "dss1" 20))
 (define digest:sha1 (di "sha1" 20))
+(define digest:sha224 (di "sha224" 28))
+(define digest:sha256 (di "sha256" 32))
+(define digest:sha384 (di "sha384" 48))
+(define digest:sha512 (di "sha512" 64))
 
 ;; ============================================================
 
@@ -223,18 +230,17 @@
 (define (ci name keylen blocklen ivlen)
   (new cipher-impl% (name name) (keylen keylen) (blocklen blocklen) (ivlen ivlen)))
 
-(define aes-128-cbc (ci "aes-128-cbc" 16 16 16))
-(define aes-128-ecb (ci "aes-128-ecb" 16 16 #f))
+(define cipher:aes-128-cbc (ci "aes-128-cbc" 16 16 16))
+(define cipher:aes-128-ecb (ci "aes-128-ecb" 16 16 #f))
+(define cipher:aes-128     cipher:aes-128-cbc)
 
-(define key16 #"keyAkeyBkeyCkeyD")
-(define key00 #"keyAkey\0keyCkeyD")
-(define iv16  #"ivIVivIVivIVivIV")
-(define data  #"hello goodbye")
+(define cipher:aes-192-cbc (ci "aes-192-cbc" 24 16 16))
+(define cipher:aes-192-ecb (ci "aes-192-ecb" 24 16 #f))
+(define cipher:aes-192     cipher:aes-192-cbc)
 
-(require "../common/digest.rkt"
-         "../common/cipher.rkt")
-(provide (all-from-out "../common/digest.rkt")
-         (all-from-out "../common/cipher.rkt"))
+(define cipher:aes-256-cbc (ci "aes-256-cbc" 32 16 16))
+(define cipher:aes-256-ecb (ci "aes-256-ecb" 32 16 #f))
+(define cipher:aes-256     cipher:aes-256-cbc)
 
 ;; ============================================================
 
@@ -264,12 +270,14 @@ FIXME: check again whether DER available in older versions
         (new pkey-ctx% (impl this) (key key) (private? #t))))
 
     (define/public (digest-ok? di)
-      ;; FIXME
-      #f)
+      (case sys
+        ((rsa)
+         (and (member di (list digest:ripemd160 digest:sha1 digest:sha224
+                               digest:sha256 digest:sha384 digest:sha512))
+              #t))
+        ((dsa)
+         (and (member di (list digest:dss1)) #t))))
     ))
-
-(define pkey:rsa (new pkey-impl% (sys 'rsa)))
-(define pkey:dsa (new pkey-impl% (sys 'dsa)))
 
 (define pkey-ctx%
   (class* base-ctx% (pkey-ctx<%>)
@@ -319,7 +327,7 @@ FIXME: check again whether DER available in older versions
         (let* ([impl (send dg get-impl)]
                [result
                 (openssl "dgst" (format "-~a" (send impl get-name))
-                         (if private? "-prverify" "-verify" keyfile)
+                         (if private? "-prverify" "-verify") keyfile
                          "-signature" sigfile
                          #:in (send dg get-content who #f))])
           (cond [(regexp-match? #rx#"OK" result)
@@ -341,8 +349,25 @@ FIXME: check again whether DER available in older versions
            (let ([result
                   (openssl "rsautl"
                            "-inkey" keyfile
-                           (and public? "-pubin")
+                          (and want-public? "-pubin")
                            (if encrypt? "-encrypt" "-decrypt")
                            #:in (subbytes inbuf instart inend))])
              result)))))
     ))
+
+(define pkey:rsa (new pkey-impl% (sys 'rsa)))
+(define pkey:dsa (new pkey-impl% (sys 'dsa)))
+
+;; ============================================================
+
+(require "../common/digest.rkt"
+         "../common/cipher.rkt"
+         "../common/pkey.rkt")
+(provide (all-from-out "../common/digest.rkt")
+         (all-from-out "../common/cipher.rkt")
+         (all-from-out "../common/pkey.rkt"))
+
+(define key16 #"keyAkeyBkeyCkeyD")
+(define key00 #"keyAkey\0keyCkeyD")
+(define iv16  #"ivIVivIVivIVivIV")
+(define data  #"hello goodbye")
