@@ -31,6 +31,8 @@
    (-> digest-impl? digest-ctx?)]
   [digest-size
    (-> (or/c digest-impl? digest-ctx?) nat?)]
+  [digest-block-size
+   (-> (or/c digest-impl? digest-ctx?) nat?)]
   [digest-update!
    (->* (digest-ctx? bytes?) (nat? nat?)
         void?)]
@@ -70,6 +72,10 @@
 (define (digest-size o)
   (cond [(is-a? o digest-impl<%>) (send o get-size)]
         [(is-a? o digest-ctx<%>) (digest-size (send o get-impl))]))
+
+(define (digest-block-size o)
+  (cond [(is-a? o digest-impl<%>) (send o get-block-size)]
+        [(is-a? o digest-ctx<%>) (digest-block-size (send o get-impl))]))
 
 (define (digest-update! x buf [start 0] [end (bytes-length buf)])
   (send x update! 'digest-update! buf start end))

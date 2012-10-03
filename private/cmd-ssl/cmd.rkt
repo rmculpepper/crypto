@@ -80,11 +80,13 @@
 (define digest-impl%
   (class* object% (digest-impl<%>)
     (init-field name
-                size)
+                size
+                block-size)
     (super-new)
 
     (define/public (get-name) name)
     (define/public (get-size) size)
+    (define/public (get-block-size) block-size)
 
     (define/public (new-ctx)
       (new digest-ctx% (impl this)))
@@ -159,14 +161,14 @@
 (define (di name size block-size)
   (new digest-impl% (name name) (size size) (block-size block-size)))
 
-(define digest:md5 (di "md5" 16))
-(define digest:ripemd160 (di "rmd160" 20))
-(define digest:dss1 (di "dss1" 20))
-(define digest:sha1 (di "sha1" 20))
-(define digest:sha224 (di "sha224" 28))
-(define digest:sha256 (di "sha256" 32))
-(define digest:sha384 (di "sha384" 48))
-(define digest:sha512 (di "sha512" 64))
+(define digest:md5 (di "md5" 16 64))
+(define digest:ripemd160 (di "rmd160" 20 64))
+(define digest:dss1 (di "dss1" 20 64))
+(define digest:sha1 (di "sha1" 20 64))
+(define digest:sha224 (di "sha224" 28 64))
+(define digest:sha256 (di "sha256" 32 64))
+(define digest:sha384 (di "sha384" 48 128))
+(define digest:sha512 (di "sha512" 64 128))
 
 ;; ============================================================
 

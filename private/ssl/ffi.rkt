@@ -121,6 +121,12 @@
 (define-cpointer-type _HMAC_CTX)
 (define EVP_MAX_MD_SIZE 64) ;; 512 bits
 
+(define-crypto EVP_get_digestbyname
+  (_fun _string -> _EVP_MD/null))
+
+(define-crypto EVP_MD_size (_fun _EVP_MD -> _int))
+(define-crypto EVP_MD_block_size (_fun _EVP_MD -> _int))
+
 (define-crypto EVP_MD_CTX_destroy
   (_fun _EVP_MD_CTX -> _void)
   #:wrap (deallocator))
@@ -128,9 +134,6 @@
 (define-crypto EVP_MD_CTX_create
   (_fun -> _EVP_MD_CTX/null)
   #:wrap (compose (allocator EVP_MD_CTX_destroy) (err-wrap/pointer 'EVP_MD_CTX_create)))
-
-(define-crypto EVP_get_digestbyname
-  (_fun _string -> _EVP_MD/null))
 
 (define-crypto EVP_DigestInit_ex
   (_fun _EVP_MD_CTX

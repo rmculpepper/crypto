@@ -34,12 +34,13 @@
   (class* object% (digest-impl<%>)
     (init-field md    ;; EVP_MD
                 name) ;; symbol
-    (define size (last (ptr-ref md (_list-struct _int _int _int))))
+    (define size (EVP_MD_size md))
     (define hmac-impl #f)
     (super-new)
 
     (define/public (get-name) (symbol->string name))
     (define/public (get-size) size)
+    (define/public (get-block-size) (EVP_MD_block_size md))
 
     (define/public (new-ctx)
       (let ([ctx (EVP_MD_CTX_create)])
@@ -96,6 +97,7 @@
 
     (define/public (get-name) (format "HMAC-~a" (send digest get-name)))
     (define/public (get-size) (send digest get-size))
+    (define/public (get-block-size) (send digest get-block-size))
 
     (define/public (new-ctx key)
       (let ([ctx (HMAC_CTX_new)])

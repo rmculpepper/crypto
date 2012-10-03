@@ -50,6 +50,7 @@ eg, (send a-sha1-impl get-size) => 20
   (interface (impl<%>)
     get-name      ;; -> any -- eg, 'md5, 'sha1, 'sha256
     get-size      ;; -> nat
+    get-block-size;; -> nat
     get-hmac-impl ;; who -> digest-impl<%>
     hmac-buffer   ;; sym bytes bytes nat nat -> bytes/#f
                   ;;  -- fast/convenience method, may return #f
