@@ -5,7 +5,7 @@ To Do
 - update tests
 - update docs
 
-- add Racket impls (HMAC, if nothing else)
+- add more Racket impls
 - add support for gnutls, etc (?)
 
 - fix balance of code between operations and impls
