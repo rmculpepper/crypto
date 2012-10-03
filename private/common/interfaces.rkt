@@ -53,7 +53,8 @@ eg, (send a-sha1-impl get-size) => 20
     get-hmac-impl ;; who -> digest-impl<%>
     hmac-buffer   ;; sym bytes bytes nat nat -> bytes/#f
                   ;;  -- fast/convenience method, may return #f
-    new-ctx       ;; -> digest-ctx<%>
+    new-ctx       ;; ??? -> digest-ctx<%>
+                  ;; Ordinary digest has no params; HMAC takes key.
     generate-hmac-key ;; -> bytes
     ))
 
