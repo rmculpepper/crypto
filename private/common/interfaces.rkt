@@ -19,6 +19,7 @@
          ctx<%>
          digest-impl<%>
          digest-ctx<%>
+         hmac-impl<%>
          cipher-impl<%>
          cipher-ctx<%>
          pkey-impl<%>
@@ -54,8 +55,7 @@ eg, (send a-sha1-impl get-size) => 20
     get-hmac-impl ;; who -> digest-impl<%>
     hmac-buffer   ;; sym bytes bytes nat nat -> bytes/#f
                   ;;  -- fast/convenience method, may return #f
-    new-ctx       ;; ??? -> digest-ctx<%>
-                  ;; Ordinary digest has no params; HMAC takes key.
+    new-ctx       ;; -> digest-ctx<%>
     generate-hmac-key ;; -> bytes
     ))
 
@@ -64,6 +64,12 @@ eg, (send a-sha1-impl get-size) => 20
     update!  ;; sym bytes nat nat -> void
     final!   ;; sym bytes nat nat -> nat
     copy     ;; sym -> digest-ctx<%>/#f
+    ))
+
+(define hmac-impl<%>
+  (interface (impl<%>)
+    get-digest ;; -> digest-impl<%>
+    new-ctx    ;; sym bytes -> digest-ctx<%>
     ))
 
 ;; ============================================================

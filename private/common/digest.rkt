@@ -127,7 +127,7 @@
 
 (define (make-hmac-ctx di key)
   (let* ([himpl (send di get-hmac-impl 'make-hmac-ctx)])
-    (send himpl new-ctx key)))
+    (send himpl new-ctx 'make-hmac-ctx key)))
 
 (define (hmac di key inp)
   (cond [(bytes? inp) (-hmac-bytes di key inp)]
@@ -139,9 +139,9 @@
 
 (define (-hmac-port di key inp)
   (let* ([buf (make-bytes 4000)]
+         [size (send di get-size)]
          [himpl (send di get-hmac-impl 'hmac)]
-         [hctx (send himpl new-ctx key)]
-         [size (send himpl get-size)])
+         [hctx (send himpl new-ctx 'hmac key)])
     (let loop ()
       (let ([count (read-bytes-avail! buf inp)])
         (cond [(eof-object? count)

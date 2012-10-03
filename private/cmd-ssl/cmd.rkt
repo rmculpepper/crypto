@@ -95,34 +95,19 @@
     (define/public (hmac-buffer who key buf start end) #f)
     (define/public (generate-hmac-key)
       (random-bytes-no-nuls size))
-
-    ;; ----
-
-    (define/public (do-digest who _hmac-key content)
-      (openssl "dgst" (format "-a~a" name) "-binary" #:in content))
     ))
 
 (define hmac-impl%
-  (class* object% (digest-impl<%>)
+  (class* object% (hmac-impl<%>)
     (init-field digest)
     (super-new)
 
-    (define/public (get-name) (format "HMAC-~a" (send digest get-name)))
-    (define/public (get-size) (send digest get-size))
-
-    (define/public (new-ctx key)
-      (new digest-ctx% (impl this) (hmac-key key)))
-    (define/public (get-hmac-impl who)
-      (error who "already an HMAC implementation"))
-    (define/public (hmac-buffer who key buf start end)
-      (send digest hmac-buffer who key buf start end))
-    (define/public (generate-hmac-key)
-      (send digest generate-hmac-key))
-
-    (define/public (do-digest who hmac-key content)
-      (openssl "dgst" (format "-a~a" (send digest get-name)) "-binary"
-               "-hmac" hmac-key
-               #:in content))
+    (define/public (get-digest) digest)
+    (define/public (new-ctx who key)
+      ;; There seems to be no way to pass HMAC keys containing embedded NUL bytes :(
+      (unless (bytes-no-nuls? key)
+        (error who "key must not contain NUL byte, got: ~e" key))
+      (new digest-ctx% (impl digest) (hmac-key key)))
     ))
 
 (define digest-ctx%
@@ -130,11 +115,6 @@
     (init-field [hmac-key #f])
     (inherit-field impl)
     (super-new)
-
-    ;; There seems to be no way to pass HMAC keys containing embedded NUL bytes :(
-    (when hmac-key
-      (unless (bytes-no-nuls? hmac-key)
-        (error 'make-hmac-ctx "key must contain NUL byte, got: ~e" hmac-key)))
 
     (define stored-content (open-output-bytes))
 
@@ -147,7 +127,9 @@
 
     (define/public (final! who buf start end)
       (let* ([content (get-content who #t)]
-             [md (send impl do-digest who hmac-key content)])
+             [md (openssl "dgst" (format "-a~a" (send impl get-name)) "-binary"
+                          (and hmac-key "-hmac") hmac-key
+                          #:in content)])
         (bytes-copy! buf start md)
         (bytes-length md)))
 

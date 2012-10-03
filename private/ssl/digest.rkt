@@ -91,33 +91,19 @@
 ;; ============================================================
 
 (define hmac-impl%
-  (class* object% (digest-impl<%>)
+  (class* object% (hmac-impl<%>)
     (init-field digest)
     (super-new)
-
-    (define/public (get-name) (format "HMAC-~a" (send digest get-name)))
-    (define/public (get-size) (send digest get-size))
-    (define/public (get-block-size) (send digest get-block-size))
-
-    (define/public (new-ctx key)
+    (define/public (get-digest) digest)
+    (define/public (new-ctx who key)
       (let ([ctx (HMAC_CTX_new)])
         (HMAC_Init_ex ctx key (bytes-length key) (get-field md digest))
-        (new hmac-ctx% (impl this) (ctx ctx))))
-
-    (define/public (get-hmac-impl who)
-      (error who "expected digest implementation, given HMAC implementation: ~e" this))
-
-    (define/public (hmac-buffer who key buf start end)
-      (send digest hmac-buffer who key buf start))
-
-    (define/public (generate-hmac-key)
-      (send digest generate-hmac-key))
+        (new hmac-ctx% (impl this) (digest digest) (ctx ctx))))
     ))
 
 (define hmac-ctx%
   (class* base-ctx% (digest-ctx<%>)
-    (init-field ctx)
-    (inherit-field impl)
+    (init-field ctx digest)
     (super-new)
 
     (define/public (update! who buf start end)
@@ -126,12 +112,12 @@
 
     (define/public (final! who buf start end)
       (unless ctx (error who "HMAC context is closed"))
-      (let ([size (send impl get-size)])
+      (let ([size (send digest get-size)])
         (check-output-range who buf start end size)
         (HMAC_Final ctx (ptr-add buf start))
         (HMAC_CTX_free ctx)
         (set! ctx #f)
         size))
 
-    (define/public (copy) #f)
+    (define/public (copy) #f) ;; FIXME (?)
     ))
