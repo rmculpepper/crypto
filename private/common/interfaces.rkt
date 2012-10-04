@@ -41,6 +41,12 @@
 ;; ============================================================
 ;; Implementation Factories
 
+;; FIXME: add all-digests, all-ciphers, all-pkeys methods ???
+;; (mostly for testing?)
+
+;; FIXME: add more flexible description language for requests
+;; eg PBKDF2-HMAC-SHA1 is specialized by libcrypto, else generic
+
 (define factory<%>
   (interface ()
     #|
@@ -63,16 +69,22 @@ eg, (send a-sha1-impl get-size) => 20
 ;; ============================================================
 ;; Digests
 
+;; FIXME: elim end indexes: simplifies interface, clients can check easily
+;; FIXME: add hmac-buffer! method
+
 (define digest-impl<%>
   (interface (impl<%>)
     get-name      ;; -> any -- eg, 'md5, 'sha1, 'sha256
     get-size      ;; -> nat
     get-block-size;; -> nat
     get-hmac-impl ;; who -> digest-impl<%>
-    hmac-buffer   ;; sym bytes bytes nat nat -> bytes/#f
-                  ;;  -- fast/convenience method, may return #f
     new-ctx       ;; -> digest-ctx<%>
     generate-hmac-key ;; -> bytes
+
+    can-digest-buffer!? ;; -> boolean
+    digest-buffer!      ;; sym bytes nat nat bytes nat -> nat
+    can-hmac-buffer!?   ;; -> boolean
+    hmac-buffer!        ;; sym bytes bytes nat nat bytes nat -> nat
     ))
 
 (define digest-ctx<%>

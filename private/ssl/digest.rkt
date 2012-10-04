@@ -51,14 +51,22 @@
       (unless hmac-impl (set! hmac-impl (new hmac-impl% (digest this))))
       hmac-impl)
 
-    (define/public (hmac-buffer who key buf start end)
-      (let ([outbuf (make-bytes size)])
-        (check-input-range who buf start end)
-        (HMAC md key (bytes-length key) (ptr-add buf start) (- end start) outbuf)
-        outbuf))
-
     (define/public (generate-hmac-key)
       (random-bytes size))
+
+    ;; ----
+
+    ;; FIXME: tried to use EVP_Digest but got segfault
+    (define/public (can-digest-buffer!?) #f)
+    (define/public (digest-buffer! who buf start end outbuf outstart) (void))
+
+    (define/public (can-hmac-buffer!?) #t)
+    (define/public (hmac-buffer! who key buf start end outbuf outstart)
+      (check-input-range who buf start end)
+      (check-output-range who outbuf outstart (+ outstart size))
+      (HMAC md key (bytes-length key) (ptr-add buf start) (- end start)
+            (ptr-add outbuf outstart))
+      (void))
     ))
 
 (define digest-ctx%

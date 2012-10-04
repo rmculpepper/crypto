@@ -107,9 +107,24 @@
       (new digest-ctx% (impl this)))
     (define/public (get-hmac-impl who)
       (new hmac-impl% (digest this)))
-    (define/public (hmac-buffer who key buf start end) #f)
     (define/public (generate-hmac-key)
       (random-bytes-no-nuls size))
+
+    ;; ----
+
+    (define/public (can-digest-buffer!?) #t)
+    (define/public (digest-buffer! who buf start end outbuf outstart)
+      (let ([md (openssl "dgst" (format "-~a" name) "-binary"
+                         #:in (subbytes buf start end))])
+        (bytes-copy! outbuf outstart md)
+        (bytes-length md)))
+
+    (define/public (can-hmac-buffer!?) #t)
+    (define/public (hmac-buffer! who key buf start end outbuf outstart)
+      (let ([md (openssl "dgst" (format "-~a" name) "-binary"
+                         "-hmac" key #:in (subbytes buf start end))])
+        (bytes-copy! outbuf outstart md)
+        (bytes-length md)))
     ))
 
 (define hmac-impl%
@@ -141,12 +156,12 @@
       (void (write-bytes buf stored-content start end)))
 
     (define/public (final! who buf start end)
-      (let* ([content (get-content who #t)]
-             [md (openssl "dgst" (format "-a~a" (send impl get-name)) "-binary"
-                          (and hmac-key "-hmac") hmac-key
-                          #:in content)])
-        (bytes-copy! buf start md)
-        (bytes-length md)))
+      (let* ([content (get-content who #t)])
+        (if hmac-key
+            (send impl hmac-buffer! who hmac-key
+                  content 0 (bytes-length content) buf start)
+            (send impl digest-buffer who
+                  content 0 (bytes-length content) buf start))))
 
     (define/public (copy who)
       (let* ([content-so-far (get-content who #f)]

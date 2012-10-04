@@ -110,7 +110,7 @@
 
 (define (-digest-port* di inp)
   (let ([dg (make-digest-ctx di)]
-        [ibuf (make-bytes 4096)])
+        [ibuf (make-bytes 4000)])
     (let lp ([count (read-bytes-avail! ibuf inp)])
       (cond [(eof-object? count)
              dg]
@@ -119,9 +119,14 @@
              (lp (read-bytes-avail! ibuf inp))]))))
 
 (define (-digest-bytes di bs)
-  (let ([dg (make-digest-ctx di)])
-    (digest-update! dg bs)
-    (digest-final dg)))
+  (cond [(send di can-digest-buffer!?)
+         (let ([outbuf (make-bytes (send di get-size))])
+           (send di digest-buffer! 'digest bs 0 (bytes-length bs) outbuf 0)
+           outbuf)]
+        [else
+         (let ([dg (make-digest-ctx di)])
+           (digest-update! dg bs)
+           (digest-final dg))]))
 
 ;; ----
 
@@ -134,8 +139,15 @@
         [(input-port? inp) (-hmac-port di key inp)]))
 
 (define (-hmac-bytes di key buf)
-  (or (send di hmac-buffer 'hmac key buf 0 (bytes-length buf))
-      (-hmac-port di key (open-input-bytes buf))))
+  (let ([outbuf (make-bytes (send di get-size))])
+    (cond [(send di can-hmac-buffer!?)
+           (send di hmac-buffer! 'hmac key buf 0 (bytes-length buf) outbuf 0)]
+          [else
+           (let* ([himpl (send di get-hmac-impl 'hmac)]
+                  [hctx (send himpl new-ctx 'hmac key)])
+             (send hctx update! 'hmac buf 0 (bytes-length buf))
+             (send hctx final! 'hmac outbuf 0 (bytes-length outbuf)))])
+    outbuf))
 
 (define (-hmac-port di key inp)
   (let* ([buf (make-bytes 4000)]
@@ -145,10 +157,10 @@
     (let loop ()
       (let ([count (read-bytes-avail! buf inp)])
         (cond [(eof-object? count)
-               (send hctx final! 'hmac-port buf 0 size)
+               (send hctx final! 'hmac buf 0 size)
                (shrink-bytes buf size)]
               [else
-               (send hctx update! 'hmac-port buf 0 count)
+               (send hctx update! 'hmac buf 0 count)
                (loop)])))))
 
 (define (generate-hmac-key di)
