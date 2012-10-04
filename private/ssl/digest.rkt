@@ -38,7 +38,7 @@
     (define hmac-impl #f)
     (super-new)
 
-    (define/public (get-name) (symbol->string name))
+    (define/public (get-name) name)
     (define/public (get-size) size)
     (define/public (get-block-size) (EVP_MD_block_size md))
 

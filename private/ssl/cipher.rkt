@@ -38,7 +38,7 @@
          (values size keylen (and (> ivlen 0) ivlen))]))
     (super-new)
 
-    (define/public (get-name) (symbol->string name))
+    (define/public (get-name) name)
     (define/public (get-key-size) key-size)
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)

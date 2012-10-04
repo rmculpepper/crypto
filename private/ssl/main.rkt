@@ -21,6 +21,7 @@
          racket/match
          ffi/unsafe
          (only-in "../common/digest.rkt" digest)
+         "factory.rkt"
          "ffi.rkt"
          "macros.rkt"
          "rand.rkt"
@@ -38,39 +39,24 @@
 ;; ============================================================
 ;; Available Digests
 
-(define digest-table (make-hasheq))
-(define (available-digests) (hash-keys digest-table))
-
-(define (intern-digest-impl name)
-  (cond [(hash-ref digest-table name #f)
-         => values]
-        [(EVP_get_digestbyname (symbol->string name))
-         => (lambda (md)
-              (let ([di (new digest-impl% (md md) (name name))])
-                (hash-set! digest-table name di)
-                di))]
-        [else #f]))
-
-(define (make-digest-op name di)
-  (procedure-rename
-   (if di
-       (lambda (inp) (digest di inp))
-       (unavailable-function name))
-   name))
+(define *digests* null)
+(define (available-digests) *digests*)
 
 (define-syntax (define-digest stx)
   (syntax-case stx ()
     [(_ id)
      (with-syntax ([di (format-id stx "digest:~a" #'id)])
        #'(begin
-           (define di (intern-digest-impl 'id))
+           (define di (send ssl-factory get-digest-by-name 'id))
            (define id (make-digest-op 'id di))
-           (put-symbols! avail-digests.symbols di id)))]))
+           (when di (set! *digests* (cons di *digests*)))
+           (provide di id)))]))
 
-(define (unavailable-function who)
-  (lambda x (error who "unavailable")))
-
-(define-symbols avail-digests.symbols)
+(define (make-digest-op name di)
+  (let ([op (if di
+                (lambda (inp) (digest di inp))
+                (lambda (inp) (error name "unavailable")))])
+    (procedure-rename op name)))
 
 (define-digest md5)
 (define-digest ripemd160)
@@ -81,14 +67,13 @@
 (define-digest sha384)
 (define-digest sha512)
 
-(define-provider provide-avail-digests avail-digests.symbols)
-(provide-avail-digests)
+(provide available-digests)
 
 ;; ============================================================
 ;; Available Ciphers
 
-(define cipher-table (make-hasheq))
-(define (available-ciphers) (hash-keys cipher-table))
+(define *ciphers* null)
+(define (available-ciphers) *ciphers*)
 
 (define-for-syntax cipher-modes '(ecb cbc cfb ofb))
 ;; (define-for-syntax default-cipher-mode 'cbc)
@@ -120,20 +105,8 @@
        (with-syntax ([c-p-mode c-p-mode]
                      [cipher:c-p-mode (format-id #'c "cipher:~a" c-p-mode)])
          #'(begin
-             (define cipher:c-p-mode (intern-cipher 'c-p-mode))
-             (put-symbols! avail-ciphers.symbols cipher:c-p-mode))))]))
-
-(define (intern-cipher name-sym)
-  (cond [(hash-ref cipher-table name-sym #f)
-         => values]
-        [(EVP_get_cipherbyname (symbol->string name-sym))
-         => (lambda (cipher)
-              (let ([ci (new cipher-impl% (cipher cipher) (name name-sym))])
-                (hash-set! cipher-table name-sym ci)
-                ci))]
-        [else #f]))
-
-(define-symbols avail-ciphers.symbols available-ciphers)
+             (define cipher:c-p-mode (send ssl-factory get-cipher-by-name 'c-p-mode))
+             (provide cipher:c-p-mode))))]))
 
 (define-cipher des (#f ede ede3))
 (define-cipher idea)
@@ -142,77 +115,15 @@
 (define-cipher aes (#f 128 192 256))
 (define-cipher camellia (#f 128 192 256))
 
-(define-provider provide-avail-ciphers avail-ciphers.symbols)
-(provide-avail-ciphers)
+(provide available-ciphers)
 
 ;; ============================================================
 ;; Public-Key Available Cryptosystems
 
-;; XXX As of openssl-0.9.8 pkeys can only be used with certain types of
-;;     digests.
-;;     openssl-0.9.9 is supposed to remove the restriction for digest types
+(define pkey:rsa (send ssl-factory get-pkey-by-name 'rsa))
+(define pkey:dsa (send ssl-factory get-pkey-by-name 'dsa))
 
-(define pkey:rsa:digests 
-  (filter values
-    (list digest:ripemd160 
-          digest:sha1 digest:sha224 digest:sha256 digest:sha384 digest:sha512)))
-
-(define pkey:dsa:digests
-  (filter values
-    (list digest:dss1))) ; sha1 with fancy name
-
-(define (rsa-keygen bits [exp 65537])
-  (let/fini ([ep (BN_new) BN_free])
-    (BN_add_word ep exp)
-    (let/error ([rsap (RSA_new) RSA_free]
-                [evp (EVP_PKEY_new) EVP_PKEY_free])
-      (RSA_generate_key_ex rsap bits ep)
-      (EVP_PKEY_set1_RSA evp rsap)
-      (new pkey-ctx% (impl pkey:rsa) (evp evp) (private? #t)))))
-
-(define (dsa-keygen bits)
-  (let/error ([dsap (DSA_new) DSA_free]
-              [evp (EVP_PKEY_new) EVP_PKEY_free])
-    (DSA_generate_parameters_ex dsap bits)
-    (DSA_generate_key dsap)
-    (EVP_PKEY_set1_DSA evp dsap)
-    (new pkey-ctx% (impl pkey:dsa) (evp evp) (private? #t))))
-
-;; FIXME: get pktype constants from C headers
-
-;; libcrypto #defines for those are autogened...
-;; EVP_PKEY: struct evp_pkey_st {type ...}
-(define (pk->type evp)
-  (EVP_PKEY_type (car (ptr-ref evp (_list-struct _int)))))
-
-(define pkey:rsa
-  (with-handlers (#|(exn:fail? (lambda x #f))|#)
-    (let ([pktype (let/fini ([rsap (RSA_new) RSA_free]
-                             [evp (EVP_PKEY_new) EVP_PKEY_free])
-                    (EVP_PKEY_set1_RSA evp rsap)
-                    (pk->type evp))])
-      (new pkey-impl%
-           (name "RSA")
-           (pktype pktype)
-           (keygen rsa-keygen)
-           (ok-digests pkey:rsa:digests)))))
-
-(define pkey:dsa
-  (with-handlers (#|(exn:fail? (lambda x #f))|#)
-    (let ([pktype (let/fini ([dsap (DSA_new) DSA_free]
-                             [evp (EVP_PKEY_new) EVP_PKEY_free])
-                    (EVP_PKEY_set1_DSA evp dsap)
-                    (pk->type evp))])
-      (new pkey-impl%
-           (name "RSA")
-           (pktype pktype)
-           (keygen dsa-keygen)
-           (ok-digests pkey:dsa:digests)))))
-
-(provide pkey:rsa:digests
-         pkey:dsa:digests
-
-         pkey:rsa
+(provide pkey:rsa
          pkey:dsa)
 
 ;; ============================================================

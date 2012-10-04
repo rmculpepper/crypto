@@ -17,6 +17,7 @@
 (require racket/class)
 (provide impl<%>
          ctx<%>
+         factory<%>
          digest-impl<%>
          digest-ctx<%>
          hmac-impl<%>
@@ -37,9 +38,24 @@
     get-impl    ;; -> impl<%>
     ))
 
-#|
-TODO: define factory interfaces or otherwise say how to find impls
+;; ============================================================
+;; Implementation Factories
 
+(define factory<%>
+  (interface ()
+    #|
+    all-digests        ;; -> (listof digest-impl<%>)
+    all-ciphers        ;; -> (listof cipher-impl<%>)
+    all-pkeys          ;; -> (listof pkey-impl<%>)
+    |#
+    get-digest-by-name ;; symbol -> digest-impl<%>/#f
+    get-cipher-by-name ;; symbol -> cipher-impl<%>/#f
+    get-pkey-by-name   ;; symbol -> pkey-impl<%>/#f
+    ))
+
+;; ============================================================
+
+#|
 All sizes are expressed as a number of bytes unless otherwise noted.
 eg, (send a-sha1-impl get-size) => 20
 |#

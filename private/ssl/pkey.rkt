@@ -46,8 +46,8 @@
       (apply keygen args))
 
     (define/public (digest-ok? di)
-      (or (not ok-digests)
-          (memq di ok-digests)))
+      (or (eq? ok-digests 'all)
+          (and (memq (send di get-name) ok-digests) #t)))
     ))
 
 (define pkey-ctx%
