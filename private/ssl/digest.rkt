@@ -106,21 +106,22 @@
     (define/public (new-ctx who key)
       (let ([ctx (HMAC_CTX_new)])
         (HMAC_Init_ex ctx key (bytes-length key) (get-field md digest))
-        (new hmac-ctx% (impl this) (digest digest) (ctx ctx))))
+        (new hmac-ctx% (impl digest) (ctx ctx))))
     ))
 
 (define hmac-ctx%
   (class* base-ctx% (digest-ctx<%>)
-    (init-field ctx digest)
+    (init-field ctx)
+    (inherit-field impl)
     (super-new)
 
     (define/public (update! who buf start end)
       (check-input-range who buf start end)
-      (HMAC_Update ctx (ptr-add buf start) end))
+      (HMAC_Update ctx (ptr-add buf start) (- end start)))
 
     (define/public (final! who buf start end)
       (unless ctx (error who "HMAC context is closed"))
-      (let ([size (send digest get-size)])
+      (let ([size (send impl get-size)])
         (check-output-range who buf start end size)
         (HMAC_Final ctx (ptr-add buf start))
         (HMAC_CTX_free ctx)

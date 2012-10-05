@@ -1,55 +1,137 @@
-;; mzcrypto: libcrypto bindings for PLT-scheme
-;; tests
+;; Copyright 2012 Ryan Culpepper
+;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
-;; (C) Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
-;; 
-;; mzcrypto is free software: you can redistribute it and/or modify
+;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
 ;; by the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 ;; 
-;; mzcrypto is distributed in the hope that it will be useful,
+;; This library is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU Lesser General Public License for more details.
 ;; 
 ;; You should have received a copy of the GNU Lesser General Public License
-;; along with mzcrypto.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
-#lang scheme/base
-(require srfi/78
-         "main.rkt"
-         "../common/digest.rkt"
-         "../common/cipher.rkt"
-         "../common/pkey.rkt"
-         (only-in "util.rkt" hex))
-(provide run-tests)
+#lang racket/base
+(require racket/class
+         rackunit
+         "../private/common/functions.rkt")
+(provide test-digests)
 
-(define (test-sha1)
-  (check (hex (sha1 #"")) 
-         => #"da39a3ee5e6b4b0d3255bfef95601890afd80709")
-  (check (hex (sha1 #"abc")) 
-         => #"a9993e364706816aba3e25717850c26c9cd0d89d")
-  (check (hex (sha1 #"abcdef")) 
-         => #"1f8ac10f23c5b5bc1167bda84b833e5c057a77d2")
-  (let ((x (make-digest-ctx digest:sha1)))
-    (digest-update! x #"abc")
-    (check (hex (digest-peek-final x))
-           => #"a9993e364706816aba3e25717850c26c9cd0d89d")
-    (digest-update! x #"abcdef" 3 (bytes-length #"abcdef"))
-    (check (hex (digest-final x))
-           => #"1f8ac10f23c5b5bc1167bda84b833e5c057a77d2")))
+;; let's not exhaust our entropy pool on testing
+(define (semirandom-bytes len)
+  (let ([bs (make-bytes len)])
+    (for ([i (in-range len)])
+      (bytes-set! bs i (random 256)))
+    bs))
 
-(define (test-digest dt df)
-  (define x (make-digest-ctx dt))
-  (let* ((bs (random-bytes 128))
-         (xbs (df bs)))
-    (digest-update! x bs)
-    (check (digest-peek-final x) => xbs)
-    (check (digest-final x) => xbs))
-  (let ((k (random-bytes 20))
-        (msg #"The cat is in the box."))
-    (check (hmac dt k (open-input-bytes msg)) => (hmac dt k msg))))
+(define (test-digest/in+out di in out)
+  (test-case (format "~a: ~s" (send di get-name) in)
+    (check-equal? (digest di in) out)
+    (check-equal? (digest di (open-input-bytes in)) out)
+    (let ([ctx (make-digest-ctx di)])
+      (digest-update! ctx in)
+      (check-equal? (digest-peek-final ctx) out)
+      (check-equal? (digest-final ctx) out))
+    (let* ([r 57]
+           [in* (bytes-append (make-bytes r 65) in (make-bytes r 66))])
+      (let ([ctx (make-digest-ctx di)]
+            [dibuf (make-bytes (digest-size di))])
+        (digest-update! ctx in* r (+ r (bytes-length in)))
+        (digest-final! ctx dibuf 0 (bytes-length dibuf))
+        (check-equal? dibuf out))
+      (let ([ctx (make-digest-ctx di)])
+        (for ([i (in-range r (+ r (bytes-length in)))])
+          (digest-update! ctx in* i (add1 i)))
+        (check-equal? (digest-final ctx) out)))))
+
+(define (test-digest/ins+outs di ins+outs)
+  (test-case (format "incremental ~a" (send di get-name))
+    (let ([ctx (make-digest-ctx di)]
+          [in-so-far #""])
+      (for ([in+out ins+outs])
+        (let ([in (car in+out)] [out (cadr in+out)])
+          (digest-update! ctx in)
+          (set! in-so-far (bytes-append in-so-far in))
+          (let ([out-so-far (digest-peek-final ctx)])
+            (check-equal? out-so-far out)
+            (check-equal? out-so-far (digest in-so-far))))))))
+
+(define (test-digest-impls-agree di di-base in)
+  (test-digest/in+out di in (digest di-base in)))
+
+(define (test-hmac/in+out di key in out)
+  (test-case (format "HMAC ~a: ~s" (send di get-name) in)
+    (check-equal? (hmac di key in) out)
+    (check-equal? (hmac di key (open-input-bytes in)) out)
+    (let ([ctx (make-hmac-ctx di key)])
+      (digest-update! ctx in)
+      (check-equal? (digest-final ctx) out))
+    (let* ([r 57]
+           [in* (bytes-append (make-bytes r 65) in (make-bytes r 66))])
+      (let ([ctx (make-hmac-ctx di key)]
+            [dibuf (make-bytes (digest-size di))])
+        (digest-update! ctx in* r (+ r (bytes-length in)))
+        (digest-final! ctx dibuf 0 (bytes-length dibuf))
+        (check-equal? dibuf out))
+      (let ([ctx (make-hmac-ctx di key)])
+        (for ([i (in-range r (+ r (bytes-length in)))])
+          (digest-update! ctx in* i (add1 i)))
+        (check-equal? (digest-final ctx) out)))))
+
+(define (test-hmac-impls-agree di di-base key in)
+  (test-hmac/in+out di key in (hmac di-base key in)))
+
+;; ----
+
+(define (make-sha1-tests digest:sha1)
+  (define (td in out) (test-digest/in+out digest:sha1 in out))
+  (define (td* ins+outs) (test-digest/ins+outs digest:sha1 ins+outs))
+  (test-suite "sha1 tests"
+    (td #""
+        #"da39a3ee5e6b4b0d3255bfef95601890afd80709")
+    (td #"abc"
+        #"a9993e364706816aba3e25717850c26c9cd0d89d")
+    (td #"abcdef"
+        #"1f8ac10f23c5b5bc1167bda84b833e5c057a77d2")
+    (td* '((#"abc"
+            #"a9993e364706816aba3e25717850c26c9cd0d89d")
+           (#"def"
+            #"1f8ac10f23c5b5bc1167bda84b833e5c057a77d2")))))
+
+(define digest-inputs
+  `(#""
+    #"abc"
+    #"abcdef"
+    #"The cat is in the box."
+    #"How now, brown cow?"
+    ,(semirandom-bytes 10)
+    ,(semirandom-bytes 100)
+    ,(semirandom-bytes 1000)
+    ,(semirandom-bytes 10000)))
+
+(define digest-keys
+  '(#"secret!"))
+
+(define digest-names
+  '(sha1 md5 ripemd160 sha224 sha256 sha384 sha512))
+
+(define (test-digests factory base-factory)
+  (for ([name digest-names])
+    (let ([di (send factory get-digest-by-name name)]
+          [di-base (send base-factory get-digest-by-name name)])
+      (when (and di di-base)
+        (for ([in digest-inputs])
+          (test-digest-impls-agree di di-base in))
+        (for* ([key digest-keys]
+               [in digest-inputs])
+          (test-hmac-impls-agree di di-base key in))))))
+
+;; ----
+
+#|
 
 (define (test-pubkey ktype dgtype)
   (define k (generate-pkey ktype 1024))
@@ -193,3 +275,4 @@
     (for-each test-dh dhparams))
 
   (check-report))
+|#

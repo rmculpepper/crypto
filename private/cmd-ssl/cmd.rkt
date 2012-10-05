@@ -17,6 +17,7 @@
 (require racket/class
          racket/system
          racket/string
+         racket/dict
          racket/port
          racket/file
          "../common/interfaces.rkt"
@@ -28,7 +29,7 @@
 (define (random-bytes-no-nuls size)
   (let ([bs (make-bytes size)])
     (for ([i (in-range size)])
-      (bytes-set! bs i (add1 (random 254))))
+      (bytes-set! bs i (add1 (random 255))))
     bs))
 
 ;; ============================================================
@@ -170,18 +171,6 @@
         dg2))
     ))
 
-(define (di name size block-size)
-  (new digest-impl% (name name) (size size) (block-size block-size)))
-
-(define digest:md5 (di "md5" 16 64))
-(define digest:ripemd160 (di "rmd160" 20 64))
-(define digest:dss1 (di "dss1" 20 64))
-(define digest:sha1 (di "sha1" 20 64))
-(define digest:sha224 (di "sha224" 28 64))
-(define digest:sha256 (di "sha256" 32 64))
-(define digest:sha384 (di "sha384" 48 128))
-(define digest:sha512 (di "sha512" 64 128))
-
 ;; ============================================================
 
 (define cipher-impl%
@@ -240,21 +229,6 @@
         (bytes-copy! buf start tail)
         (bytes-length tail)))
     ))
-
-(define (ci name keylen blocklen ivlen)
-  (new cipher-impl% (name name) (keylen keylen) (blocklen blocklen) (ivlen ivlen)))
-
-(define cipher:aes-128-cbc (ci "aes-128-cbc" 16 16 16))
-(define cipher:aes-128-ecb (ci "aes-128-ecb" 16 16 #f))
-(define cipher:aes-128     cipher:aes-128-cbc)
-
-(define cipher:aes-192-cbc (ci "aes-192-cbc" 24 16 16))
-(define cipher:aes-192-ecb (ci "aes-192-ecb" 24 16 #f))
-(define cipher:aes-192     cipher:aes-192-cbc)
-
-(define cipher:aes-256-cbc (ci "aes-256-cbc" 32 16 16))
-(define cipher:aes-256-ecb (ci "aes-256-ecb" 32 16 #f))
-(define cipher:aes-256     cipher:aes-256-cbc)
 
 ;; ============================================================
 
@@ -369,9 +343,6 @@ FIXME: check again whether DER available in older versions
              result)))))
     ))
 
-(define pkey:rsa (new pkey-impl% (sys 'rsa)))
-(define pkey:dsa (new pkey-impl% (sys 'dsa)))
-
 ;; ============================================================
 
 (require "../common/digest.rkt"
@@ -385,3 +356,58 @@ FIXME: check again whether DER available in older versions
 (define key00 #"keyAkey\0keyCkeyD")
 (define iv16  #"ivIVivIVivIVivIV")
 (define data  #"hello goodbye")
+
+(define (di name size block-size)
+  (new digest-impl% (name name) (size size) (block-size block-size)))
+
+(define digest:md5 (di "md5" 16 64))
+(define digest:ripemd160 (di "rmd160" 20 64))
+(define digest:dss1 (di "dss1" 20 64))
+(define digest:sha1 (di "sha1" 20 64))
+(define digest:sha224 (di "sha224" 28 64))
+(define digest:sha256 (di "sha256" 32 64))
+(define digest:sha384 (di "sha384" 48 128))
+(define digest:sha512 (di "sha512" 64 128))
+
+(define (ci name keylen blocklen ivlen)
+  (new cipher-impl% (name name) (keylen keylen) (blocklen blocklen) (ivlen ivlen)))
+
+(define cipher:aes-128-cbc (ci "aes-128-cbc" 16 16 16))
+(define cipher:aes-128-ecb (ci "aes-128-ecb" 16 16 #f))
+(define cipher:aes-128     cipher:aes-128-cbc)
+
+(define cipher:aes-192-cbc (ci "aes-192-cbc" 24 16 16))
+(define cipher:aes-192-ecb (ci "aes-192-ecb" 24 16 #f))
+(define cipher:aes-192     cipher:aes-192-cbc)
+
+(define cipher:aes-256-cbc (ci "aes-256-cbc" 32 16 16))
+(define cipher:aes-256-ecb (ci "aes-256-ecb" 32 16 #f))
+(define cipher:aes-256     cipher:aes-256-cbc)
+
+(define pkey:rsa (new pkey-impl% (sys 'rsa)))
+(define pkey:dsa (new pkey-impl% (sys 'dsa)))
+
+;; ============================================================
+
+(define digest-info
+  `((md5       16 64)
+    (ripemd160 20 64)
+    (dss1      20 64)
+    (sha1      20 64)
+    (sha224    28 64)
+    (sha256    32 64)
+    (sha384    48 128)
+    (sha512    64 128)))
+
+(define cmdssl-factory%
+  (class* object% (#|factory<%>|#)
+    (super-new)
+
+    (define/public (get-digest-by-name name)
+      (cond [(dict-ref digest-info name)
+             => (lambda (s+bs)
+                  (di name (car s+bs) (cadr s+bs)))]
+            [else #f]))
+    ))
+
+(define cmdssl-factory (new cmdssl-factory%))
