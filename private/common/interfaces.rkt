@@ -87,6 +87,7 @@ eg, (send a-sha1-impl get-size) => 20
     hmac-buffer!        ;; sym bytes bytes nat nat bytes nat -> nat
     ))
 
+;; FIXME: add some option to reset instead of close; add to new-ctx or final! (???)
 (define digest-ctx<%>
   (interface (ctx<%>)
     update!  ;; sym bytes nat nat -> void
