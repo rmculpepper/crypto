@@ -16,7 +16,9 @@
 #lang racket/base
 (require "digest.rkt"
          "cipher.rkt"
-         "pkey.rkt")
+         "pkey.rkt"
+         "util.rkt")
 (provide (all-from-out "digest.rkt")
          (all-from-out "cipher.rkt")
-         (all-from-out "pkey.rkt"))
+         (all-from-out "pkey.rkt")
+         (all-from-out "util.rkt"))
