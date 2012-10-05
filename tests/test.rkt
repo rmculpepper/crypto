@@ -52,38 +52,6 @@
                    (open-input-bytes bs)) 
            => #t)))
 
-(define (test-cipher algo)
-  (define msg 
-    #"Maybe the cat is out of the box! Where is the cat?")
-  (define-values (k iv) (generate-cipher-key+iv algo))
-
-  (check (decrypt algo k iv (encrypt algo k iv msg)) => msg)
-
-  (let* ((cin (encrypt algo k iv (open-input-bytes msg)))
-         (pin (decrypt algo k iv cin)))
-    (check (read-bytes (bytes-length msg) pin) => msg)
-    (check (eof-object? (read pin)) => #t))
-
-  (let-values (((pin) (open-input-bytes msg))
-               ((cin cout) (make-pipe))
-               ((pout) (open-output-bytes)))
-    (encrypt algo k iv pin cout)
-    (close-output-port cout)
-    (decrypt algo k iv cin pout)
-    (check (get-output-bytes pout) => msg))
-
-  (let-values (((cin pout) (encrypt algo k iv))
-               ((pin cout) (decrypt algo k iv)))
-    (write-bytes msg pout)
-    (close-output-port pout)
-    (write-bytes (read-bytes (* (cipher-block-size algo)
-                                (ceiling (/ (bytes-length msg) 
-                                            (cipher-block-size algo))))
-                             cin)
-                 cout)
-    (close-output-port cout)
-    (check (read-bytes (bytes-length msg) pin) => msg)))
-
 (define (test-encrypt/pkey algo)
   (define privk (generate-pkey pkey:rsa 1024))
   (define pubk (pkey->public-key privk))

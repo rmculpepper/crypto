@@ -20,7 +20,9 @@
          rackunit
          "../private/common/functions.rkt"
          "util.rkt")
-(provide test-digests)
+(provide test-digests
+         digest-names
+         digest-inputs)
 
 (define (test-digest/in+out di in out)
   (test-case (format "~a: ~s" (send di get-name) in)

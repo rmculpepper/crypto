@@ -399,15 +399,67 @@ FIXME: check again whether DER available in older versions
     (sha384    48 128)
     (sha512    64 128)))
 
+(define cipher-info
+  '((aes-128-cbc  16 16 16)
+    (aes-128-ecb  16 16 #f)
+    (aes-192-cbc  24 16 16)
+    (aes-192-ecb  24 16 #f)
+    (aes-256-cbc  32 16 16)
+    (aes-256-ecb  32 16 #f)
+    (bf-cbc       16  8  8)
+    (bf-ecb       16  8 #f)
+    ;; bf-cfb
+    ;; bf-ofb
+    #|
+    cast-cbc
+    cast5-cbc
+    cast5-cfb
+    cast5-ecb
+    cast5-ofb
+    des-cbc
+    des-cfb
+    des-ecb
+    des-ofb
+    des-ede
+    des-ede-cbc
+    des-ede-cfb
+    des-ede-ofb
+    des-ede3
+    des-ede3-cbc
+    des-ede3-cfb
+    des-ede3-ofb
+    desx
+    rc2-cbc
+    rc2-cfb
+    rc2-ecb
+    rc2-ofb
+    rc2-40-cbc
+    rc2-64-cbc
+    rc4
+    rc4-40
+    |#))
+
 (define cmdssl-factory%
   (class* object% (#|factory<%>|#)
     (super-new)
 
     (define/public (get-digest-by-name name)
-      (cond [(dict-ref digest-info name)
+      (cond [(dict-ref digest-info name #f)
              => (lambda (s+bs)
                   (di name (car s+bs) (cadr s+bs)))]
             [else #f]))
+
+    (define/public (get-cipher-by-name name)
+      (cond [(dict-ref cipher-info name #f)
+             => (lambda (ks+bs+ivs)
+                  (apply ci name ks+bs+ivs))]
+            [else #f]))
+
+    (define/public (get-pkey-by-name name)
+      (case name
+        ((rsa) pkey:rsa)
+        ((dsa) pkey:dsa)
+        (else #f)))
     ))
 
 (define cmdssl-factory (new cmdssl-factory%))
