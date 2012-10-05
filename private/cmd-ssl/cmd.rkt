@@ -50,7 +50,8 @@
     (set!-values (sp spout spin sperr)
       (apply subprocess #f #f #f "/usr/bin/openssl" args))
 
-    (eprintf "** ~a\n" (string-join (cons "/usr/bin/openssl" args) " "))
+    (when #f
+      (eprintf "** ~a\n" (string-join (cons "/usr/bin/openssl" args) " ")))
 
     (abstract get-openssl-args)
 
@@ -62,9 +63,11 @@
     (define/public (close/read who)
       (close-output-port spin)
       (sync sp)
-      (let ([err (port->string sperr)])
-        (unless (zero? (string-length err))
-          (eprintf "~a\n" err)))
+      (unless (zero? (subprocess-status sp))
+        (let ([err (port->string sperr)])
+          (close-input-port sperr)
+          (close-input-port spout)
+          (error who "subprocess failed: ~a" err)))
       (close-input-port sperr)
       (begin0 (port->bytes spout)
         (close-input-port spout)))
@@ -246,6 +249,8 @@ FIXME: check again whether DER available in older versions
     (init-field sys)
     (super-new)
 
+    (define/public (get-name) sys)
+
     (define/public (read-key who public? buf start end)
       (let ([key (subbytes buf start end)])
         (new pkey-ctx% (impl this) (key key) (private? (not public?)))))
@@ -254,17 +259,19 @@ FIXME: check again whether DER available in older versions
       (let* ([key
               (case sys
                 ((rsa) (openssl "genrsa" (car args)))
-                ((dsa) (openssl "gendsa" (car args))))])
+                ((dsa)
+                 (let ([params (openssl "dsaparam" (car args))])
+                   (with-tmp-files ([paramfile params])
+                     (openssl "gendsa" paramfile)))))])
         (new pkey-ctx% (impl this) (key key) (private? #t))))
 
     (define/public (digest-ok? di)
       (case sys
         ((rsa)
-         (and (member di (list digest:ripemd160 digest:sha1 digest:sha224
-                               digest:sha256 digest:sha384 digest:sha512))
-              #t))
+         (and (memq (send di get-name) '(ripemd160 sha1 sha224 sha256 sha384 sha512)) #t))
         ((dsa)
-         (and (member di (list digest:dss1)) #t))))
+         (and (memq (send di get-name) '(dss1)) #t))
+        (else #f)))
 
     (define/public (can-encrypt?)
       (case sys
@@ -292,8 +299,9 @@ FIXME: check again whether DER available in older versions
                (error who "only public key component is available")]
               [(and (not private?) (not want-private?)) key])))
 
-    (define/public (equal-to-key? pkctx)
-      (equal? key (get-field key pkctx)))
+    (define/public (equal-to-key? other)
+      (equal? (write-key 'equal-to-key? #t)
+              (send other write-key 'equal-to-key? #t)))
 
     #|
     Cannot sign an existing digest-context using command line, so we make

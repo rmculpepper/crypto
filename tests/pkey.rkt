@@ -82,7 +82,7 @@
           (let ([di (send factory get-digest-by-name di-name)]
                 [base-di (and base-factory (send base-factory get-digest-by-name di-name))])
             (when (pkey-digest? pki di)
-              (eprintf "** Testing ~a with ~a\n" name di-name)
+              (when #f (eprintf "** Testing ~a with ~a\n" name di-name))
               (test-pubkey pki di))))
         (when (pkey-can-encrypt? pki)
           (test-encrypt/pkey pki
