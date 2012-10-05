@@ -31,7 +31,8 @@
     (init-field name
                 pktype
                 keygen
-                ok-digests)
+                ok-digests
+                encrypt-ok?)
     (super-new)
 
     (define/public (get-name) name)
@@ -48,6 +49,8 @@
     (define/public (digest-ok? di)
       (or (eq? ok-digests 'all)
           (and (memq (send di get-name) ok-digests) #t)))
+    (define/public (can-encrypt?)
+      encrypt-ok?)
     ))
 
 (define pkey-ctx%

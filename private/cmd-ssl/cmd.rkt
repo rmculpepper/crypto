@@ -265,6 +265,11 @@ FIXME: check again whether DER available in older versions
               #t))
         ((dsa)
          (and (member di (list digest:dss1)) #t))))
+
+    (define/public (can-encrypt?)
+      (case sys
+        ((rsa) #t)
+        (else #f)))
     ))
 
 (define pkey-ctx%

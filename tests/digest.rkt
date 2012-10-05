@@ -25,7 +25,7 @@
          digest-inputs)
 
 (define (test-digest/in+out di in out)
-  (test-case (format "~a: ~s" (send di get-name) in)
+  (test-case (format "~a: ~e" (send di get-name) in)
     (check-equal? (digest di in) out)
     (check-equal? (digest di (open-input-bytes in)) out)
     (let ([ctx (make-digest-ctx di)])
@@ -62,7 +62,7 @@
   (test-digest/in+out di in (digest di-base in)))
 
 (define (test-hmac/in+out di key in out)
-  (test-case (format "HMAC ~a: ~s" (send di get-name) in)
+  (test-case (format "HMAC ~a: ~e" (send di get-name) in)
     (check-equal? (hmac di key in) out)
     (check-equal? (hmac di key (open-input-bytes in)) out)
     (let ([ctx (make-hmac-ctx di key)])
@@ -125,7 +125,7 @@
     ,(semirandom-bytes/alpha 40)))
 
 (define digest-names
-  '(sha1 md5 ripemd160 sha224 sha256 sha384 sha512))
+  '(sha1 md5 ripemd160 sha224 sha256 sha384 sha512 dss1))
 
 (define (test-digests factory base-factory)
   (for ([name digest-names])

@@ -77,14 +77,16 @@
        (name "RSA")
        (pktype EVP_PKEY_RSA)
        (keygen rsa-keygen)
-       (ok-digests pkey:rsa:digests)))
+       (ok-digests pkey:rsa:digests)
+       (encrypt-ok? #t)))
 
 (define pkey:dsa
   (new pkey-impl%
        (name "RSA")
        (pktype EVP_PKEY_DSA)
        (keygen dsa-keygen)
-       (ok-digests pkey:dsa:digests)))
+       (ok-digests pkey:dsa:digests)
+       (encrypt-ok? #f)))
 
 (define pkey-table (hasheq 'rsa pkey:rsa 'dsa pkey:dsa))
 

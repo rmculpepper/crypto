@@ -33,6 +33,8 @@
    (-> pkey-ctx? nat?)]
   [pkey-bits
    (-> pkey-ctx? nat?)]
+  [pkey-can-encrypt?
+   (-> (or/c pkey-impl? pkey-ctx?) boolean?)]
   [pkey=?
    (->* (pkey-ctx?) () #:rest (listof pkey-ctx?) boolean?)]
   [pkey->public-key
@@ -100,6 +102,10 @@
 (define (pkey-private? pk) (send pk is-private?))
 (define (pkey-size pk) (send pk get-max-signature-size))
 (define (pkey-bits pk) (send pk get-key-size/bits))
+
+(define (pkey-can-encrypt? x)
+  (cond [(is-a? x pkey-impl<%>) (send x can-encrypt?)]
+        [(is-a? x pkey-ctx<%>) (send (send x get-impl) can-encrypt?)]))
 
 (define (pkey=? k1 . ks)
   (for/and ([k (in-list ks)])

@@ -130,6 +130,7 @@ eg, (send a-sha1-impl get-size) => 20
     read-key     ;; sym boolean bytes nat nat -> pkey-ctx<%>
     generate-key ;; (listof ???) -> pkey-ctx<%>
     digest-ok?   ;; digest-impl<%> -> boolean
+    can-encrypt? ;; -> boolean
     ))
 
 (define pkey-ctx<%>
