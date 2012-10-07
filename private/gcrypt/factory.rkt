@@ -26,7 +26,7 @@
 (define digest-info
   `((md5        ,GCRY_MD_MD5        64)
     (sha1       ,GCRY_MD_SHA1       64)
-    ;; (ripemd160  ,GCRY_MD_RMD160     64) ;; Doesn't seem to be available!
+    (ripemd160  ,GCRY_MD_RMD160     64) ;; Doesn't seem to be available!
     (md2        ,GCRY_MD_MD2        16)
     (haval      ,GCRY_MD_HAVAL      128)
     (sha224     ,GCRY_MD_SHA224     64)
@@ -52,13 +52,14 @@
       (cond [(hash-ref digest-table name-sym #f)
              => values]
             [(dict-ref digest-info name-sym #f)
-             => (lambda (algo+bs)
-                  (let ([di (new digest-impl%
-                                 (md (car algo+bs))
-                                 (name name-sym)
-                                 (blocksize (cadr algo+bs)))])
-                    (hash-set! digest-table name-sym di)
-                    di))]
+             => (lambda (md+bs)
+                  (let* ([md (car md+bs)]
+                         [bs (cadr md+bs)]
+                         [avail? (gcry_md_test_algo md)])
+                    (and avail?
+                         (let ([di (new digest-impl% (md md) (name name-sym) (blocksize bs))])
+                           (hash-set! digest-table name-sym di)
+                           di))))]
             [else #f]))
 
     #|

@@ -79,6 +79,8 @@
 (define GCRY_MD_FLAG_SECURE    1) ;; Allocate all buffers in "secure" memory.
 (define GCRY_MD_FLAG_HMAC      2) ;; Make an HMAC out of this algorithm.
 
+(define GCRYCTL_TEST_ALGO      8)
+
 (define-gcrypt gcry_md_close
   (_fun _gcry_md_hd -> _void)
   #:wrap (deallocator))
@@ -119,6 +121,13 @@
 (define-gcrypt gcry_md_algo_name (_fun _int -> _string))
 (define-gcrypt gcry_md_map_name (_fun _string -> _int))
 (define-gcrypt gcry_md_get_algo_dlen (_fun _int -> _uint))
+
+(define-gcrypt gcry_md_algo_info
+  ;; no #:wrap check because result sometimes encodes boolean (inverted)
+  (_fun _int _int _pointer _pointer -> _gcry_error))
+
+(define (gcry_md_test_algo a)
+  (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f)))
 
 ;; ----
 

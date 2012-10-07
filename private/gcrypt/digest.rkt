@@ -70,6 +70,8 @@
 
     (define/public (final! who buf start end)
       (gcry_md_read ctx (ptr-add buf start) (- end start))
+      (gcry_md_close ctx)
+      (set! ctx #f)
       (send impl get-size))
 
     (define/public (copy who)
