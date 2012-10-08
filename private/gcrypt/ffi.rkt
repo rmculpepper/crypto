@@ -198,6 +198,9 @@
   (_fun _gcry_cipher_hd _pointer _size _pointer _size -> _gcry_error)
   #:wrap check)
 
+(define-gcrypt gcry_cipher_get_algo_keylen (_fun _int -> _size))
+(define-gcrypt gcry_cipher_get_algo_blklen (_fun _int -> _size))
+
 ;; ----
 
 (define GCRY_WEAK_RANDOM        0)

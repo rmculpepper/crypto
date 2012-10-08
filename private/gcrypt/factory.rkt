@@ -16,11 +16,13 @@
 #lang racket/base
 (require racket/class
          racket/dict
+         racket/syntax
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "ffi.rkt"
-         "digest.rkt")
+         "digest.rkt"
+         "cipher.rkt")
 (provide gcrypt-factory)
 
 (define digest-info
@@ -40,6 +42,41 @@
     (tiger1     ,GCRY_MD_TIGER1     #f)
     (tiger2     ,GCRY_MD_TIGER2     #f)
     |#))
+
+(define (cipher->algid cipher)
+  (case cipher
+    ;;GCRY_CIPHER_IDEA
+    ;;GCRY_CIPHER_3DES
+    ;;GCRY_CIPHER_CAST5
+    ((blowfish) GCRY_CIPHER_BLOWFISH)
+    ;;GCRY_CIPHER_SAFER_SK128
+    ;;GCRY_CIPHER_DES_SK
+    ((aes-128) GCRY_CIPHER_AES)
+    ((aes-192) GCRY_CIPHER_AES192)
+    ((aes-256) GCRY_CIPHER_AES256)
+    ((twofish) GCRY_CIPHER_TWOFISH)
+    ;;GCRY_CIPHER_ARCFOUR
+    ;;GCRY_CIPHER_DES
+    ((twofish-128) GCRY_CIPHER_TWOFISH128)
+    ((serpent-128) GCRY_CIPHER_SERPENT128)
+    ((serpent-192) GCRY_CIPHER_SERPENT192)
+    ((serpent-256) GCRY_CIPHER_SERPENT256)
+    ;;GCRY_CIPHER_RFC2268_40
+    ;;GCRY_CIPHER_RFC2268_128
+    ;;GCRY_CIPHER_SEED
+    ((camellia-128) GCRY_CIPHER_CAMELLIA128)
+    ((camellia-192) GCRY_CIPHER_CAMELLIA192)
+    ((camellia-256) GCRY_CIPHER_CAMELLIA256)
+    (else #f)))
+
+(define cipher-info
+  (for*/list ([cipher (in-list '(blowfish
+                                 aes-128 aes-192 aes-256
+                                 twofish twofish-128
+                                 serpent-128 serpent-192 serpent-256
+                                 camellia-128 camellia-192 camellia-256))]
+              [mode '(ecb cbc)])
+    (list (format-symbol "~a-~a" cipher mode) cipher mode)))
 
 (define gcrypt-factory%
   (class* object% (#|factory<%>|#)
@@ -62,22 +99,25 @@
                            di))))]
             [else #f]))
 
-    #|
     (define/private (intern-cipher name-sym)
       (cond [(hash-ref cipher-table name-sym #f)
              => values]
-            [(EVP_get_cipherbyname (symbol->string name-sym))
-             => (lambda (cipher)
-                  (let ([ci (new cipher-impl% (cipher cipher) (name name-sym))])
+            [(dict-ref cipher-info name-sym #f)
+             => (lambda (alg+mode)
+                  (let ([ci (new cipher-impl%
+                                 (name name-sym)
+                                 (cipher (cipher->algid (car alg+mode)))
+                                 (mode (cadr alg+mode)))])
                     (hash-set! cipher-table name-sym ci)
                     ci))]
             [else #f]))
-    |#
-    
+
     ;; ----
 
     (define/public (get-digest-by-name name)
       (intern-digest name))
+    (define/public (get-cipher-by-name name)
+      (intern-cipher name))
     ))
 
 (define gcrypt-factory (new gcrypt-factory%))
