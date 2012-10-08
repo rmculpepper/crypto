@@ -1,9 +1,12 @@
 To Do
 =====
 
+- better way to request digests/ciphers/etc
+- add error checking and reporting code to libgcrypt impls
 - devise factory/discovery method for getting impls
 - update tests
 - update docs
+- offer multiple padding options?
 
 - add more Racket impls
 - add support for gnutls, etc (?)
