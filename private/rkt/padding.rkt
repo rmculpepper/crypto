@@ -34,8 +34,8 @@
   ;; Zeros, then pad-length for final byte
   (let* ([pad-byte (- end pos)])
     (for ([i (in-range pos (sub1 end))])
-      (bytes-set! buf i 0))
-    (bytes-set! buf (sub1 end) pad-byte)))
+      (bytes-set! bs i 0))
+    (bytes-set! bs (sub1 end) pad-byte)))
 
 (define (unpad-bytes/ansix923 bs [start 0] [end (bytes-length bs)])
   (let* ([pad-length (bytes-ref bs (sub1 end))]
@@ -49,7 +49,7 @@
   ;; Fill with pad-length
   (let* ([pad-byte (- end pos)])
     (for ([i (in-range pos end)])
-      (bytes-set! buf i pad-byte))))
+      (bytes-set! bs i pad-byte))))
 
 (define (unpad-bytes/pkcs7 bs [start 0] [end (bytes-length bs)])
   (let* ([pad-length (bytes-ref bs (sub1 end))]
@@ -67,9 +67,9 @@
 
 (define (pad-bytes!/iso/iec-7816-4 bs pos [end (bytes-length bs)])
   ;; One byte of #x80, then fill with zeroes
-  (bytes-set! buf pos #x80)
+  (bytes-set! bs pos #x80)
   (for ([i (in-range (add1 pos) end)])
-    (bytes-set! buf i #x00)))
+    (bytes-set! bs i #x00)))
 
 (define (unpad-bytes/iso/iec-7816-4 bs [start 0] [end (bytes-length bs)])
   (let loop ([i (sub1 end)])
@@ -85,7 +85,7 @@
   ;; So technically this function adds both padding and a pad-length field.
   (let* ([pad-byte (sub1 (- end pos))])
     (for ([i (in-range pos end)])
-      (bytes-set! buf i pad-byte))))
+      (bytes-set! bs i pad-byte))))
 
 (define (unpad-bytes/tls bs [start 0] [end (bytes-length bs)])
   (let* ([pad-byte (add1 (bytes-ref bs (sub1 end)))]
