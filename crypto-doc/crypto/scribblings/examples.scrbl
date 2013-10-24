@@ -1,10 +1,9 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
-          planet/scribble
           (for-label racket/base
                      racket/contract
-                     (this-package-in main)))
+                     crypto))
 
 @title[#:tag "examples"]{Examples}
 

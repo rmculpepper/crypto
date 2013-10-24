@@ -1,10 +1,9 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
-          planet/scribble
           (for-label racket/base
                      racket/contract
-                     (this-package-in main)))
+                     crypto))
 
 @title[#:tag "util"]{Utilities}
 
@@ -73,7 +72,7 @@ facilities.
 }
 
 @section{Miscellaneous}
-@defmodule*/no-declare[(crypto/util (planet vyzo/crypto/util))]
+@defmodule*/no-declare[(crypto/util)]
 @declare-exporting{util.ss}
 
 This module provides some additional utilities that are not exported
