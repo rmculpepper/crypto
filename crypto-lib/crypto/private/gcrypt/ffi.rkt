@@ -54,7 +54,6 @@
 
 ;; ----
 
-(define _size _uintptr) ;; FIXME: ffi should provide _size
 (define-cpointer-type _gcry_md_hd)
 
 (define GCRY_MD_NONE           0)

@@ -16,13 +16,15 @@
 
 #lang racket/base
 (require racket/class
-         "interfaces.rkt")
+         "interfaces.rkt"
+         "digest.rkt"
+         "cipher.rkt")
 
 ;; ----
 
-(define (!digest? x) (is-a? x digest-impl%))
-(define (digest? x) (is-a? x digest-ctx%))
-(define (!hmac? x) (is-a? x hmac-ctx%))
+(define (!digest? x) (is-a? x digest-impl<%>))
+(define (digest? x) (is-a? x digest-ctx<%>))
+;; (define (!hmac? x) (is-a? x hmac-ctx<%>))
 
 (define digest-new make-digest-ctx)
 (define (-digest-ctx x) (get-field ctx x))  ;; used by pkey.rkt
@@ -32,7 +34,7 @@
 (define hmac-new make-hmac-ctx)
 (define hmac-update! digest-update!)
 (define hmac-final! digest-final!)
-(define hmac? !hmac?)
+;; (define hmac? !hmac?)
 
 ;; split digest-final from digest-final!
 ;; split digest-peek-final from digest-peek-final!
@@ -45,9 +47,6 @@
 ;; split cipher-update from cipher-update!, changed args (???)
 ;; cipher-final (???)
 
-(define cipher-encrypt cipher-new-encrypt)
-(define cipher-decrypt cipher-new-decrypt)
-
 (define (cipher-encrypt ci key iv #:padding pad?)
   (make-encrypt-cipher-ctx ci key #:iv iv #:pad? pad?))
 (define (cipher-decrypt ci key iv #:padding pad?)
@@ -58,6 +57,6 @@
 
 ;; ----
 
-(define (!pkey? x) (is-a? x pkey-impl%))
-(define (pkey? x) (is-a? x pkey-ctx%))
+(define (!pkey? x) (is-a? x pkey-impl<%>))
+(define (pkey? x) (is-a? x pkey-ctx<%>))
 (define (-pkey-type x) (send x get-impl))
