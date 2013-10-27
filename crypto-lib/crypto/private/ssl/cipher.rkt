@@ -20,6 +20,7 @@
          racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/error.rkt"
          "ffi.rkt"
          "macros.rkt"
          "rand.rkt"

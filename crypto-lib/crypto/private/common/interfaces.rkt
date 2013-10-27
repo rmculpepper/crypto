@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2013 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -25,6 +25,15 @@
          cipher-ctx<%>
          pkey-impl<%>
          pkey-ctx<%>)
+
+;; ============================================================
+;; General Notes
+
+;; All sizes are expressed as a number of bytes unless otherwise noted.
+;; eg, (send a-sha1-impl get-size) => 20
+
+;; Whenever a string S is accepted as an input, it is interpreted as
+;; equivalent to (string->bytes/utf-8 S).
 
 ;; ============================================================
 ;; General Implementation & Contexts
@@ -60,13 +69,6 @@
     ))
 
 ;; ============================================================
-
-#|
-All sizes are expressed as a number of bytes unless otherwise noted.
-eg, (send a-sha1-impl get-size) => 20
-|#
-
-;; ============================================================
 ;; Digests
 
 ;; FIXME: elim end indexes: simplifies interface, clients can check easily
@@ -83,6 +85,7 @@ eg, (send a-sha1-impl get-size) => 20
 
     can-digest-buffer!? ;; -> boolean
     digest-buffer!      ;; sym bytes nat nat bytes nat -> nat
+
     can-hmac-buffer!?   ;; -> boolean
     hmac-buffer!        ;; sym bytes bytes nat nat bytes nat -> nat
     ))
@@ -90,7 +93,7 @@ eg, (send a-sha1-impl get-size) => 20
 ;; FIXME: add some option to reset instead of close; add to new-ctx or final! (???)
 (define digest-ctx<%>
   (interface (ctx<%>)
-    update!  ;; sym bytes nat nat -> void
+    update   ;; sym bytes nat nat -> void
     final!   ;; sym bytes nat nat -> nat
     copy     ;; sym -> digest-ctx<%>/#f
     ))
@@ -104,6 +107,11 @@ eg, (send a-sha1-impl get-size) => 20
 ;; ============================================================
 ;; Ciphers
 
+;; PadMode = (U #f #t)
+;;  - #f means no padding
+;;  - #t means PKCS7 (in practice, same as PKCS5)
+;; Maybe support more padding modes in future?
+
 (define cipher-impl<%>
   (interface (impl<%>)
     get-name       ;; -> any -- eg, "AES-128", "DES-EDE" (???)
@@ -111,10 +119,16 @@ eg, (send a-sha1-impl get-size) => 20
     get-block-size ;; -> nat
     get-iv-size    ;; -> nat/#f
 
-    new-ctx         ;; sym bytes bytes/#f boolean boolean -> cipher-ctx<%>
-                    ;; who key   iv       enc?    pad?
+    new-ctx         ;; sym bytes bytes/#f boolean PadMode -> cipher-ctx<%>
+                    ;; who key   iv       enc?    pad
     generate-key+iv ;; -> (values bytes bytes/#f)
     ))
+
+;; Some disadvantages to current cipher update! and final! methods:
+;;  - client has to know how much output to expect (output buffer free space)
+;;  - not all impls produce output at same rate
+;;    - eg openssl command-line tool doesn't produce output until final! (???)
+;;    - eg gcrypt accepts only multiples of blocks (???)
 
 (define cipher-ctx<%>
   (interface (ctx<%>)

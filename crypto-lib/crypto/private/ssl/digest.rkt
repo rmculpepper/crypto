@@ -19,6 +19,7 @@
          racket/class
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/error.rkt"
          "ffi.rkt"
          "macros.rkt"
          "rand.rkt"
@@ -75,7 +76,7 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update! who buf start end)
+    (define/public (update who buf start end)
       (unless ctx (error who "digest context is closed"))
       (check-input-range who buf start end)
       (EVP_DigestUpdate ctx (ptr-add buf start) (- end start)))
@@ -115,7 +116,7 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update! who buf start end)
+    (define/public (update who buf start end)
       (check-input-range who buf start end)
       (HMAC_Update ctx (ptr-add buf start) (- end start)))
 

@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2013 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -91,42 +91,3 @@
      (let ((var exp))
        (with-error (fini var)
          (let/error rest body ...)))]))
-
-;; ------------------------------------------------------------
-
-(provide check-input-range
-         check-output-range)
-
-(define check-input-range
-  (case-lambda
-    [(where bs maxlen)
-     (unless (<= (bytes-length bs) maxlen)
-       (error where "bad input range"))]
-    [(where bs start end)
-     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs)))
-       (error where "bad input range: [~a,~a); expected range within [0,~a)"
-              start end (bytes-length bs)))]
-    [(where bs start end maxlen)
-     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs))
-                  (<= (- end start) maxlen))
-       (error where "bad input range: [~a,~a); expected range within [0,~a) of length at most ~a"
-              start end (bytes-length bs) maxlen))]))
-
-(define check-output-range
-  (case-lambda
-    [(where bs minlen)
-     (when (or (not (bytes? bs)) (immutable? bs))
-       (error where "expects mutable bytes"))
-     (unless (>= (bytes-length bs) minlen)
-       (error where "bad output range"))]
-    [(where bs start end)
-     (when (or (not (bytes? bs)) (immutable? bs))
-       (error where "expects mutable bytes"))
-     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs)))
-       (error where "bad output range"))]
-    [(where bs start end minlen)
-     (when (or (not (bytes? bs)) (immutable? bs))
-       (error where "expects mutable bytes"))
-     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs))
-                  (>= (- end start) minlen))
-       (error where "bad output range"))]))

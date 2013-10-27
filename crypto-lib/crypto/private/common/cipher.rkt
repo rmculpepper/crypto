@@ -19,7 +19,8 @@
          racket/contract/base
          racket/port
          "interfaces.rkt"
-         "common.rkt")
+         "common.rkt"
+         "error.rkt")
 (provide
  (contract-out
   [cipher-impl?
@@ -33,46 +34,63 @@
   [cipher-iv-size
    (-> (or/c cipher-impl? cipher-ctx?) nat?)]
   [make-encrypt-cipher-ctx
-   (->* (cipher-impl? key/c iv/c) (#:pad? any/c)
+   (->* [cipher-impl? key/c iv/c] [#:pad pad-mode/c]
         cipher-ctx?)]
   [make-decrypt-cipher-ctx
-   (->* (cipher-impl? key/c iv/c) (#:pad? any/c)
+   (->* [cipher-impl? key/c iv/c] [#:pad pad-mode/c]
         cipher-ctx?)]
   [cipher-encrypt?
    (-> cipher-ctx? boolean?)]
   [cipher-update
-   (->* (cipher-ctx? bytes?) (nat? nat?)
+   (->* [cipher-ctx? bytes?] [nat? nat?]
         bytes?)]
-  [cipher-update!
-   (->* (cipher-ctx? bytes? bytes?)
-        (nat? nat? nat? nat?)
-        nat?)]
   [cipher-final
    (-> cipher-ctx? bytes?)]
-  [cipher-final!
-   (->* (cipher-ctx? bytes?) (nat? nat?) nat?)]
+
   [encrypt
-   (case->
-    (-> cipher-impl? key/c iv/c
-        (values input-port? output-port?))
-    (-> cipher-impl? key/c iv/c (or/c input-port? bytes?)
-        (or/c input-port? bytes?))
-    (-> cipher-impl? key/c iv/c (or/c input-port? bytes?) output-port?
-        void?))]
+   (->* [cipher-impl? key/c iv/c (or/c bytes? string? input-port?)]
+        [#:pad pad-mode/c]
+        bytes?)]
   [decrypt
-   (case->
-    (-> cipher-impl? key/c iv/c
-        (values input-port? output-port?))
-    (-> cipher-impl? key/c iv/c (or/c input-port? bytes?)
-        (or/c input-port? bytes?))
-    (-> cipher-impl? key/c iv/c (or/c input-port? bytes?) output-port?
-        void?))]
+   (->* [cipher-impl? key/c iv/c (or/c bytes? string? input-port?)]
+        [#:pad pad-mode/c]
+        bytes?)]
+  [encrypt-bytes
+   (->* [cipher-impl? key/c iv/c bytes?] [nat? nat? #:pad pad-mode/c]
+        bytes?)]
+  [decrypt-bytes
+   (->* [cipher-impl? key/c iv/c bytes?] [nat? nat? #:pad pad-mode/c]
+        bytes?)]
+  [encrypt-write
+   (->* [cipher-impl? key/c iv/c (or/c bytes? string? input-port?) output-port?]
+        [#:pad pad-mode/c]
+        nat?)]
+  [decrypt-write
+   (->* [cipher-impl? key/c iv/c (or/c bytes? string? input-port?) output-port?]
+        [#:pad pad-mode/c]
+        nat?)]
+  ;; [make-encrypt-pipe
+  ;;  (->* [cipher-impl? key/c iv/c] [#:pad pad-mode/c]
+  ;;       (values input-port? output-port?))]
+  ;; [make-decrypt-pipe
+  ;;  (->* [cipher-impl? key/c iv/c] [#:pad pad-mode/c]
+  ;;       (values input-port? output-port?))]
+  ;; [make-encrypt-output-port
+  ;;  (->* [cipher-impl? key/c iv/c output-port?] [#:pad pad-mode/c]
+  ;;       output-port?)]
+  ;; [make-decrypt-output-port
+  ;;  (->* [cipher-impl? key/c iv/c output-port?] [#:pad pad-mode/c]
+  ;;       output-port?)]
+
   [generate-cipher-key+iv
    (-> cipher-impl? (values key/c iv/c))]))
 
 (define nat? exact-nonnegative-integer?)
 (define key/c bytes?)
 (define iv/c (or/c bytes? #f))
+(define pad-mode/c boolean?)
+
+(define default-pad #t)
 
 ;; ----
 
@@ -80,132 +98,161 @@
 (define (cipher-ctx? x) (is-a? x cipher-ctx?))
 (define (cipher-encrypt? x) (send x get-encrypt?))
 
-(define (cipher-block-size obj)
-  (get-cipher-prop obj (lambda (o) (send o get-block-size))))
-(define (cipher-key-size obj)
-  (get-cipher-prop obj (lambda (o) (send o get-key-size))))
-(define (cipher-iv-size obj)
-  (get-cipher-prop obj (lambda (o) (send o get-iv-size))))
+(define (-get-impl o)
+  (cond [(is-a? o cipher-impl<%>) o]
+        [(is-a? o cipher-ctx<%>) (send o get-impl)]))
 
-(define (get-cipher-prop obj getter)
-  (cond [(is-a? obj cipher-impl<%>) (getter obj)]
-        [(is-a? obj cipher-ctx<%>) (getter (send obj get-impl))]))
+(define (cipher-block-size o)
+  (send (-get-impl o) get-block-size))
+(define (cipher-key-size o)
+  (send (-get-impl o) get-key-size))
+(define (cipher-iv-size o)
+  (send (-get-impl o) get-iv-size))
 
 ;; ----
 
-(define (make-encrypt-cipher-ctx ci key iv #:pad? [pad? #t])
+(define (make-encrypt-cipher-ctx ci key iv #:pad [pad? #t])
   (send ci new-ctx 'make-encrypt-cipher-ctx key iv #t pad?))
 
-(define (make-decrypt-cipher-ctx ci key iv #:pad? [pad? #t])
+(define (make-decrypt-cipher-ctx ci key iv #:pad [pad? #t])
   (send ci new-ctx 'make-decrypt-cipher-ctx key iv #f pad?))
 
 (define (cipher-update c ibuf [istart 0] [iend (bytes-length ibuf)])
-  (let* ([ilen (max 0 (- iend istart))] ;; istart<=iend not yet checked
+  (check-input-range 'cipher-update ibuf istart iend)
+  (let* ([ilen (- iend istart)]
          [obuf (make-bytes (+ ilen (cipher-block-size c)))]
          [len (send c update! 'cipher-update
                     ibuf istart iend
                     obuf 0 (bytes-length obuf))])
     (shrink-bytes obuf len)))
 
-(define (cipher-update! c ibuf obuf
-                        [istart 0] [iend (bytes-length ibuf)]
-                        [ostart 0] [oend (bytes-length obuf)])
-  (send c update! 'cipher-update! ibuf istart iend obuf ostart oend))
-
 (define (cipher-final c)
   (let* ([buf (make-bytes (cipher-block-size c))]
-         [len (send c final! 'cipher-final! buf 0 (bytes-length buf))])
+         [len (send c final! 'cipher-final buf 0 (bytes-length buf))])
     (shrink-bytes buf len)))
-
-(define (cipher-final! c buf [start 0] [end (bytes-length buf)])
-  (send c final! 'cipher-final! buf start end))
 
 ;; ----
 
-(define (cipher-pump cipher inp outp)
-  (let* ([block-size (cipher-block-size cipher)]
-         [ibuf (make-bytes (* 8 block-size))]
-         [obuf (make-bytes (* 9 block-size))])
-    (let loop ()
-      (let ([icount (read-bytes-avail! ibuf inp)])
-        (cond [(eof-object? icount)
-               (let ([ocount (cipher-final! cipher obuf)])
-                 (write-bytes obuf outp 0 ocount)
-                 (flush-output outp)
-                 (void))]
-              [else
-               (let ([ocount (cipher-update! cipher ibuf obuf 0 icount)])
-                 (write-bytes obuf outp 0 ocount)
-                 (loop))])))))
+;; *crypt : cipher-impl key iv (U bytes string input-port) -> bytes
+(define (encrypt ci key iv inp #:pad [pad default-pad])
+  (*crypt 'encrypt (make-encrypt-cipher-ctx ci key iv #:pad pad) inp))
+(define (decrypt ci key iv inp #:pad [pad default-pad])
+  (*crypt 'encrypt (make-decrypt-cipher-ctx ci key iv #:pad pad) inp))
 
-(define (*crypt-pipe who init ci key iv)
-  (define cipher (init ci key iv))
-  (define block-size (cipher-block-size cipher))
-  (define-values (enc-in enc-out) (make-pipe))
-  (define 8blocks (* 8 block-size))
-  (define enc-buf (make-bytes (* 9 block-size)))
-  (define name (string->symbol (format "~a-pipe" who)))
+;; *crypt-bytes : cipher-impl key iv bytes [nat nat] -> bytes
+(define (encrypt-bytes ci key iv buf [start 0] [end (bytes-length buf)] #:pad [pad default-pad])
+  (*crypt-bytes 'encrypt-bytes (make-encrypt-cipher-ctx ci key iv #:pad pad) buf start end))
+(define (decrypt-bytes ci key iv buf [start 0] [end (bytes-length buf)] #:pad [pad default-pad])
+  (*crypt-bytes 'decrypt-bytes (make-decrypt-cipher-ctx ci key iv #:pad pad) buf start end))
+
+;; *crypt-write : cipher-impl key iv (U bytes string input-port) output-port -> nat
+(define (encrypt-write ci key iv inp out #:pad [pad default-pad])
+  (*crypt-write 'encrypt-write (make-encrypt-cipher-ctx key iv #:pad pad) inp out))
+(define (decrypt-write ci key iv inp out #:pad [pad default-pad])
+  (*crypt-write 'decrypt-write (make-decrypt-cipher-ctx key iv #:pad pad) inp out))
+
+;; FIXME: would like to have way of putting read-exn in pipe so padding error
+;; shows up on reading side (too?)
+(define (make-encrypt-pipe ci key iv #:pad [pad default-pad])
+  (make-*crypt-pipe 'make-encrypt-pipe (make-encrypt-cipher-ctx ci key iv #:pad pad)))
+(define (make-decrypt-pipe ci key iv #:pad [pad default-pad])
+  (make-*crypt-pipe 'make-decrypt-pipe (make-decrypt-cipher-ctx ci key iv #:pad pad)))
+
+(define (make-encrypt-output-port ci key iv out #:pad [pad default-pad] #:close? [close? #f])
+  (let ([cctx (make-encrypt-cipher-ctx ci key iv #:pad pad)])
+    (make-*crypt-output-port cctx out close?)))
+(define (make-decrypt-output-port ci key iv out #:pad [pad default-pad] #:close? [close? #f])
+  (let ([cctx (make-decrypt-cipher-ctx ci key iv #:pad pad)])
+    (make-*crypt-output-port cctx out close?)))
+
+;; *crypt-copy-port : ci key iv input-port output-port -> void
+(define (encrypt-copy-port ci key iv in out #:pad [pad default-pad])
+  (let ([cctx (make-encrypt-cipher-ctx ci key iv #:pad pad)])
+    (*crypt-copy-port 'encrypt-copy-port cctx in out)))
+(define (decrypt-copy-port ci key iv in out #:pad [pad default-pad])
+  (let ([cctx (make-decrypt-cipher-ctx ci key iv #:pad pad)])
+    (*crypt-copy-port 'decrypt-copy-port cctx in out)))
+
+;; ----
+
+(define (*crypt who cctx inp)
+  (cond [(bytes? inp) (*crypt-bytes who cctx inp 0 (bytes-length inp))]
+        [(string? inp) (*crypt who cctx (open-input-string inp))]
+        [(input-port? inp)
+         (let ([out (open-output-bytes)])
+           (*crypt-copy-port who cctx inp out)
+           (get-output-bytes out))]))
+
+(define (*crypt-bytes who cctx buf start end)
+  (check-input-range who buf start end)
+  (define enc-buf (make-bytes (-cipher-encrypted-size cctx (- end start))))
+  (let* ([len (send cctx update! who buf start end enc-buf 0)]
+         [len (send cctx final! who enc-buf len)])
+    (shrink-bytes enc-buf len)))
+
+(define (*crypt-write who cctx inp out)
+  (cond [(bytes? inp) (*crypt-copy-port who cctx (open-input-bytes inp) out)]
+        [(string? inp) (*crypt-write who cctx (open-input-string inp) out)]
+        [(input-port? inp) (*crypt-copy-port who cctx inp out)]))
+
+(define (make-*crypt-pipe who cctx)
+  (define-values (pin pout) (make-pipe))
+  (values pin (make-*crypt-output-port who cctx pout #t)))
+
+(define (make-*crypt-input-port who cctx in close?)
+  (define-values (pin pout) (make-pipe))
+  (thread (lambda ()
+            (*crypt-copy-port who cctx in pout)
+            (close-output-port pout)))
+  pin)
+
+(define (make-*crypt-output-port who cctx out close?)
+  (define BLOCKS-AT-ONCE 8)
+  (define block-size (cipher-block-size cctx))
+  ;; Assumes no padding adds more than one extra block
+  (define enc-buf (make-bytes (* (+ 1 BLOCKS-AT-ONCE) block-size)))
+  (define name (object-name out)) ;; FIXME: add "encrypt-"/"decrypt-"
   (define evt always-evt)
   (define (write-out buf start end _sync? _eb?)
-    (let* ([len* (min (- end start) 8blocks)]
-           [enc-len (cipher-update! cipher buf enc-buf start (+ start len*))])
-      (write-bytes enc-buf enc-out 0 enc-len)
-      len*))
+    (if (= start end)
+        (begin (flush-output out) 0)
+        (let* ([len* (min (- end start) (* BLOCKS-AT-ONCE block-size))]
+               [enc-len (send cctx update! who buf start (+ start len*)
+                              enc-buf 0 (bytes-length enc-buf))])
+          (write-bytes enc-buf out 0 enc-len)
+          len*)))
   (define (close)
-    (let ([enc-len (cipher-final! cipher enc-buf)])
-      (write-bytes enc-buf enc-out 0 enc-len)
-      (close-output-port enc-out)))
-  (values enc-in
-          (make-output-port name evt write-out close)))
+    ;; FIXME: If final! fails w/ padding error, want to propagate to
+    ;; other end of port (if pipe)...
+    (let ([enc-len (send cctx final! who enc-buf 0 (bytes-length enc-buf))])
+      (write-bytes enc-buf out 0 enc-len)
+      (when close?
+        (close-output-port out))))
+  (make-output-port name evt write-out close))
 
-#|
-(define (*crypt-pipe who init ci key iv)
-  (let-values ([(cipher) (init ci key iv)]
-               [(rd1 wr1) (make-pipe)]
-               [(rd2 wr2) (make-pipe)])
-    (thread (lambda ()
-              (cipher-pump cipher rd1 wr2)
-              (close-input-port rd1)
-              (close-output-port wr2)))
-    (values rd2 wr1)))
-|#
+(define (*crypt-copy-port who cctx inp outp)
+  (define BLOCKS-AT-ONCE 8)
+  (define block-size (cipher-block-size cctx))
+  (define ibuf (make-bytes (* block-size BLOCKS-AT-ONCE)))
+  (define obuf (make-bytes (* block-size (+ 1 BLOCKS-AT-ONCE))))
+  (let loop ()
+    (let ([icount (read-bytes-avail! ibuf inp)])
+      (cond [(eof-object? icount)
+             ;; FIXME: handle cipher-final! error...
+             (let ([ocount (send cctx final! who obuf 0 (bytes-length obuf))])
+               (write-bytes obuf outp 0 ocount)
+               (flush-output outp)
+               (void))]
+            [else
+             (let ([ocount (send cctx update! who ibuf 0 icount
+                                 obuf 0 (bytes-length obuf))])
+               (write-bytes obuf outp 0 ocount)
+               (loop))]))))
 
-(define (*crypt-input who init ci key iv inp)
-  (cond [(bytes? inp) 
-         (let ([outp (open-output-bytes)])
-           (cipher-pump (init ci key iv) (open-input-bytes inp) outp)
-           (get-output-bytes outp))]
-        [(input-port? inp)
-         (let-values ([(cipher) (init ci key iv)]
-                      [(rd wr) (make-pipe)])
-           (thread (lambda () 
-                     (cipher-pump cipher inp wr)
-                     (close-output-port wr)))
-           rd)]))
-
-(define (*crypt-pump who init ci key iv inp outp)
-  (let ([inp (if (bytes? inp) (open-input-bytes inp) inp)])
-    (cipher-pump (init ci key iv) inp outp)))
-
-(define (-make-cipher-pipe-fun who init)
-  (case-lambda
-    [(ci key iv)
-     (*crypt-pipe who init ci key iv)]
-    [(ci key iv inp)
-     (*crypt-input who init ci key iv inp)]
-    [(ci key iv inp outp)
-     (*crypt-pump who init ci key iv inp outp)]))
-
-(define encrypt (-make-cipher-pipe-fun 'encrypt make-encrypt-cipher-ctx))
-(define decrypt (-make-cipher-pipe-fun 'decrypt make-decrypt-cipher-ctx))
-
-(define (encrypt->bytes ci key iv inp)
-  (let ([enc-inp (*crypt-input 'encrypt->bytes make-encrypt-cipher-ctx ci key iv inp)])
-    (port->bytes enc-inp)))
-
-(define (decrypt->bytes ci key iv inp)
-  (let ([dec-inp (*crypt-input 'decrypt->bytes make-decrypt-cipher-ctx ci key iv inp)])
-    (port->bytes dec-inp)))
+(define (-cipher-encrypted-size o in-len)
+  (define block-size (cipher-block-size o))
+  (define in-blocks (quotient in-len block-size))
+  (* block-size (+ in-blocks 1)))
 
 ;; ----
 

@@ -1,6 +1,11 @@
 To Do
 =====
 
+- new API for sign/verify
+
+- export random functions
+- add randomness-source to cipher-impl::generate-key+iv
+
 - better way to request digests/ciphers/etc
 - add error checking and reporting code to libgcrypt impls
 - devise factory/discovery method for getting impls

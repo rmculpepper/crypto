@@ -115,6 +115,9 @@
 (define-cipher aes (#f 128 192 256))
 (define-cipher camellia (#f 128 192 256))
 
+(define cipher:rc4 (send ssl-factory get-cipher-by-name 'rc4))
+(provide cipher:rc4)
+
 (provide available-ciphers)
 
 ;; ============================================================

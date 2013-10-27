@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2013 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -18,67 +18,74 @@
 (require racket/class
          racket/contract/base
          "interfaces.rkt"
-         "common.rkt")
+         "common.rkt"
+         "error.rkt")
 (provide
  (contract-out
-  [digest
-   (-> digest-impl? (or/c input-port? bytes?) bytes?)]
   [digest-impl?
    (-> any/c boolean?)]
   [digest-ctx?
    (-> any/c boolean?)]
-  [make-digest-ctx
-   (-> digest-impl? digest-ctx?)]
   [digest-size
-   (-> (or/c digest-impl? digest-ctx?) nat?)]
+   (-> (or/c digest/c digest-ctx?) nat?)]
   [digest-block-size
-   (-> (or/c digest-impl? digest-ctx?) nat?)]
-  [digest-update!
-   (->* (digest-ctx? bytes?) (nat? nat?)
+   (-> (or/c digest/c digest-ctx?) nat?)]
+  [make-digest-ctx
+   (-> digest/c digest-ctx?)]
+  [digest-update
+   (->* [digest-ctx? bytes?] [nat? nat?]
         void?)]
   [digest-final
    (-> digest-ctx? bytes?)]
-  [digest-final!
-   (->* (digest-ctx? bytes?) (nat? nat?)
-        nat?)]
   [digest-copy
-   (-> digest-ctx? digest-ctx?)]
+   (-> digest-ctx? (or/c digest-ctx? #f))]
   [digest-peek-final
    (-> digest-ctx? bytes?)]
-  [digest-peek-final!
-   (->* (digest-ctx? bytes?) (nat? nat?)
-        nat?)]
+  [digest
+   (-> digest/c (or/c bytes? input-port? string?) bytes?)]
+  [digest-bytes
+   (->* [digest/c bytes?] [nat? nat?] bytes?)]
   [hmac
-   (-> digest-impl? bytes? (or/c bytes? input-port?)
+   (-> digest/c bytes? (or/c bytes? input-port? string?)
        bytes?)]
   [make-hmac-ctx
-   (-> digest-impl? bytes? digest-ctx?)]
+   (-> digest/c bytes? digest-ctx?)]
   [generate-hmac-key
-   (-> digest-impl? bytes?)]))
+   (-> digest/c bytes?)]))
 (provide -digest-port*) ;; for pkey.rkt
-
-(define nat? exact-nonnegative-integer?)
-
-;; ----
 
 (define (digest-impl? x)
   (is-a? x digest-impl<%>))
 (define (digest-ctx? x)
   (is-a? x digest-ctx<%>))
 
+(define digest/c (or/c digest-impl? symbol?))
+(define nat? exact-nonnegative-integer?)
+
+;; ----
+
+
 (define (make-digest-ctx di)
-  (send di new-ctx))
+  (send (-get-impl 'make-digest-ctx di #f) new-ctx))
+
+(define (-get-impl who o ctx-ok?)
+  (cond [(symbol? o)
+         (or (for/or ([factory (in-list (crypto-factories))])
+               (send factory get-digest-by-name o))
+             (error who "could not get digest implementation\n  digest: ~e" o))]
+        [(is-a? o digest-impl<%>) o]
+        [(and ctx-ok? (is-a? o digest-ctx<%>)) (send o get-impl)]
+        [else (error who "bad digest specification\n  digest: ~e" o)]))
 
 (define (digest-size o)
-  (cond [(is-a? o digest-impl<%>) (send o get-size)]
-        [(is-a? o digest-ctx<%>) (digest-size (send o get-impl))]))
-
+  (send (-get-impl 'digest-size o #t) get-size))
 (define (digest-block-size o)
-  (cond [(is-a? o digest-impl<%>) (send o get-block-size)]
-        [(is-a? o digest-ctx<%>) (digest-block-size (send o get-impl))]))
+  (send (-get-impl 'digest-block-size o #t) get-block-size))
 
-(define (digest-update! x buf [start 0] [end (bytes-length buf)])
-  (send x update! 'digest-update! buf start end))
+;; ----
+
+(define (digest-update x buf [start 0] [end (bytes-length buf)])
+  (send x update 'digest-update buf start end))
 
 (define (digest-final dg)
   (let* ([len (digest-size dg)]
@@ -86,66 +93,81 @@
     (send dg final! 'digest-final buf 0 len)
     buf))
 
-(define (digest-final! dg buf [start 0] [end (bytes-length buf)])
-  (send dg final! 'digest-final! buf start end))
-
-(define (digest-copy idg)
-  (send idg copy 'digest-copy))
+(define (digest-copy dg)
+  (send dg copy 'digest-copy))
 
 (define (digest-peek-final dg)
-  (let* ([len (digest-size dg)]
-         [buf (make-bytes len)])
-    (send (digest-copy dg) final! 'digest-peek-final buf 0 len)
-    buf))
+  (let* ([dg (send dg copy 'digest-peek-final)])
+    (and dg
+         (let* ([len (digest-size dg)]
+                [buf (make-bytes len)])
+           (send (digest-copy dg) final! 'digest-peek-final buf 0 len)
+           buf))))
 
-(define (digest-peek-final! dg buf [start 0] [end (bytes-length buf)])
-  (send (digest-copy dg) final! 'digest-peek-final! buf start end))
+;; ----
 
 (define (digest di inp)
-  (cond [(bytes? inp) (-digest-bytes di inp)]
-        [(input-port? inp) (-digest-port di inp)]))
+  (let ([di (-get-impl 'digest di #f)])
+    (cond [(bytes? inp) (-digest-bytes 'digest di inp 0 (bytes-length inp))]
+          [(string? inp)
+           (-digest-port di (open-input-string inp))]
+          [(input-port? inp) (-digest-port di inp)])))
+
+(define (digest-bytes di buf [start 0] [end (bytes-length buf)])
+  (let ([di (-get-impl 'digest-bytes di #f)])
+    (-digest-bytes 'digest-bytes di buf start end)))
 
 (define (-digest-port type inp)
   (digest-final (-digest-port* type inp)))
 
 (define (-digest-port* di inp)
   (let ([dg (make-digest-ctx di)]
-        [ibuf (make-bytes 4000)])
-    (let lp ([count (read-bytes-avail! ibuf inp)])
-      (cond [(eof-object? count)
-             dg]
-            [else
-             (digest-update! dg ibuf 0 count)
-             (lp (read-bytes-avail! ibuf inp))]))))
+        [buf (make-bytes 4000)])
+    (let lp ()
+      (let ([count (read-bytes-avail! buf inp)])
+        (cond [(eof-object? count)
+               dg]
+              [else
+               (digest-update dg buf 0 count)
+               (lp)])))))
 
-(define (-digest-bytes di bs)
+(define (-digest-bytes who di bs start end)
+  (check-input-range who bs start end)
   (cond [(send di can-digest-buffer!?)
          (let ([outbuf (make-bytes (send di get-size))])
-           (send di digest-buffer! 'digest bs 0 (bytes-length bs) outbuf 0)
+           (send di digest-buffer! 'digest bs start end outbuf 0)
            outbuf)]
         [else
          (let ([dg (make-digest-ctx di)])
-           (digest-update! dg bs)
+           (digest-update dg bs start end)
            (digest-final dg))]))
 
 ;; ----
 
 (define (make-hmac-ctx di key)
-  (let* ([himpl (send di get-hmac-impl 'make-hmac-ctx)])
+  (let* ([di (-get-impl 'make-hmac-ctx di #f)]
+         [himpl (send di get-hmac-impl 'make-hmac-ctx)])
     (send himpl new-ctx 'make-hmac-ctx key)))
 
 (define (hmac di key inp)
-  (cond [(bytes? inp) (-hmac-bytes di key inp)]
-        [(input-port? inp) (-hmac-port di key inp)]))
+  (let ([di (-get-impl 'hmac di #f)])
+    (cond [(bytes? inp) (-hmac-bytes 'hmac di key inp 0 (bytes-length inp))]
+          [(string? inp) (-hmac-port di key (open-input-string inp))]
+          [(input-port? inp) (-hmac-port di key inp)])))
 
-(define (-hmac-bytes di key buf)
+(define (hmac-bytes di key bs [start 0] [end (bytes-length bs)])
+  (let ([di (-get-impl 'hmac-bytes di #f)])
+    (-hmac-bytes 'hmac-bytes di key bs start end)))
+
+(define (-hmac-bytes who di key buf start end)
+  (check-input-range who buf start end)
   (let ([outbuf (make-bytes (send di get-size))])
     (cond [(send di can-hmac-buffer!?)
            (send di hmac-buffer! 'hmac key buf 0 (bytes-length buf) outbuf 0)]
           [else
            (let* ([himpl (send di get-hmac-impl 'hmac)]
                   [hctx (send himpl new-ctx 'hmac key)])
-             (send hctx update! 'hmac buf 0 (bytes-length buf))
+             (send hctx update! 'hmac buf start end)
              (send hctx final! 'hmac outbuf 0 (bytes-length outbuf)))])
     outbuf))
 
@@ -164,4 +186,5 @@
                (loop)])))))
 
 (define (generate-hmac-key di)
-  (send di generate-hmac-key))
+  (let ([di (-get-impl 'generate-hmac-key di #f)])
+    (send di generate-hmac-key)))

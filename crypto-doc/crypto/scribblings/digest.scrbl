@@ -7,126 +7,140 @@
 
 @title[#:tag "digest"]{Message Digests}
 
-@section{Digest Algorithms}
+A @deftech{message digest} function (sometimes called a
+@deftech{cryptographic hash} function) maps variable-length (and
+potentially long) messages to fixed-length (and relatively short)
+digests. For a good digest function, it is infeasible to find a
+preimage of a given digest; that is, given an output, it is very hard
+to find a corresponding input.
 
-A @scheme[<digest>] is a first class object which captures algorithm details.
-The set of digest algorithms depends on the local libcrypto configuration 
-and is determined at module load-time.
+Different digest functions, or algorithms, compute digests of
+different sizes and have different characteristics that may affect
+their security. Examples of digest functions include SHA1, SHA256, and
+SHA512. SHA1 computes an 160-bit (20-byte) digest; SHA256 computes a
+256-bit digest; and SHA512 computes a 512-bit digest.
 
-@deftogether[(
-@defthing[digest:md5 <digest>]
-@defthing[digest:ripemd160 <digest>]
-@defthing[digest:dss1 <digest>]
-@defthing[digest:sha1 <digest>]
-@defthing[digest:sha224 <digest>]
-@defthing[digest:sha256 <digest>]
-@defthing[digest:sha384 <digest>]
-@defthing[digest:sha512 <digest>]
-)]{
-Digest algorithms. Bound to #f when an algorithm is unavailable.
+The HMAC (``Hash-based Message Authentication Code'') construction
+combines a digest function together with a secret key. A Message
+Authentication Code can be used in a security protocol to guarantee
+message authentication and integrity.
+
+This library provides both high-level, all-at-once digest operations
+and low-level, incremental operations.
+
+@section{Administrative Digest Functions}
+
+@defproc[(digest-impl? [v any/c]) boolean?]{
+
+Returns @racket[#f] if @racket[v] represents a @deftech{digest
+implementation}, @racket[#f] otherwise.
 }
 
-@defproc[(available-digests) (list symbol?)]{
-List of available digest names.
+@defproc[(digest-size [di (or/c digest-impl? digest-ctx?)])
+         exact-positive-integer?]{
+
+Returns the size in bytes of the digest computed by the algorithm
+represented by @racket[di].
 }
 
-@defproc[(!digest? (o _)) boolean?]{
-True if @scheme[o] is a @scheme[<digest>].
-}
+@defproc[(digest-block-size [d (or/c digest-impl? digest-ctx?)])
+         exact-positive-integer?]{
 
-@defproc[(digest-size (o (or <digest> digest? hmac?))) 
-         exact-nonnegative-integer?]{
-The block size of a digest algorithm
-}
-
-@section{Computing Digests}
-
-@defproc[(digest (t <digest>) (inp (or bytes? input-port?))) bytes?]{
-Computes a digest for @scheme[inp] using @scheme[t] as the digest algorithm.
-}
-
-@deftogether[(
-@defproc[(md5 (inp (or bytes? input-port?))) bytes?]
-@defproc[(ripemd160 (inp (or bytes? input-port?))) bytes?]
-@defproc[(dss1 (inp (or bytes? input-port?))) bytes?]
-@defproc[(sha1 (inp (or bytes? input-port?))) bytes?]
-@defproc[(sha224 (inp (or bytes? input-port?))) bytes?]
-@defproc[(sha256 (inp (or bytes? input-port?))) bytes?]
-@defproc[(sha384 (inp (or bytes? input-port?))) bytes?]
-@defproc[(sha512 (inp (or bytes? input-port?))) bytes?]
-)]{
-Shortcuts for @scheme[(digest <digest> inp)].
+Returns the size in bytes of the digest's internal block size. This
+information is generally not needed by applications, but some
+constructions (for example, HMAC) are defined in terms of a digest
+function's block size.
 }
 
 
-@defproc[(hmac (t <digest>) (key bytes?) (inp (or bytes? input-port?))) bytes?]{
-Computes an HMAC for @scheme[inp] using @scheme[t] as the digest algorithm
-and @scheme[key] as the authentication key.
+@section{High-level Digest Functions}
+
+@defproc[(digest [di digest-impl?]
+                 [input (or/c bytes? string? input-port?)])
+         bytes?]{
+
+Computes the digest of @racket[input] using the digest function
+represented by @racket[di].
+
+If @racket[input] is a string, it is converted by bytes by calling
+@racket[string->bytes/utf-8].  If @racket[input] is an input port, its
+contents are read until until it produces @racket[eof], but the port
+is not closed.
 }
 
-@section{Low Level Digest Operations}
+@defproc[(hmac [di digest-impl?]
+               [key bytes?]
+               [input (or/c bytes? string? input-port?)])
+         bytes?]{
 
-Low level operations are performed on @emph{digest contexts} for message
-digest computations and @emph{hmac contexts} for hmac computations.
-
-@defproc[(digest-new (t <digest>)) digest?]{
-Create and initialize a new digest context
+Like @racket[digest], but computes the HMAC of @racket[input]
+parameterized by digest @racket[di] using the secret key
+@racket[key]. The @racket[key] may be of any length, but the effective
+security of the key is limited to @racket[(digest-block-size di)].
 }
 
-@defproc[(digest-update! (o digest?) (data bytes?) 
-                         (start exact-nonnegative-integer? 0)
-                         (end exact-nonnegative-integer? (bytes-length data)))
-         _]{
-Incrementally update a digest context.
+
+@section{Low-level Digest Functions}
+
+@defproc[(make-digest-ctx [di digest-impl?])
+         digest-ctx?]{
+
+Creates a @deftech{digest context} for the digest function represented
+by @racket[di]. A digest context can be incrementally updated with
+message data.
 }
 
-@defproc*[(
-[(digest-final! (o digest?)) bytes?]
-[(digest-final! (o digest?) (outp bytes?) 
-                (start exact-nonnegative-integer? 0)
-                (end exact-nonnegative-integer? (bytes-length outp)))
- exact-nonnegative-integer?]
-)]{
-Finalize the digest context.
+@defproc[(digest-ctx?  [v any/c]) boolean?]{
 
-The first form returns the output; The second form
-writes the output in @scheme[outp] which must have enough room for the
-digest and return the digest size.
+Returns @racket[#t] if @racket[v] is a @tech{digest context},
+@racket[#f] otherwise.
 }
 
-@defproc[(digest-copy (o digest?)) digest?]{
-Copies a digest context, which must not be finalized.
+@defproc[(digest-update [dctx digest-ctx?]
+                        [input bytes?]
+                        [start exact-nonnegative-integer? 0]
+                        [end exact-nonnegative-integer? (bytes-length input)])
+         void?]{
+
+Updates @racket[dctx] with the message data corresponding to
+@racket[(subbytes input start end)]. The @racket[digest-update]
+function can be called multiple times, in which case @racket[dctx]
+computes the digest of the concatenated inputs.
 }
 
-@defproc[(digest->bytes (o digest?)) bytes?]{
-Returns the current value of the digest.
+@defproc[(digest-final [dctx digest-ctx?])
+         bytes?]{
+
+Closes @racket[dctx] and returns the digest of the message.
 }
 
-@defproc[(digest? (o _)) boolean?]{
-True if @scheme[o] is a digest context.
+@defproc[(digest-copy [dctx digest-ctx?])
+         (or/c digest-ctx? #f)]{
+
+Returns a copy of @racket[dctx], or @racket[#f] is the implementation
+does not support copying. Use @racket[digest-copy] to efficiently
+compute digests for messages with a common prefix.
 }
 
-@defproc[(hmac-new (t <digest>) (key bytes?)) hmac?]{
-Create and initialize a hmac context
+@defproc[(digest-peek-final [dctx digest-ctx?])
+         bytes?]{
+
+Returns the digest without closing @racket[dctx], or @racket[#f] if
+@racket[dctx] does not support copying.
 }
 
-@defproc[(hmac-update! (o hmac?) (data bytes?) 
-                       (start exact-nonnegative-integer? 0)
-                       (end exact-nonnegative-integer? (bytes-length data)))
-         _]{
-Incrementally update an hmac context.
+@defproc[(make-hmac-ctx [di digest-impl?]
+                        [key bytes?])
+         digest-ctx?]{
+
+Like @racket[make-digest-ctx], but creates an HMAC context
+parameterized over the digest @racket[di] and using the secret key
+@racket[key].
 }
 
-@defproc*[(
-[(hmac-final! (o hmac?)) bytes?]
-[(hmac-final! (o hmac?) (outp bytes?) 
-              (start exact-nonnegative-integer? 0)
-              (end exact-nonnegative-integer? (bytes-length outp)))
- exact-nonnegative-integer?]
-)]{
-Finalize an hmac context.
-}
+@defproc[(generate-hmac-key [di digest-impl?])
+         bytes?]{
 
-@defproc[(hmac? (o _)) boolean?]{
-True if @scheme[o] is an hmac context.
+Generate a random secret key appropriate for HMAC parameterized over
+digest @racket[di].
 }

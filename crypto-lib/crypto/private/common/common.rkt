@@ -17,8 +17,12 @@
 #lang racket/base
 (require racket/class
          "interfaces.rkt")
-(provide base-ctx%
+(provide crypto-factories
+         base-ctx%
          shrink-bytes)
+
+;; crypto-factories : parameter of (listof factory<%>)
+(define crypto-factories (make-parameter null))
 
 ;; ----
 
