@@ -93,7 +93,7 @@
 ;; ============================================================
 
 (define ssl-factory%
-  (class* object% (#|factory<%>|#)
+  (class* object% (factory<%>)
     (super-new)
 
     (define digest-table (make-hasheq))

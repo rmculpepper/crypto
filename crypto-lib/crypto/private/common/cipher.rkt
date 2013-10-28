@@ -19,6 +19,7 @@
          racket/contract/base
          racket/port
          "interfaces.rkt"
+         "factory.rkt"
          "common.rkt"
          "error.rkt")
 (provide
@@ -98,8 +99,7 @@
 
 (define (-get-impl who o ctx-ok?)
   (cond [(digest-spec? o)
-         (or (for/or ([factory (in-list (crypto-factories))])
-               (send factory get-cipher-by-name o))
+         (or (get-cipher o)
              (error who "could not get cipher implementation\n  cipher: ~e" o))]
         [(is-a? o cipher-impl<%>) o]
         [(is-a? o cipher-ctx<%>) (send o get-impl)]

@@ -18,6 +18,7 @@
 (require racket/class
          racket/contract/base
          "interfaces.rkt"
+         "factory.rkt"
          "common.rkt"
          "error.rkt")
 (provide
@@ -60,8 +61,7 @@
 
 (define (-get-impl who o ctx-ok?)
   (cond [(digest-spec? o)
-         (or (for/or ([factory (in-list (crypto-factories))])
-               (send factory get-digest-by-name o))
+         (or (get-digest o)
              (error who "could not get digest implementation\n  digest: ~e" o))]
         [(is-a? o digest-impl<%>) o]
         [(and ctx-ok? (is-a? o digest-ctx<%>)) (send o get-impl)]

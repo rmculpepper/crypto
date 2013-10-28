@@ -26,6 +26,7 @@
          pkey-impl<%>
          pkey-ctx<%>
 
+         factory?
          digest-spec?
          digest-impl?
          digest-ctx?
@@ -74,6 +75,8 @@
     get-cipher-by-name ;; CipherSpec -> cipher-impl<%>/#f
     get-pkey-by-name   ;; symbol -> pkey-impl<%>/#f
     ))
+
+(define (factory? x) (is-a? x factory<%>))
 
 ;; A DigestSpec is a symbol.
 ;; A CipherSpec is a symbol.
