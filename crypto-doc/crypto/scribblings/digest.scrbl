@@ -30,6 +30,24 @@ and low-level, incremental operations.
 
 @section{Administrative Digest Functions}
 
+@defproc[(digest-spec? [v any/c]) boolean?]{
+
+Returns @racket[#f] if @racket[v] represents a @tech{digest
+specification}, @racket[#f] otherwise.
+
+A @deftech{digest specification} is a symbol, which is interpreted as
+the name of a digest. Examples include @racket['sha1] and
+@racket['sha512]. Another example is @racket['no-such-digest]---any
+symbol is allowed; it is up to a specific cryptography provider to
+determine whether it maps to a @tech{digest implementation}.
+
+@;{FIXME: better to have known set of digests, then guarantee that
+any spec maps to set of compatible impls???}
+
+Future versions of this library may add other forms of digest
+specifications.
+}
+
 @defproc[(digest-impl? [v any/c]) boolean?]{
 
 Returns @racket[#f] if @racket[v] represents a @deftech{digest

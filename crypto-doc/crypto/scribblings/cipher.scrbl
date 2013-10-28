@@ -25,6 +25,18 @@ ECB, CBC, and CTR.
 This library provides both high-level, all-at-once encryption and
 decryption operations and low-level, incremental operations.
 
+@defproc[(cipher-spec? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] represents a @tech{cipher
+specification}, @racket[#f] otherwise.
+
+A @deftech{cipher specification} is a symbol, which is interpreted as
+the name of a cipher.
+
+Future versions of this library may add other forms of cipher
+specifications.
+}
+
 @defproc[(cipher-impl? [v any/c]) boolean?]{
 
 Returns @racket[#t] if @racket[v] represents a cipher implementation,
