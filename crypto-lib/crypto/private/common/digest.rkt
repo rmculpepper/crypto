@@ -22,10 +22,6 @@
          "error.rkt")
 (provide
  (contract-out
-  [digest-impl?
-   (-> any/c boolean?)]
-  [digest-ctx?
-   (-> any/c boolean?)]
   [digest-size
    (-> (or/c digest/c digest-ctx?) nat?)]
   [digest-block-size
@@ -54,22 +50,16 @@
    (-> digest/c bytes?)]))
 (provide -digest-port*) ;; for pkey.rkt
 
-(define (digest-impl? x)
-  (is-a? x digest-impl<%>))
-(define (digest-ctx? x)
-  (is-a? x digest-ctx<%>))
-
-(define digest/c (or/c digest-impl? symbol?))
+(define digest/c (or/c digest-spec? digest-impl?))
 (define nat? exact-nonnegative-integer?)
 
 ;; ----
-
 
 (define (make-digest-ctx di)
   (send (-get-impl 'make-digest-ctx di #f) new-ctx))
 
 (define (-get-impl who o ctx-ok?)
-  (cond [(symbol? o)
+  (cond [(digest-spec? o)
          (or (for/or ([factory (in-list (crypto-factories))])
                (send factory get-digest-by-name o))
              (error who "could not get digest implementation\n  digest: ~e" o))]

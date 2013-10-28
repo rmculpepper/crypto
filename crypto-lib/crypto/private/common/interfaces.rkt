@@ -24,7 +24,14 @@
          cipher-impl<%>
          cipher-ctx<%>
          pkey-impl<%>
-         pkey-ctx<%>)
+         pkey-ctx<%>
+
+         digest-spec?
+         digest-impl?
+         digest-ctx?
+         cipher-spec?
+         cipher-impl?
+         cipher-ctx?)
 
 ;; ============================================================
 ;; General Notes
@@ -63,10 +70,16 @@
     all-ciphers        ;; -> (listof cipher-impl<%>)
     all-pkeys          ;; -> (listof pkey-impl<%>)
     |#
-    get-digest-by-name ;; symbol -> digest-impl<%>/#f
-    get-cipher-by-name ;; symbol -> cipher-impl<%>/#f
+    get-digest-by-name ;; DigestSpec -> digest-impl<%>/#f
+    get-cipher-by-name ;; CipherSpec -> cipher-impl<%>/#f
     get-pkey-by-name   ;; symbol -> pkey-impl<%>/#f
     ))
+
+;; A DigestSpec is a symbol.
+;; A CipherSpec is a symbol.
+
+(define (digest-spec? x) (symbol? x))
+(define (cipher-spec? x) (symbol? x))
 
 ;; ============================================================
 ;; Digests
@@ -104,6 +117,9 @@
     new-ctx    ;; sym bytes -> digest-ctx<%>
     ))
 
+(define (digest-impl? x) (is-a? x digest-impl<%>))
+(define (digest-ctx? x) (is-a? x digest-ctx<%>))
+
 ;; ============================================================
 ;; Ciphers
 
@@ -135,6 +151,9 @@
     update!  ;; sym bytes nat nat bytes nat nat -> nat
     final!   ;; sym bytes nat nat -> nat
     ))
+
+(define (cipher-impl? x) (is-a? x cipher-impl<%>))
+(define (cipher-ctx? x) (is-a? x cipher-ctx?))
 
 ;; ============================================================
 ;; Public-Key Cryptography

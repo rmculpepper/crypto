@@ -2,6 +2,11 @@ To Do
 =====
 
 - new API for sign/verify
+- nettle factory
+
+- sections for Password Hashing
+  - pbkdf2
+  - bcrypt, scrypt (from elsewhere)
 
 - export random functions
 - add randomness-source to cipher-impl::generate-key+iv
