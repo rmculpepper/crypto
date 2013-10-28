@@ -55,9 +55,11 @@
         (EVP_CIPHER_CTX_set_padding ctx pad?)
         (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
 
-    (define/public (generate-key+iv)
-      (values (random-bytes key-size)
-              (and iv-size (pseudo-random-bytes iv-size))))
+    (define/public (generate-key)
+      (random-bytes key-size))
+    (define/public (generate-iv)
+      ;; FIXME: ok to use use pseudo-random-bytes?
+      (and iv-size (random-bytes iv-size)))
     ))
 
 (define cipher-ctx%

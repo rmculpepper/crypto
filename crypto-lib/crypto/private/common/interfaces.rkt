@@ -137,7 +137,8 @@
 
     new-ctx         ;; sym bytes bytes/#f boolean PadMode -> cipher-ctx<%>
                     ;; who key   iv       enc?    pad
-    generate-key+iv ;; -> (values bytes bytes/#f)
+    generate-key    ;; -> bytes
+    generate-iv     ;; -> bytes/#f
     ))
 
 ;; Some disadvantages to current cipher update! and final! methods:

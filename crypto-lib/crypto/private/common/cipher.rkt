@@ -78,8 +78,10 @@
   ;;  (->* [cipher/c key/c iv/c output-port?] [#:pad pad-mode/c]
   ;;       output-port?)]
 
-  [generate-cipher-key+iv
-   (-> cipher-impl? (values key/c iv/c))]))
+  [cipher-generate-key
+   (-> cipher/c key/c)]
+  [cipher-generate-iv
+   (-> cipher/c iv/c)]))
 
 (define cipher/c (or/c cipher-spec? cipher-impl?))
 
@@ -271,6 +273,11 @@
 
 ;; ----
 
-(define (generate-cipher-key+iv ci)
-  (let ([ci (-get-impl 'generate-cipher-key+iv ci #f)])
-    (send ci generate-key+iv)))
+(define (cipher-generate-key ci)
+  ;; FIXME: any way to check for weak keys, avoid???
+  (let ([ci (-get-impl 'cipher-generate-key ci #f)])
+    (send ci generate-key)))
+
+(define (cipher-generate-iv ci)
+  (let ([ci (-get-impl 'cipher-generate-iv ci #f)])
+    (send ci generate-iv)))
