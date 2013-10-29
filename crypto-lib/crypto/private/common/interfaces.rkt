@@ -78,11 +78,143 @@
 
 (define (factory? x) (is-a? x factory<%>))
 
-;; A DigestSpec is a symbol.
-;; A CipherSpec is a symbol.
+;; A DigestSpec is a symbol in domain of known-digests.
+;; A CipherSpec is a symbol in domain of known-cipher-names.
 
-(define (digest-spec? x) (symbol? x))
-(define (cipher-spec? x) (symbol? x))
+(define known-digests
+  ;; References:
+  ;;  - http://en.wikipedia.org/wiki/Cryptographic_hash_function
+  ;; An entry is of form (list name-symbol hash-size-bits block-size-bits)
+  '#hasheq(;; symbol  -> (Hash Block)   -- sizes in bits
+           [gost           256  256]
+           [md2            128  128]
+           [md4            128  512]
+           [md5            128  512]
+           [ripemd         128  512]
+           [ripemd128      128  512]
+           [ripemd256      256  512]
+           [ripemd160      160  512]
+           [ripemd320      320  512]
+           [tiger2-128     128  512]
+           [tiger2-160     160  512]
+           [tiger2-192     192  512]
+           ;; Note: 3 versions: Whirlpool-0 (2000), Whirlpool-T (2001), Whirlpool (2003)
+           [whirlpool      512  512] 
+           [sha0           160  512]
+           [sha1           160  512]
+           [sha224         224  512]
+           [sha256         256  512]
+           [sha384         384  1024]
+           [sha512         512  1024]
+
+           ;; Many recent hash algorithms can be configured to produce a wide
+           ;; range of output sizes, and some have additional parameters.
+           ;; List common configurations here, and add another kind of DigestSpec
+           ;; to handle the other cases.
+
+           ;; Note: As of 10/2013, SHA3 is not standardized, and SHA3 is expected
+           ;; to be different (maybe?) from Keccak as submitted to the NIST contest.
+           ;; [sha3-224       224  1152]
+           ;; [sha3-256       256  1088]
+           ;; [sha3-384       384  832]
+           ;; [sha3-512       512  576]
+           ;; skein*
+           ;; blake*, blake2-*
+           ))
+
+(define (digest-spec? x)
+  (and (hash-ref known-digests x #f) #t))
+
+(define known-block-ciphers
+  ;; References: http://www.users.zetnet.co.uk/hopwood/crypto/scan/cs.html
+  ;; AllowedKeys is one of
+  ;;  - (list size ...)
+  ;;  - #('variable min max step default)
+  '#hasheq(;; symbol  -> (Block AllowedKeys)   -- sizes in bits
+           [aes           128   (128 192 256)]
+           [des           64    (56)]      ;; key expressed as 64-bits w/ parity bits
+           [des-ede2      64    (112)]     ;; key expressed as 128 bits w/ parity bits
+           [des-ede3      64    (168)]     ;; key expressed as 192 bits w/ parity bits
+           [blowfish      64    #(variable 32 448 8 128)]
+           [cast128       64    #(variable 40 128 8 128)]
+           [camellia      128   (128 192 256)]
+           [idea          64    (128)]
+           [rc5           64    #(variable 0 2040 8 128)]
+           [rc5-64        128   #(variable 0 2040 8 128)]
+           [rc6-64        256   #(variable 0 2040 8 128)]
+           [cast256       128   #(variable 128 256 32 128)]
+           ;; AES finalists
+           [serpent       128   #(variable 0 256 8 128)]
+           [twofish       128   #(variable 8 256 8 128)]
+           [rc6           128   #(variable 0 2040 8 128)]
+           [mars          128   #(variable 128 448 32 128)] ;; aka Mars-2 ???
+           ))
+
+;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+;; TODO
+;;  - change cipher-impl to leave key-size unfixed; only need
+;;    when creating ctx or calling encrypt/decrypt
+;;  - key-size-ok? : CipherName Nat -> Boolean
+;;  - check-key-size : CipherName Nat -> void or error
+
+(define known-stream-ciphers
+  '#hasheq(;; symbol  ->  IV  AllowedKeys      -- sizes in bits
+           [rc4           0   #(variable 40 2048 8 128)]
+           [salsa20       64  (256)]
+           [salsa20/8     64  (256)]
+           [salsa20/12    64  (256)]
+           ))
+
+(define known-ciphers-abbrev
+  '#hasheq(;; symbol -> CipherSpec
+           [aes-128-cbc (cbc aes 128)]
+           [aes-192-cbc (cbc aes 192)]
+           [aes-256-cbc (cbc aes 256)]
+           [aes-128-ctr (ctr aes 128)]
+           [aes-192-ctr (ctr aes 192)]
+           [aes-256-ctr (ctr aes 256)]))
+
+;; Mode effects:
+;;   ecb: iv=none,    block same
+;;   cbc: iv=1 block, block same
+;;   ofb: iv=1 block, stream cipher
+;;   cfb: iv=1 block, stream cipher
+;;   ctr: iv=1 block, stream cipher
+;;   gcm: iv=???, ???                                -- FIXME
+(define known-block-modes '(ecb cbc ofb cfb ctr gcm))
+
+;; A CipherSpec is one of
+;;  - a symbol in known-ciphers-abbrev
+;;  - (list* 'stream CipherName)
+;;  - (list* BlockMode CipherName KeySpec)
+;; BlockMode is one of 'ecb, 'cbc, 'cfb, 'ofb, 'ctr.
+;; CipherName is a symbol in the domain od known-block-ciphers.
+;; KeySpec is one of
+;;  - '()
+;;  - (list Nat)
+
+(define (cipher-spec? x)
+  (cond [(symbol? x)
+         (and (hash-ref known-ciphers-abbrev #f) #t)]
+        [(and (pair? x) (eq? (car x) 'stream))
+         (match (cdr x)
+           [(list cipher-name)
+            (and (hash-ref known-stream-ciphers cipher-name #f) #t)]
+           [_ #f])]
+        [(and (pair? x) (memq (car x) known-block-modes))
+         (match (cdr x)
+           [(list cipher-name)
+            (and (hash-ref known-block-ciphers cipher-name #f) #t)]
+           [(list cipher-name key-size)
+            (let ([entry (hash-ref known-block-ciphers cipher-name #f)])
+              (and entry
+                   (key-size-matches? key-size (cadr entry))))]
+           [_ #f])]
+        [else #f]))
+
+(define (key-size-matches? size allowed-sizes)
+  (if (list? 
+
 
 ;; ============================================================
 ;; Digests
