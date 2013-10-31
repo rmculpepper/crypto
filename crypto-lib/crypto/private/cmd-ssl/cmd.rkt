@@ -111,8 +111,6 @@
       (new digest-ctx% (impl this)))
     (define/public (get-hmac-impl who)
       (new hmac-impl% (digest this)))
-    (define/public (generate-hmac-key)
-      (random-bytes-no-nuls size))
 
     ;; ----
 
@@ -178,20 +176,16 @@
 
 (define cipher-impl%
   (class* object% (cipher-impl<%>)
-    (init-field name keylen blocklen [ivlen blocklen])
+    (init-field spec keylen blocklen [ivlen blocklen])
     (super-new)
 
-    (define/public (get-name) name)
+    (define/public (get-name) spec)
     (define/public (get-key-size) keylen)
     (define/public (get-block-size) blocklen)
     (define/public (get-iv-size) ivlen)
 
     (define/public (new-ctx who key iv enc? pad?)
       (new cipher-ctx% (impl this) (key key) (iv iv) (enc? enc?) (pad? pad?)))
-
-    (define/public (generate-key+iv)
-      (values (random-bytes-no-nuls keylen)
-              (and ivlen (random-bytes-no-nuls ivlen))))
     ))
 
 (define cipher-ctx%
