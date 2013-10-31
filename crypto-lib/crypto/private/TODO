@@ -8,12 +8,10 @@ To Do
   - pbkdf2
   - bcrypt, scrypt (from elsewhere)
 
-- export random functions
-- add randomness-source to cipher-impl::generate-key+iv
+- ciphers: track bytes encrypted, better space checking
 
 - better way to request digests/ciphers/etc
 - add error checking and reporting code to libgcrypt impls
-- devise factory/discovery method for getting impls
 - update tests
 - update docs
 - offer multiple padding options?
