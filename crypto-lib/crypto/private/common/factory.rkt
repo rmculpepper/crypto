@@ -39,7 +39,6 @@
 
 (define (get-cipher ci [factories (crypto-factories)])
   (for/or ([f (in-list factories)])
-    (eprintf "** trying factory ~e cipher ~e\n" f ci)
     (send f get-cipher-by-name ci)))
 
 (define (get-random [factories (crypto-factories)])

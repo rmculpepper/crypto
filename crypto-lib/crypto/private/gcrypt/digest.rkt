@@ -16,6 +16,7 @@
 #lang racket/base
 (require racket/class
          ffi/unsafe
+         "../common/catalog.rkt"
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "ffi.rkt")
@@ -25,12 +26,12 @@
   (class* object% (digest-impl<%>)
     (init-field md        ;; int
                 blocksize ;; no way to fetch w/ ffi (?)
-                name)     ;; symbol
+                spec)     ;; symbol
     (define hmac-impl #f)
     (define size (gcry_md_get_algo_dlen md))
     (super-new)
 
-    (define/public (get-name) name)
+    (define/public (get-spec) spec)
     (define/public (get-size) size)
     (define/public (get-block-size) blocksize)
 
@@ -41,12 +42,6 @@
     (define/public (get-hmac-impl who)
       (unless hmac-impl (set! hmac-impl (new hmac-impl% (digest this))))
       hmac-impl)
-
-    (define/public (generate-hmac-key)
-      ;; FIXME
-      (let ([buf (make-bytes size)])
-        (gcry_randomize buf size GCRY_STRONG_RANDOM)
-        buf))
 
     ;; ----
 
@@ -65,7 +60,7 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update! who buf start end)
+    (define/public (update who buf start end)
       (gcry_md_write ctx (ptr-add buf start) (- end start)))
 
     (define/public (final! who buf start end)

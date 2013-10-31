@@ -18,6 +18,7 @@
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/catalog.rkt"
          "../rkt/padding.rkt"
          "ffi.rkt")
 (provide cipher-impl%)
@@ -26,39 +27,24 @@
   (class* object% (cipher-impl<%>)
     (init-field cipher
                 mode    ;; one of 'ecb, 'cbc, 'stream (rest unsupported)
-                name)
+                spec)
     (super-new)
 
     (define key-size (gcry_cipher_get_algo_keylen cipher))
     (define block-size (gcry_cipher_get_algo_blklen cipher))
-    (define iv-size
-      (case mode
-        ((cbc) block-size)
-        ((ecb) #f)
-        ((stream) #f))) ;; FIXME ???
+    (define iv-size (cipher-spec-iv-size spec))
 
-    (define/public (get-name) name)
+    (define/public (get-spec) spec)
     (define/public (get-key-size) key-size)
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)
 
     (define/public (new-ctx who key iv enc? pad?)
-      (let* ([mode (case mode
-                     ((cbc) GCRY_CIPHER_MODE_CBC)
-                     ((ecb) GCRY_CIPHER_MODE_ECB)
-                     ((stream) GCRY_CIPHER_MODE_STREAM))]
-             [ctx (gcry_cipher_open cipher mode 0)])
+      (let* ([ctx (gcry_cipher_open cipher mode 0)])
         (gcry_cipher_setkey ctx key (bytes-length key))
-        (when iv-size
+        (when (positive? iv-size)
           (gcry_cipher_setiv ctx iv (bytes-length iv)))
         (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?))))
-
-    (define/public (generate-key+iv)
-      (let ([key (make-bytes key-size)]
-            [iv (and iv-size (make-bytes iv-size))])
-        (gcry_randomize key key-size GCRY_STRONG_RANDOM)
-        (and iv (gcry_randomize iv iv-size GCRY_STRONG_RANDOM))
-        (values key iv)))
     ))
 
 (define cipher-ctx%
