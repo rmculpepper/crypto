@@ -30,29 +30,6 @@
                      racket/syntax))
 (provide (all-defined-out))
 
-(define multikeylen-cipher-impl%
-  (class* object% (cipher-impl<%>)
-    (init-field impls ;; (nonempty-listof (cons nat cipher-impl%))
-                spec)
-    (super-new)
-
-    (define/public (get-spec) spec)
-    (define/public (get-block-size) (send (car impls) get-block-size))
-    (define/public (get-iv-size) (send (car impls) get-iv-size))
-
-    (define/public (new-ctx who key iv enc? pad?)
-      (cond [(assoc (bytes-length key) impls)
-             => (lambda (keylen+impl)
-                  (send (cdr keylen+impl) new-ctx who key iv enc? pad?))]
-            [else
-             (check-key-size who spec (bytes-length key))
-             (error 'multikeylen-cipher-impl%
-                    (string-append "internal error: no implementation for key length"
-                                   "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")
-                    spec (bytes-length key)
-                    (string-join (map number->string (map car impls)) ", "))]))
-    ))
-
 (define cipher-impl%
   (class* object% (cipher-impl<%>)
     (init-field cipher ;; EVP_CIPHER

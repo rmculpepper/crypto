@@ -15,22 +15,17 @@
 
 #lang racket/base
 (require racket/class
+         racket/match
          racket/system
          racket/string
          racket/dict
          racket/port
          racket/file
+         "../common/catalog.rkt"
          "../common/interfaces.rkt"
          "../common/common.rkt"
          (only-in "../ssl/util.rkt" hex unhex))
 (provide (all-defined-out))
-
-;; random-bytes-no-nuls : nat -> bytes-no-nuls
-(define (random-bytes-no-nuls size)
-  (let ([bs (make-bytes size)])
-    (for ([i (in-range size)])
-      (bytes-set! bs i (add1 (random 255))))
-    bs))
 
 ;; ============================================================
 
@@ -103,7 +98,7 @@
                 block-size)
     (super-new)
 
-    (define/public (get-name) name)
+    (define/public (get-spec) name)
     (define/public (get-size) size)
     (define/public (get-block-size) block-size)
 
@@ -154,7 +149,7 @@
       (begin0 (get-output-bytes stored-content)
         (when reset? (set! stored-content #f))))
 
-    (define/public (update! who buf start end)
+    (define/public (update who buf start end)
       (void (write-bytes buf stored-content start end)))
 
     (define/public (final! who buf start end)
@@ -176,13 +171,13 @@
 
 (define cipher-impl%
   (class* object% (cipher-impl<%>)
-    (init-field spec keylen blocklen [ivlen blocklen])
+    (init-field spec blocklen ivlen cmd)
     (super-new)
 
-    (define/public (get-name) spec)
-    (define/public (get-key-size) keylen)
+    (define/public (get-spec) spec)
     (define/public (get-block-size) blocklen)
     (define/public (get-iv-size) ivlen)
+    (define/public (get-cmd) cmd)
 
     (define/public (new-ctx who key iv enc? pad?)
       (new cipher-ctx% (impl this) (key key) (iv iv) (enc? enc?) (pad? pad?)))
@@ -197,7 +192,7 @@
 
     (define/override (get-openssl-args)
       (list* "enc"
-             (format "-~a" (send impl get-name))
+             (format "-~a" (send impl get-cmd))
              (if enc? "-e" "-d")
              "-bufsize" "1"
              "-K" (bytes->string/latin-1 (hex key))
@@ -237,6 +232,7 @@ Since most openssl commands take keys as filenames, we write keys to temp files.
 {read,write}-key uses PEM format instead of DER
 FIXME: check again whether DER available in older versions
 |#
+
 
 (define pkey-impl%
   (class* object% (pkey-impl<%>)
@@ -352,6 +348,7 @@ FIXME: check again whether DER available in older versions
 
 ;; ============================================================
 
+#|
 (require "../common/digest.rkt"
          "../common/cipher.rkt"
          "../common/pkey.rkt")
@@ -363,36 +360,45 @@ FIXME: check again whether DER available in older versions
 (define key00 #"keyAkey\0keyCkeyD")
 (define iv16  #"ivIVivIVivIVivIV")
 (define data  #"hello goodbye")
+|#
 
-(define (di name size block-size)
-  (new digest-impl% (name name) (size size) (block-size block-size)))
+(define (di spec cmd)
+  (match (hash-ref known-digests spec #f)
+    [(list size block-size)
+     (new digest-impl% (spec spec) (cmd cmd) (size size) (block-size block-size))]))
 
-(define digest:md5 (di "md5" 16 64))
-(define digest:ripemd160 (di "rmd160" 20 64))
-(define digest:dss1 (di "dss1" 20 64))
-(define digest:sha1 (di "sha1" 20 64))
-(define digest:sha224 (di "sha224" 28 64))
-(define digest:sha256 (di "sha256" 32 64))
-(define digest:sha384 (di "sha384" 48 128))
-(define digest:sha512 (di "sha512" 64 128))
+(define digests
+  '([md5 "md5"]
+    [ripemd160 "rmd160"]
+    [sha1 "sha1"]
+    [sha224 "sha224"]
+    [sha256 "sha256"]
+    [sha384 "sha384"]
+    [sha512 "sha512"]))
 
-(define (ci name keylen blocklen ivlen)
-  (new cipher-impl% (name name) (keylen keylen) (blocklen blocklen) (ivlen ivlen)))
+(define (ci spec cmd/s)
+  (if (list? cmd/s)
+      (new multikeylen-cipher-impl%
+           (spec spec)
+           (impls (for/list ([len+cmd cmd/s])
+                    (cons (car len+cmd)
+                          (ci spec (cdr len+cmd))))))
+      (new cipher-impl%
+           (spec spec)
+           (cmd cmd/s)
+           (blocklen (cipher-spec-block-size spec))
+           (ivlen (cipher-spec-iv-size spec)))))
 
-(define cipher:aes-128-cbc (ci "aes-128-cbc" 16 16 16))
-(define cipher:aes-128-ecb (ci "aes-128-ecb" 16 16 #f))
-(define cipher:aes-128     cipher:aes-128-cbc)
+(define ciphers
+  '([aes (ecb cbc) (128 192 256)]))
 
-(define cipher:aes-192-cbc (ci "aes-192-cbc" 24 16 16))
-(define cipher:aes-192-ecb (ci "aes-192-ecb" 24 16 #f))
-(define cipher:aes-192     cipher:aes-192-cbc)
+(define pkey:rsa 'fixme-rsa)
+(define pkey:dsa 'fixme-dsa)
 
-(define cipher:aes-256-cbc (ci "aes-256-cbc" 32 16 16))
-(define cipher:aes-256-ecb (ci "aes-256-ecb" 32 16 #f))
-(define cipher:aes-256     cipher:aes-256-cbc)
-
+#|
 (define pkey:rsa (new pkey-impl% (sys 'rsa)))
 (define pkey:dsa (new pkey-impl% (sys 'dsa)))
+|#
 
 ;; ============================================================
 
@@ -451,16 +457,24 @@ FIXME: check again whether DER available in older versions
     (super-new)
 
     (define/public (get-digest-by-name name)
-      (cond [(dict-ref digest-info name #f)
-             => (lambda (s+bs)
-                  (di name (car s+bs) (cadr s+bs)))]
+      (cond [(assq name digests)
+             => (lambda (entry)
+                  (di name (cadr entry)))]
             [else #f]))
 
-    (define/public (get-cipher-by-name name)
-      (cond [(dict-ref cipher-info name #f)
-             => (lambda (ks+bs+ivs)
-                  (apply ci name ks+bs+ivs))]
-            [else #f]))
+    (define/public (get-cipher-by-name spec)
+      (match spec
+        [(list name mode)
+         (cond [(assq name ciphers)
+                => (lambda (entry)
+                     (match entry
+                       [(list _ modes keylens)
+                        (and (memq mode modes)
+                             (ci spec (for/list ([keylen keylens])
+                                        (cons (quotient keylen 8)
+                                              (format "~a-~a-~a" name keylen mode)))))]
+                       [_ #f]))]
+               [else #f])]))
 
     (define/public (get-pkey-by-name name)
       (case name

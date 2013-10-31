@@ -20,6 +20,7 @@
          racket/string
          ffi/unsafe
          "../common/interfaces.rkt"
+         "../common/common.rkt"
          "../common/catalog.rkt"
          "digest.rkt"
          "cipher.rkt"
@@ -170,12 +171,12 @@ To print all ciphers:
       (cond [(hash-ref cipher-table spec #f)
              => values]
             [(match spec
-               [(list 'stream (? symbol? name-sym))
+               [(list (? symbol? name-sym) 'stream)
                 (match (assq name-sym libcrypto-ciphers)
                   [(list name-sym '(stream) #f name-string)
                    (EVP_get_cipherbyname name-string)]
                   [_ #f])]
-               [(list (? symbol? mode) (? symbol? name-sym))
+               [(list (? symbol? name-sym) (? symbol? mode))
                 (match (assq name-sym libcrypto-ciphers)
                   [(list name-sym modes keys name-string)
                    (and (memq mode modes)

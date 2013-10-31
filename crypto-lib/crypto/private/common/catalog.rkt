@@ -151,7 +151,7 @@
     [(list (? symbol? cipher-name) 'stream)
      (and (hash-ref known-stream-ciphers cipher-name #f) #t)]
     [(list (? symbol? cipher-name) (? block-mode?))
-     (and (hash-ref known-block-ciphers cipher-name #f) #f)]
+     (and (hash-ref known-block-ciphers cipher-name #f) #t)]
     [_ #f]))
 
 ;; ----------------------------------------

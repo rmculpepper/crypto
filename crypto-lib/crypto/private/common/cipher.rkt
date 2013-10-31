@@ -102,14 +102,14 @@
 ;; ----
 
 (define (-get-spec o)
-  (cond [(digest-spec? o) o]
+  (cond [(cipher-spec? o) o]
         [(is-a? o cipher-impl<%>)
          (send o get-spec)]
         [(is-a? o cipher-ctx<%>)
          (send (send o get-impl) get-spec)]))
 
 (define (-get-impl who o)
-  (cond [(digest-spec? o)
+  (cond [(cipher-spec? o)
          (or (get-cipher o)
              (error who "could not get cipher implementation\n  cipher: ~e" o))]
         [(is-a? o cipher-impl<%>) o]
