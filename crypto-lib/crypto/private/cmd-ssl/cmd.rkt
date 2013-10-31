@@ -93,12 +93,13 @@
 
 (define digest-impl%
   (class* object% (digest-impl<%>)
-    (init-field name
+    (init-field spec
+                cmd
                 size
                 block-size)
     (super-new)
 
-    (define/public (get-spec) name)
+    (define/public (get-spec) spec)
     (define/public (get-size) size)
     (define/public (get-block-size) block-size)
 
@@ -111,14 +112,14 @@
 
     (define/public (can-digest-buffer!?) #t)
     (define/public (digest-buffer! who buf start end outbuf outstart)
-      (let ([md (openssl "dgst" (format "-~a" name) "-binary"
+      (let ([md (openssl "dgst" (format "-~a" cmd) "-binary"
                          #:in (subbytes buf start end))])
         (bytes-copy! outbuf outstart md)
         (bytes-length md)))
 
     (define/public (can-hmac-buffer!?) #t)
     (define/public (hmac-buffer! who key buf start end outbuf outstart)
-      (let ([md (openssl "dgst" (format "-~a" name) "-binary"
+      (let ([md (openssl "dgst" (format "-~a" cmd) "-binary"
                          "-hmac" key #:in (subbytes buf start end))])
         (bytes-copy! outbuf outstart md)
         (bytes-length md)))
@@ -157,7 +158,7 @@
         (if hmac-key
             (send impl hmac-buffer! who hmac-key
                   content 0 (bytes-length content) buf start)
-            (send impl digest-buffer who
+            (send impl digest-buffer! who
                   content 0 (bytes-length content) buf start))))
 
     (define/public (copy who)
