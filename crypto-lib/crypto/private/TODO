@@ -1,8 +1,9 @@
 To Do
 =====
 
-- new API for sign/verify
+- doc: how to get impls from specs
 - nettle factory
+- new API for sign/verify
 
 - sections for Password Hashing
   - pbkdf2
@@ -10,7 +11,6 @@ To Do
 
 - ciphers: track bytes encrypted, better space checking
 
-- better way to request digests/ciphers/etc
 - add error checking and reporting code to libgcrypt impls
 - update tests
 - update docs
