@@ -24,9 +24,11 @@
          "error.rkt")
 (provide
  (contract-out
-  [cipher-block-size
+  [cipher-default-key-size
    (-> (or/c cipher/c cipher-ctx?) nat?)]
-  [cipher-key-size
+  [cipher-key-sizes
+   (-> (or/c cipher/c cipher-ctx?) (or/c (listof nat?) varies?))]
+  [cipher-block-size
    (-> (or/c cipher/c cipher-ctx?) nat?)]
   [cipher-iv-size
    (-> (or/c cipher/c cipher-ctx?) nat?)]
@@ -80,7 +82,7 @@
   ;;       output-port?)]
 
   [cipher-generate-key
-   (-> cipher/c key/c)]
+   (->* [cipher/c] [nat?] key/c)]
   [cipher-generate-iv
    (-> cipher/c iv/c)]))
 
@@ -105,10 +107,31 @@
         [(is-a? o cipher-ctx<%>) (send o get-impl)]
         [else (error who "bad cipher specification\n  cipher: ~e" o)]))
 
+(define MIN-DEFAULT-KEY-SIZE 128)
+
+(define (cipher-default-key-size o)
+  (define allowed (send (-get-impl 'cipher-default-key-size o #t) get-key-sizes))
+  (cond [(list? allowed)
+         (or (for/or ([size (in-list allowed)] #:when (>= size MIN-DEFAULT-KEY-SIZE)) size)
+             (max allowed))]
+        [(varies? allowed)
+         (let* ([minks (varies-min allowed)]
+                [maxks (varies-max allowed)]
+                [step (varies-step allowed)]
+                [diff (- MIN-DEFAULT-KEY-SIZE minks)]
+                [diff-steps (quotient diff step)]
+                [best-default (+ MIN-DEFAULT-KEY-SIZE
+                                 (* step diff-steps)
+                                 (if (zero? (remainder diff step)) step 0))])
+           (cond [(<= minks best-default maxks)
+                  best-default]
+                 [else maxks]))]))
+
+(define (cipher-key-sizes o)
+  (send (-get-impl 'cipher-key-size o #t) get-key-sizes))
+
 (define (cipher-block-size o)
   (send (-get-impl 'cipher-block-size o #t) get-block-size))
-(define (cipher-key-size o)
-  (send (-get-impl 'cipher-key-size o #t) get-key-size))
 (define (cipher-iv-size o)
   (send (-get-impl 'cipher-iv-size o #t) get-iv-size))
 
@@ -273,7 +296,7 @@
 
 ;; ----
 
-(define (cipher-generate-key ci)
+(define (cipher-generate-key ci [size (cipher-default-key-size ci)])
   ;; FIXME: any way to check for weak keys, avoid???
   (let ([ci (-get-impl 'cipher-generate-key ci #f)])
     (send ci generate-key)))

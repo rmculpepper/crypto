@@ -14,7 +14,9 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require racket/class)
+(require racket/class
+         racket/string
+         racket/match)
 (provide impl<%>
          ctx<%>
          factory<%>
@@ -25,6 +27,12 @@
          cipher-ctx<%>
          pkey-impl<%>
          pkey-ctx<%>
+
+         (struct-out varies)
+         known-digests
+         known-block-modes
+         known-block-ciphers
+         known-stream-ciphers
 
          factory?
          digest-spec?
@@ -79,33 +87,32 @@
 (define (factory? x) (is-a? x factory<%>))
 
 ;; A DigestSpec is a symbol in domain of known-digests.
-;; A CipherSpec is a symbol in domain of known-cipher-names.
 
 (define known-digests
   ;; References:
   ;;  - http://en.wikipedia.org/wiki/Cryptographic_hash_function
   ;; An entry is of form (list name-symbol hash-size-bits block-size-bits)
-  '#hasheq(;; symbol  -> (Hash Block)   -- sizes in bits
-           [gost           256  256]
-           [md2            128  128]
-           [md4            128  512]
-           [md5            128  512]
-           [ripemd         128  512]
-           [ripemd128      128  512]
-           [ripemd256      256  512]
-           [ripemd160      160  512]
-           [ripemd320      320  512]
-           [tiger2-128     128  512]
-           [tiger2-160     160  512]
-           [tiger2-192     192  512]
+  '#hasheq(;; symbol  ->   [Hash  Block]   -- sizes in bits
+           [gost        .  [ 256  256 ]]
+           [md2         .  [ 128  128 ]]
+           [md4         .  [ 128  512 ]]
+           [md5         .  [ 128  512 ]]
+           [ripemd      .  [ 128  512 ]]
+           [ripemd128   .  [ 128  512 ]]
+           [ripemd256   .  [ 256  512 ]]
+           [ripemd160   .  [ 160  512 ]]
+           [ripemd320   .  [ 320  512 ]]
+           [tiger2-128  .  [ 128  512 ]]
+           [tiger2-160  .  [ 160  512 ]]
+           [tiger2-192  .  [ 192  512 ]]
            ;; Note: 3 versions: Whirlpool-0 (2000), Whirlpool-T (2001), Whirlpool (2003)
-           [whirlpool      512  512] 
-           [sha0           160  512]
-           [sha1           160  512]
-           [sha224         224  512]
-           [sha256         256  512]
-           [sha384         384  1024]
-           [sha512         512  1024]
+           [whirlpool   .  [ 512  512 ]] 
+           [sha0        .  [ 160  512 ]]
+           [sha1        .  [ 160  512 ]]
+           [sha224      .  [ 224  512 ]]
+           [sha256      .  [ 256  512 ]]
+           [sha384      .  [ 384  1024 ]]
+           [sha512      .  [ 512  1024 ]]
 
            ;; Many recent hash algorithms can be configured to produce a wide
            ;; range of output sizes, and some have additional parameters.
@@ -125,95 +132,123 @@
 (define (digest-spec? x)
   (and (hash-ref known-digests x #f) #t))
 
+;; AllowedKeys is one of
+;;  - (list key-size-nat ...+)
+;;  - #s(varies min-nat max-nat step-nat)
+(define-struct varies (min max step) #:prefab)
+
 (define known-block-ciphers
   ;; References: http://www.users.zetnet.co.uk/hopwood/crypto/scan/cs.html
   ;; AllowedKeys is one of
-  ;;  - (list size ...)
-  ;;  - #('variable min max step default)
+  ;;  - (list size ...+)
+  ;;  - (vector 'variable min max step)
   '#hasheq(;; symbol  -> (Block AllowedKeys)   -- sizes in bits
-           [aes           128   (128 192 256)]
-           [des           64    (56)]      ;; key expressed as 64-bits w/ parity bits
-           [des-ede2      64    (112)]     ;; key expressed as 128 bits w/ parity bits
-           [des-ede3      64    (168)]     ;; key expressed as 192 bits w/ parity bits
-           [blowfish      64    #(variable 32 448 8 128)]
-           [cast128       64    #(variable 40 128 8 128)]
-           [camellia      128   (128 192 256)]
-           [idea          64    (128)]
-           [rc5           64    #(variable 0 2040 8 128)]
-           [rc5-64        128   #(variable 0 2040 8 128)]
-           [rc6-64        256   #(variable 0 2040 8 128)]
-           [cast256       128   #(variable 128 256 32 128)]
+           [aes        .  [ 128   (128 192 256)]]
+           [des        .  [ 64    (56)]]      ;; key expressed as 64-bits w/ parity bits
+           [des-ede2   .  [ 64    (112)]]     ;; key expressed as 128 bits w/ parity bits
+           [des-ede3   .  [ 64    (168)]]     ;; key expressed as 192 bits w/ parity bits
+           [blowfish   .  [ 64    #s(varies 32 448 8)]]
+           [cast128    .  [ 64    #s(varies 40 128 8)]]
+           [camellia   .  [ 128   (128 192 256)]]
+           [idea       .  [ 64    (128)]]
+           [rc5        .  [ 64    #s(varies 0 2040 8)]]
+           [rc5-64     .  [ 128   #s(varies 0 2040 8)]]
+           [rc6-64     .  [ 256   #s(varies 0 2040 8)]]
+           [cast256    .  [ 128   #s(varies 128 256 32)]]
            ;; AES finalists
-           [serpent       128   #(variable 0 256 8 128)]
-           [twofish       128   #(variable 8 256 8 128)]
-           [rc6           128   #(variable 0 2040 8 128)]
-           [mars          128   #(variable 128 448 32 128)] ;; aka Mars-2 ???
+           [serpent    .  [ 128   #s(varies 0 256 8)]]
+           [twofish    .  [ 128   #s(varies 8 256 8)]]
+           [rc6        .  [ 128   #s(varies 0 2040 8)]]
+           [mars       .  [ 128   #s(varies 128 448 32)]] ;; aka Mars-2 ???
            ))
+
+(define known-stream-ciphers
+  '#hasheq(;; symbol  ->  IV  AllowedKeys      -- sizes in bits
+           [rc4        .  [ 0   #s(varies 40 2048 8)]]
+           [salsa20    .  [ 64  (256)]]
+           [salsa20/8  .  [ 64  (256)]]
+           [salsa20/12 .  [ 64  (256)]]
+           ))
+
+;; Mode effects:
+;;   ecb: iv=none,    block same, 0 added
+;;   cbc: iv=1 block, block same, 0 added
+;;   ofb: iv=1 block, stream cipher, 0 added
+;;   cfb: iv=1 block, stream cipher, 0 added
+;;   ctr: iv=1 block, stream cipher, 0 added
+;;   gcm: iv=???, ???                                -- FIXME
+;;   ccm: NOTE: offline/nonincremental: needs length before starting; don't support
+(define known-block-modes '(ecb cbc ofb cfb ctr gcm))
 
 ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ;; TODO
 ;;  - change cipher-impl to leave key-size unfixed; only need
 ;;    when creating ctx or calling encrypt/decrypt
-;;  - key-size-ok? : CipherName Nat -> Boolean
-;;  - check-key-size : CipherName Nat -> void or error
-
-(define known-stream-ciphers
-  '#hasheq(;; symbol  ->  IV  AllowedKeys      -- sizes in bits
-           [rc4           0   #(variable 40 2048 8 128)]
-           [salsa20       64  (256)]
-           [salsa20/8     64  (256)]
-           [salsa20/12    64  (256)]
-           ))
 
 (define known-ciphers-abbrev
   '#hasheq(;; symbol -> CipherSpec
-           [aes-128-cbc (cbc aes 128)]
-           [aes-192-cbc (cbc aes 192)]
-           [aes-256-cbc (cbc aes 256)]
-           [aes-128-ctr (ctr aes 128)]
-           [aes-192-ctr (ctr aes 192)]
-           [aes-256-ctr (ctr aes 256)]))
+           ))
 
-;; Mode effects:
-;;   ecb: iv=none,    block same
-;;   cbc: iv=1 block, block same
-;;   ofb: iv=1 block, stream cipher
-;;   cfb: iv=1 block, stream cipher
-;;   ctr: iv=1 block, stream cipher
-;;   gcm: iv=???, ???                                -- FIXME
-(define known-block-modes '(ecb cbc ofb cfb ctr gcm))
+;; bad-key-size : CipherName Nat -> (U #f '() AllowedKeys)
+;; #f means ok; '() means unknown cipher; AllowedKeys means given size not allowed
+(define (bad-key-size cipher-name key-size)
+  (let* ([entry (or (hash-ref known-block-ciphers cipher-name #f)
+                    (hash-ref known-stream-ciphers cipher-name #f))]
+         [allowed (and entry (cadr entry))])
+    (cond [(list? allowed)
+           (if (member key-size allowed) #f allowed)]
+          [(varies? allowed)
+           (if (and (<= (varies-min allowed) key-size (varies-max allowed))
+                    (zero? (quotient (- key-size (varies-min allowed))
+                                     (varies-step allowed))))
+               #f
+               allowed)]
+          [else '()])))
+
+;; key-size-ok? : CipherName Nat -> Boolean
+(define (key-size-ok? cipher-name key-size)
+  (not (bad-key-size cipher-name key-size)))
+
+;; check-key-size : symbol CipherName Nat -> void or error
+(define (check-key-size who cipher-name key-size)
+  (let* ([allowed (bad-key-size cipher-name key-size)])
+    (cond [(eq? allowed #f) (void)]
+          [(eq? allowed '())
+           (error who "unknown cipher\n  cipher: ~e" cipher-name)]
+          [(list? allowed)
+           (error who
+                  "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
+                  cipher-name
+                  key-size
+                  (string-join (map number->string allowed) ", "))]
+          [(varies? allowed)
+           (error who
+                  "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
+                  cipher-name
+                  key-size
+                  (format "from ~a to ~a in multiples of ~a"
+                          (varies-min allowed)
+                          (varies-max allowed)
+                          (varies-step allowed)))])))
 
 ;; A CipherSpec is one of
-;;  - a symbol in known-ciphers-abbrev
-;;  - (list* 'stream CipherName)
-;;  - (list* BlockMode CipherName KeySpec)
+;;  - a symbol in the domain of known-ciphers-abbrev
+;;  - (list 'stream StreamCipherName)
+;;  - (list BlockMode BlockCipherName)
 ;; BlockMode is one of 'ecb, 'cbc, 'cfb, 'ofb, 'ctr.
-;; CipherName is a symbol in the domain od known-block-ciphers.
-;; KeySpec is one of
-;;  - '()
-;;  - (list Nat)
+;; BlockCipherName is a symbol in the domain of known-block-ciphers,
+;; StreamCipherName is a symbol in the domain of known-stream-ciphers.
 
 (define (cipher-spec? x)
-  (cond [(symbol? x)
-         (and (hash-ref known-ciphers-abbrev #f) #t)]
-        [(and (pair? x) (eq? (car x) 'stream))
-         (match (cdr x)
-           [(list cipher-name)
-            (and (hash-ref known-stream-ciphers cipher-name #f) #t)]
-           [_ #f])]
-        [(and (pair? x) (memq (car x) known-block-modes))
-         (match (cdr x)
-           [(list cipher-name)
-            (and (hash-ref known-block-ciphers cipher-name #f) #t)]
-           [(list cipher-name key-size)
-            (let ([entry (hash-ref known-block-ciphers cipher-name #f)])
-              (and entry
-                   (key-size-matches? key-size (cadr entry))))]
-           [_ #f])]
-        [else #f]))
-
-(define (key-size-matches? size allowed-sizes)
-  (if (list? 
+  (match x
+    [(? symbol?)
+     (and (hash-ref known-ciphers-abbrev #f) #t)]
+    [(list 'stream (? symbol? cipher-name))
+     (and (hash-ref known-stream-ciphers cipher-name #f) #t)]
+    [(list (? (lambda (s) (memq s known-block-modes)))
+           (? symbol? cipher-name))
+     (and (hash-ref known-block-ciphers cipher-name #f) #f)]
+    [_ #f]))
 
 
 ;; ============================================================
@@ -260,19 +295,19 @@
 
 ;; PadMode = (U #f #t)
 ;;  - #f means no padding
-;;  - #t means PKCS7 (in practice, same as PKCS5)
+;;  - #t means PKCS7 for block ciphers, none for stream
 ;; Maybe support more padding modes in future?
 
 (define cipher-impl<%>
   (interface (impl<%>)
     get-name       ;; -> any -- eg, "AES-128", "DES-EDE" (???)
-    get-key-size   ;; -> nat
+    get-key-sizes  ;; -> AllowedKeys
     get-block-size ;; -> nat
     get-iv-size    ;; -> nat/#f
 
     new-ctx         ;; sym bytes bytes/#f boolean PadMode -> cipher-ctx<%>
                     ;; who key   iv       enc?    pad
-    generate-key    ;; -> bytes
+    generate-key    ;; [nat] -> bytes
     generate-iv     ;; -> bytes/#f
     ))
 

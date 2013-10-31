@@ -34,7 +34,7 @@
 (define digest-impl%
   (class* object% (digest-impl<%>)
     (init-field md    ;; EVP_MD
-                name) ;; symbol
+                name) ;; DigestSpec (symbol)
     (define size (EVP_MD_size md))
     (define hmac-impl #f)
     (super-new)

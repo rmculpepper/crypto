@@ -124,6 +124,11 @@
 (define-crypto EVP_get_digestbyname
   (_fun _string -> _EVP_MD/null))
 
+(define-crypto EVP_MD_do_all_sorted
+  (_fun (_fun _EVP_MD/null _string _string #| _pointer |# -> _void)
+        (_pointer = #f)
+        -> _void))
+
 (define-crypto EVP_MD_size (_fun _EVP_MD -> _int))
 (define-crypto EVP_MD_block_size (_fun _EVP_MD -> _int))
 
@@ -226,6 +231,11 @@
 
 (define-crypto EVP_get_cipherbyname
   (_fun _string -> _EVP_CIPHER/null))
+
+(define-crypto EVP_CIPHER_do_all_sorted
+  (_fun (_fun _EVP_CIPHER/null _string _string #| _pointer |# -> _void)
+        (_pointer = #f)
+        -> _void))
 
 ;; libcrypto < 0.9.8.d doesn't have EVP_CIPHER_CTX_new/free
 (define-crypto EVP_CIPHER_CTX_free

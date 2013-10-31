@@ -16,6 +16,7 @@
 
 #lang racket/base
 (require racket/class
+         racket/match
          racket/string
          ffi/unsafe
          "../common/interfaces.rkt"
@@ -26,11 +27,63 @@
          "macros.rkt")
 (provide ssl-factory)
 
-(define all-digest-names
-  '(md5 ripemd160 sha1 sha224 sha256 sha384 sha512))
+#|
+To print all digests:
+
+(EVP_MD_do_all_sorted
+ (lambda (m from to)
+   (if m
+       (printf "digest ~s\n" from)
+       (printf "alias ~s => ~s\n" from to))))
+
+To print all ciphers:
+
+(EVP_CIPHER_do_all_sorted
+ (lambda (c from to)
+   (if c
+       (printf "cipher ~s\n" from)
+       (printf "alias ~s => ~s\n" from to))))
+|#
+
+(define libcrypto-digests
+  #hasheq(;; DigestSpec -> String
+          ;; Maps to name for EVP_get_digestbyname
+          [md4       . "md4"]
+          [md5       . "md5"]
+          [ripemd160 . "ripemd160"]
+          [sha0      . "sha"]
+          [sha1      . "sha1"]
+          [sha224    . "sha224"]
+          [sha256    . "sha256"]
+          [sha384    . "sha384"]
+          [sha512    . "sha512"]))
+
+(define libcrypto-ciphers
+  '(;; [CipherName Modes KeySizes String]
+    ;; keys=#f means inherit constraints, don't add to string
+    [aes (cbc cfb cfb1 cfb8 ctr ecb gcm ofb xts) (128 192 256) "aes"]
+    [blowfish (cbc cfb ecb ofb) #f "bf"]
+    [camellia (cbc cfb cfb1 cfb8 ecb ofb) (128 192 256) "camellia"]
+    [cast128 (cbc cfb ecb ofb) #f "cast5"]
+    [des (cbc cfb cfb1 cfb8 ecb ofb) #f "des"]
+    [des-ede2 (cbc cfb ofb) #f "des-ede"] ;; ECB mode???
+    [des-ede3 (cbc cfb ofb) #f "des-ede3"] ;; ECB mode???
+    [rc4 (stream) #f "rc4"]))
+
+;; cross : (U string (listof string)) ... -> (listof string)
+(define (cross . parts)
+  (let cross* ([parts parts] [rprefix null])
+    (cond [(null? parts)
+           (list (apply string-append (reverse rprefix)))]
+          [(string? (car parts))
+           (cross* (cdr parts) (cons (car parts) rprefix))]
+          [(list? (car parts))
+           (apply append
+                  (for/list ([next (in-list (car parts))])
+                    (cross* (cdr parts) (cons next rprefix))))])))
 
 ;; FIXME: des-ede-ecb, des-ede3-ecb ???
-(define all-cipher-names
+(define libcrypto-cipher-names
   '(aes-128-cbc    aes-128-ecb
     aes-192-cbc    aes-192-ecb
     aes-256-cbc    aes-256-ecb
@@ -97,25 +150,43 @@
     (super-new)
 
     (define digest-table (make-hasheq))
-    (define cipher-table (make-hasheq))
+    (define cipher-table (make-hash))
 
     (define/private (intern-digest name-sym)
       (cond [(hash-ref digest-table name-sym #f)
              => values]
-            [(EVP_get_digestbyname (symbol->string name-sym))
+            [(let ([name-string (hash-ref libcrypto-digests name-sym #f)])
+               (and name-string (EVP_get_digestbyname name-string)))
              => (lambda (md)
                   (let ([di (new digest-impl% (md md) (name name-sym))])
                     (hash-set! digest-table name-sym di)
                     di))]
             [else #f]))
 
-    (define/private (intern-cipher name-sym)
-      (cond [(hash-ref cipher-table name-sym #f)
+    (define/private (intern-cipher spec)
+      (cond [(hash-ref cipher-table spec #f)
              => values]
-            [(EVP_get_cipherbyname (symbol->string name-sym))
-             => (lambda (cipher)
-                  (let ([ci (new cipher-impl% (cipher cipher) (name name-sym))])
-                    (hash-set! cipher-table name-sym ci)
+            [(match spec
+               [(list 'stream (? symbol? name-sym))
+                (match (assq name-sym libcrypto-ciphers)
+                  [(list name-sym '(stream) #f name-string)
+                   (EVP_get_cipherbyname name-string)]
+                  [_ #f])]
+               [(list (? symbol? mode) (? symbol? name-sym))
+                (match (assq name-sym libcrypto-ciphers)
+                  [(list name-sym modes keys name-string)
+                   (and (memq mode modes)
+                        (if keys
+                            (filter values
+                                    (for/list ([key (in-list keys)])
+                                      (define s (format "~a-~a-~a" name-string key mode))
+                                      (EVP_get_cipherbyname s)))
+                            (EVP_get_cipherbyname (format "~a-~a" name-string mode))))]
+                  [_ #f])])
+             => (lambda (cipher/s)
+                  (let* ([ciphers (if (list? cipher/s) cipher/s (list cipher/s))]
+                         [ci (new cipher-impl% (ciphers ciphers) (spec spec))])
+                    (hash-set! cipher-table spec ci)
                     ci))]
             [else #f]))
 
@@ -126,12 +197,6 @@
 
     (define/public (get-cipher-by-name name)
       (intern-cipher name))
-
-    (define/public (get-cipher family param mode)
-      (let* ([parts (for/list ([p (list family param mode)] #:when p)
-                      (string-downcase (format "~a")))]
-             [name (string->symbol (string-join parts "-"))])
-        (intern-cipher name)))
 
     (define/public (get-pkey-by-name name-sym)
       (hash-ref pkey-table name-sym #f))

@@ -47,7 +47,7 @@
        bytes?)]
   [make-hmac-ctx
    (-> digest/c bytes? digest-ctx?)]
-  [hmac-generate-key
+  [generate-hmac-key
    (-> digest/c bytes?)]))
 (provide -digest-port*) ;; for pkey.rkt
 
@@ -175,6 +175,6 @@
                (send hctx update! 'hmac buf 0 count)
                (loop)])))))
 
-(define (hmac-generate-key di)
-  (let ([di (-get-impl 'hmac-generate-key di #f)])
+(define (generate-hmac-key di)
+  (let ([di (-get-impl 'generate-hmac-key di #f)])
     (send di generate-hmac-key)))

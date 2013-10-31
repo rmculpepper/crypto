@@ -1,6 +1,8 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
+          racket/list
+          crypto/private/common/interfaces
           (for-label racket/base
                      racket/contract
                      crypto))
@@ -10,15 +12,18 @@
 A @deftech{message digest} function (sometimes called a
 @deftech{cryptographic hash} function) maps variable-length (and
 potentially long) messages to fixed-length (and relatively short)
-digests. For a good digest function, it is infeasible to find a
+digests. @;{For a good digest function, it is infeasible to find a
 preimage of a given digest; that is, given an output, it is very hard
-to find a corresponding input.
+to find a corresponding input.} Different digest functions, or
+algorithms, compute digests of different sizes and have different
+characteristics that may affect their security.
 
-Different digest functions, or algorithms, compute digests of
-different sizes and have different characteristics that may affect
-their security. Examples of digest functions include SHA1, SHA256, and
-SHA512. SHA1 computes an 160-bit (20-byte) digest; SHA256 computes a
-256-bit digest; and SHA512 computes a 512-bit digest.
+@emph{Take care when choosing a digest for new development.}  Several
+of the digests listed available through this library are now
+considered insecure or broken. At the time of this writing (October
+2013), the safest choices are probably the SHA2 family
+(@racket['sha224], @racket['sha256], @racket['sha384], and
+@racket['sha512]).
 
 The HMAC (``Hash-based Message Authentication Code'') construction
 combines a digest function together with a secret key. A Message
@@ -36,13 +41,14 @@ Returns @racket[#f] if @racket[v] represents a @tech{digest
 specification}, @racket[#f] otherwise.
 
 A @deftech{digest specification} is a symbol, which is interpreted as
-the name of a digest. Examples include @racket['sha1] and
-@racket['sha512]. Another example is @racket['no-such-digest]---any
-symbol is allowed; it is up to a specific cryptography provider to
-determine whether it maps to a @tech{digest implementation}.
-
-@;{FIXME: better to have known set of digests, then guarantee that
-any spec maps to set of compatible impls???}
+the name of a digest. The following symbols are valid:
+@(let ([digest-names (sort (hash-keys known-digests) symbol<?)])
+   (add-between (for/list ([digest-name digest-names])
+                  (racket '#,(racketvalfont (format "~a" digest-name))))
+                ", ")).
+Not every digest name in the list above may have an available
+@tech[#:key "digest implementation"]{implementation}, depending on the
+cryptography providers installed.
 
 Future versions of this library may add other forms of digest
 specifications.
@@ -54,26 +60,26 @@ Returns @racket[#f] if @racket[v] represents a @deftech{digest
 implementation}, @racket[#f] otherwise.
 }
 
-@defproc[(digest-size [di (or/c digest-impl? digest-ctx?)])
+@defproc[(digest-size [di (or/c digest-spec? digest-impl? digest-ctx?)])
          exact-positive-integer?]{
 
 Returns the size in bytes of the digest computed by the algorithm
 represented by @racket[di].
 }
 
-@defproc[(digest-block-size [d (or/c digest-impl? digest-ctx?)])
+@defproc[(digest-block-size [di (or/c digest-spec? digest-impl? digest-ctx?)])
          exact-positive-integer?]{
 
 Returns the size in bytes of the digest's internal block size. This
 information is generally not needed by applications, but some
-constructions (for example, HMAC) are defined in terms of a digest
+constructions (such as HMAC) are defined in terms of a digest
 function's block size.
 }
 
 
 @section{High-level Digest Functions}
 
-@defproc[(digest [di digest-impl?]
+@defproc[(digest [di (or/c digest-spec? digest-impl?)]
                  [input (or/c bytes? string? input-port?)])
          bytes?]{
 
@@ -86,7 +92,7 @@ contents are read until until it produces @racket[eof], but the port
 is not closed.
 }
 
-@defproc[(hmac [di digest-impl?]
+@defproc[(hmac [di (or/c digest-spec? digest-impl?)]
                [key bytes?]
                [input (or/c bytes? string? input-port?)])
          bytes?]{
@@ -100,7 +106,7 @@ security of the key is limited to @racket[(digest-block-size di)].
 
 @section{Low-level Digest Functions}
 
-@defproc[(make-digest-ctx [di digest-impl?])
+@defproc[(make-digest-ctx [di (or/c digest-spec? digest-impl?)])
          digest-ctx?]{
 
 Creates a @deftech{digest context} for the digest function represented
@@ -108,7 +114,7 @@ by @racket[di]. A digest context can be incrementally updated with
 message data.
 }
 
-@defproc[(digest-ctx?  [v any/c]) boolean?]{
+@defproc[(digest-ctx? [v any/c]) boolean?]{
 
 Returns @racket[#t] if @racket[v] is a @tech{digest context},
 @racket[#f] otherwise.
@@ -147,7 +153,7 @@ Returns the digest without closing @racket[dctx], or @racket[#f] if
 @racket[dctx] does not support copying.
 }
 
-@defproc[(make-hmac-ctx [di digest-impl?]
+@defproc[(make-hmac-ctx [di (or/c digest-spec? digest-impl?)]
                         [key bytes?])
          digest-ctx?]{
 
@@ -156,7 +162,7 @@ parameterized over the digest @racket[di] and using the secret key
 @racket[key].
 }
 
-@defproc[(generate-hmac-key [di digest-impl?])
+@defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
          bytes?]{
 
 Generate a random secret key appropriate for HMAC parameterized over

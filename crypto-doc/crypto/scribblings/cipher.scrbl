@@ -1,6 +1,8 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
+          racket/list
+          crypto/private/common/interfaces
           (for-label racket/base
                      racket/contract
                      crypto))
@@ -30,8 +32,29 @@ decryption operations and low-level, incremental operations.
 Returns @racket[#t] if @racket[v] represents a @tech{cipher
 specification}, @racket[#f] otherwise.
 
-A @deftech{cipher specification} is a symbol, which is interpreted as
-the name of a cipher.
+A @deftech{cipher specification} is one of the following:
+@itemlist[
+
+@item{@racket[(list 'stream _stream-cipher-symbol)]---where
+@racket[_stream-cipher-symbol] is one of the following:
+@(let ([stream-cipher-names (sort (hash-keys known-stream-ciphers) symbol<?)])
+   (add-between (for/list ([name stream-cipher-names])
+                  (racket '#,(racketvalfont (format "~a" name))))
+                ", ")).}
+
+@item{@racket[(list _block-mode _block-cipher-symbol)]---where 
+@racket[_block-mode] is one of the following: 
+@(add-between (for/list ([mode known-block-modes])
+                (racket '#,(racketvalfont (format "~a" mode))))
+              ", "),
+and @racket[_block-cipher-symbol] is one of the following:
+@(let ([block-cipher-names (sort (hash-keys known-block-ciphers) symbol<?)])
+   (add-between (for/list ([name block-cipher-names])
+                  (racket '#,(racketvalfont (format "~a" name))))
+                ", ")).
+Note that some modes, such as CTR, convert a block cipher
+into a stream cipher.}
+]
 
 Future versions of this library may add other forms of cipher
 specifications.

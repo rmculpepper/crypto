@@ -31,18 +31,27 @@
 
 (define cipher-impl%
   (class* object% (cipher-impl<%>)
-    (init-field cipher
-                name)
-    (define-values (block-size key-size iv-size)
+    (init-field ciphers ;; non-empty list of EVP_CIPHER
+                spec)  ;; CipherSpec
+    (define-values (block-size key-size iv-size) (get-sizes (car ciphers)))
+    (for ([cipher (in-list (cdr ciphers))])
+      (let-values ([(b k iv) (get-sizes cipher)])
+        (unless (and (= b block-size) (equal? iv iv-size))
+          (error 'libcrypto-cipher-impl%
+                 "inconsistent cipher block or IV sizes\n  cipher: ~e" spec))))
+    (super-new)
+
+    (define/private (get-sizes cipher)
       (match (ptr-ref cipher (_list-struct _int _int _int _int))
         [(list _ size keylen ivlen)
          (values size keylen (and (> ivlen 0) ivlen))]))
-    (super-new)
 
-    (define/public (get-name) name)
+    (define/public (get-name) spec)
     (define/public (get-key-size) key-size)
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)
+
+    (define cipher 'bad-fixme)
 
     (define/public (new-ctx who key iv enc? pad?)
       (unless (and (bytes? key) (>= (bytes-length key) key-size))
