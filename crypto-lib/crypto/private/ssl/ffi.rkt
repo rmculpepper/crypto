@@ -279,10 +279,16 @@
                 olen))
   #:wrap (err-wrap 'EVP_CipherFinal_ex values))
 
+(define-crypto EVP_CIPHER_CTX_set_key_length
+  (_fun _EVP_CIPHER_CTX _int -> _int)
+  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_key_length))
+
+(define-crypto EVP_CIPHER_CTX_ctrl
+  (_fun _EVP_CIPHER_CTX _int _int _bytes -> _int)
+  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_ctrl))
+
 (define-crypto EVP_CIPHER_CTX_set_padding
-  (_fun _EVP_CIPHER_CTX
-        _bool
-        -> _int)
+  (_fun _EVP_CIPHER_CTX _bool -> _int)
   #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_padding))
 
 ;; ============================================================

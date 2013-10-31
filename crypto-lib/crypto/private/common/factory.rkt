@@ -16,7 +16,8 @@
 #lang racket/base
 (require racket/class
          racket/contract
-         "interfaces.rkt")
+         "interfaces.rkt"
+         "catalog.rkt")
 (provide
  (contract-out
   [crypto-factories

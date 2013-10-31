@@ -1,5 +1,6 @@
 #lang racket/base
 (require "private/common/interfaces.rkt"
+         "private/common/catalog.rkt"
          "private/common/factory.rkt"
          "private/common/digest.rkt"
          "private/common/cipher.rkt"

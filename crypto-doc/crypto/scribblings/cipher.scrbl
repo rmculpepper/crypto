@@ -2,7 +2,7 @@
 @(require scribble/manual
           scribble/basic
           racket/list
-          crypto/private/common/interfaces
+          crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
                      crypto))
@@ -44,16 +44,14 @@ A @deftech{cipher specification} is one of the following:
 
 @item{@racket[(list _block-mode _block-cipher-symbol)]---where 
 @racket[_block-mode] is one of the following: 
-@(add-between (for/list ([mode known-block-modes])
+@(add-between (for/list ([mode (map car known-block-modes)])
                 (racket '#,(racketvalfont (format "~a" mode))))
               ", "),
 and @racket[_block-cipher-symbol] is one of the following:
 @(let ([block-cipher-names (sort (hash-keys known-block-ciphers) symbol<?)])
    (add-between (for/list ([name block-cipher-names])
                   (racket '#,(racketvalfont (format "~a" name))))
-                ", ")).
-Note that some modes, such as CTR, convert a block cipher
-into a stream cipher.}
+                ", ")).}
 ]
 
 Future versions of this library may add other forms of cipher
@@ -66,29 +64,36 @@ Returns @racket[#t] if @racket[v] represents a cipher implementation,
 @racket[#f] otherwise.
 }
 
-@defproc[(cipher-block-size [c (or/c cipher-impl? cipher-ctx?)])
+@defproc[(cipher-default-key-size [ci (or/c cipher-spec? cipher-impl?)])
+         exact-nonnegative-integer?]{
+
+Returns the default size in bytes of the secret keys accepted by the
+cipher.
+}
+
+@defproc[(cipher-key-sizes [ci (or/c cipher-spec? cipher-impl?)])
+         (or/c (listof exact-nonnegative-integer?) varies?)]{
+
+Returns the possible sizes in bytes of the secret keys accepted by the
+cipher.
+}
+
+@defproc[(cipher-block-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
          exact-positive-integer?]{
 
 Returns the size in bytes of the blocks manipulated by the cipher. If
 @racket[c] is a stream cipher, returns @racket[1].
 
 A cipher always produces a ciphertext that is a multiple of its block
-size; depending on the cipher's padding mode, a plaintext must either
-be a multiple of the block size, or it will automatically be padded to
-a multiple of the block size.
+size. If a cipher is used without padding, the plaintext must be a
+multiple of the block size.
 }
 
-@defproc[(cipher-key-size [c (or/c cipher-impl? cipher-ctx?)])
-         exact-positive-integer?]{
-
-Returns the size in bytes of the secret key accepted by the cipher.
-}
-
-@defproc[(cipher-iv-size [c (or/c cipher-impl? cipher-ctx?)])
-         (or/c exact-positive-integer? #f)]{
+@defproc[(cipher-iv-size [ci (or/c cipher-impl? cipher-ctx?)])
+         exact-nonnegative-integer?]{
 
 Returns the size in bytes of the IV (initialization vector) accepted
-by the cipher, or @racket[#f] if the cipher does not use an IV.
+by the cipher. Returns @racket[0] if the cipher does not use an IV.
 }
 
 @section{High-level Cipher Operations}

@@ -2,7 +2,7 @@
 @(require scribble/manual
           scribble/basic
           racket/list
-          crypto/private/common/interfaces
+          crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
                      crypto))

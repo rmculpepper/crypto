@@ -18,6 +18,7 @@
 (require racket/class
          racket/contract/base
          "interfaces.rkt"
+         "catalog.rkt"
          "factory.rkt"
          "common.rkt"
          "error.rkt")

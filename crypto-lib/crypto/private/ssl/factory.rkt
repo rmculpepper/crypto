@@ -20,6 +20,7 @@
          racket/string
          ffi/unsafe
          "../common/interfaces.rkt"
+         "../common/catalog.rkt"
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
@@ -60,6 +61,7 @@ To print all ciphers:
 
 (define libcrypto-ciphers
   '(;; [CipherName Modes KeySizes String]
+    ;; Note: key sizes in bits (to match lookup string); converted to bytes below
     ;; keys=#f means inherit constraints, don't add to string
     [aes (cbc cfb cfb1 cfb8 ctr ecb gcm ofb xts) (128 192 256) "aes"]
     [blowfish (cbc cfb ecb ofb) #f "bf"]
@@ -177,17 +179,27 @@ To print all ciphers:
                   [(list name-sym modes keys name-string)
                    (and (memq mode modes)
                         (if keys
-                            (filter values
-                                    (for/list ([key (in-list keys)])
-                                      (define s (format "~a-~a-~a" name-string key mode))
-                                      (EVP_get_cipherbyname s)))
+                            (let ([keylen+evps
+                                   (for/list ([key (in-list keys)])
+                                     (define s (format "~a-~a-~a" name-string key mode))
+                                     (cons (quotient key 8) ;; convert bit size to byte size
+                                           (EVP_get_cipherbyname s)))])
+                              (and (andmap cdr keylen+evps) keylen+evps))
                             (EVP_get_cipherbyname (format "~a-~a" name-string mode))))]
                   [_ #f])])
              => (lambda (cipher/s)
-                  (let* ([ciphers (if (list? cipher/s) cipher/s (list cipher/s))]
-                         [ci (new cipher-impl% (ciphers ciphers) (spec spec))])
-                    (hash-set! cipher-table spec ci)
-                    ci))]
+                  (define ci
+                    (cond [(list? cipher/s)
+                           (new multikeylen-cipher-impl%
+                                (impls (for/list ([keylen+evp (in-list cipher/s)])
+                                         (cons (car keylen+evp)
+                                               (new cipher-impl% (cipher (cdr keylen+evp))
+                                                    (spec spec)))))
+                                (spec spec))]
+                          [else
+                           (new cipher-impl% (cipher cipher/s) (spec spec))]))
+                  (hash-set! cipher-table spec ci)
+                  ci)]
             [else #f]))
 
     ;; ----

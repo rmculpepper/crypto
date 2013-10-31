@@ -18,7 +18,9 @@
 (require ffi/unsafe
          racket/class
          racket/match
+         racket/string
          "../common/interfaces.rkt"
+         "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt"
@@ -29,41 +31,70 @@
                      racket/syntax))
 (provide (all-defined-out))
 
-(define cipher-impl%
+(define multikeylen-cipher-impl%
   (class* object% (cipher-impl<%>)
-    (init-field ciphers ;; non-empty list of EVP_CIPHER
-                spec)  ;; CipherSpec
-    (define-values (block-size key-size iv-size) (get-sizes (car ciphers)))
-    (for ([cipher (in-list (cdr ciphers))])
-      (let-values ([(b k iv) (get-sizes cipher)])
-        (unless (and (= b block-size) (equal? iv iv-size))
-          (error 'libcrypto-cipher-impl%
-                 "inconsistent cipher block or IV sizes\n  cipher: ~e" spec))))
+    (init-field impls ;; (nonempty-listof (cons nat cipher-impl%))
+                spec)
     (super-new)
 
-    (define/private (get-sizes cipher)
+    (define/public (get-spec) spec)
+    (define/public (get-block-size) (send (car impls) get-block-size))
+    (define/public (get-iv-size) (send (car impls) get-iv-size))
+
+    (define/public (new-ctx who key iv enc? pad?)
+      (cond [(assoc (bytes-length key) impls)
+             => (lambda (keylen+impl)
+                  (send (cdr keylen+impl) new-ctx who key iv enc? pad?))]
+            [else
+             (check-key-size who spec (bytes-length key))
+             (error 'multikeylen-cipher-impl%
+                    (string-append "internal error: no implementation for key length"
+                                   "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")
+                    spec (bytes-length key)
+                    (string-join (map number->string (map car impls)) ", "))]))
+
+    ;; FIXME: shouldn't be methods
+    (define/public (generate-key)
+      (send (car impls) generate-key))
+    (define/public (generate-iv)
+      (send (car impls) generate-iv))))
+
+(define cipher-impl%
+  (class* object% (cipher-impl<%>)
+    (init-field cipher ;; EVP_CIPHER
+                spec)
+    (define-values (block-size key-size iv-size)
       (match (ptr-ref cipher (_list-struct _int _int _int _int))
         [(list _ size keylen ivlen)
-         (values size keylen (and (> ivlen 0) ivlen))]))
+         (values size keylen ivlen)]))
+    (let ()
+      (define (check what value expected)
+        (unless (= value expected)
+          (error 'cipher-impl%
+                 "internal error: inconsistent ~a\n  cipher: ~e\n  expected: ~e\n  got: ~e"
+                 what spec value expected)))
+      (check "block size" block-size (cipher-spec-block-size spec))
+      (check "IV size" iv-size (cipher-spec-iv-size spec)))
+    (super-new)
 
-    (define/public (get-name) spec)
-    (define/public (get-key-size) key-size)
+    (define/public (get-spec) spec)
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)
 
-    (define cipher 'bad-fixme)
-
     (define/public (new-ctx who key iv enc? pad?)
-      (unless (and (bytes? key) (>= (bytes-length key) key-size))
-        (error who "bad key: ~e" key))
-      (when iv-size
-        (unless (and (bytes? iv) (>= (bytes-length iv) iv-size))
-          (error who "bad iv: ~e" iv)))
+      (check-key-size who spec (bytes-length key))
+      (unless (= (if (bytes? iv) (bytes-length iv) 0) iv-size)
+        (error who
+               "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
+               spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
       (let ([ctx (EVP_CIPHER_CTX_new)])
-        (EVP_CipherInit_ex ctx cipher key (and iv-size iv) enc?)
+        (EVP_CipherInit_ex ctx cipher #f #f enc?)
+        (EVP_CIPHER_CTX_set_key_length ctx (bytes-length key))
         (EVP_CIPHER_CTX_set_padding ctx pad?)
+        (EVP_CipherInit_ex ctx cipher key (and iv-size iv) enc?)
         (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
 
+    ;; FIXME: no need to be methods
     (define/public (generate-key)
       (random-bytes key-size))
     (define/public (generate-iv)

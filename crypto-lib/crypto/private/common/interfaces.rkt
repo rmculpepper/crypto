@@ -15,8 +15,7 @@
 
 #lang racket/base
 (require racket/class
-         racket/string
-         racket/match)
+         "catalog.rkt")
 (provide impl<%>
          ctx<%>
          factory<%>
@@ -28,17 +27,9 @@
          pkey-impl<%>
          pkey-ctx<%>
 
-         (struct-out varies)
-         known-digests
-         known-block-modes
-         known-block-ciphers
-         known-stream-ciphers
-
          factory?
-         digest-spec?
          digest-impl?
          digest-ctx?
-         cipher-spec?
          cipher-impl?
          cipher-ctx?)
 
@@ -85,170 +76,6 @@
     ))
 
 (define (factory? x) (is-a? x factory<%>))
-
-;; A DigestSpec is a symbol in domain of known-digests.
-
-(define known-digests
-  ;; References:
-  ;;  - http://en.wikipedia.org/wiki/Cryptographic_hash_function
-  ;; An entry is of form (list name-symbol hash-size-bits block-size-bits)
-  '#hasheq(;; symbol  ->   [Hash  Block]   -- sizes in bits
-           [gost        .  [ 256  256 ]]
-           [md2         .  [ 128  128 ]]
-           [md4         .  [ 128  512 ]]
-           [md5         .  [ 128  512 ]]
-           [ripemd      .  [ 128  512 ]]
-           [ripemd128   .  [ 128  512 ]]
-           [ripemd256   .  [ 256  512 ]]
-           [ripemd160   .  [ 160  512 ]]
-           [ripemd320   .  [ 320  512 ]]
-           [tiger2-128  .  [ 128  512 ]]
-           [tiger2-160  .  [ 160  512 ]]
-           [tiger2-192  .  [ 192  512 ]]
-           ;; Note: 3 versions: Whirlpool-0 (2000), Whirlpool-T (2001), Whirlpool (2003)
-           [whirlpool   .  [ 512  512 ]] 
-           [sha0        .  [ 160  512 ]]
-           [sha1        .  [ 160  512 ]]
-           [sha224      .  [ 224  512 ]]
-           [sha256      .  [ 256  512 ]]
-           [sha384      .  [ 384  1024 ]]
-           [sha512      .  [ 512  1024 ]]
-
-           ;; Many recent hash algorithms can be configured to produce a wide
-           ;; range of output sizes, and some have additional parameters.
-           ;; List common configurations here, and add another kind of DigestSpec
-           ;; to handle the other cases.
-
-           ;; Note: As of 10/2013, SHA3 is not standardized, and SHA3 is expected
-           ;; to be different (maybe?) from Keccak as submitted to the NIST contest.
-           ;; [sha3-224       224  1152]
-           ;; [sha3-256       256  1088]
-           ;; [sha3-384       384  832]
-           ;; [sha3-512       512  576]
-           ;; skein*
-           ;; blake*, blake2-*
-           ))
-
-(define (digest-spec? x)
-  (and (hash-ref known-digests x #f) #t))
-
-;; AllowedKeys is one of
-;;  - (list key-size-nat ...+)
-;;  - #s(varies min-nat max-nat step-nat)
-(define-struct varies (min max step) #:prefab)
-
-(define known-block-ciphers
-  ;; References: http://www.users.zetnet.co.uk/hopwood/crypto/scan/cs.html
-  ;; AllowedKeys is one of
-  ;;  - (list size ...+)
-  ;;  - (vector 'variable min max step)
-  '#hasheq(;; symbol  -> (Block AllowedKeys)   -- sizes in bits
-           [aes        .  [ 128   (128 192 256)]]
-           [des        .  [ 64    (56)]]      ;; key expressed as 64-bits w/ parity bits
-           [des-ede2   .  [ 64    (112)]]     ;; key expressed as 128 bits w/ parity bits
-           [des-ede3   .  [ 64    (168)]]     ;; key expressed as 192 bits w/ parity bits
-           [blowfish   .  [ 64    #s(varies 32 448 8)]]
-           [cast128    .  [ 64    #s(varies 40 128 8)]]
-           [camellia   .  [ 128   (128 192 256)]]
-           [idea       .  [ 64    (128)]]
-           [rc5        .  [ 64    #s(varies 0 2040 8)]]
-           [rc5-64     .  [ 128   #s(varies 0 2040 8)]]
-           [rc6-64     .  [ 256   #s(varies 0 2040 8)]]
-           [cast256    .  [ 128   #s(varies 128 256 32)]]
-           ;; AES finalists
-           [serpent    .  [ 128   #s(varies 0 256 8)]]
-           [twofish    .  [ 128   #s(varies 8 256 8)]]
-           [rc6        .  [ 128   #s(varies 0 2040 8)]]
-           [mars       .  [ 128   #s(varies 128 448 32)]] ;; aka Mars-2 ???
-           ))
-
-(define known-stream-ciphers
-  '#hasheq(;; symbol  ->  IV  AllowedKeys      -- sizes in bits
-           [rc4        .  [ 0   #s(varies 40 2048 8)]]
-           [salsa20    .  [ 64  (256)]]
-           [salsa20/8  .  [ 64  (256)]]
-           [salsa20/12 .  [ 64  (256)]]
-           ))
-
-;; Mode effects:
-;;   ecb: iv=none,    block same, 0 added
-;;   cbc: iv=1 block, block same, 0 added
-;;   ofb: iv=1 block, stream cipher, 0 added
-;;   cfb: iv=1 block, stream cipher, 0 added
-;;   ctr: iv=1 block, stream cipher, 0 added
-;;   gcm: iv=???, ???                                -- FIXME
-;;   ccm: NOTE: offline/nonincremental: needs length before starting; don't support
-(define known-block-modes '(ecb cbc ofb cfb ctr gcm))
-
-;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-;; TODO
-;;  - change cipher-impl to leave key-size unfixed; only need
-;;    when creating ctx or calling encrypt/decrypt
-
-(define known-ciphers-abbrev
-  '#hasheq(;; symbol -> CipherSpec
-           ))
-
-;; bad-key-size : CipherName Nat -> (U #f '() AllowedKeys)
-;; #f means ok; '() means unknown cipher; AllowedKeys means given size not allowed
-(define (bad-key-size cipher-name key-size)
-  (let* ([entry (or (hash-ref known-block-ciphers cipher-name #f)
-                    (hash-ref known-stream-ciphers cipher-name #f))]
-         [allowed (and entry (cadr entry))])
-    (cond [(list? allowed)
-           (if (member key-size allowed) #f allowed)]
-          [(varies? allowed)
-           (if (and (<= (varies-min allowed) key-size (varies-max allowed))
-                    (zero? (quotient (- key-size (varies-min allowed))
-                                     (varies-step allowed))))
-               #f
-               allowed)]
-          [else '()])))
-
-;; key-size-ok? : CipherName Nat -> Boolean
-(define (key-size-ok? cipher-name key-size)
-  (not (bad-key-size cipher-name key-size)))
-
-;; check-key-size : symbol CipherName Nat -> void or error
-(define (check-key-size who cipher-name key-size)
-  (let* ([allowed (bad-key-size cipher-name key-size)])
-    (cond [(eq? allowed #f) (void)]
-          [(eq? allowed '())
-           (error who "unknown cipher\n  cipher: ~e" cipher-name)]
-          [(list? allowed)
-           (error who
-                  "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
-                  cipher-name
-                  key-size
-                  (string-join (map number->string allowed) ", "))]
-          [(varies? allowed)
-           (error who
-                  "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
-                  cipher-name
-                  key-size
-                  (format "from ~a to ~a in multiples of ~a"
-                          (varies-min allowed)
-                          (varies-max allowed)
-                          (varies-step allowed)))])))
-
-;; A CipherSpec is one of
-;;  - a symbol in the domain of known-ciphers-abbrev
-;;  - (list 'stream StreamCipherName)
-;;  - (list BlockMode BlockCipherName)
-;; BlockMode is one of 'ecb, 'cbc, 'cfb, 'ofb, 'ctr.
-;; BlockCipherName is a symbol in the domain of known-block-ciphers,
-;; StreamCipherName is a symbol in the domain of known-stream-ciphers.
-
-(define (cipher-spec? x)
-  (match x
-    [(? symbol?)
-     (and (hash-ref known-ciphers-abbrev #f) #t)]
-    [(list 'stream (? symbol? cipher-name))
-     (and (hash-ref known-stream-ciphers cipher-name #f) #t)]
-    [(list (? (lambda (s) (memq s known-block-modes)))
-           (? symbol? cipher-name))
-     (and (hash-ref known-block-ciphers cipher-name #f) #f)]
-    [_ #f]))
 
 
 ;; ============================================================
@@ -300,10 +127,9 @@
 
 (define cipher-impl<%>
   (interface (impl<%>)
-    get-name       ;; -> any -- eg, "AES-128", "DES-EDE" (???)
-    get-key-sizes  ;; -> AllowedKeys
+    get-spec       ;; -> CipherSpec
     get-block-size ;; -> nat
-    get-iv-size    ;; -> nat/#f
+    get-iv-size    ;; -> nat
 
     new-ctx         ;; sym bytes bytes/#f boolean PadMode -> cipher-ctx<%>
                     ;; who key   iv       enc?    pad
