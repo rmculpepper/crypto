@@ -35,23 +35,23 @@ specification}, @racket[#f] otherwise.
 A @deftech{cipher specification} is one of the following:
 @itemlist[
 
-@item{@racket[(list 'stream _stream-cipher-symbol)]---where
+@item{@racket[(list _stream-cipher-symbol 'stream)]---where
 @racket[_stream-cipher-symbol] is one of the following:
 @(let ([stream-cipher-names (sort (hash-keys known-stream-ciphers) symbol<?)])
    (add-between (for/list ([name stream-cipher-names])
                   (racket '#,(racketvalfont (format "~a" name))))
                 ", ")).}
 
-@item{@racket[(list _block-mode _block-cipher-symbol)]---where 
-@racket[_block-mode] is one of the following: 
-@(add-between (for/list ([mode (map car known-block-modes)])
-                (racket '#,(racketvalfont (format "~a" mode))))
-              ", "),
-and @racket[_block-cipher-symbol] is one of the following:
+@item{@racket[(list _block-cipher-symbol _block-mode)]---where 
+@racket[_block-cipher-symbol] is one of the following:
 @(let ([block-cipher-names (sort (hash-keys known-block-ciphers) symbol<?)])
    (add-between (for/list ([name block-cipher-names])
                   (racket '#,(racketvalfont (format "~a" name))))
-                ", ")).}
+                ", ")),
+and @racket[_block-mode] is one of the following: 
+@(add-between (for/list ([mode (map car known-block-modes)])
+                (racket '#,(racketvalfont (format "~a" mode))))
+              ", ").}
 ]
 
 Future versions of this library may add other forms of cipher
@@ -72,7 +72,7 @@ cipher.
 }
 
 @defproc[(cipher-key-sizes [ci (or/c cipher-spec? cipher-impl?)])
-         (or/c (listof exact-nonnegative-integer?) varies?)]{
+         (or/c (listof exact-nonnegative-integer?) variable-size?)]{
 
 Returns the possible sizes in bytes of the secret keys accepted by the
 cipher.
@@ -232,9 +232,19 @@ Processes any remaining input buffered by @racket[cctx], applies
 padding if appropriate, and returns the newly available output
 }
 
-@defproc[(generate-cipher-key+iv [ci cipher-impl?])
-         (values bytes? (or/c bytes? #f))]{
+@defproc[(generate-cipher-key [ci (or/c cipher-spec? cipher-impl?)])
+         bytes?]{
 
-Generates a random secret key and initialization vector appropriate
-for use with the cipher @racket[ci].
+Generates a random secret key appropriate for use with the cipher
+@racket[ci]. Note: some ciphers have a set of weak keys;
+@racket[generate-cipher-key] currently does @emph{not} check for and
+avoid weak keys.
+}
+
+@defproc[(generate-cipher-iv [ci (or/c cipher-spec? cipher-impl?)])
+         (or/c bytes? #f)]{
+
+Generates a random initialization vector appropriate for use with the
+cipher @racket[ci]. If @racket[ci] does not use an IV, returns
+@racket[#f].
 }

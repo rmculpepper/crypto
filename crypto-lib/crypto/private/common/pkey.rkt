@@ -182,8 +182,8 @@
 
 ;; sk = "sealed key"
 (define (encrypt-envelope pk ci buf)
-  (define k (cipher-generate-key ci))
-  (define iv (cipher-generate-iv ci))
+  (define k (generate-cipher-key ci))
+  (define iv (generate-cipher-iv ci))
   (define sk (pkey-encrypt pk k))
   (values sk iv (encrypt ci k iv buf)))
 

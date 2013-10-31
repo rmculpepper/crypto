@@ -72,8 +72,8 @@
 
 ;; AllowedKeys is one of
 ;;  - (list key-size-nat ...+)
-;;  - #s(varies min-nat max-nat step-nat)
-(define-struct varies (min max step) #:prefab)
+;;  - #s(variable-size min-nat max-nat step-nat)
+(define-struct variable-size (min max step) #:prefab)
 
 (define known-block-ciphers
   ;; References: http://www.users.zetnet.co.uk/hopwood/crypto/scan/cs.html
@@ -85,24 +85,24 @@
            [des        .  [ 8     (7)]]      ;; key expressed as 8 bytes w/ parity bits
            [des-ede2   .  [ 8     (14)]]     ;; key expressed as 16 bytes w/ parity bits
            [des-ede3   .  [ 8     (21)]]     ;; key expressed as 24 bytes w/ parity bits
-           [blowfish   .  [ 8     #s(varies 32 56 1)]]
-           [cast128    .  [ 8     #s(varies 40 16 1)]]
+           [blowfish   .  [ 8     #s(variable-size 32 56 1)]]
+           [cast128    .  [ 8     #s(variable-size 40 16 1)]]
            [camellia   .  [ 16    (16 24 32)]]
            [idea       .  [ 8     (16)]]
-           [rc5        .  [ 8     #s(varies 0 255 1)]]
-           [rc5-64     .  [ 16    #s(varies 0 255 1)]]
-           [rc6-64     .  [ 32    #s(varies 0 255 1)]]
-           [cast256    .  [ 16    #s(varies 16 32 4)]]
+           [rc5        .  [ 8     #s(variable-size 0 255 1)]]
+           [rc5-64     .  [ 16    #s(variable-size 0 255 1)]]
+           [rc6-64     .  [ 32    #s(variable-size 0 255 1)]]
+           [cast256    .  [ 16    #s(variable-size 16 32 4)]]
            ;; AES finalists
-           [serpent    .  [ 16    #s(varies 0 32 1)]]
-           [twofish    .  [ 16    #s(varies 8 32 1)]]
-           [rc6        .  [ 16    #s(varies 0 255 1)]]
-           [mars       .  [ 16    #s(varies 16 56 4)]] ;; aka Mars-2 ???
+           [serpent    .  [ 16    #s(variable-size 0 32 1)]]
+           [twofish    .  [ 16    #s(variable-size 8 32 1)]]
+           [rc6        .  [ 16    #s(variable-size 0 255 1)]]
+           [mars       .  [ 16    #s(variable-size 16 56 4)]] ;; aka Mars-2 ???
            ))
 
 (define known-stream-ciphers
   '#hasheq(;; symbol  ->  IV  AllowedKeys      -- sizes in bytes
-           [rc4        .  [ 0   #s(varies 5 256 1)]]
+           [rc4        .  [ 0   #s(variable-size 5 256 1)]]
            [salsa20    .  [ 8   (32)]]
            [salsa20/8  .  [ 8   (32)]]
            [salsa20/12 .  [ 8   (32)]]
@@ -129,17 +129,17 @@
 (define (block-mode? x) (and (symbol? x) (assq x known-block-modes) #t))
 
 ;; A CipherSpec is one of
-;;  - (list 'stream StreamCipherName)
-;;  - (list BlockMode BlockCipherName)
+;;  - (list StreamCipherName 'stream)
+;;  - (list BlockCipherName BlockMode)
 ;; BlockMode is one of 'ecb, 'cbc, 'cfb, 'ofb, 'ctr.
 ;; BlockCipherName is a symbol in the domain of known-block-ciphers,
 ;; StreamCipherName is a symbol in the domain of known-stream-ciphers.
 
 (define (cipher-spec? x)
   (match x
-    [(list 'stream (? symbol? cipher-name))
+    [(list (? symbol? cipher-name) 'stream)
      (and (hash-ref known-stream-ciphers cipher-name #f) #t)]
-    [(list (? block-mode?) (? symbol? cipher-name))
+    [(list (? symbol? cipher-name) (? block-mode?))
      (and (hash-ref known-block-ciphers cipher-name #f) #f)]
     [_ #f]))
 
@@ -147,11 +147,11 @@
 
 (define (cipher-spec-key-sizes cipher-spec)
   (match cipher-spec
-    [(list 'stream cipher-name)
+    [(list cipher-name 'stream)
      (match (hash-ref known-stream-ciphers cipher-name #f)
        [(list _ allowed-keys) allowed-keys]
        [_ #f])]
-    [(list (? block-mode? mode) cipher-name)
+    [(list cipher-name (? block-mode? mode))
      (match (hash-ref known-block-ciphers cipher-name #f)
        [(list _ allowed-keys) allowed-keys]
        [_ #f])]))
@@ -163,10 +163,10 @@
   (cond [(list? allowed)
          (or (for/or ([size (in-list allowed)] #:when (>= size MIN-DEFAULT-KEY-SIZE)) size)
              (max allowed))]
-        [(varies? allowed)
-         (let* ([minks (varies-min allowed)]
-                [maxks (varies-max allowed)]
-                [step (varies-step allowed)]
+        [(variable-size? allowed)
+         (let* ([minks (variable-size-min allowed)]
+                [maxks (variable-size-max allowed)]
+                [step (variable-size-step allowed)]
                 [diff (- MIN-DEFAULT-KEY-SIZE minks)]
                 [diff-steps (quotient diff step)]
                 [best-default (+ MIN-DEFAULT-KEY-SIZE
@@ -179,8 +179,8 @@
 
 (define (cipher-spec-block-size cipher-spec)
   (match cipher-spec
-    [(list 'stream cipher-name) 1]
-    [(list (? block-mode? mode) (? symbol? cipher-name))
+    [(list cipher-name 'stream) 1]
+    [(list (? symbol? cipher-name) (? block-mode? mode))
      (let ([entry (hash-ref known-block-ciphers cipher-name #f)])
        (match entry
          [(list block-size allowed-keys)
@@ -191,11 +191,11 @@
 
 (define (cipher-spec-iv-size cipher-spec)
   (match cipher-spec
-    [(list 'stream cipher-name)
+    [(list cipher-name 'stream)
      (match (hash-ref known-stream-ciphers cipher-name #f)
        [(list iv-bytes allowed-keys)
         iv-bytes])]
-    [(list (? block-mode? mode) (? symbol? cipher-name))
+    [(list (? symbol? cipher-name) (? block-mode? mode))
      (match (hash-ref known-block-ciphers cipher-name #f)
        [(list block-size allowed-keys)
         (match (assq mode known-block-modes)
@@ -209,10 +209,10 @@
   (let ([allowed (cipher-spec-key-sizes cipher-spec)])
     (cond [(list? allowed)
            (if (member key-size allowed) #f allowed)]
-          [(varies? allowed)
-           (if (and (<= (varies-min allowed) key-size (varies-max allowed))
-                    (zero? (quotient (- key-size (varies-min allowed))
-                                     (varies-step allowed))))
+          [(variable-size? allowed)
+           (if (and (<= (variable-size-min allowed) key-size (variable-size-max allowed))
+                    (zero? (quotient (- key-size (variable-size-min allowed))
+                                     (variable-size-step allowed))))
                #f
                allowed)]
           [else '()])))
@@ -233,12 +233,12 @@
                   cipher-spec
                   key-size
                   (string-join (map number->string allowed) ", "))]
-          [(varies? allowed)
+          [(variable-size? allowed)
            (error who
                   "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
                   cipher-spec
                   key-size
                   (format "from ~a to ~a in multiples of ~a"
-                          (varies-min allowed)
-                          (varies-max allowed)
-                          (varies-step allowed)))])))
+                          (variable-size-min allowed)
+                          (variable-size-max allowed)
+                          (variable-size-step allowed)))])))

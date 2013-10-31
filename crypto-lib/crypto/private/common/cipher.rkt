@@ -28,7 +28,7 @@
   [cipher-default-key-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-key-sizes
-   (-> (or/c cipher-spec? cipher-impl?) (or/c (listof nat?) varies?))]
+   (-> (or/c cipher-spec? cipher-impl?) (or/c (listof nat?) variable-size?))]
   [cipher-block-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-iv-size
@@ -82,9 +82,9 @@
   ;;  (->* [cipher/c key/c iv/c output-port?] [#:pad pad-mode/c]
   ;;       output-port?)]
 
-  [cipher-generate-key
+  [generate-cipher-key
    (->* [cipher/c] [nat?] key/c)]
-  [cipher-generate-iv
+  [generate-cipher-iv
    (-> cipher/c iv/c)]))
 
 (define cipher/c (or/c cipher-spec? cipher-impl?))
@@ -273,11 +273,11 @@
 
 ;; ----
 
-(define (cipher-generate-key ci [size (cipher-default-key-size ci)])
+(define (generate-cipher-key ci [size (cipher-default-key-size ci)])
   ;; FIXME: any way to check for weak keys, avoid???
-  (let ([ci (-get-impl 'cipher-generate-key ci)])
+  (let ([ci (-get-impl 'generate-cipher-key ci)])
     (send ci generate-key)))
 
-(define (cipher-generate-iv ci)
-  (let ([ci (-get-impl 'cipher-generate-iv ci)])
+(define (generate-cipher-iv ci)
+  (let ([ci (-get-impl 'generate-cipher-iv ci)])
     (send ci generate-iv)))
