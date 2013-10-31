@@ -67,6 +67,17 @@
 (define (digest-spec? x)
   (and (hash-ref known-digests x #f) #t))
 
+(define (digest-spec-size spec)
+  (match (hash-ref known-digests spec #f)
+    [(list size block-size) size]
+    [_ #f]))
+
+(define (digest-spec-block-size spec)
+  (match (hash-ref known-digests spec #f)
+    [(list size block-size) block-size]
+    [_ #f]))
+
+
 ;; ============================================================
 ;; Ciphers
 

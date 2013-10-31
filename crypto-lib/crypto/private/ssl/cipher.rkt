@@ -25,7 +25,6 @@
          "../common/error.rkt"
          "ffi.rkt"
          "macros.rkt"
-         "rand.rkt"
          "util.rkt"
          (for-syntax racket/base
                      racket/syntax))
@@ -52,12 +51,7 @@
                                    "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")
                     spec (bytes-length key)
                     (string-join (map number->string (map car impls)) ", "))]))
-
-    ;; FIXME: shouldn't be methods
-    (define/public (generate-key)
-      (send (car impls) generate-key))
-    (define/public (generate-iv)
-      (send (car impls) generate-iv))))
+    ))
 
 (define cipher-impl%
   (class* object% (cipher-impl<%>)
@@ -93,13 +87,6 @@
         (EVP_CIPHER_CTX_set_padding ctx pad?)
         (EVP_CipherInit_ex ctx cipher key (and iv-size iv) enc?)
         (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
-
-    ;; FIXME: no need to be methods
-    (define/public (generate-key)
-      (random-bytes key-size))
-    (define/public (generate-iv)
-      ;; FIXME: ok to use use pseudo-random-bytes?
-      (and iv-size (random-bytes iv-size)))
     ))
 
 (define cipher-ctx%

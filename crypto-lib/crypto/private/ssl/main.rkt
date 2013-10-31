@@ -30,9 +30,6 @@
          "pkey.rkt"
          "dh.rkt")
 
-(provide random-bytes
-         pseudo-random-bytes)
-
 (provide-dh)
 (provide generate-dhkey)
 

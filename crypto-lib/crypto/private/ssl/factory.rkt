@@ -24,6 +24,7 @@
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
+         "rand.rkt"
          "ffi.rkt"
          "macros.rkt")
 (provide ssl-factory)
@@ -154,14 +155,14 @@ To print all ciphers:
     (define digest-table (make-hasheq))
     (define cipher-table (make-hash))
 
-    (define/private (intern-digest name-sym)
-      (cond [(hash-ref digest-table name-sym #f)
+    (define/private (intern-digest spec)
+      (cond [(hash-ref digest-table spec #f)
              => values]
-            [(let ([name-string (hash-ref libcrypto-digests name-sym #f)])
+            [(let ([name-string (hash-ref libcrypto-digests spec #f)])
                (and name-string (EVP_get_digestbyname name-string)))
              => (lambda (md)
-                  (let ([di (new digest-impl% (md md) (name name-sym))])
-                    (hash-set! digest-table name-sym di)
+                  (let ([di (new digest-impl% (md md) (spec spec))])
+                    (hash-set! digest-table spec di)
                     di))]
             [else #f]))
 
@@ -212,6 +213,9 @@ To print all ciphers:
 
     (define/public (get-pkey-by-name name-sym)
       (hash-ref pkey-table name-sym #f))
+
+    (define/public (get-random)
+      random-impl)
     ))
 
 (define ssl-factory (new ssl-factory%))

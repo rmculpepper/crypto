@@ -22,6 +22,7 @@
          "catalog.rkt"
          "factory.rkt"
          "common.rkt"
+         "random.rkt"
          "error.rkt")
 (provide
  (contract-out
@@ -275,9 +276,8 @@
 
 (define (generate-cipher-key ci [size (cipher-default-key-size ci)])
   ;; FIXME: any way to check for weak keys, avoid???
-  (let ([ci (-get-impl 'generate-cipher-key ci)])
-    (send ci generate-key)))
+  (random-bytes size))
 
 (define (generate-cipher-iv ci)
-  (let ([ci (-get-impl 'generate-cipher-iv ci)])
-    (send ci generate-iv)))
+  (let ([size (cipher-iv-size ci)])
+    (and (positive? ci) (random-bytes size))))

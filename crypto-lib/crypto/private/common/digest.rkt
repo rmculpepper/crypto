@@ -21,13 +21,14 @@
          "catalog.rkt"
          "factory.rkt"
          "common.rkt"
+         "random.rkt"
          "error.rkt")
 (provide
  (contract-out
   [digest-size
-   (-> (or/c digest/c digest-ctx?) nat?)]
+   (-> (or/c digest-spec? digest-impl? digest-ctx?) nat?)]
   [digest-block-size
-   (-> (or/c digest/c digest-ctx?) nat?)]
+   (-> (or/c digest-spec? digest-impl? digest-ctx?) nat?)]
   [make-digest-ctx
    (-> digest/c digest-ctx?)]
   [digest-update
@@ -58,20 +59,24 @@
 ;; ----
 
 (define (make-digest-ctx di)
-  (send (-get-impl 'make-digest-ctx di #f) new-ctx))
+  (send (-get-impl 'make-digest-ctx di) new-ctx))
 
-(define (-get-impl who o ctx-ok?)
+(define (-get-spec o)
+  (cond [(digest-spec? o) o]
+        [(is-a? o digest-impl<%>) (send o get-spec)]
+        [(is-a? o digest-ctx<%>) (send (send o get-impl) get-spec)]))
+
+(define (-get-impl who o)
   (cond [(digest-spec? o)
          (or (get-digest o)
              (error who "could not get digest implementation\n  digest: ~e" o))]
         [(is-a? o digest-impl<%>) o]
-        [(and ctx-ok? (is-a? o digest-ctx<%>)) (send o get-impl)]
-        [else (error who "bad digest specification\n  digest: ~e" o)]))
+        [(is-a? o digest-ctx<%>) (send o get-impl)]))
 
 (define (digest-size o)
-  (send (-get-impl 'digest-size o #t) get-size))
+  (digest-spec-size (-get-spec o)))
 (define (digest-block-size o)
-  (send (-get-impl 'digest-block-size o #t) get-block-size))
+  (digest-spec-block-size (-get-spec o)))
 
 ;; ----
 
@@ -98,14 +103,14 @@
 ;; ----
 
 (define (digest di inp)
-  (let ([di (-get-impl 'digest di #f)])
+  (let ([di (-get-impl 'digest di)])
     (cond [(bytes? inp) (-digest-bytes 'digest di inp 0 (bytes-length inp))]
           [(string? inp)
            (-digest-port di (open-input-string inp))]
           [(input-port? inp) (-digest-port di inp)])))
 
 (define (digest-bytes di buf [start 0] [end (bytes-length buf)])
-  (let ([di (-get-impl 'digest-bytes di #f)])
+  (let ([di (-get-impl 'digest-bytes di)])
     (-digest-bytes 'digest-bytes di buf start end)))
 
 (define (-digest-port type inp)
@@ -136,18 +141,18 @@
 ;; ----
 
 (define (make-hmac-ctx di key)
-  (let* ([di (-get-impl 'make-hmac-ctx di #f)]
+  (let* ([di (-get-impl 'make-hmac-ctx di)]
          [himpl (send di get-hmac-impl 'make-hmac-ctx)])
     (send himpl new-ctx 'make-hmac-ctx key)))
 
 (define (hmac di key inp)
-  (let ([di (-get-impl 'hmac di #f)])
+  (let ([di (-get-impl 'hmac di)])
     (cond [(bytes? inp) (-hmac-bytes 'hmac di key inp 0 (bytes-length inp))]
           [(string? inp) (-hmac-port di key (open-input-string inp))]
           [(input-port? inp) (-hmac-port di key inp)])))
 
 (define (hmac-bytes di key bs [start 0] [end (bytes-length bs)])
-  (let ([di (-get-impl 'hmac-bytes di #f)])
+  (let ([di (-get-impl 'hmac-bytes di)])
     (-hmac-bytes 'hmac-bytes di key bs start end)))
 
 (define (-hmac-bytes who di key buf start end)
@@ -177,5 +182,4 @@
                (loop)])))))
 
 (define (generate-hmac-key di)
-  (let ([di (-get-impl 'generate-hmac-key di #f)])
-    (send di generate-hmac-key)))
+  (random-bytes (digest-size di)))

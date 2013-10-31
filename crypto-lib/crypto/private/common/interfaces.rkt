@@ -26,12 +26,14 @@
          cipher-ctx<%>
          pkey-impl<%>
          pkey-ctx<%>
+         random-impl<%>
 
          factory?
          digest-impl?
          digest-ctx?
          cipher-impl?
-         cipher-ctx?)
+         cipher-ctx?
+         random-impl?)
 
 ;; ============================================================
 ;; General Notes
@@ -73,6 +75,7 @@
     get-digest-by-name ;; DigestSpec -> digest-impl<%>/#f
     get-cipher-by-name ;; CipherSpec -> cipher-impl<%>/#f
     get-pkey-by-name   ;; symbol -> pkey-impl<%>/#f
+    get-random         ;; -> random-impl<%>/#f
     ))
 
 (define (factory? x) (is-a? x factory<%>))
@@ -86,12 +89,11 @@
 
 (define digest-impl<%>
   (interface (impl<%>)
-    get-name      ;; -> any -- eg, 'md5, 'sha1, 'sha256
+    get-spec      ;; -> DigestSpec
     get-size      ;; -> nat
     get-block-size;; -> nat
     get-hmac-impl ;; who -> digest-impl<%>
     new-ctx       ;; -> digest-ctx<%>
-    generate-hmac-key ;; -> bytes
 
     can-digest-buffer!? ;; -> boolean
     digest-buffer!      ;; sym bytes nat nat bytes nat -> nat
@@ -133,8 +135,6 @@
 
     new-ctx         ;; sym bytes bytes/#f boolean PadMode -> cipher-ctx<%>
                     ;; who key   iv       enc?    pad
-    generate-key    ;; [nat] -> bytes
-    generate-iv     ;; -> bytes/#f
     ))
 
 ;; Some disadvantages to current cipher update! and final! methods:
@@ -177,3 +177,14 @@
 
     encrypt/decrypt ;; sym boolean boolean bytes nat nat -> bytes
     ))
+
+;; ============================================================
+;; Randomness
+
+(define random-impl<%>
+  (interface (impl<%>)
+    random-bytes!        ;; sym bytes nat nat -> void
+    pseudo-random-bytes! ;; sym bytes nat nat -> void
+    ))
+
+(define (random-impl? x) (is-a? x random-impl<%>))

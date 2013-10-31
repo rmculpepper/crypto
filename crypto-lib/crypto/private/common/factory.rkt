@@ -26,6 +26,8 @@
    (->* [digest-spec?] [(listof factory?)] (or/c digest-impl? #f))]
   [get-cipher
    (->* [cipher-spec?] [(listof factory?)] (or/c cipher-impl? #f))]
+  [get-random
+   (-> (or/c random-impl? #f))]
   ))
 
 ;; crypto-factories : parameter of (listof factory<%>)
@@ -38,3 +40,7 @@
 (define (get-cipher ci [factories (crypto-factories)])
   (for/or ([f (in-list factories)])
     (send f get-cipher-by-name ci)))
+
+(define (get-random [factories (crypto-factories)])
+  (for/or ([f (in-list factories)])
+    (send f get-random)))

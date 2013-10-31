@@ -22,7 +22,6 @@
          "../common/error.rkt"
          "ffi.rkt"
          "macros.rkt"
-         "rand.rkt"
          "util.rkt"
          (only-in racket/list last))
 (provide (all-defined-out))
@@ -34,12 +33,12 @@
 (define digest-impl%
   (class* object% (digest-impl<%>)
     (init-field md    ;; EVP_MD
-                name) ;; DigestSpec (symbol)
+                spec) ;; DigestSpec (symbol)
     (define size (EVP_MD_size md))
     (define hmac-impl #f)
     (super-new)
 
-    (define/public (get-name) name)
+    (define/public (get-spec) spec)
     (define/public (get-size) size)
     (define/public (get-block-size) (EVP_MD_block_size md))
 
@@ -51,9 +50,6 @@
     (define/public (get-hmac-impl who)
       (unless hmac-impl (set! hmac-impl (new hmac-impl% (digest this))))
       hmac-impl)
-
-    (define/public (generate-hmac-key)
-      (random-bytes size))
 
     ;; ----
 

@@ -1,5 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
-;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
+;; Copyright 2013 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -16,20 +15,22 @@
 
 #lang racket/base
 (require racket/class
-         ffi/unsafe
-         "../common/interfaces.rkt"
-         "../common/error.rkt"
-         "ffi.rkt")
-(provide (all-defined-out))
+         racket/contract
+         "interfaces.rkt"
+         "factory.rkt")
+(provide
+ (contract-out
+  [random-bytes
+   (->* [exact-nonnegative-integer?] [random-impl?] bytes?)]
+  [pseudo-random-bytes
+   (->* [exact-nonnegative-integer?] [random-impl?] bytes?)]))
 
-(define random-impl%
-  (class* object% (random-impl<%>)
-    (super-new)
-    (define/public (random-bytes! who buf start end)
-      (check-output-range who buf start end)
-      (void (RAND_bytes (ptr-add buf start) (- end start))))
-    (define/public (pseudo-random-bytes! who buf start end)
-      (check-output-range who buf start end)
-      (void (RAND_pseudo_bytes (ptr-add buf start) (- end start))))))
+(define (random-bytes size [impl (get-random)])
+  (let ([buf (make-bytes size)])
+    (send impl random-bytes! 'random-bytes buf 0 size)
+    buf))
 
-(define random-impl (new random-impl%))
+(define (pseudo-random-bytes size [impl (get-random)])
+  (let ([buf (make-bytes size)])
+    (send impl pseudo-random-bytes! 'pseudo-random-bytes buf 0 size)
+    buf))
