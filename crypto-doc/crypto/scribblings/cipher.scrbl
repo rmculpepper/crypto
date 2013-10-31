@@ -11,9 +11,9 @@
 
 A @deftech{cryptographic cipher} (or @deftech{symmetric-key encryption
 algorithm}) is a reversable function from variable-length messages to
-message. The input is called the ``plaintext'' and the output is
+messages. The input is called the ``plaintext'' and the output is
 called the ``ciphertext''. For a good cipher, the ciphertext reveals
-no information about the content of the plaintext (only its length or
+no information about the contents of the plaintext (only its length or
 approximate length); in particular, it is infeasible to compute the
 plaintext corresponding to a given ciphertext without knowing the
 secret key.
@@ -35,27 +35,27 @@ specification}, @racket[#f] otherwise.
 A @deftech{cipher specification} is one of the following:
 @itemlist[
 
-@item{@racket[(list _stream-cipher-symbol 'stream)]---where
-@racket[_stream-cipher-symbol] is one of the following:
+@item{@racket[(list _stream-cipher 'stream)]---where
+@racket[_stream-cipher] is one of the following symbols:
 @(let ([stream-cipher-names (sort (hash-keys known-stream-ciphers) symbol<?)])
    (add-between (for/list ([name stream-cipher-names])
                   (racket '#,(racketvalfont (format "~a" name))))
                 ", ")).}
 
-@item{@racket[(list _block-cipher-symbol _block-mode)]---where 
-@racket[_block-cipher-symbol] is one of the following:
+@item{@racket[(list _block-cipher _block-mode)]---where 
+@racket[_block-cipher] is one of the following symbols:
 @(let ([block-cipher-names (sort (hash-keys known-block-ciphers) symbol<?)])
    (add-between (for/list ([name block-cipher-names])
                   (racket '#,(racketvalfont (format "~a" name))))
                 ", ")),
-and @racket[_block-mode] is one of the following: 
+and @racket[_block-mode] is one of the following symbols: 
 @(add-between (for/list ([mode (map car known-block-modes)])
                 (racket '#,(racketvalfont (format "~a" mode))))
               ", ").}
 ]
 
-Future versions of this library may add other forms of cipher
-specifications.
+Future versions of this library may add more ciphers to the lists
+above and other forms of cipher specifications.
 }
 
 @defproc[(cipher-impl? [v any/c]) boolean?]{
@@ -67,14 +67,13 @@ Returns @racket[#t] if @racket[v] represents a cipher implementation,
 @defproc[(cipher-default-key-size [ci (or/c cipher-spec? cipher-impl?)])
          exact-nonnegative-integer?]{
 
-Returns the default size in bytes of the secret keys accepted by the
-cipher.
+Returns the default size in bytes of the secret keys used by the cipher.
 }
 
 @defproc[(cipher-key-sizes [ci (or/c cipher-spec? cipher-impl?)])
          (or/c (listof exact-nonnegative-integer?) variable-size?)]{
 
-Returns the possible sizes in bytes of the secret keys accepted by the
+Returns the possible sizes in bytes of the secret keys used by the
 cipher.
 }
 
@@ -82,30 +81,31 @@ cipher.
          exact-positive-integer?]{
 
 Returns the size in bytes of the blocks manipulated by the cipher. If
-@racket[c] is a stream cipher, returns @racket[1].
+@racket[ci] is a stream cipher (including block ciphers using a stream
+mode such as CTR), returns @racket[1].
 
 A cipher always produces a ciphertext that is a multiple of its block
 size. If a cipher is used without padding, the plaintext must be a
 multiple of the block size.
 }
 
-@defproc[(cipher-iv-size [ci (or/c cipher-impl? cipher-ctx?)])
+@defproc[(cipher-iv-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
          exact-nonnegative-integer?]{
 
-Returns the size in bytes of the IV (initialization vector) accepted
-by the cipher. Returns @racket[0] if the cipher does not use an IV.
+Returns the size in bytes of the IV (initialization vector) used by
+the cipher. Returns @racket[0] if the cipher does not use an IV.
 }
 
 @section{High-level Cipher Operations}
 
 @deftogether[[
-@defproc[(encrypt [ci cipher-impl?]
+@defproc[(encrypt [ci (or/c cipher-spec? cipher-impl?)]
                   [key bytes?]
                   [iv (or/c bytes? #f)]
                   [input (or/c bytes? string? input-port?)]
                   [#:pad pad-mode boolean? #t])
          bytes?]
-@defproc[(decrypt [ci cipher-impl?]
+@defproc[(decrypt [ci (or/c cipher-spec? cipher-impl?)]
                   [key bytes?]
                   [iv (or/c bytes? #f)]
                   [input (or/c bytes? string? input-port?)]
@@ -120,10 +120,23 @@ If @racket[input] is a string, it is converted to bytes using
 @racket[string->bytes/utf-8]. If @racket[input] is an input port, its
 contents are read and processed unil an @racket[eof], but the port is
 not closed.
+
+If @racket[pad-mode] is @racket[#t] and @racket[ci] is a block cipher,
+then the input is padded using PKCS#7 padding during decryption, and
+the padding is checked and removed during decryption. If @racket[_n]
+bytes of padding are needed, then @racket[_n] copies of the byte
+@racket[_n] are appended to the end of the input. If the input already
+ended at the end of a block, an entire block of padding is added.
+(PKCS#7 padding is the same as PKCS#5 padding defined for a wider
+range of block sizes.)  If @racket[pad-mode] is @racket[#f], then the
+input is not padded, and its length must by divisible by @racket[ci]'s
+block size. If @racket[ci] is a stream cipher (including block ciphers
+using a stream mode), no padding is added in either case. Future
+versions of this library may support additional kinds of padding.
 }
 
 @deftogether[[
-@defproc[(encrypt-bytes [ci cipher-impl?]
+@defproc[(encrypt-bytes [ci (or/c cipher-spec? cipher-impl?)]
                         [key bytes?]
                         [iv (or/c bytes? #f)]
                         [input bytes?]
@@ -131,7 +144,7 @@ not closed.
                         [end exact-nonnegative-integer? (bytes-length input)]
                         [#:pad pad-mode boolean? #t])
          bytes?]
-@defproc[(decrypt-bytes [ci cipher-impl?]
+@defproc[(decrypt-bytes [ci (or/c cipher-spec? cipher-impl?)]
                         [key bytes?]
                         [iv (or/c bytes? #f)]
                         [input bytes?]
@@ -146,14 +159,14 @@ Like @racket[encrypt] and @racket[decrypt], respectively, of
 }
 
 @deftogether[[
-@defproc[(encrypt-write [ci cipher-impl?]
+@defproc[(encrypt-write [ci (or/c cipher-spec? cipher-impl?)]
                         [key bytes?]
                         [iv (or/c bytes? #f)]
                         [input (or/c bytes? string? input-port?)]
                         [out output-port?]
                         [#:pad pad-mode boolean? #t])
          exact-nonnegative-integer?]
-@defproc[(decrypt-write [ci cipher-impl?]
+@defproc[(decrypt-write [ci (or/c cipher-spec? cipher-impl?)]
                         [key bytes?]
                         [iv (or/c bytes? #f)]
                         [input (or/c bytes? string? input-port?)]
@@ -171,46 +184,38 @@ number of bytes written is returned.
 @section{Low-level Cipher Operations}
 
 @deftogether[[
-@defproc[(make-encrypt-cipher-ctx [ci cipher-impl?]
-                                  [key bytes?]
-                                  [iv (or/c bytes? #f)]
-                                  [#:pad pad-mode boolean? #t])
-         cipher-ctx?]
-@defproc[(make-decrypt-cipher-ctx [ci cipher-impl?]
-                                  [key bytes?]
-                                  [iv (or/c bytes? #f)]
-                                  [#:pad pad-mode boolean? #t])
-         cipher-ctx?]
+@defproc[(make-encrypt-ctx [ci (or/c cipher-spec? cipher-impl?)]
+                           [key bytes?]
+                           [iv (or/c bytes? #f)]
+                           [#:pad pad-mode boolean? #t])
+         encrypt-ctx?]
+@defproc[(make-decrypt-ctx [ci (or/c cipher-spec? cipher-impl?)]
+                           [key bytes?]
+                           [iv (or/c bytes? #f)]
+                           [#:pad pad-mode boolean? #t])
+         decrypt-ctx?]
 ]]{
 
 Returns a new cipher context for encryption or decryption,
 respectively, using the given secret @racket[key], initialization
 vector @racket[iv], and padding mode @racket[pad-mode].
-
-If @racket[pad-mode] is @racket[#t] and @racket[ci] is a block cipher,
-then the input is padded using PKCS#7 padding: If @racket[_n] bytes of
-padding are needed, then @racket[_n] copies of the byte @racket[_n]
-are appended to the end of the input. If the input already ended at
-the end of a block, an entire block of padding is added.  (PKCS#7
-padding is the same as PKCS#5 padding, just defined for a wider range
-of block sizes.)  If @racket[pad-mode] is @racket[#f], then the input
-is not padded, and its length must by divisible by @racket[ci]'s block
-size. If @racket[ci] is a stream cipher, no padding is added in either
-case. Future versions of this library may support additional kinds of
-padding.
 }
 
 @defproc[(cipher-ctx? [v any/c]) boolean?]{
 
 Returns @racket[#t] if @racket[v] is a cipher context, @racket[#f]
-otherwise.
+otherwise. 
+
+Equivalent to @racket[(or (encrypt-ctx? v) (decrypt-ctx? v))].
 }
 
-@defproc[(cipher-encrypt? [cctx cipher-ctx?]) boolean?]{
+@deftogether[[
+@defproc[(encrypt-ctx? [v any/c]) boolean?]
+@defproc[(decrypt-ctx? [v any/c]) boolean?]
+]]{
 
-Returns @racket[#t] if @racket[cctx] is a cipher context for
-encryption (ie, created with @racket[make-encrypt-cipher-context]),
-@racket[#f] otherwise.
+Returns @racket[#t] if @racket[v] is a cipher context for encryption
+or decryption, respectively; otherwise, returns @racket[#f].
 }
 
 @defproc[(cipher-update [cctx cipher-ctx?]
@@ -222,14 +227,15 @@ encryption (ie, created with @racket[make-encrypt-cipher-context]),
 Processes @racket[(subbytes input start end)] with the cipher context
 @racket[cctx], returning the newly available encrypted or decrypted
 output. The output may be larger or smaller than the input, because
-incomplete blocks are internally buffered by the cipher.
+incomplete blocks are internally buffered by @racket[cctx].
 }
 
 @defproc[(cipher-final [cctx cipher-ctx?])
          bytes?]{
 
-Processes any remaining input buffered by @racket[cctx], applies
-padding if appropriate, and returns the newly available output
+Processes any remaining input buffered by @racket[cctx], applies or
+checks and removes padding if appropriate, and returns the newly
+available output.
 }
 
 @defproc[(generate-cipher-key [ci (or/c cipher-spec? cipher-impl?)])
@@ -237,7 +243,7 @@ padding if appropriate, and returns the newly available output
 
 Generates a random secret key appropriate for use with the cipher
 @racket[ci]. Note: some ciphers have a set of weak keys;
-@racket[generate-cipher-key] currently does @emph{not} check for and
+@racket[generate-cipher-key] currently does @emph{not} detect and
 avoid weak keys.
 }
 

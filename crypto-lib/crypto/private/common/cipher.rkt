@@ -34,14 +34,16 @@
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-iv-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
-  [make-encrypt-cipher-ctx
+  [make-encrypt-ctx
    (->* [cipher/c key/c iv/c] [#:pad pad-mode/c]
-        cipher-ctx?)]
-  [make-decrypt-cipher-ctx
+        encrypt-ctx?)]
+  [make-decrypt-ctx
    (->* [cipher/c key/c iv/c] [#:pad pad-mode/c]
-        cipher-ctx?)]
-  [cipher-encrypt?
-   (-> cipher-ctx? boolean?)]
+        decrypt-ctx?)]
+  [encrypt-ctx?
+   (-> any/c boolean?)]
+  [decrypt-ctx?
+   (-> any/c boolean?)]
   [cipher-update
    (->* [cipher-ctx? bytes?] [nat? nat?]
         bytes?)]
@@ -99,8 +101,6 @@
 
 ;; ----
 
-(define (cipher-encrypt? x) (send x get-encrypt?))
-
 (define (-get-spec o)
   (cond [(digest-spec? o) o]
         [(is-a? o cipher-impl<%>)
@@ -126,11 +126,15 @@
 
 ;; ----
 
-(define (make-encrypt-cipher-ctx ci key iv #:pad [pad? #t])
-  (-encrypt-ctx 'make-encrypt-cipher-ctx ci key iv pad?))
+(define (encrypt-ctx? x)
+  (and (cipher-ctx? x) (send x get-encrypt?)))
+(define (decrypt-ctx? x)
+  (and (cipher-ctx? x) (not (send x get-encrypt?))))
 
-(define (make-decrypt-cipher-ctx ci key iv #:pad [pad? #t])
-  (-decrypt-ctx 'make-decrypt-cipher-ctx ci key iv pad?))
+(define (make-encrypt-ctx ci key iv #:pad [pad? #t])
+  (-encrypt-ctx 'make-encrypt-ctx ci key iv pad?))
+(define (make-decrypt-ctx ci key iv #:pad [pad? #t])
+  (-decrypt-ctx 'make-decrypt-ctx ci key iv pad?))
 
 (define (-encrypt-ctx who ci key iv pad)
   (let ([ci (-get-impl who ci)])
