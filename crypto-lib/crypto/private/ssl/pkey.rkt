@@ -21,10 +21,7 @@
          "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt"
-         "macros.rkt"
-         "util.rkt"
-         "digest.rkt"
-         "cipher.rkt")
+         "digest.rkt")
 (provide (all-defined-out))
 
 (define pkey-impl%

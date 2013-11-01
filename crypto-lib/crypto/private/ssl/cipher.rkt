@@ -18,16 +18,11 @@
 (require ffi/unsafe
          racket/class
          racket/match
-         racket/string
          "../common/interfaces.rkt"
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
-         "ffi.rkt"
-         "macros.rkt"
-         "util.rkt"
-         (for-syntax racket/base
-                     racket/syntax))
+         "ffi.rkt")
 (provide (all-defined-out))
 
 (define cipher-impl%

@@ -20,10 +20,7 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
-         "ffi.rkt"
-         "macros.rkt"
-         "util.rkt"
-         (only-in racket/list last))
+         "ffi.rkt")
 (provide (all-defined-out))
 
 ;; FIXME: potential races all over the place
