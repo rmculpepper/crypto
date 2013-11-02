@@ -18,9 +18,11 @@
 (require racket/class
          racket/string
          "catalog.rkt"
-         "interfaces.rkt")
+         "interfaces.rkt"
+         "../rkt/padding.rkt")
 (provide base-ctx%
          multikeylen-cipher-impl%
+         whole-block-cipher-ctx%
          shrink-bytes)
 
 ;; ----
@@ -30,6 +32,8 @@
     (init-field impl)
     (define/public (get-impl) impl)
     (super-new)))
+
+;; ----
 
 (define multikeylen-cipher-impl%
   (class* object% (cipher-impl<%>)
@@ -52,6 +56,117 @@
                                    "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")
                     spec (bytes-length key)
                     (string-join (map number->string (map car impls)) ", "))]))
+    ))
+
+;; ----
+
+(define whole-block-cipher-ctx%
+  (class* base-ctx% (cipher-ctx<%>)
+    (init-field encrypt? pad?)
+    (inherit-field impl)
+    (super-new)
+
+    ;; Underlying impl only accepts whole blocks.
+    ;; First partlen bytes of partial is waiting for rest of block.
+    (field [block-size (send impl get-block-size)])
+    (define partial (make-bytes block-size))
+    (define partlen 0)
+
+    (define/public (get-encrypt?) encrypt?)
+
+    (define/public (update! who inbuf instart inend outbuf outstart outend)
+      (unless (*open?) (error who "cipher context is closed"))
+      (define len (- inend instart))
+      (define total (+ len partlen))
+      ;; First complete fill partial to *crypt separately
+      ;; ... except if was empty, skip and go straight to aligned
+      (define prefixlen (remainder (min len (- block-size partlen)) block-size))
+      ;; Complication: when decrypting with padding, can't output decrypted block until
+      ;; first byte of next block is seen, else might miss ill-padded data.
+      (define flush-partial?
+        (and (positive? partlen)
+             (if (or encrypt? (not pad?))
+                 (>= total block-size)
+                 (> total block-size))))
+      (define alignstart (+ instart prefixlen))
+      (define alignend0 (- inend (remainder (- inend alignstart) block-size)))
+      (define alignend1
+        (if (or encrypt? (not pad?))
+            alignend0
+            (if (zero? (remainder (- alignend0 alignstart) block-size))
+                (- alignend0 block-size)
+                alignend0)))
+      (define alignend (max alignstart alignend1))
+      (define pfxoutlen (if flush-partial? block-size 0))
+      (when (< instart alignstart)
+        (bytes-copy! partial partlen inbuf instart alignstart))
+      (cond [flush-partial?
+             (*crypt partial 0 block-size outbuf outstart (+ outstart block-size)) ;; outend
+             (bytes-fill! partial 0)
+             (set! partlen 0)]
+            [else
+             (set! partlen (+ partlen prefixlen))])
+      (define outstart* (+ outstart pfxoutlen))
+      (define alignlen (- alignend alignstart))
+      (when (< alignstart alignend)
+        (*crypt inbuf alignstart alignend outbuf outstart* (+ outstart* alignlen))) ;; outend
+      (when (< alignend inend) ;; implies flush-partial?
+        (bytes-copy! partial 0 inbuf alignend inend)
+        (set! partlen (- inend alignend)))
+      (+ pfxoutlen alignlen))
+
+    (define/public (final! who outbuf outstart outend)
+      (unless (*open?) (error who "cipher context is closed"))
+      (begin0
+          (cond [encrypt?
+                 (cond [pad?
+                        (pad-bytes!/pkcs7 partial partlen)
+                        (*crypt partial 0 block-size outbuf outstart outend)
+                        block-size]
+                       [(zero? partlen)
+                        0]
+                       [else
+                        (or (*crypt-partial partial 0 partlen outbuf outstart outend)
+                            (err/partial who))])]
+                [else ;; decrypting
+                 (cond [pad?
+                        (unless (= partlen block-size)
+                          (err/partial who))
+                        (let ([tmp (make-bytes block-size)])
+                          (*crypt partial 0 block-size tmp 0 block-size)
+                          (let ([pos (unpad-bytes/pkcs7 tmp)])
+                            (unless pos
+                              (err/partial who))
+                            (bytes-copy! outbuf outstart tmp 0 pos)
+                            pos))]
+                       [(zero? partlen)
+                        0]
+                       [else
+                        (or (*crypt-partial partial 0 partlen outbuf outstart outend)
+                            (err/partial who))])])
+        (*close)))
+
+    ;; *crypt-partial : ... -> nat or #f
+    ;; encrypt partial final block (eg for CTR mode)
+    ;; returns number of bytes or #f to indicate refusal to handle partial block
+    ;; only called if pad? is #f, (- inend instart) < block-size
+    (define/public (*crypt-partial inbuf instart inend outbuf outstart outend)
+      #f)
+
+    (define/private (err/partial who)
+      (error who "partial block (~a)" (if encrypt? "encrypting" "decrypting")))
+
+    ;; Methods to implement in subclass:
+
+    ;; *crypt : inbuf instart inend outbuf outstart outend -> void
+    ;; encrypt/decrypt whole number of blocks
+    (abstract *crypt)
+
+    ;; *open? : -> boolean
+    (abstract *open?)
+
+    ;; *close : -> void
+    (abstract *close)
     ))
 
 ;; ----

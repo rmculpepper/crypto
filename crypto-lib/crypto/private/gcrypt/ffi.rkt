@@ -128,6 +128,23 @@
 (define (gcry_md_test_algo a)
   (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f)))
 
+(define GCRY_KDF_PBKDF2 34) ;; really PBKDF2-HMAC-<digest>
+
+(define-gcrypt gcry_kdf_derive
+  (_fun (input subalgo salt iters outlen) ::
+        (input   : _bytes)
+        (inlen   : _size = (bytes-length input))
+        (algo    : _int = GCRY_KDF_PBKDF2)
+        (subalgo : _int)
+        (salt    : _bytes)
+        (saltlen : _size = (bytes-length salt))
+        (iters   : _ulong)
+        (outlen  : _size)
+        (out     : (_bytes o outlen))
+        -> (status : _gcry_error)
+        -> (values status out))
+  #:wrap check2)
+
 ;; ----
 
 (define-cpointer-type _gcry_cipher_hd)

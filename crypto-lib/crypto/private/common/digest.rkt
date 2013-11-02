@@ -163,7 +163,7 @@
           [else
            (let* ([himpl (send di get-hmac-impl 'hmac)]
                   [hctx (send himpl new-ctx 'hmac key)])
-             (send hctx update! 'hmac buf start end)
+             (send hctx update 'hmac buf start end)
              (send hctx final! 'hmac outbuf 0 (bytes-length outbuf)))])
     outbuf))
 
@@ -178,7 +178,7 @@
                (send hctx final! 'hmac buf 0 size)
                (shrink-bytes buf size)]
               [else
-               (send hctx update! 'hmac buf 0 count)
+               (send hctx update 'hmac buf 0 count)
                (loop)])))))
 
 (define (generate-hmac-key di)

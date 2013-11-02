@@ -4,6 +4,7 @@ To Do
 - doc: how to get impls from specs
 - nettle factory
 - new API for sign/verify
+- gcrypt initialization
 
 - sections for Password Hashing
   - pbkdf2

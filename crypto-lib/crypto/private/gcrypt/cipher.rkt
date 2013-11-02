@@ -48,102 +48,23 @@
     ))
 
 (define cipher-ctx%
-  (class* base-ctx% (cipher-ctx<%>)
-    (init-field ctx
-                encrypt?
-                pad?)
-    (inherit-field impl)
+  (class* whole-block-cipher-ctx% (cipher-ctx<%>)
+    (inherit-field impl encrypt? pad?)
+    (init-field ctx)
     (super-new)
 
     ;; FIXME: reconcile padding and stream ciphers (raise error?)
 
-    ;; gcrypt accepts only whole blocks.
-    ;; First partlen bytes of partial is waiting for rest of block.
-    (define block-size (send impl get-block-size))
-    (define partial (make-bytes block-size))
-    (define partlen 0)
-
-    (define/public (get-encrypt?) encrypt?)
-
-    (define/public (update! who inbuf instart inend outbuf outstart outend)
-      (define len (- inend instart))
-      (define total (+ len partlen))
-      ;; First complete fill partial to *crypt separately
-      ;; ... except if was empty, skip and go straight to aligned
-      (define prefixlen (remainder (min len (- block-size partlen)) block-size))
-      ;; Complication: when decrypting with padding, can't output decrypted block until
-      ;; first byte of next block is seen, else might miss ill-padded data.
-      (define flush-partial?
-        (and (positive? partlen)
-             (if (or encrypt? (not pad?))
-                 (>= total block-size)
-                 (> total block-size))))
-      (define alignstart (+ instart prefixlen))
-      (define alignend0 (- inend (remainder (- inend alignstart) block-size)))
-      (define alignend1
-        (if (or encrypt? (not pad?))
-            alignend0
-            (if (zero? (remainder (- alignend0 alignstart) block-size))
-                (- alignend0 block-size)
-                alignend0)))
-      (define alignend (max alignstart alignend1))
-
-      (define pfxoutlen (if flush-partial? block-size 0))
-      (when (< instart alignstart)
-        (bytes-copy! partial partlen inbuf instart alignstart))
-      (cond [flush-partial?
-             (*crypt partial 0 block-size outbuf outstart (+ outstart block-size)) ;; outend
-             (bytes-fill! partial 0)
-             (set! partlen 0)]
-            [else
-             (set! partlen (+ partlen prefixlen))])
-      (define outstart* (+ outstart pfxoutlen))
-      (define alignlen (- alignend alignstart))
-      (when (< alignstart alignend)
-        (*crypt inbuf alignstart alignend outbuf outstart* (+ outstart* alignlen))) ;; outend
-      (when (< alignend inend) ;; implies flush-partial?
-        (bytes-copy! partial 0 inbuf alignend inend)
-        (set! partlen (- inend alignend)))
-      (+ pfxoutlen alignlen))
-
-    (define/private (*crypt inbuf instart inend outbuf outstart outend)
+    (define/override (*crypt inbuf instart inend outbuf outstart outend)
       (let ([op (if encrypt? gcry_cipher_encrypt gcry_cipher_decrypt)])
         (op ctx
             (ptr-add outbuf outstart) (- outend outstart)
             (ptr-add inbuf instart) (- inend instart))))
 
-    (define/public (final! who outbuf outstart outend)
-      (define (err/partial)
-        (error who "partial block (~a)" (if encrypt? "encrypting" "decrypting")))
-      (begin0
-          (cond [encrypt?
-                 (cond [pad?
-                        (pad-bytes!/pkcs7 partial partlen)
-                        (*crypt partial 0 block-size outbuf outstart outend)
-                        block-size]
-                       [else
-                        (unless (zero? partlen)
-                          ;; FIXME: better error
-                          (err/partial))
-                        0])]
-                [else ;; decrypting
-                 (cond [pad?
-                        (unless (= partlen block-size)
-                          (err/partial))
-                        (let ([tmp (make-bytes block-size)])
-                          (*crypt partial 0 block-size tmp 0 block-size)
-                          (let ([pos (unpad-bytes/pkcs7 tmp)])
-                            (unless pos
-                              (err/partial))
-                            (bytes-copy! outbuf outstart tmp 0 pos)
-                            pos))]
-                       [else
-                        (unless (= partlen 0)
-                          (err/partial))])])
-        (gcry_cipher_close ctx)
-        (set! ctx #f)))
+    (define/override (*open?)
+      (and ctx #t))
 
-    ;; http://en.wikipedia.org/wiki/Padding_%28cryptography%29
-    (define/private (pad-bytes! buf pos)
-      (pad-bytes!/pkcs7 buf pos))
+    (define/override (*close)
+      (gcry_cipher_close ctx)
+      (set! ctx #f))
     ))

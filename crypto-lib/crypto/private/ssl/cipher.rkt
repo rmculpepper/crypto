@@ -61,6 +61,12 @@
         (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
     ))
 
+;; Conflicting notes about GCM mode:
+;; - Must set AAD with NULL output buffer; MUST set, even if 0-length (use #"")
+;;   See http://incog-izick.blogspot.com/2011/08/using-openssl-aes-gcm.html
+;; - No, don't, if using EVP_CipherInit_ex
+;;   See http://stackoverflow.com/questions/12153009/
+
 (define cipher-ctx%
   (class* base-ctx% (cipher-ctx<%>)
     (init-field ctx
