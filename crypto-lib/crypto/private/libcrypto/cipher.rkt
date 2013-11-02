@@ -25,7 +25,7 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
-(define cipher-impl%
+(define libcrypto-cipher-impl%
   (class* object% (cipher-impl<%>)
     (init-field cipher ;; EVP_CIPHER
                 spec)
@@ -58,7 +58,7 @@
         (EVP_CIPHER_CTX_set_key_length ctx (bytes-length key))
         (EVP_CIPHER_CTX_set_padding ctx (and pad? (cipher-spec-uses-padding? spec)))
         (EVP_CipherInit_ex ctx cipher key (and iv-size iv) enc?)
-        (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
+        (new libcrypto-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
     ))
 
 ;; Conflicting notes about GCM mode:
@@ -67,7 +67,7 @@
 ;; - No, don't, if using EVP_CipherInit_ex
 ;;   See http://stackoverflow.com/questions/12153009/
 
-(define cipher-ctx%
+(define libcrypto-cipher-ctx%
   (class* base-ctx% (cipher-ctx<%>)
     (init-field ctx
                 encrypt?)

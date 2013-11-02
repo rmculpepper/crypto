@@ -22,7 +22,7 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
-(define random-impl%
+(define libcrypto-random-impl%
   (class* object% (random-impl<%>)
     (super-new)
     (define/public (random-bytes! who buf start end)
@@ -32,4 +32,4 @@
       (check-output-range who buf start end)
       (void (RAND_pseudo_bytes (ptr-add buf start) (- end start))))))
 
-(define random-impl (new random-impl%))
+(define libcrypto-random-impl (new libcrypto-random-impl%))

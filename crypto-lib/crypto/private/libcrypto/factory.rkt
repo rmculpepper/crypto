@@ -114,7 +114,7 @@ To print all ciphers:
                 [evp (EVP_PKEY_new) EVP_PKEY_free])
       (RSA_generate_key_ex rsap bits ep)
       (EVP_PKEY_set1_RSA evp rsap)
-      (new pkey-ctx% (impl pkey:rsa) (evp evp) (private? #t)))))
+      (new libcrypto-pkey-ctx% (impl pkey:rsa) (evp evp) (private? #t)))))
 
 (define (dsa-keygen bits)
   (let/error ([dsap (DSA_new) DSA_free]
@@ -122,13 +122,13 @@ To print all ciphers:
     (DSA_generate_parameters_ex dsap bits)
     (DSA_generate_key dsap)
     (EVP_PKEY_set1_DSA evp dsap)
-    (new pkey-ctx% (impl pkey:dsa) (evp evp) (private? #t))))
+    (new libcrypto-pkey-ctx% (impl pkey:dsa) (evp evp) (private? #t))))
 
 (define EVP_PKEY_RSA	6)
 (define EVP_PKEY_DSA	116)
 
 (define pkey:rsa
-  (new pkey-impl%
+  (new libcrypto-pkey-impl%
        (name "RSA")
        (pktype EVP_PKEY_RSA)
        (keygen rsa-keygen)
@@ -136,7 +136,7 @@ To print all ciphers:
        (encrypt-ok? #t)))
 
 (define pkey:dsa
-  (new pkey-impl%
+  (new libcrypto-pkey-impl%
        (name "RSA")
        (pktype EVP_PKEY_DSA)
        (keygen dsa-keygen)
@@ -154,7 +154,7 @@ To print all ciphers:
     (define/override (get-digest* spec)
       (let* ([name-string (hash-ref libcrypto-digests spec #f)]
              [evp (and name-string (EVP_get_digestbyname name-string))])
-        (new digest-impl% (spec spec) (md evp))))
+        (new libcrypto-digest-impl% (spec spec) (md evp))))
 
     (define/override (get-cipher* spec)
       (match spec
@@ -178,7 +178,7 @@ To print all ciphers:
            [_ #f])]))
 
     (define/private (make-cipher spec evp)
-      (and evp (new cipher-impl% (spec spec) (cipher evp))))
+      (and evp (new libcrypto-cipher-impl% (spec spec) (cipher evp))))
 
     ;; ----
 
@@ -186,7 +186,7 @@ To print all ciphers:
       (hash-ref pkey-table name-sym #f))
 
     (define/override (get-random)
-      random-impl)
+      libcrypto-random-impl)
     ))
 
 (define libcrypto-factory (new libcrypto-factory%))

@@ -24,7 +24,7 @@
          "digest.rkt")
 (provide (all-defined-out))
 
-(define pkey-impl%
+(define libcrypto-pkey-impl%
   (class* object% (pkey-impl<%>)
     (init-field name
                 pktype
@@ -39,7 +39,7 @@
       (check-input-range who buf start end)
       (let* ([d2i (if public? d2i_PublicKey d2i_PrivateKey)]
              [evp (d2i pktype (ptr-add buf start) (- end start))])
-        (new pkey-ctx% (impl this) (evp evp) (private? (not public?)))))
+        (new libcrypto-pkey-ctx% (impl this) (evp evp) (private? (not public?)))))
 
     (define/public (generate-key args)
       (apply keygen args))
@@ -51,7 +51,7 @@
       encrypt-ok?)
     ))
 
-(define pkey-ctx%
+(define libcrypto-pkey-ctx%
   (class* base-ctx% (pkey-ctx<%>)
     (init-field evp
                 private?)
@@ -70,7 +70,7 @@
         buf))
 
     (define/public (equal-to-key? other)
-      (and (is-a? other pkey-ctx%)
+      (and (is-a? other libcrypto-pkey-ctx%)
            (EVP_PKEY_cmp evp (get-field evp other))))
 
     ;; From headers, EVP_{Sign,Verify}{Init_ex,Update} are just macros for
@@ -80,7 +80,7 @@
       (unless private?
         (error who "not a private key"))
       ;; FIXME: add method to digest-ctx% instead (?)
-      (unless (is-a? digest-ctx digest-ctx%)
+      (unless (is-a? digest-ctx libcrypto-digest-ctx%)
         (eprintf "args = ~s\n" (list who digest-ctx buf start end))
         (error who "invalid digest context, not compatible with libcrypto: ~e" digest-ctx))
       (check-output-range who buf start end (get-max-signature-size))
@@ -90,7 +90,7 @@
 
     (define/public (verify who digest-ctx buf start end)
       ;; FIXME: add methdo to digest-ctx% instead (?)
-      (unless (is-a? digest-ctx digest-ctx%)
+      (unless (is-a? digest-ctx libcrypto-digest-ctx%)
         (error who "invalid digest context, not compatible with libcrypto"))
       (check-input-range who buf start end)
       (let ([dctx (get-field ctx digest-ctx)])
