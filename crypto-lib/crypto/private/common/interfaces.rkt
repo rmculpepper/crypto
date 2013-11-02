@@ -72,10 +72,10 @@
     all-ciphers        ;; -> (listof cipher-impl<%>)
     all-pkeys          ;; -> (listof pkey-impl<%>)
     |#
-    get-digest-by-name ;; DigestSpec -> digest-impl<%>/#f
-    get-cipher-by-name ;; CipherSpec -> cipher-impl<%>/#f
-    get-pkey-by-name   ;; symbol -> pkey-impl<%>/#f
-    get-random         ;; -> random-impl<%>/#f
+    get-digest  ;; DigestSpec -> digest-impl<%>/#f
+    get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
+    get-pkey    ;; symbol -> pkey-impl<%>/#f
+    get-random  ;; -> random-impl<%>/#f
     ))
 
 (define (factory? x) (is-a? x factory<%>))

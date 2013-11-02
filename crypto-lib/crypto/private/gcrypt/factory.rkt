@@ -94,58 +94,38 @@
 ;; ----------------------------------------
 
 (define gcrypt-factory%
-  (class* object% (#|factory<%>|#)
+  (class* factory-base% (factory<%>)
     (super-new)
 
-    (define digest-table (make-hasheq))
-    (define cipher-table (make-hash))
-
-    (define/private (intern-digest spec)
-      (cond [(hash-ref digest-table spec #f)
-             => values]
-            [(assq spec digests)
+    (define/override (get-digest* spec)
+      (cond [(assq spec digests)
              => (lambda (entry)
                   (match entry
                     [(list _ algid blocksize)
                      (and (gcry_md_test_algo algid)
-                          (let ([di (new digest-impl%
-                                         (md algid)
-                                         (spec spec)
-                                         (blocksize blocksize))])
-                            (hash-set! digest-table spec di)
-                            di))]
+                          (new digest-impl%
+                               (md algid)
+                               (spec spec)
+                               (blocksize blocksize)))]
                     [_ #f]))]
             [else #f]))
 
-    (define/private (intern-cipher spec)
-      (cond [(hash-ref cipher-table spec #f)
-             => values]
-            [(and (assq (cadr spec) modes)
+    (define/override (get-cipher* spec)
+      (cond [(and (assq (cadr spec) modes)
                   (assq (car spec) ciphers))
              => (lambda (entry)
                   (match entry
                     [(list _ keylens+algids)
-                     (let ([ci (new multikeylen-cipher-impl%
-                                    (spec spec)
-                                    (impls
-                                     (for/list ([keylen+algid (in-list keylens+algids)])
-                                       (cons (quotient (car keylen+algid) 8)
-                                             (new cipher-impl%
-                                                  (spec spec)
-                                                  (cipher (cadr keylen+algid))
-                                                  (mode (cadr (assq (cadr spec) modes))))))))])
-                       (hash-set! cipher-table spec ci)
-                       ci)]
+                     (for/list ([keylen+algid (in-list keylens+algids)])
+                       (cons (quotient (car keylen+algid) 8)
+                             (new cipher-impl%
+                                  (spec spec)
+                                  (cipher (cadr keylen+algid))
+                                  (mode (cadr (assq (cadr spec) modes))))))]
                     [_ #f]))]
             [else #f]))
 
-    ;; ----
-
-    (define/public (get-digest-by-name name)
-      (intern-digest name))
-    (define/public (get-cipher-by-name name)
-      (intern-cipher name))
-    (define/public (get-random)
+    (define/override (get-random)
       random-impl)
     ))
 

@@ -404,67 +404,17 @@ FIXME: check again whether DER available in older versions
 
 ;; ============================================================
 
-(define digest-info
-  `((md5       16 64)
-    (ripemd160 20 64)
-    (dss1      20 64)
-    (sha1      20 64)
-    (sha224    28 64)
-    (sha256    32 64)
-    (sha384    48 128)
-    (sha512    64 128)))
-
-(define cipher-info
-  '((aes-128-cbc  16 16 16)
-    (aes-128-ecb  16 16 #f)
-    (aes-192-cbc  24 16 16)
-    (aes-192-ecb  24 16 #f)
-    (aes-256-cbc  32 16 16)
-    (aes-256-ecb  32 16 #f)
-    (bf-cbc       16  8  8)
-    (bf-ecb       16  8 #f)
-    ;; bf-cfb
-    ;; bf-ofb
-    #|
-    cast-cbc
-    cast5-cbc
-    cast5-cfb
-    cast5-ecb
-    cast5-ofb
-    des-cbc
-    des-cfb
-    des-ecb
-    des-ofb
-    des-ede
-    des-ede-cbc
-    des-ede-cfb
-    des-ede-ofb
-    des-ede3
-    des-ede3-cbc
-    des-ede3-cfb
-    des-ede3-ofb
-    desx
-    rc2-cbc
-    rc2-cfb
-    rc2-ecb
-    rc2-ofb
-    rc2-40-cbc
-    rc2-64-cbc
-    rc4
-    rc4-40
-    |#))
-
 (define cmdssl-factory%
-  (class* object% (#|factory<%>|#)
+  (class* factory-base% (factory<%>)
     (super-new)
 
-    (define/public (get-digest-by-name name)
+    (define/override (get-digest* name)
       (cond [(assq name digests)
              => (lambda (entry)
                   (di name (cadr entry)))]
             [else #f]))
 
-    (define/public (get-cipher-by-name spec)
+    (define/override (get-cipher* spec)
       (match spec
         [(list name mode)
          (cond [(assq name ciphers)
@@ -478,7 +428,7 @@ FIXME: check again whether DER available in older versions
                        [_ #f]))]
                [else #f])]))
 
-    (define/public (get-pkey-by-name name)
+    (define/override (get-pkey name)
       (case name
         ((rsa) pkey:rsa)
         ((dsa) pkey:dsa)

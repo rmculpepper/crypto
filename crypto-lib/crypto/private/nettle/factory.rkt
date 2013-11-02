@@ -72,67 +72,39 @@
 ;; ----------------------------------------
 
 (define nettle-factory%
-  (class* object% (#|factory<%>|#)
+  (class* factory-base% (factory<%>)
     (super-new)
 
-    (define digest-table (make-hasheq))
-    (define cipher-table (make-hash))
-
-    (define/private (intern-digest spec)
-      (cond [(hash-ref digest-table spec #f)
-             => values]
-            [(assq spec digests)
+    (define/override (get-digest* spec)
+      (cond [(assq spec digests)
              => (lambda (entry)
                   (let ([algid (cadr entry)])
                     (cond [(assoc algid nettle-hashes)
                            => (lambda (entry)
-                                (let* ([nh (cadr entry)]
-                                       [di (new digest-impl%
-                                                (spec spec)
-                                                (nh nh))])
-                                  (hash-set! digest-table spec di)))]
+                                (let ([nh (cadr entry)])
+                                  (new digest-impl%
+                                       (spec spec)
+                                       (nh nh))))]
                           [else #f])))]
             [else #f]))
 
-    (define/private (intern-cipher spec)
-      (cond [(hash-ref cipher-table spec #f)
-             => values]
-            [else
-             (let ([ci (get-cipher spec)])
-               (when ci (hash-set! cipher-table spec ci))
-               ci)]))
-
-    (define/private (get-cipher spec)
+    (define/override (get-cipher* spec)
       (and (memq (cadr spec) modes)
            (let ([entry (assq (car spec) ciphers)])
              (match entry
                [(list _ (? string? algid))
                 (get-nc spec algid)]
                [(list _ keylens+algids)
-                (let* ([impls
-                        (for/list ([keylen+algid (in-list keylens+algids)])
-                          (cons (quotient (car keylen+algid) 8)
-                                (get-nc spec (cadr keylen+algid))))]
-                       [impls (filter cdr impls)])
-                  (and (pair? impls)
-                       (new multikeylen-cipher-impl%
-                            (spec spec)
-                            (impls impls))))]))))
+                (for/list ([keylen+algid (in-list keylens+algids)])
+                  (cons (quotient (car keylen+algid) 8)
+                        (get-nc spec (cadr keylen+algid))))]
+               [_ #f]))))
 
     (define/private (get-nc spec algid)
       (match (assoc algid nettle-more-ciphers)
         [(list _ nc)
          (new cipher-impl% (spec spec) (nc nc))]
         [_ #f]))
-
-    ;; ----
-
-    (define/public (get-digest-by-name name)
-      (intern-digest name))
-    (define/public (get-cipher-by-name name)
-      (intern-cipher name))
-    (define/public (get-random)
-      #f)
     ))
 
 (define nettle-factory (new nettle-factory%))

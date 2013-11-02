@@ -148,72 +148,43 @@ To print all ciphers:
 ;; ============================================================
 
 (define ssl-factory%
-  (class* object% (factory<%>)
+  (class* factory-base% (factory<%>)
     (super-new)
 
-    (define digest-table (make-hasheq))
-    (define cipher-table (make-hash))
+    (define/override (get-digest* spec)
+      (let ([name-string (hash-ref libcrypto-digests spec #f)])
+        (and name-string (EVP_get_digestbyname name-string))))
 
-    (define/private (intern-digest spec)
-      (cond [(hash-ref digest-table spec #f)
-             => values]
-            [(let ([name-string (hash-ref libcrypto-digests spec #f)])
-               (and name-string (EVP_get_digestbyname name-string)))
-             => (lambda (md)
-                  (let ([di (new digest-impl% (md md) (spec spec))])
-                    (hash-set! digest-table spec di)
-                    di))]
-            [else #f]))
+    (define/override (get-cipher* spec)
+      (match spec
+        [(list (? symbol? name-sym) 'stream)
+         (match (assq name-sym libcrypto-ciphers)
+           [(list name-sym '(stream) #f name-string)
+            (make-cipher spec (EVP_get_cipherbyname name-string))]
+           [_ #f])]
+        [(list (? symbol? name-sym) (? symbol? mode))
+         (match (assq name-sym libcrypto-ciphers)
+           [(list name-sym modes keys name-string)
+            (and (memq mode modes)
+                 (cond [keys
+                        (for/list ([key (in-list keys)])
+                          (define s (format "~a-~a-~a" name-string key mode))
+                          (cons (quotient key 8)
+                                (make-cipher spec (EVP_get_cipherbyname s))))]
+                       [else
+                        (define s (format "~a-~a" name-string mode))
+                        (make-cipher spec (EVP_get_cipherbyname s))]))]
+           [_ #f])]))
 
-    (define/private (intern-cipher spec)
-      (cond [(hash-ref cipher-table spec #f)
-             => values]
-            [(match spec
-               [(list (? symbol? name-sym) 'stream)
-                (match (assq name-sym libcrypto-ciphers)
-                  [(list name-sym '(stream) #f name-string)
-                   (EVP_get_cipherbyname name-string)]
-                  [_ #f])]
-               [(list (? symbol? name-sym) (? symbol? mode))
-                (match (assq name-sym libcrypto-ciphers)
-                  [(list name-sym modes keys name-string)
-                   (and (memq mode modes)
-                        (if keys
-                            (let ([keylen+evps
-                                   (for/list ([key (in-list keys)])
-                                     (define s (format "~a-~a-~a" name-string key mode))
-                                     (cons (quotient key 8) ;; convert bit size to byte size
-                                           (EVP_get_cipherbyname s)))])
-                              (and (andmap cdr keylen+evps) keylen+evps))
-                            (EVP_get_cipherbyname (format "~a-~a" name-string mode))))]
-                  [_ #f])])
-             => (lambda (cipher/s)
-                  (define ci
-                    (cond [(list? cipher/s)
-                           (new multikeylen-cipher-impl%
-                                (impls (for/list ([keylen+evp (in-list cipher/s)])
-                                         (cons (car keylen+evp)
-                                               (new cipher-impl% (cipher (cdr keylen+evp))
-                                                    (spec spec)))))
-                                (spec spec))]
-                          [else
-                           (new cipher-impl% (cipher cipher/s) (spec spec))]))
-                  (hash-set! cipher-table spec ci)
-                  ci)]
-            [else #f]))
+    (define/private (make-cipher spec evp)
+      (and evp (new cipher-impl% (spec spec) (cipher evp))))
 
     ;; ----
 
-    (define/public (get-digest-by-name name)
-      (intern-digest name))
-
-    (define/public (get-cipher-by-name name)
-      (intern-cipher name))
-
-    (define/public (get-pkey-by-name name-sym)
+    (define/override (get-pkey name-sym)
       (hash-ref pkey-table name-sym #f))
 
-    (define/public (get-random)
+    (define/override (get-random)
       random-impl)
     ))
 

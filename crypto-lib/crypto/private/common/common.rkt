@@ -21,6 +21,7 @@
          "interfaces.rkt"
          "../rkt/padding.rkt")
 (provide base-ctx%
+         factory-base%
          multikeylen-cipher-impl%
          whole-block-cipher-ctx%
          shrink-bytes)
@@ -32,6 +33,49 @@
     (init-field impl)
     (define/public (get-impl) impl)
     (super-new)))
+
+;; ----
+
+(define factory-base%
+  (class* object% (factory<%>)
+    (super-new)
+
+    ;; digest-table : hasheq[DigestSpec => DigestImpl/'none]
+    (define digest-table (make-hasheq))
+    ;; cipher-table : hash[CipherSpec => CipherImpl/'none]
+    (define cipher-table (make-hash))
+
+    (define/public (get-digest spec)
+      (cond [(hash-ref digest-table spec #f)
+             => (lambda (impl/none)
+                  (and (digest-impl? impl/none) impl/none))]
+            [else
+             (let ([di (get-digest* spec)])
+               (when di (hash-set! digest-table spec di))
+               di)]))
+
+    (define/public (get-cipher spec)
+      (cond [(hash-ref cipher-table spec #f)
+             => (lambda (impl/none)
+                  (and (cipher-impl? impl/none) impl/none))]
+            [else
+             (let* ([ci/s (get-cipher* spec)]
+                    [ci (cond [(list? ci/s)
+                               (and (andmap cdr ci/s)
+                                    (new multikeylen-cipher-impl%
+                                         (spec spec)
+                                         (impls ci/s)))]
+                              [(cipher-impl? ci/s) ci/s]
+                              [else #f])])
+               (when ci (hash-set! cipher-table spec ci))
+               ci)]))
+
+    (define/public (get-pkey spec) #f)
+    (define/public (get-random) #f)
+
+    (abstract get-digest*)
+    (abstract get-cipher*) ;; CipherSpec -> (U #f CipherImpl (listof (cons nat CipherImpl)))
+    ))
 
 ;; ----
 
