@@ -26,7 +26,7 @@
          "rand.rkt"
          "ffi.rkt"
          "macros.rkt")
-(provide ssl-factory)
+(provide libcrypto-factory)
 
 #|
 To print all digests:
@@ -147,7 +147,7 @@ To print all ciphers:
 
 ;; ============================================================
 
-(define ssl-factory%
+(define libcrypto-factory%
   (class* factory-base% (factory<%>)
     (super-new)
 
@@ -189,4 +189,4 @@ To print all ciphers:
       random-impl)
     ))
 
-(define ssl-factory (new ssl-factory%))
+(define libcrypto-factory (new libcrypto-factory%))

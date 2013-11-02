@@ -24,7 +24,7 @@
          "../common/catalog.rkt"
          "../common/interfaces.rkt"
          "../common/common.rkt"
-         (only-in "../ssl/util.rkt" hex unhex))
+         (only-in "../libcrypto/util.rkt" hex unhex))
 (provide (all-defined-out))
 
 ;; ============================================================

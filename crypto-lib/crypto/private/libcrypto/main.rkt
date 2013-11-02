@@ -44,7 +44,7 @@
     [(_ id)
      (with-syntax ([di (format-id stx "digest:~a" #'id)])
        #'(begin
-           (define di (send ssl-factory get-digest-by-name 'id))
+           (define di (send libcrypto-factory get-digest-by-name 'id))
            (define id (make-digest-op 'id di))
            (when di (set! *digests* (cons di *digests*)))
            (provide di id)))]))
@@ -102,7 +102,7 @@
        (with-syntax ([c-p-mode c-p-mode]
                      [cipher:c-p-mode (format-id #'c "cipher:~a" c-p-mode)])
          #'(begin
-             (define cipher:c-p-mode (send ssl-factory get-cipher-by-name 'c-p-mode))
+             (define cipher:c-p-mode (send libcrypto-factory get-cipher-by-name 'c-p-mode))
              (provide cipher:c-p-mode))))]))
 
 (define-cipher des (#f ede ede3))
@@ -112,7 +112,7 @@
 (define-cipher aes (#f 128 192 256))
 (define-cipher camellia (#f 128 192 256))
 
-(define cipher:rc4 (send ssl-factory get-cipher-by-name 'rc4))
+(define cipher:rc4 (send libcrypto-factory get-cipher-by-name 'rc4))
 (provide cipher:rc4)
 
 (provide available-ciphers)
@@ -120,8 +120,8 @@
 ;; ============================================================
 ;; Public-Key Available Cryptosystems
 
-(define pkey:rsa (send ssl-factory get-pkey-by-name 'rsa))
-(define pkey:dsa (send ssl-factory get-pkey-by-name 'dsa))
+(define pkey:rsa (send libcrypto-factory get-pkey-by-name 'rsa))
+(define pkey:dsa (send libcrypto-factory get-pkey-by-name 'dsa))
 
 (provide pkey:rsa
          pkey:dsa)

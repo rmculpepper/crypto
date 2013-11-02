@@ -17,15 +17,15 @@
          cipher-impl?
          cipher-ctx?)
 
-(require (only-in "private/ssl/factory.rkt" ssl-factory)
+(require (only-in "private/libcrypto/factory.rkt" libcrypto-factory)
          (only-in "private/gcrypt/factory.rkt" gcrypt-factory)
          (only-in "private/nettle/factory.rkt" nettle-factory))
-(provide ssl-factory
+(provide libcrypto-factory
          gcrypt-factory
          nettle-factory)
 
 (crypto-factories
- (list* ssl-factory
+ (list* libcrypto-factory
         nettle-factory
         gcrypt-factory
         (crypto-factories)))
