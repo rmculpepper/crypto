@@ -31,12 +31,12 @@
 
 (define cipher-impl%
   (class* object% (cipher-impl<%>)
-    (init-field nc spec extras)
+    (init-field nc spec)
     (define iv-size (cipher-spec-iv-size spec))
     (super-new)
 
     (define/public (get-spec) spec)
-    (define/public (get-block-size) (nettle_cipher-block_size nc))
+    (define/public (get-block-size) (nettle-cipher-block-size nc))
     (define/public (get-iv-size) iv-size)
 
     (define/public (new-ctx who key iv enc? pad?)
@@ -46,7 +46,7 @@
                "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
                spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
       (let ([ctx (new cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
-        (send ctx set-key+iv key iv extras)
+        (send ctx set-key+iv key iv)
         ctx))
     ))
 
@@ -58,24 +58,25 @@
 
     ;; FIXME: reconcile padding and stream ciphers (raise error?)
     (define mode (cadr (send impl get-spec)))
-    (define ctx (make-ctx (nettle_cipher-context_size nc)))
+    (define ctx (make-ctx (nettle-cipher-context-size nc)))
     (define iv (make-bytes (send impl get-iv-size)))
 
-    (define/public (set-key+iv key iv* extras)
+    (define/public (set-key+iv key iv*)
       (when (positive? (bytes-length iv))
         (bytes-copy! iv 0 iv* 0 (bytes-length iv)))
       (if encrypt?
-          ((nettle_cipher-set_encrypt_key nc) ctx (bytes-length key) key)
-          ((nettle_cipher-set_decrypt_key nc) ctx (bytes-length key) key))
-      (for ([extra (in-list extras)])
+          ((nettle-cipher-set-encrypt-key nc) ctx (bytes-length key) key)
+          ((nettle-cipher-set-decrypt-key nc) ctx (bytes-length key) key))
+      (for ([extra (in-list (nettle-cipher-extras nc))])
         (case (car extra)
           [(set-iv)
            (let ([set-iv-fun (cadr extra)])
-             (set-iv-fun ctx (bytes-length iv) iv))]
+             (set-iv-fun ctx iv))]
           [else (void)])))
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
-      (define crypt (if encrypt? (nettle_cipher-encrypt nc) (nettle_cipher-decrypt nc)))
+      (define crypt (if encrypt? (nettle-cipher-encrypt nc) (nettle-cipher-decrypt nc)))
+      (eprintf "in *crypt, in=~s,~s out=~s,~s\n" instart inend outstart outend)
       (case mode
         [(ecb stream)
          (crypt ctx (- inend instart) (ptr-add outbuf outstart) (ptr-add inbuf instart))]
@@ -85,7 +86,7 @@
                        (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
         [(ctr)
          ;; Note: must use *encrypt* function in CTR mode, even when decrypting
-         (let ([crypt (nettle_cipher-encrypt nc)])
+         (let ([crypt (nettle-cipher-encrypt nc)])
            (nettle_ctr_crypt ctx crypt block-size iv (- inend instart)
                              (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
         [else (error 'cipher::*crypt "internal error: bad mode: ~e\n" mode)]))
@@ -93,7 +94,8 @@
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
       (case mode
         [(ctr stream)
-         (*crypt inbuf instart inend outbuf outstart outend)]
+         (*crypt inbuf instart inend outbuf outstart outend)
+         (- inend instart)]
         [else #f]))
 
     (define/override (*open?)

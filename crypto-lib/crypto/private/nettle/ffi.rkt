@@ -108,6 +108,16 @@
    [encrypt         _nettle_crypt_func]
    [decrypt         _nettle_crypt_func]))
 
+;; Want to create cipher records for "irregular" ciphers; easiest way
+;; to handle mix of static, foreign-allocated records and dynamic,
+;; racket-allocated records is to copy.
+
+(struct nettle-cipher (name
+                       context-size block-size key-size
+                       set-encrypt-key set-decrypt-key
+                       encrypt decrypt
+                       extras))
+
 ;; struct nettle_cipher *nettle_ciphers[], array terminated by NULL
 (define nettle_ciphers (ffi-obj #"nettle_ciphers" libnettle))
 
@@ -116,12 +126,19 @@
     (let loop ([i 0])
       (let ([next (ptr-ref ptr _nettle_cipher-pointer/null i)])
         (if next
-            (cons (list (nettle_cipher-name next) next)
+            (cons (nettle-cipher (nettle_cipher-name next)
+                                 (nettle_cipher-context_size next)
+                                 (nettle_cipher-block_size next)
+                                 (nettle_cipher-key_size next)
+                                 (nettle_cipher-set_encrypt_key next)
+                                 (nettle_cipher-set_decrypt_key next)
+                                 (nettle_cipher-encrypt next)
+                                 (nettle_cipher-decrypt next)
+                                 null)
                   (loop (add1 i)))
             null)))))
 
-;; nettle_ciphers omits ciphers with any irregularity;
-;; create dummy entries for them (with name=#f to avoid GC problems)
+;; nettle_ciphers omits ciphers with any irregularity; create entries for them too
 
 (define BLOWFISH_ROUNDS 16)
 (define BLOWFISH_CONTEXT_SIZE (+ (* 4 4 256) (* 4 (+ 2 BLOWFISH_ROUNDS))))
@@ -133,44 +150,46 @@
 
 (define blowfish-cipher
   (and nettle_blowfish_encrypt
-       (make-nettle_cipher
-        #f BLOWFISH_CONTEXT_SIZE BLOWFISH_BLOCK_SIZE BLOWFISH_KEY_SIZE
-        nettle_blowfish_set_key nettle_blowfish_set_key
-        nettle_blowfish_encrypt nettle_blowfish_decrypt)))
+       (nettle-cipher "blowfish"
+                      BLOWFISH_CONTEXT_SIZE BLOWFISH_BLOCK_SIZE BLOWFISH_KEY_SIZE
+                      nettle_blowfish_set_key nettle_blowfish_set_key
+                      nettle_blowfish_encrypt nettle_blowfish_decrypt
+                      null)))
 
 (define SALSA20_CONTEXT_SIZE (* 4 16))
 (define SALSA20_KEY_SIZE 32)
 (define SALSA20_BLOCK_SIZE 64)
 (define SALSA20_IV_SIZE 8)
 (define-nettle nettle_salsa20_set_key _nettle_set_key_func)
-(define-nettle nettle_salsa20_set_iv  _nettle_set_key_func)
+(define-nettle nettle_salsa20_set_iv (_fun _CIPHER_CTX _pointer -> _void))
 (define-nettle nettle_salsa20_crypt _nettle_crypt_func #:fail (lambda () #f))
 (define-nettle nettle_salsa20r12_crypt _nettle_crypt_func #:fail (lambda () #f))
 
 (define salsa20-cipher
   (and nettle_salsa20_crypt
-       (list "salsa20"
-             (make-nettle_cipher
-              #f SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
-              nettle_salsa20_set_key nettle_salsa20_set_key
-              nettle_salsa20_crypt nettle_salsa20_crypt)
-             `(set-iv ,nettle_salsa20_set_iv))))
+       (nettle-cipher "salsa20"
+                      SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
+                      nettle_salsa20_set_key nettle_salsa20_set_key
+                      nettle_salsa20_crypt nettle_salsa20_crypt
+                      `((set-iv ,nettle_salsa20_set_iv)))))
 
 (define salsa20r12-cipher
   (and nettle_salsa20r12_crypt
-       (list "salsa20r12"
-             (make-nettle_cipher
-              #f SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
-              nettle_salsa20_set_key nettle_salsa20_set_key
-              nettle_salsa20r12_crypt nettle_salsa20r12_crypt)
-             `(set-iv ,nettle_salsa20_set_iv))))
+       (nettle-cipher "salsa20r12"
+                      SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
+                      nettle_salsa20_set_key nettle_salsa20_set_key
+                      nettle_salsa20r12_crypt nettle_salsa20r12_crypt
+                      `((set-iv ,nettle_salsa20_set_iv)))))
 
 (define nettle-more-ciphers
-  (append nettle-regular-ciphers
-          (filter values
-                  (list blowfish-cipher
-                        salsa20-cipher
-                        salsa20r12-cipher))))
+  (let* ([more-ciphers
+          (append nettle-regular-ciphers
+                  (filter values
+                          (list blowfish-cipher
+                                salsa20-cipher
+                                salsa20r12-cipher)))])
+    (for/list ([cipher (in-list more-ciphers)])
+      (list (nettle-cipher-name cipher) cipher))))
 
 ;; ----
 

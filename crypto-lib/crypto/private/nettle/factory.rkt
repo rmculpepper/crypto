@@ -121,8 +121,8 @@
 
     (define/private (get-nc spec algid)
       (match (assoc algid nettle-more-ciphers)
-        [(list* _ nc extras)
-         (new cipher-impl% (spec spec) (nc nc) (extras extras))]
+        [(list _ nc)
+         (new cipher-impl% (spec spec) (nc nc))]
         [_ #f]))
 
     ;; ----

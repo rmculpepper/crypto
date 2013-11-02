@@ -163,7 +163,7 @@
 (define (encrypt ci key iv inp #:pad [pad default-pad])
   (*crypt 'encrypt (-encrypt-ctx 'encrypt ci key iv pad) inp))
 (define (decrypt ci key iv inp #:pad [pad default-pad])
-  (*crypt 'encrypt (-decrypt-ctx 'decrypt ci key iv pad) inp))
+  (*crypt 'decrypt (-decrypt-ctx 'decrypt ci key iv pad) inp))
 
 ;; *crypt-bytes : cipher-impl key iv bytes [nat nat] -> bytes
 (define (encrypt-bytes ci key iv buf [start 0] [end (bytes-length buf)] #:pad [pad default-pad])
