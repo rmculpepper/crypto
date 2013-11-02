@@ -56,7 +56,7 @@
       (let ([ctx (EVP_CIPHER_CTX_new)])
         (EVP_CipherInit_ex ctx cipher #f #f enc?)
         (EVP_CIPHER_CTX_set_key_length ctx (bytes-length key))
-        (EVP_CIPHER_CTX_set_padding ctx pad?)
+        (EVP_CIPHER_CTX_set_padding ctx (and pad? (cipher-spec-uses-padding? spec)))
         (EVP_CipherInit_ex ctx cipher key (and iv-size iv) enc?)
         (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
     ))

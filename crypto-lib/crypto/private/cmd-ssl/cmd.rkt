@@ -181,7 +181,8 @@
     (define/public (get-cmd) cmd)
 
     (define/public (new-ctx who key iv enc? pad?)
-      (new cipher-ctx% (impl this) (key key) (iv iv) (enc? enc?) (pad? pad?)))
+      (let ([pad? (and pad? (cipher-spec-uses-padding? spec))])
+        (new cipher-ctx% (impl this) (key key) (iv iv) (enc? enc?) (pad? pad?))))
     ))
 
 (define cipher-ctx%

@@ -45,7 +45,8 @@
         (error who
                "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
                spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
-      (let ([ctx (new cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
+      (let* ([pad? (and pad? (cipher-spec-uses-padding? spec))]
+             [ctx (new cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
         (send ctx set-key+iv key iv)
         ctx))
     ))

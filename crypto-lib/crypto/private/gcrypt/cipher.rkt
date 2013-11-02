@@ -40,7 +40,8 @@
     (define/public (get-iv-size) iv-size)
 
     (define/public (new-ctx who key iv enc? pad?)
-      (let* ([ctx (gcry_cipher_open cipher mode 0)])
+      (let ([ctx (gcry_cipher_open cipher mode 0)]
+            [pad? (and pad? (cipher-spec-uses-padding? spec))])
         (gcry_cipher_setkey ctx key (bytes-length key))
         (when (positive? iv-size)
           (gcry_cipher_setiv ctx iv (bytes-length iv)))

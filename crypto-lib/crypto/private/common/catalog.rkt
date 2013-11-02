@@ -253,3 +253,16 @@
                           (variable-size-min allowed)
                           (variable-size-max allowed)
                           (variable-size-step allowed)))])))
+
+;; cipher-spec-uses-padding? : CipherSpec -> Boolean
+(define (cipher-spec-uses-padding? spec)
+  (match spec
+    [(list cipher mode)
+     (mode-uses-padding? mode)]))
+
+(define (mode-uses-padding? mode)
+  (if (eq? mode 'stream)
+      #f
+      (match (assq mode known-block-modes)
+        [(list _ _ _ effective-mode _)
+         (eq? effective-mode 'block)])))
