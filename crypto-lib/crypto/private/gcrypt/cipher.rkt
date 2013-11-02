@@ -19,7 +19,6 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/catalog.rkt"
-         "../rkt/padding.rkt"
          "ffi.rkt")
 (provide cipher-impl%)
 

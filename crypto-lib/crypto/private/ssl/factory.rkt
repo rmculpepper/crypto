@@ -152,8 +152,9 @@ To print all ciphers:
     (super-new)
 
     (define/override (get-digest* spec)
-      (let ([name-string (hash-ref libcrypto-digests spec #f)])
-        (and name-string (EVP_get_digestbyname name-string))))
+      (let* ([name-string (hash-ref libcrypto-digests spec #f)]
+             [evp (and name-string (EVP_get_digestbyname name-string))])
+        (new digest-impl% (spec spec) (md evp))))
 
     (define/override (get-cipher* spec)
       (match spec

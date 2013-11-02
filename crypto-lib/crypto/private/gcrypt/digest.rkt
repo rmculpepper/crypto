@@ -16,7 +16,6 @@
 #lang racket/base
 (require racket/class
          ffi/unsafe
-         "../common/catalog.rkt"
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "ffi.rkt")

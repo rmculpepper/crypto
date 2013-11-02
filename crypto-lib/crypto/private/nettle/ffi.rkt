@@ -16,9 +16,7 @@
 #lang racket/base
 (require ffi/unsafe
          (only-in '#%foreign ffi-obj)
-         ffi/unsafe/define
-         ffi/unsafe/alloc
-         ffi/unsafe/atomic)
+         ffi/unsafe/define)
 (provide (protect-out (all-defined-out)))
 
 (define libnettle (ffi-lib "libnettle" '("4" #f)))
