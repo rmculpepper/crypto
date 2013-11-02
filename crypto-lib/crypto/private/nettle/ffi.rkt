@@ -229,3 +229,35 @@
         (src     : _pointer)
         -> _void))
 
+(define GCM_BLOCK_SIZE 16)
+(define GCM_IV_SIZE (- GCM_BLOCK_SIZE 4))
+(define GCM_TABLE_BITS 8)
+;; gcm_block = GCM_BLOCK_SIZE bytes, ulong-aligned
+;; gcm_key = array of 1<<GCM_TABLE_BITS gcm_blocks
+;; gcm_ctx = { 3 * gcm_block ; 2 * uint64 }
+(define GCM_KEY_SIZE (* GCM_BLOCK_SIZE (expt 2 GCM_TABLE_BITS)))
+(define GCM_CTX_SIZE (+ (* 3 GCM_BLOCK_SIZE) (* 2 (sizeof _uint64))))
+
+(define-cpointer-type _gcm_key)
+(define-cpointer-type _gcm_ctx)
+
+(define-nettle gcm_set_key
+  (_fun _gcm_key _CIPHER_CTX _nettle_crypt_func -> _void))
+(define-nettle gcm_set_iv
+  (_fun _gcm_ctx _gcm_key _uint _pointer -> _void))
+
+(define-nettle gcm_update
+  ;; add AAD, all but last must be block-size multiple
+  (_fun _gcm_ctx _gcm_key _uint _pointer -> _void))
+
+(define-nettle gcm_encrypt
+  ;; add plaintext, all but last must be block-size multiple
+  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer _pointer -> _void))
+(define-nettle gcm_encrypt
+  ;; add ciphertext, all but last must be block-size multiple
+  ;; use cipher's *encrypt* func for _nettle_crypt_func argument
+  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer _pointer -> _void))
+
+(define-nettle gcm_digest
+  ;; get auth tag; length usually GCM_BLOCK_SIZE, but can be shorter
+  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer -> _void))
