@@ -20,9 +20,9 @@
          "../common/common.rkt"
          "../common/catalog.rkt"
          "ffi.rkt")
-(provide cipher-impl%)
+(provide gcrypt-cipher-impl%)
 
-(define cipher-impl%
+(define gcrypt-cipher-impl%
   (class* object% (cipher-impl<%>)
     (init-field cipher
                 mode    ;; one of 'ecb, 'cbc, 'stream (rest unsupported)
@@ -44,10 +44,10 @@
         (gcry_cipher_setkey ctx key (bytes-length key))
         (when (positive? iv-size)
           (gcry_cipher_setiv ctx iv (bytes-length iv)))
-        (new cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?))))
+        (new gcrypt-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?))))
     ))
 
-(define cipher-ctx%
+(define gcrypt-cipher-ctx%
   (class* whole-block-cipher-ctx% (cipher-ctx<%>)
     (inherit-field impl encrypt? pad?)
     (init-field ctx)

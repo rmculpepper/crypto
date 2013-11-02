@@ -78,7 +78,7 @@
 
 ;; ----------------------------------------
 
-(define random-impl%
+(define gcrypt-random-impl%
   (class* object% (random-impl<%>)
     (super-new)
     (define/public (random-bytes! who buf start end)
@@ -88,7 +88,7 @@
       (gcry_randomize (ptr-add buf start) (- end start) GCRY_STRONG_RANDOM))
     ))
 
-(define random-impl (new random-impl%))
+(define gcrypt-random-impl (new gcrypt-random-impl%))
 
 ;; ----------------------------------------
 
@@ -102,7 +102,7 @@
                   (match entry
                     [(list _ algid blocksize)
                      (and (gcry_md_test_algo algid)
-                          (new digest-impl%
+                          (new gcrypt-digest-impl%
                                (md algid)
                                (spec spec)
                                (blocksize blocksize)))]
@@ -117,7 +117,7 @@
                     [(list _ keylens+algids)
                      (for/list ([keylen+algid (in-list keylens+algids)])
                        (cons (quotient (car keylen+algid) 8)
-                             (new cipher-impl%
+                             (new gcrypt-cipher-impl%
                                   (spec spec)
                                   (cipher (cadr keylen+algid))
                                   (mode (cadr (assq (cadr spec) modes))))))]
@@ -125,7 +125,7 @@
             [else #f]))
 
     (define/override (get-random)
-      random-impl)
+      gcrypt-random-impl)
     ))
 
 (define gcrypt-factory (new gcrypt-factory%))

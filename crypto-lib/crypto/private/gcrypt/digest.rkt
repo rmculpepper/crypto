@@ -19,9 +19,9 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "ffi.rkt")
-(provide digest-impl%)
+(provide gcrypt-digest-impl%)
 
-(define digest-impl%
+(define gcrypt-digest-impl%
   (class* object% (digest-impl<%>)
     (init-field md        ;; int
                 blocksize ;; no way to fetch w/ ffi (?)
@@ -36,10 +36,10 @@
 
     (define/public (new-ctx)
       (let ([ctx (gcry_md_open md 0)])
-        (new digest-ctx% (impl this) (ctx ctx))))
+        (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 
     (define/public (get-hmac-impl who)
-      (unless hmac-impl (set! hmac-impl (new hmac-impl% (digest this))))
+      (unless hmac-impl (set! hmac-impl (new gcrypt-hmac-impl% (digest this))))
       hmac-impl)
 
     ;; ----
@@ -53,7 +53,7 @@
     (define/public (hmac-buffer! who key buf start end outbuf outstart) (void))
     ))
 
-(define digest-ctx%
+(define gcrypt-digest-ctx%
   (class* base-ctx% (digest-ctx<%>)
     (init-field ctx)
     (inherit-field impl)
@@ -70,12 +70,12 @@
 
     (define/public (copy who)
       (let ([ctx2 (gcry_md_copy ctx)])
-        (new digest-ctx% (impl impl) (ctx ctx2))))
+        (new gcrypt-digest-ctx% (impl impl) (ctx ctx2))))
     ))
 
 ;; ============================================================
 
-(define hmac-impl%
+(define gcrypt-hmac-impl%
   (class* object% (hmac-impl<%>)
     (init-field digest)
     (super-new)
@@ -83,5 +83,5 @@
     (define/public (new-ctx who key)
       (let ([ctx (gcry_md_open (get-field md digest) GCRY_MD_FLAG_HMAC)])
         (gcry_md_setkey ctx key (bytes-length key))
-        (new digest-ctx% (impl digest) (ctx ctx))))
+        (new gcrypt-digest-ctx% (impl digest) (ctx ctx))))
     ))
