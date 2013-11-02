@@ -1,6 +1,8 @@
 To Do
 =====
 
+- abstract classes for digest, cipher w/ error checking
+- GCM support
 - doc: how to get impls from specs
 - nettle factory
 - new API for sign/verify
