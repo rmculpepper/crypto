@@ -21,14 +21,14 @@
          "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide (all-defined-out))
+(provide nettle-cipher-impl%)
 
 (define (make-ctx size)
   (let ([ctx (malloc size 'atomic-interior)])
     (cpointer-push-tag! ctx CIPHER_CTX-tag)
     ctx))
 
-(define cipher-impl%
+(define nettle-cipher-impl%
   (class* object% (cipher-impl<%>)
     (init-field nc spec)
     (define iv-size (cipher-spec-iv-size spec))
@@ -45,12 +45,12 @@
                "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
                spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
       (let* ([pad? (and pad? (cipher-spec-uses-padding? spec))]
-             [ctx (new cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
+             [ctx (new nettle-cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
         (send ctx set-key+iv key iv)
         ctx))
     ))
 
-(define cipher-ctx%
+(define nettle-cipher-ctx%
   (class* whole-block-cipher-ctx% (cipher-ctx<%>)
     (init-field nc)
     (inherit-field impl block-size encrypt? pad?)

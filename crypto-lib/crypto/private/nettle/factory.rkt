@@ -80,7 +80,7 @@
                     (cond [(assoc algid nettle-hashes)
                            => (lambda (entry)
                                 (let ([nh (cadr entry)])
-                                  (new digest-impl%
+                                  (new nettle-digest-impl%
                                        (spec spec)
                                        (nh nh))))]
                           [else #f])))]
@@ -101,7 +101,7 @@
     (define/private (get-nc spec algid)
       (match (assoc algid nettle-more-ciphers)
         [(list _ nc)
-         (new cipher-impl% (spec spec) (nc nc))]
+         (new nettle-cipher-impl% (spec spec) (nc nc))]
         [_ #f]))
     ))
 

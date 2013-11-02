@@ -20,14 +20,14 @@
          "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide digest-impl%)
+(provide nettle-digest-impl%)
 
 (define (make-ctx size)
   (let ([ctx (malloc size 'atomic-interior)])
     (cpointer-push-tag! ctx HASH_CTX-tag)
     ctx))
 
-(define digest-impl%
+(define nettle-digest-impl%
   (class* object% (digest-impl<%>)
     (init-field nh spec)
     (define hmac-impl #f)
@@ -40,10 +40,10 @@
     (define/public (new-ctx)
       (let ([ctx (make-ctx (nettle_hash-context_size nh))])
         ((nettle_hash-init nh) ctx)
-        (new digest-ctx% (impl this) (nh nh) (ctx ctx))))
+        (new nettle-digest-ctx% (impl this) (nh nh) (ctx ctx))))
 
     (define/public (get-hmac-impl who)
-      (unless hmac-impl (set! hmac-impl (new hmac-impl% (digest this) (nh nh))))
+      (unless hmac-impl (set! hmac-impl (new nettle-hmac-impl% (digest this) (nh nh))))
       hmac-impl)
 
     ;; ----
@@ -57,7 +57,7 @@
       (error 'hmac-buffer! "unimplemented"))
     ))
 
-(define digest-ctx%
+(define nettle-digest-ctx%
   (class* base-ctx% (digest-ctx<%>)
     (init-field ctx nh)
     (inherit-field impl)
@@ -75,12 +75,12 @@
       (let* ([size (nettle_hash-context_size nh)]
              [ctx2 (make-ctx size)])
         (memmove ctx2 ctx size)
-        (new digest-ctx% (impl impl) (nh nh) (ctx ctx2))))
+        (new nettle-digest-ctx% (impl impl) (nh nh) (ctx ctx2))))
     ))
 
 ;; ============================================================
 
-(define hmac-impl%
+(define nettle-hmac-impl%
   (class* object% (hmac-impl<%>)
     (init-field digest nh)
     (super-new)
@@ -91,10 +91,10 @@
              [inner (make-ctx size)]
              [ctx (make-ctx size)])
         (nettle_hmac_set_key outer inner ctx nh key)
-        (new hmac-ctx% (impl digest) (nh nh) (outer outer) (inner inner) (ctx ctx))))
+        (new nettle-hmac-ctx% (impl digest) (nh nh) (outer outer) (inner inner) (ctx ctx))))
     ))
 
-(define hmac-ctx%
+(define nettle-hmac-ctx%
   (class* base-ctx% (digest-ctx<%>)
     (init-field nh outer inner ctx)
     (inherit-field impl)
@@ -117,5 +117,5 @@
       (let* ([size (nettle_hash-context_size nh)]
              [ctx2 (make-ctx size)])
         (memmove ctx2 ctx size)
-        (new hmac-ctx% (impl impl) (nh nh) (outer outer) (inner inner) (ctx ctx2))))
+        (new nettle-hmac-ctx% (impl impl) (nh nh) (outer outer) (inner inner) (ctx ctx2))))
     ))
