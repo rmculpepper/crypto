@@ -1,12 +1,22 @@
 To Do
 =====
 
+- reorg modules
+  - crypto/main - provides generic operations + crypto-factories param
+  - crypto/factory/{libcrypto,nettle,etc} - provides factories + init code
+  - user must set crypto-factories
+
+- impls should know their factory (eg to get preferred randomness impl)
 - abstract classes for digest, cipher w/ error checking
 - GCM support
 - doc: how to get impls from specs
-- nettle factory
 - new API for sign/verify
 - gcrypt initialization
+
+- nettle RSA
+  - encrypt/decrypt undocumented, uses PKCS#1 v1.5 padding (bad!)
+
+- CRYPTO_memcmp & other timing-related stuff
 
 - sections for Password Hashing
   - pbkdf2
