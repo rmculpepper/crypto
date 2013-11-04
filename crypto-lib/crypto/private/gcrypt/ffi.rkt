@@ -235,3 +235,160 @@
 
 (define-gcrypt gcry_create_nonce
   (_fun _pointer _size -> _void))
+
+;; ----
+
+(define-cpointer-type _gcry_mpi)
+
+(define-gcrypt gcry_mpi_release
+  (_fun _gcry_mpi -> _void))
+
+(define-gcrypt gcry_mpi_nbits
+  (_fun _gcry_mpi -> _uint))
+
+(define-gcrypt gcry_mpi_scan
+  (_fun (fmt buf) ::
+        (result : (_ptr o _gcry_mpi))
+        (fmt    : _int) ;; = GCRYMPI_FMT_USG
+        (buf    : _bytes)
+        (len    : _size = (bytes-length buf))
+        (nread  : _pointer = #f) ;; (_ptr o _size)
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:wrap (compose (allocator gcry_mpi_release) check2))
+
+(define-gcrypt gcry_mpi_print
+  (_fun (fmt mpi buf) ::
+        (fmt : _int) ;; = GCRYMPI_FMT_USG
+        (buf : _bytes)
+        (len : _size = (bytes-length buf))
+        (nwrote : (_ptr o _size))
+        (mpi : _gcry_mpi)
+        -> (status : _gcry_error)
+        -> (values status nwrote))
+  #:wrap check2)
+
+;; ----
+
+(define-cpointer-type _gcry_sexp)
+
+(define-gcrypt gcry_sexp_release
+  (_fun _gcry_sexp -> _void)
+  #:wrap (deallocator))
+
+(define-gcrypt gcry_sexp_build
+  (_fun (fmt . args) ::
+        (result : (_ptr o _gcry_sexp/null))
+        (erroff : (_ptr o _size))
+        (fmt    : _string/utf-8)
+        (arg0 : _pointer = (get-sexp-build-arg args 0))
+        (arg1 : _pointer = (get-sexp-build-arg args 1))
+        (arg2 : _pointer = (get-sexp-build-arg args 2))
+        (arg3 : _pointer = (get-sexp-build-arg args 3))
+        (arg4 : _pointer = (get-sexp-build-arg args 4))
+        (arg5 : _pointer = (get-sexp-build-arg args 5))
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:c-id gcry_sexp_build
+  #:wrap (compose (allocator gcry_sexp_release) check2))
+
+(define (get-sexp-build-arg args n)
+  (and (> (length args) n) (list-ref args n)))
+
+(define-gcrypt gcry_sexp_find_token
+  (_fun (sexp : _gcry_sexp)
+        (token : _string/utf-8)
+        (size  : _size = (string-utf-8-length token))
+        -> _gcry_sexp/null)
+  #:wrap (allocator gcry_sexp_release))
+
+(define-gcrypt gcry_sexp_nth_data
+  (_fun (sexp  : _gcry_sexp)
+        (index : _int)
+        (len   : (_ptr o _size))
+        -> (ptr : _pointer)
+        -> (and ptr
+                (let ([buf (make-bytes len)])
+                  (memmove buf ptr len)
+                  buf))))
+
+(define GCRYMPI_FMT_HEX 4)
+(define GCRYMPI_FMT_USG 5)
+
+(define-gcrypt gcry_sexp_nth_mpi
+  (_fun (sexp  : _gcry_sexp)
+        (index : _int)
+        (fmt   : _int = GCRYMPI_FMT_USG)
+        -> _gcry_mpi/null)
+  #:wrap (allocator gcry_mpi_release))
+
+(define GCRYSEXP_FMT_CANON 1)
+(define GCRYSEXP_FMT_ADVANCED 3)
+
+(define-gcrypt gcry_sexp_sprint
+  (_fun (sexp buf mode) ::
+        (sexp : _gcry_sexp)
+        (mode : _int)
+        (buf  : _bytes)
+        (len  : _size = (if buf (bytes-length buf) 0))
+        -> _size))
+
+(define (gcry_sexp->bytes s)
+  (let* ([n (gcry_sexp_sprint s #f)]
+         [buf (make-bytes n)])
+    (gcry_sexp_sprint s buf GCRYSEXP_FMT_CANON)
+    buf))
+
+(define (gcry_sexp->string s)
+  (let* ([n (gcry_sexp_sprint s #f)]
+         [buf (make-bytes n)])
+    (gcry_sexp_sprint s buf GCRYSEXP_FMT_ADVANCED)
+    buf))
+
+;; ----
+
+(define-gcrypt gcry_pk_encrypt
+  (_fun (data pubkey) ::
+        (result : (_ptr o _gcry_sexp))
+        (data   : _gcry_sexp)
+        (pubkey : _gcry_sexp)
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:wrap (compose (allocator gcry_sexp_release) check2))
+
+(define-gcrypt gcry_pk_decrypt
+  (_fun (data privkey) ::
+        (result  : (_ptr o _gcry_sexp))
+        (data    : _gcry_sexp)
+        (privkey : _gcry_sexp)
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:wrap (compose (allocator gcry_sexp_release) check2))
+
+(define-gcrypt gcry_pk_sign
+  (_fun (data privkey) ::
+        (result : (_ptr o _gcry_sexp))
+        (data   : _gcry_sexp)
+        (privkey : _gcry_sexp)
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:wrap (compose (allocator gcry_sexp_release) check2))
+
+(define-gcrypt gcry_pk_verify
+  (_fun (sig data pubkey) ::
+        (sig  : _gcry_sexp)
+        (data : _gcry_sexp)
+        (pubkey : _gcry_sexp)
+        -> (status : _gcry_error))
+  #:wrap check)
+
+(define-gcrypt gcry_pk_nbits
+  (_fun _gcry_sexp -> _uint))
+
+(define-gcrypt gcry_pk_genkey
+  (_fun (params) ::
+        (result : (_ptr o _gcry_sexp))
+        (params : _gcry_sexp)
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:wrap (compose (allocator gcry_sexp_release) check2))
