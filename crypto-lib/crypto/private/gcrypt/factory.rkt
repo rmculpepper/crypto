@@ -37,11 +37,11 @@
     (sha512     ,GCRY_MD_SHA512     128)
     (md4        ,GCRY_MD_MD4        64)
     (whirlpool  ,GCRY_MD_WHIRLPOOL  64)
+    (tiger1     ,GCRY_MD_TIGER1     64)
+    (tiger2     ,GCRY_MD_TIGER2     64)
     #|
     (haval      ,GCRY_MD_HAVAL      128)
-    (tiger      ,GCRY_MD_TIGER      #f)
-    (tiger1     ,GCRY_MD_TIGER1     #f)
-    (tiger2     ,GCRY_MD_TIGER2     #f)
+    (tiger      ,GCRY_MD_TIGER      #f) ;; special old GnuPG-compat output order
     |#))
 
 ;; ----------------------------------------

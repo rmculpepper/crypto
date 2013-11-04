@@ -34,11 +34,11 @@
       (check-equal? (compute-key priv1 pub2)
                     (compute-key priv2 pub1))))
   |#
-  (eprintf ">>> Testing ~a\n" name)
+  (when #f (eprintf ">>> Testing ~a\n" name))
   (test-suite name
     ;; Test ssl impl against cmd-ssl impl
     (test-suite "digests" (test-digests factory cmdssl-factory))
-    ;; (test-suite "cipers" (test-ciphers factory cmdssl-factory))
+    (test-suite "cipers" (test-ciphers factory cmdssl-factory))
     #| (test-suite "pkey" (test-pkeys factory cmdssl-factory)) |#))
 
 (module+ main
@@ -47,5 +47,10 @@
      (make-factory-tests "libcrypto" libcrypto-factory)
      (make-factory-tests "gcrypt" gcrypt-factory)
      (make-factory-tests "nettle" nettle-factory)
-     ;; (make-cipher-agreement-tests (list libcrypto-factory gcrypt-factory nettle-factory))
+     (when #f (eprintf ">>> Digest agreement\n"))
+     (test-suite "digest agreement"
+       (test-digests-agree (list libcrypto-factory gcrypt-factory nettle-factory)))
+     (when #f (eprintf ">>> Cipher agreement\n"))
+     (test-suite "cipher agreement"
+       (test-ciphers-agree (list libcrypto-factory gcrypt-factory nettle-factory)))
      )))

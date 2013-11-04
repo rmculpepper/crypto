@@ -39,7 +39,7 @@
   [digest-copy
    (-> digest-ctx? (or/c digest-ctx? #f))]
   [digest-peek-final
-   (-> digest-ctx? bytes?)]
+   (-> digest-ctx? (or/c bytes? #f))]
   [digest
    (-> digest/c (or/c bytes? input-port? string?) bytes?)]
   [digest-bytes

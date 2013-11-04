@@ -24,13 +24,29 @@
          crypto/private/common/util
          "util.rkt")
 (provide test-ciphers
-         make-cipher-agreement-tests)
+         test-ciphers-agree)
 
-(define (test-cipher/roundtrip ci key iv msg)
+(define (test-cipher ci msg)
   (test-case (format "~a roundtrip (~s)" (send ci get-spec) (bytes-length msg))
+    (define key (semirandom-bytes (cipher-default-key-size ci)))
+    (define iv (semirandom-bytes (cipher-iv-size ci)))
+    (define ciphertext (encrypt ci key iv msg))
+    (check-equal? (decrypt ci key iv ciphertext) msg)
 
-    (check-equal? (decrypt ci key iv (encrypt ci key iv msg))
-                  msg)
+    ;; Other keys produce different output, can't decrypt
+    (when (positive? (bytes-length ciphertext))
+      (define key2 (semirandom-bytes (cipher-default-key-size ci)))
+      (check-not-equal? (encrypt ci key2 iv msg) ciphertext)
+      (check-not-equal? (with-handlers ([values values]) (decrypt ci key2 iv ciphertext))
+                        msg))
+
+    ;; If IV, different IV produces different output, can't decrypt
+    (when (and (positive? (bytes-length ciphertext))
+               (positive? (cipher-iv-size ci)))
+      (define iv2 (semirandom-bytes (cipher-iv-size ci)))
+      (check-not-equal? (encrypt ci key iv2 msg) ciphertext)
+      (check-not-equal? (with-handlers ([values values]) (decrypt ci key iv2 ciphertext))
+                        msg))
 
     ;; (let* ([cin (encrypt ci key iv (open-input-bytes msg))]
     ;;        [pin (decrypt ci key iv cin)])
@@ -79,32 +95,35 @@
   (define ci (send factory get-cipher spec))
   (define ci-base (send base-factory get-cipher spec))
   (cond [ci ;; (and ci ci-base)
-         (define key (semirandom-bytes (cipher-default-key-size ci)))
-         (define iv (semirandom-bytes (cipher-iv-size ci)))
-         (eprintf "   testing ~e\n" spec)
+         (when #f
+           (eprintf "   testing ~e\n" spec))
          (for ([in plaintexts])
-           (test-cipher/roundtrip ci key iv in))]
+           (test-cipher ci in))]
         [else
-         (when #t
+         (when #f
            (eprintf "-- skipping cipher ~e\n" spec))]))
 
-(define (make-cipher-agreement-tests factories)
-  (test-suite "cipher agreement"
-    (for ([name (in-hash-keys known-block-ciphers)]
-          [mode (map car known-block-modes)])
-      (define spec (list name mode))
-      (test-cipher-agreement spec factories))
-    (for ([name (in-hash-keys known-stream-ciphers)])
-      (define spec (list name 'stream))
-      (test-cipher-agreement spec factories))))
+(define (test-ciphers-agree factories)
+  (for* ([name (in-hash-keys known-block-ciphers)]
+         [mode (map car known-block-modes)])
+    (define spec (list name mode))
+    (test-cipher-agreement spec factories))
+  (for ([name (in-hash-keys known-stream-ciphers)])
+    (define spec (list name 'stream))
+    (test-cipher-agreement spec factories)))
 
 (define (test-cipher-agreement spec factories)
   (let ([names+impls
          (filter cdr
                  (for/list ([factory factories])
                    (cons factory (send factory get-cipher spec))))])
+    (when (zero? (length names+impls))
+      (eprintf "** no impl for cipher ~e\n" spec))
+    (when (= (length names+impls) 1)
+      (eprintf "** only one impl for cipher ~e\n" spec))
     (when (> (length names+impls) 1)
-      (eprintf "*  testing agreement ~e\n" spec)
+      (when #t
+        (eprintf "*  testing agreement ~e (~s impls)\n" spec (length names+impls)))
       (define names (map car names+impls))
       (define impls (map cdr names+impls))
       (test-case (format "cipher agreement for ~e\n" spec)

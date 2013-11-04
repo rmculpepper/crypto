@@ -35,9 +35,8 @@
            [ripemd256   .  [ 32   64 ]]
            [ripemd160   .  [ 20   64 ]]
            [ripemd320   .  [ 40   64 ]]
-           [tiger2-128  .  [ 16   64 ]]
-           [tiger2-160  .  [ 20   64 ]]
-           [tiger2-192  .  [ 24   64 ]]
+           [tiger1      .  [ 24   64 ]]
+           [tiger2      .  [ 24   64 ]]
            ;; Note: 3 versions: Whirlpool-0 (2000), Whirlpool-T (2001), Whirlpool (2003)
            [whirlpool   .  [ 64   64 ]] 
            [sha0        .  [ 20   64 ]]

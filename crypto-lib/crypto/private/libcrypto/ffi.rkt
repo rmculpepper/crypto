@@ -150,7 +150,7 @@
 (define-crypto EVP_DigestUpdate
   (_fun _EVP_MD_CTX
         (d : _pointer)
-        (cnt : _ulong)
+        (cnt : _size)
         -> _int)
   #:wrap (err-wrap/check 'EVP_DigestUpdate))
 
@@ -188,7 +188,7 @@
   ((allocator HMAC_CTX_free)
    ((err-wrap/pointer 'HMAC_CTX_new)
     (lambda ()
-      (let ([hmac (malloc 'raw 256)]) ;; FIXME: check size
+      (let ([hmac (malloc 'raw 300)]) ;; sizeof(HMAC_CTX) = 288 on linux-x86_64
         (cpointer-push-tag! hmac HMAC_CTX-tag)
         (HMAC_CTX_init hmac)
         hmac)))))

@@ -44,6 +44,8 @@
         (gcry_cipher_setkey ctx key (bytes-length key))
         (when (positive? iv-size)
           (gcry_cipher_setiv ctx iv (bytes-length iv)))
+        (when (or (= mode GCRY_CIPHER_MODE_CTR))
+          (gcry_cipher_setctr ctx iv (bytes-length iv)))
         (new gcrypt-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?))))
     ))
 

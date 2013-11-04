@@ -61,7 +61,8 @@
             [else
              (let* ([ci/s (get-cipher* spec)]
                     [ci (cond [(list? ci/s)
-                               (and (andmap cdr ci/s)
+                               (and (pair? ci/s)
+                                    (andmap cdr ci/s)
                                     (new multikeylen-cipher-impl%
                                          (spec spec)
                                          (impls ci/s)))]

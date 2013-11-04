@@ -23,10 +23,12 @@
          crypto/private/common/util
          "util.rkt")
 (provide test-digests
+         test-digests-agree
          digest-inputs)
 
 (define (test-digest/in+out di in out)
-  (eprintf "testing ~a (~s)\n" (send di get-spec) (bytes-length in))
+  (when #f
+    (eprintf "testing ~a (~s)\n" (send di get-spec) (bytes-length in)))
   (test-case (format "~a: ~e" (send di get-spec) in)
     (check-equal? (digest di in) out)
     (check-equal? (digest di (open-input-bytes in)) out)
@@ -124,3 +126,23 @@
           (for* ([key digest-keys]
                  [in digest-inputs])
                 (test-hmac-impls-agree di di-base key in)))))))
+
+(define (test-digests-agree factories)
+  (for ([name (hash-keys known-digests)])
+    (let ([impls
+           (filter values
+                   (for/list ([factory factories])
+                     (send factory get-digest name)))])
+      (when (zero? (length impls))
+        (eprintf "** no impl for digest ~e\n" name))
+      (when (= (length impls) 1)
+        (eprintf "** only one impl for digest ~e\n" name))
+      (when (> (length impls) 1)
+        (when #f
+          (eprintf "+ testing agreement ~e\n" name))
+        (for ([impl impls])
+          (for ([in digest-inputs])
+            (test-digest-impls-agree impl (car impls) in))
+          (for* ([key digest-keys]
+                 [in digest-inputs])
+            (test-hmac-impls-agree impl (car impls) key in)))))))
