@@ -12,6 +12,9 @@ To Do
     http://blog.cryptographyengineering.com/2012/06/bad-couple-of-years-for-cryptographic.html
     http://blog.cryptographyengineering.com/2012/09/on-provable-security-of-tls-part-1.html
 
+  - regarding nettle padding support (lacking):
+    http://blog.gmane.org/gmane.comp.encryption.nettle.bugs/month=20130601
+
 - reorg modules
   - crypto/main - provides generic operations + crypto-factories param
   - crypto/factory/{libcrypto,nettle,etc} - provides factories + init code
