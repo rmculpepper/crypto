@@ -30,7 +30,8 @@
 (define libcrypto-digest-impl%
   (class* object% (digest-impl<%>)
     (init-field md    ;; EVP_MD
-                spec) ;; DigestSpec (symbol)
+                spec  ;; DigestSpec (symbol)
+                factory)
     (define size (EVP_MD_size md))
     (define hmac-impl #f)
     (super-new)

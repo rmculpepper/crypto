@@ -23,7 +23,8 @@
 
 (define gcrypt-digest-impl%
   (class* object% (digest-impl<%>)
-    (init-field md        ;; int
+    (init-field factory
+                md        ;; int
                 blocksize ;; no way to fetch w/ ffi (?)
                 spec)     ;; symbol
     (define hmac-impl #f)

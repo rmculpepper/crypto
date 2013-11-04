@@ -28,7 +28,8 @@
 (define libcrypto-cipher-impl%
   (class* object% (cipher-impl<%>)
     (init-field cipher ;; EVP_CIPHER
-                spec)
+                spec
+                factory)
     (define-values (block-size key-size iv-size)
       (match (ptr-ref cipher (_list-struct _int _int _int _int))
         [(list _ size keylen ivlen)

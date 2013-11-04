@@ -82,6 +82,7 @@
                                 (let ([nh (cadr entry)])
                                   (new nettle-digest-impl%
                                        (spec spec)
+                                       (factory this)
                                        (nh nh))))]
                           [else #f])))]
             [else #f]))
@@ -101,7 +102,7 @@
     (define/private (get-nc spec algid)
       (match (assoc algid nettle-more-ciphers)
         [(list _ nc)
-         (new nettle-cipher-impl% (spec spec) (nc nc))]
+         (new nettle-cipher-impl% (spec spec) (factory this) (nc nc))]
         [_ #f]))
     ))
 

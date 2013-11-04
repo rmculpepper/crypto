@@ -30,7 +30,7 @@
 
 (define nettle-cipher-impl%
   (class* object% (cipher-impl<%>)
-    (init-field nc spec)
+    (init-field nc spec factory)
     (define iv-size (cipher-spec-iv-size spec))
     (super-new)
 

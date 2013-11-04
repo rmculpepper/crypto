@@ -103,8 +103,9 @@
                     [(list _ algid blocksize)
                      (and (gcry_md_test_algo algid)
                           (new gcrypt-digest-impl%
-                               (md algid)
                                (spec spec)
+                               (factory this)
+                               (md algid)
                                (blocksize blocksize)))]
                     [_ #f]))]
             [else #f]))
@@ -120,6 +121,7 @@
                              (and (gcry_cipher_test_algo (cadr keylen+algid))
                                   (new gcrypt-cipher-impl%
                                        (spec spec)
+                                       (factory this)
                                        (cipher (cadr keylen+algid))
                                        (mode (cadr (assq (cadr spec) modes)))))))]
                     [_ #f]))]

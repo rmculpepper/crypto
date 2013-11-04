@@ -29,7 +29,7 @@
 
 (define nettle-digest-impl%
   (class* object% (digest-impl<%>)
-    (init-field nh spec)
+    (init-field nh spec factory)
     (define hmac-impl #f)
     (super-new)
 

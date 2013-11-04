@@ -72,36 +72,6 @@ To print all ciphers:
     [des-ede3 (cbc cfb ofb) #f "des-ede3"] ;; ECB mode???
     [rc4 (stream) #f "rc4"]))
 
-;; cross : (U string (listof string)) ... -> (listof string)
-(define (cross . parts)
-  (let cross* ([parts parts] [rprefix null])
-    (cond [(null? parts)
-           (list (apply string-append (reverse rprefix)))]
-          [(string? (car parts))
-           (cross* (cdr parts) (cons (car parts) rprefix))]
-          [(list? (car parts))
-           (apply append
-                  (for/list ([next (in-list (car parts))])
-                    (cross* (cdr parts) (cons next rprefix))))])))
-
-;; FIXME: des-ede-ecb, des-ede3-ecb ???
-(define libcrypto-cipher-names
-  '(aes-128-cbc    aes-128-ecb
-    aes-192-cbc    aes-192-ecb
-    aes-256-cbc    aes-256-ecb
-    base64
-    bf-cbc         bf-cfb         bf-ecb         bf-ofb
-    cast-cbc
-    cast5-cbc      cast5-cfb      cast5-ecb      cast5-ofb
-    des-cbc        des-cfb        des-ecb        des-ofb
-    des-ede        des-ede-cbc    des-ede-cfb    des-ede-ofb
-    des-ede3       des-ede3-cbc   des-ede3-cfb   des-ede3-ofb
-    desx
-    rc2-cbc        rc2-cfb        rc2-ecb        rc2-ofb
-    rc2-40-cbc     rc2-64-cbc
-    rc4            rc4-40
-    ))
-
 ;; As of openssl-0.9.8 pkeys can only be used with certain types of digests.
 ;; openssl-0.9.9 is supposed to remove the restriction for digest types
 (define pkey:rsa:digests '(ripemd160 sha1 sha224 sha256 sha384 sha512))
@@ -154,7 +124,7 @@ To print all ciphers:
     (define/override (get-digest* spec)
       (let* ([name-string (hash-ref libcrypto-digests spec #f)]
              [evp (and name-string (EVP_get_digestbyname name-string))])
-        (and evp (new libcrypto-digest-impl% (spec spec) (md evp)))))
+        (and evp (new libcrypto-digest-impl% (spec spec) (md evp) (factory this)))))
 
     (define/override (get-cipher* spec)
       (match spec
@@ -178,7 +148,7 @@ To print all ciphers:
            [_ #f])]))
 
     (define/private (make-cipher spec evp)
-      (and evp (new libcrypto-cipher-impl% (spec spec) (cipher evp))))
+      (and evp (new libcrypto-cipher-impl% (spec spec) (cipher evp) (factory this))))
 
     ;; ----
 

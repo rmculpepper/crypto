@@ -24,7 +24,8 @@
 
 (define gcrypt-cipher-impl%
   (class* object% (cipher-impl<%>)
-    (init-field cipher
+    (init-field factory
+                cipher
                 mode    ;; one of 'ecb, 'cbc, 'stream (rest unsupported)
                 spec)
     (super-new)
