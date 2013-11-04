@@ -26,10 +26,10 @@
 (provide (all-defined-out))
 
 (define libcrypto-cipher-impl%
-  (class* object% (cipher-impl<%>)
-    (init-field cipher ;; EVP_CIPHER
-                spec
-                factory)
+  (class* impl-base% (cipher-impl<%>)
+    (init-field cipher) ;; EVP_CIPHER
+    (inherit-field spec)
+    (super-new)
     (define-values (block-size key-size iv-size)
       (match (ptr-ref cipher (_list-struct _int _int _int _int))
         [(list _ size keylen ivlen)
@@ -42,9 +42,7 @@
                  what spec value expected)))
       (check "block size" block-size (cipher-spec-block-size spec))
       (check "IV size" iv-size (cipher-spec-iv-size spec)))
-    (super-new)
 
-    (define/public (get-spec) spec)
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)
 
@@ -69,9 +67,8 @@
 ;;   See http://stackoverflow.com/questions/12153009/
 
 (define libcrypto-cipher-ctx%
-  (class* base-ctx% (cipher-ctx<%>)
-    (init-field ctx
-                encrypt?)
+  (class* ctx-base% (cipher-ctx<%>)
+    (init-field ctx encrypt?)
     (inherit-field impl)
     (super-new)
 

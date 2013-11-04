@@ -19,16 +19,26 @@
          racket/string
          "catalog.rkt"
          "interfaces.rkt"
+         "factory.rkt"
          "../rkt/padding.rkt")
-(provide base-ctx%
+(provide impl-base%
+         ctx-base%
          factory-base%
          multikeylen-cipher-impl%
          whole-block-cipher-ctx%
+         get-random*
          shrink-bytes)
 
 ;; ----
 
-(define base-ctx%
+(define impl-base%
+  (class* object% (impl<%>)
+    (init-field spec factory)
+    (define/public (get-spec) spec)
+    (define/public (get-factory) factory)
+    (super-new)))
+
+(define ctx-base%
   (class* object% (ctx<%>)
     (init-field impl)
     (define/public (get-impl) impl)
@@ -65,6 +75,7 @@
                                     (andmap cdr ci/s)
                                     (new multikeylen-cipher-impl%
                                          (spec spec)
+                                         (factory this)
                                          (impls ci/s)))]
                               [(cipher-impl? ci/s) ci/s]
                               [else #f])])
@@ -81,12 +92,11 @@
 ;; ----
 
 (define multikeylen-cipher-impl%
-  (class* object% (cipher-impl<%>)
-    (init-field impls ;; (nonempty-listof (cons nat cipher-impl%))
-                spec)
+  (class* impl-base% (cipher-impl<%>)
+    (init-field impls) ;; (nonempty-listof (cons nat cipher-impl%))
+    (inherit-field spec)
     (super-new)
 
-    (define/public (get-spec) spec)
     (define/public (get-block-size) (send (car impls) get-block-size))
     (define/public (get-iv-size) (send (car impls) get-iv-size))
 
@@ -106,7 +116,7 @@
 ;; ----
 
 (define whole-block-cipher-ctx%
-  (class* base-ctx% (cipher-ctx<%>)
+  (class* ctx-base% (cipher-ctx<%>)
     (init-field encrypt? pad?)
     (inherit-field impl)
     (super-new)
@@ -215,6 +225,28 @@
     ))
 
 ;; ----
+
+(define (get-factory* who src0)
+  (let loop ([src src0])
+    (cond [(factory? src)
+           src]
+          [(is-a? src impl<%>)
+           (get-factory* who (send src get-factory))]
+          [(is-a? src ctx<%>)
+           (get-factory* who (send src get-impl))]
+          [else
+           (error who "internal error: cannot get factory from: ~e" src0)])))
+
+(define (get-random* who src0)
+  (let ([random-impl
+         (if src0
+             (send (get-factory* who src0) get-random)
+             (get-random))])
+    (or random-impl
+        (error who "no source of randomness available~a"
+               (if src0
+                   (format "\n  from: ~e" src0)
+                   "")))))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))

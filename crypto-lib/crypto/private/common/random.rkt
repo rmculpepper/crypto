@@ -26,11 +26,13 @@
    (->* [exact-nonnegative-integer?] [random-impl?] bytes?)]))
 
 (define (random-bytes size [impl (get-random)])
+  (unless impl (error 'random-bytes "no source of randomness given"))
   (let ([buf (make-bytes size)])
     (send impl random-bytes! 'random-bytes buf 0 size)
     buf))
 
 (define (pseudo-random-bytes size [impl (get-random)])
+  (unless impl (error 'pseudo-random-bytes "no source of randomness given"))
   (let ([buf (make-bytes size)])
     (send impl pseudo-random-bytes! 'pseudo-random-bytes buf 0 size)
     buf))

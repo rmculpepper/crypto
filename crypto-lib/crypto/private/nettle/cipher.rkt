@@ -29,12 +29,12 @@
     ctx))
 
 (define nettle-cipher-impl%
-  (class* object% (cipher-impl<%>)
-    (init-field nc spec factory)
-    (define iv-size (cipher-spec-iv-size spec))
+  (class* impl-base% (cipher-impl<%>)
+    (init-field nc)
+    (inherit-field spec)
     (super-new)
 
-    (define/public (get-spec) spec)
+    (define iv-size (cipher-spec-iv-size spec))
     (define/public (get-block-size) (nettle-cipher-block-size nc))
     (define/public (get-iv-size) iv-size)
 

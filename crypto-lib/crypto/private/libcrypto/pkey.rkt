@@ -25,7 +25,7 @@
 (provide (all-defined-out))
 
 (define libcrypto-pkey-impl%
-  (class* object% (pkey-impl<%>)
+  (class* impl-base% (pkey-impl<%>)
     (init-field name
                 pktype
                 keygen
@@ -52,7 +52,7 @@
     ))
 
 (define libcrypto-pkey-ctx%
-  (class* base-ctx% (pkey-ctx<%>)
+  (class* ctx-base% (pkey-ctx<%>)
     (init-field evp
                 private?)
     (super-new)

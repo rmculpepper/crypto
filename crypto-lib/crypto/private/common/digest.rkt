@@ -181,5 +181,6 @@
                (send hctx update 'hmac buf 0 count)
                (loop)])))))
 
-(define (generate-hmac-key di)
-  (random-bytes (digest-size di)))
+(define (generate-hmac-key di [rand #f])
+  (let ([rand (or rand (get-random* 'generate-hmac-key di))])
+    (random-bytes (digest-size di) rand)))

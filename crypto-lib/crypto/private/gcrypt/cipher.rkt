@@ -23,18 +23,15 @@
 (provide gcrypt-cipher-impl%)
 
 (define gcrypt-cipher-impl%
-  (class* object% (cipher-impl<%>)
-    (init-field factory
-                cipher
-                mode    ;; one of 'ecb, 'cbc, 'stream (rest unsupported)
-                spec)
+  (class* impl-base% (cipher-impl<%>)
+    (init-field cipher mode)
+    (inherit-field spec)
     (super-new)
 
     (define key-size (gcry_cipher_get_algo_keylen cipher))
     (define block-size (gcry_cipher_get_algo_blklen cipher))
     (define iv-size (cipher-spec-iv-size spec))
 
-    (define/public (get-spec) spec)
     (define/public (get-key-size) key-size)
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)

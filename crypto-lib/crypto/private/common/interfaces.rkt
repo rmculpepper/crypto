@@ -49,6 +49,8 @@
 
 (define impl<%>
   (interface ()
+    get-spec    ;; -> *Spec
+    get-factory ;; -> factory<%>
     ))
 
 (define ctx<%>
@@ -89,7 +91,7 @@
 
 (define digest-impl<%>
   (interface (impl<%>)
-    get-spec      ;; -> DigestSpec
+    ;; get-spec      ;; -> DigestSpec
     get-size      ;; -> nat
     get-block-size;; -> nat
     get-hmac-impl ;; who -> digest-impl<%>
@@ -129,7 +131,7 @@
 
 (define cipher-impl<%>
   (interface (impl<%>)
-    get-spec       ;; -> CipherSpec
+    ;; get-spec       ;; -> CipherSpec
     get-block-size ;; -> nat
     get-iv-size    ;; -> nat
 
@@ -183,6 +185,7 @@
 
 (define random-impl<%>
   (interface (impl<%>)
+    ;; get-spec          ;; -> 'random
     random-bytes!        ;; sym bytes nat nat -> void
     pseudo-random-bytes! ;; sym bytes nat nat -> void
     ))

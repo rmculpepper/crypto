@@ -23,8 +23,8 @@
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
-         "rand.rkt"
          "ffi.rkt"
+         "rand.rkt"
          "macros.rkt")
 (provide libcrypto-factory)
 
@@ -72,6 +72,8 @@ To print all ciphers:
     [des-ede3 (cbc cfb ofb) #f "des-ede3"] ;; ECB mode???
     [rc4 (stream) #f "rc4"]))
 
+
+#|
 ;; As of openssl-0.9.8 pkeys can only be used with certain types of digests.
 ;; openssl-0.9.9 is supposed to remove the restriction for digest types
 (define pkey:rsa:digests '(ripemd160 sha1 sha224 sha256 sha384 sha512))
@@ -97,23 +99,26 @@ To print all ciphers:
 (define EVP_PKEY_RSA	6)
 (define EVP_PKEY_DSA	116)
 
-(define pkey:rsa
+(define (make-pkey:rsa)
   (new libcrypto-pkey-impl%
-       (name "RSA")
+       (spec 'rsa)
+       (factory libcrypto-factory)
        (pktype EVP_PKEY_RSA)
        (keygen rsa-keygen)
        (ok-digests pkey:rsa:digests)
        (encrypt-ok? #t)))
 
-(define pkey:dsa
+(define (make-pkey:dsa)
   (new libcrypto-pkey-impl%
-       (name "RSA")
+       (spec 'dsa)
+       (factory libcrypto-factory)
        (pktype EVP_PKEY_DSA)
        (keygen dsa-keygen)
        (ok-digests pkey:dsa:digests)
        (encrypt-ok? #f)))
 
-(define pkey-table (hasheq 'rsa pkey:rsa 'dsa pkey:dsa))
+(define pkey-table (hasheq 'rsa (make-pkey:rsa) 'dsa (make-pkey:dsa)))
+|#
 
 ;; ============================================================
 
@@ -124,7 +129,7 @@ To print all ciphers:
     (define/override (get-digest* spec)
       (let* ([name-string (hash-ref libcrypto-digests spec #f)]
              [evp (and name-string (EVP_get_digestbyname name-string))])
-        (and evp (new libcrypto-digest-impl% (spec spec) (md evp) (factory this)))))
+        (and evp (new libcrypto-digest-impl% (spec spec) (factory this) (md evp)))))
 
     (define/override (get-cipher* spec)
       (match spec
@@ -148,15 +153,20 @@ To print all ciphers:
            [_ #f])]))
 
     (define/private (make-cipher spec evp)
-      (and evp (new libcrypto-cipher-impl% (spec spec) (cipher evp) (factory this))))
+      (and evp (new libcrypto-cipher-impl% (spec spec) (factory this) (cipher evp))))
 
     ;; ----
 
+    #|
     (define/override (get-pkey name-sym)
       (hash-ref pkey-table name-sym #f))
+    |#
 
+    (define random-impl #f)
     (define/override (get-random)
-      libcrypto-random-impl)
+      (unless random-impl
+        (set! random-impl (new libcrypto-random-impl% (spec 'random) (factory this))))
+      random-impl)
     ))
 
 (define libcrypto-factory (new libcrypto-factory%))

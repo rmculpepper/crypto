@@ -18,12 +18,13 @@
 (require racket/class
          ffi/unsafe
          "../common/interfaces.rkt"
+         "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide (all-defined-out))
+(provide libcrypto-random-impl%)
 
 (define libcrypto-random-impl%
-  (class* object% (random-impl<%>)
+  (class* impl-base% (random-impl<%>)
     (super-new)
     (define/public (random-bytes! who buf start end)
       (check-output-range who buf start end)
@@ -31,5 +32,3 @@
     (define/public (pseudo-random-bytes! who buf start end)
       (check-output-range who buf start end)
       (void (RAND_pseudo_bytes (ptr-add buf start) (- end start))))))
-
-(define libcrypto-random-impl (new libcrypto-random-impl%))

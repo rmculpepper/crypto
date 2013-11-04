@@ -30,7 +30,7 @@
 ;; ============================================================
 
 (define process-handler%
-  (class base-ctx%
+  (class ctx-base%
     (super-new)
 
     (field [sp #f]
@@ -92,14 +92,12 @@
 ;; ============================================================
 
 (define digest-impl%
-  (class* object% (digest-impl<%>)
-    (init-field spec
-                cmd
+  (class* impl-base% (digest-impl<%>)
+    (init-field cmd
                 size
                 block-size)
     (super-new)
 
-    (define/public (get-spec) spec)
     (define/public (get-size) size)
     (define/public (get-block-size) block-size)
 
@@ -130,6 +128,8 @@
     (init-field digest)
     (super-new)
 
+    (define/public (get-spec) `(hmac ,(send digest get-spec)))
+    (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
     (define/public (new-ctx who key)
       ;; There seems to be no way to pass HMAC keys containing embedded NUL bytes :(
@@ -139,7 +139,7 @@
     ))
 
 (define digest-ctx%
-  (class* base-ctx% (digest-ctx<%>)
+  (class* ctx-base% (digest-ctx<%>)
     (init-field [hmac-key #f])
     (inherit-field impl)
     (super-new)
@@ -171,11 +171,11 @@
 ;; ============================================================
 
 (define cipher-impl%
-  (class* object% (cipher-impl<%>)
-    (init-field spec blocklen ivlen cmd)
+  (class* impl-base% (cipher-impl<%>)
+    (init-field blocklen ivlen cmd)
+    (inherit-field spec)
     (super-new)
 
-    (define/public (get-spec) spec)
     (define/public (get-block-size) blocklen)
     (define/public (get-iv-size) ivlen)
     (define/public (get-cmd) cmd)
@@ -237,7 +237,7 @@ FIXME: check again whether DER available in older versions
 
 
 (define pkey-impl%
-  (class* object% (pkey-impl<%>)
+  (class* impl-base% (pkey-impl<%>)
     (init-field sys)
     (super-new)
 
@@ -272,7 +272,7 @@ FIXME: check again whether DER available in older versions
     ))
 
 (define pkey-ctx%
-  (class* base-ctx% (pkey-ctx<%>)
+  (class* ctx-base% (pkey-ctx<%>)
     (init-field key private?)
     (inherit-field impl)
     (super-new)
@@ -367,7 +367,12 @@ FIXME: check again whether DER available in older versions
 (define (di spec cmd)
   (match (hash-ref known-digests spec #f)
     [(list size block-size)
-     (new digest-impl% (spec spec) (cmd cmd) (size size) (block-size block-size))]))
+     (new digest-impl%
+          (spec spec)
+          (factory cmdssl-factory)
+          (cmd cmd)
+          (size size)
+          (block-size block-size))]))
 
 (define digests
   '([md5 "md5"]
@@ -382,11 +387,13 @@ FIXME: check again whether DER available in older versions
   (if (list? cmd/s)
       (new multikeylen-cipher-impl%
            (spec spec)
+           (factory cmdssl-factory)
            (impls (for/list ([len+cmd cmd/s])
                     (cons (car len+cmd)
                           (ci spec (cdr len+cmd))))))
       (new cipher-impl%
            (spec spec)
+           (factory cmdssl-factory)
            (cmd cmd/s)
            (blocklen (cipher-spec-block-size spec))
            (ivlen (cipher-spec-iv-size spec)))))

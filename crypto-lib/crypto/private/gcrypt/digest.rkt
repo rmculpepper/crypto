@@ -22,16 +22,15 @@
 (provide gcrypt-digest-impl%)
 
 (define gcrypt-digest-impl%
-  (class* object% (digest-impl<%>)
-    (init-field factory
-                md        ;; int
-                blocksize ;; no way to fetch w/ ffi (?)
-                spec)     ;; symbol
-    (define hmac-impl #f)
-    (define size (gcry_md_get_algo_dlen md))
+  (class* impl-base% (digest-impl<%>)
+    (init-field md         ;; int
+                blocksize) ;; no way to fetch w/ ffi (?)
+    (inherit-field spec)
     (super-new)
 
-    (define/public (get-spec) spec)
+    (define hmac-impl #f)
+    (define size (gcry_md_get_algo_dlen md))
+
     (define/public (get-size) size)
     (define/public (get-block-size) blocksize)
 
@@ -55,7 +54,7 @@
     ))
 
 (define gcrypt-digest-ctx%
-  (class* base-ctx% (digest-ctx<%>)
+  (class* ctx-base% (digest-ctx<%>)
     (init-field ctx)
     (inherit-field impl)
     (super-new)
@@ -80,6 +79,8 @@
   (class* object% (hmac-impl<%>)
     (init-field digest)
     (super-new)
+    (define/public (get-spec) `(hmac ,(send digest get-spec)))
+    (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
     (define/public (new-ctx who key)
       (let ([ctx (gcry_md_open (get-field md digest) GCRY_MD_FLAG_HMAC)])

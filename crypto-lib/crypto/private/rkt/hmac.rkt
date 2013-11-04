@@ -22,7 +22,7 @@
 ;; Reference: http://www.ietf.org/rfc/rfc2104.txt
 
 (define rkt-hmac-impl%
-  (class* object% (hmac-impl<%>)
+  (class* impl-base% (hmac-impl<%>)
     (init-field digest)
     (super-new)
     (define/public (get-digest) digest)
@@ -31,7 +31,7 @@
     ))
 
 (define rkt-hmac-ctx%
-  (class* base-ctx% (digest-ctx<%>)
+  (class* ctx-base% (digest-ctx<%>)
     (init-field key [ctx #f])
     (inherit-field impl)
     (super-new)

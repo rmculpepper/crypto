@@ -81,6 +81,8 @@
 (define gcrypt-random-impl%
   (class* object% (random-impl<%>)
     (super-new)
+    (define/public (get-spec) 'random)
+    (define/public (get-factory) gcrypt-factory)
     (define/public (random-bytes! who buf start end)
       ;; FIXME: better mapping to quality levels
       (gcry_randomize (ptr-add buf start) (- end start) GCRY_STRONG_RANDOM))

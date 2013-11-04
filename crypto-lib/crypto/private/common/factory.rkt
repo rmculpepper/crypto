@@ -23,24 +23,26 @@
   [crypto-factories
    (parameter/c (listof factory?))]
   [get-digest
-   (->* [digest-spec?] [(listof factory?)] (or/c digest-impl? #f))]
+   (->* [digest-spec?] [factories/c] (or/c digest-impl? #f))]
   [get-cipher
-   (->* [cipher-spec?] [(listof factory?)] (or/c cipher-impl? #f))]
+   (->* [cipher-spec?] [factories/c] (or/c cipher-impl? #f))]
   [get-random
-   (-> (or/c random-impl? #f))]
+   (->* [] [factories/c] (or/c random-impl? #f))]
   ))
+
+(define factories/c (or/c factory? (listof factory?)))
 
 ;; crypto-factories : parameter of (listof factory<%>)
 (define crypto-factories (make-parameter null))
 
-(define (get-digest di [factories (crypto-factories)])
-  (for/or ([f (in-list factories)])
-    (send f get-digest-by-name di)))
+(define (get-digest di [factory/s (crypto-factories)])
+  (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+    (send f get-digest di)))
 
-(define (get-cipher ci [factories (crypto-factories)])
-  (for/or ([f (in-list factories)])
-    (send f get-cipher-by-name ci)))
+(define (get-cipher ci [factory/s (crypto-factories)])
+  (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+    (send f get-cipher ci)))
 
-(define (get-random [factories (crypto-factories)])
-  (for/or ([f (in-list factories)])
+(define (get-random [factory/s (crypto-factories)])
+  (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
     (send f get-random)))

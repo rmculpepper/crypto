@@ -15,7 +15,9 @@
          get-cipher
          cipher-spec?
          cipher-impl?
-         cipher-ctx?)
+         cipher-ctx?
+         get-random
+         random-impl?)
 
 (require (only-in "private/libcrypto/factory.rkt" libcrypto-factory)
          (only-in "private/gcrypt/factory.rkt" gcrypt-factory)

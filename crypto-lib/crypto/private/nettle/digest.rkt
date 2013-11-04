@@ -28,12 +28,11 @@
     ctx))
 
 (define nettle-digest-impl%
-  (class* object% (digest-impl<%>)
-    (init-field nh spec factory)
+  (class* impl-base% (digest-impl<%>)
+    (init-field nh)
     (define hmac-impl #f)
     (super-new)
 
-    (define/public (get-spec) spec)
     (define/public (get-size) (nettle_hash-digest_size nh))
     (define/public (get-block-size) (nettle_hash-digest_size nh))
 
@@ -58,7 +57,7 @@
     ))
 
 (define nettle-digest-ctx%
-  (class* base-ctx% (digest-ctx<%>)
+  (class* ctx-base% (digest-ctx<%>)
     (init-field ctx nh)
     (inherit-field impl)
     (super-new)
@@ -84,6 +83,8 @@
   (class* object% (hmac-impl<%>)
     (init-field digest nh)
     (super-new)
+    (define/public (get-spec) `(hmac ,(send digest get-spec)))
+    (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
     (define/public (new-ctx who key)
       (let* ([size (nettle_hash-context_size nh)]
@@ -95,7 +96,7 @@
     ))
 
 (define nettle-hmac-ctx%
-  (class* base-ctx% (digest-ctx<%>)
+  (class* ctx-base% (digest-ctx<%>)
     (init-field nh outer inner ctx)
     (inherit-field impl)
     (super-new)

@@ -28,15 +28,12 @@
 ;; ============================================================
 
 (define libcrypto-digest-impl%
-  (class* object% (digest-impl<%>)
-    (init-field md    ;; EVP_MD
-                spec  ;; DigestSpec (symbol)
-                factory)
+  (class* impl-base% (digest-impl<%>)
+    (init-field md)    ;; EVP_MD
     (define size (EVP_MD_size md))
     (define hmac-impl #f)
     (super-new)
 
-    (define/public (get-spec) spec)
     (define/public (get-size) size)
     (define/public (get-block-size) (EVP_MD_block_size md))
 
@@ -66,7 +63,7 @@
     ))
 
 (define libcrypto-digest-ctx%
-  (class* base-ctx% (digest-ctx<%>)
+  (class* ctx-base% (digest-ctx<%>)
     (init-field ctx)
     (inherit-field impl)
     (super-new)
@@ -98,6 +95,8 @@
   (class* object% (hmac-impl<%>)
     (init-field digest)
     (super-new)
+    (define/public (get-spec) `(hmac ,(send digest get-spec)))
+    (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
     (define/public (new-ctx who key)
       (let ([ctx (HMAC_CTX_new)])
@@ -106,7 +105,7 @@
     ))
 
 (define libcrypto-hmac-ctx%
-  (class* base-ctx% (digest-ctx<%>)
+  (class* ctx-base% (digest-ctx<%>)
     (init-field ctx)
     (inherit-field impl)
     (super-new)
