@@ -26,19 +26,18 @@
   ;;  - http://en.wikipedia.org/wiki/Cryptographic_hash_function
   ;; An entry is of form (list name-symbol hash-size block-size)
   '#hasheq(;; symbol  ->   [Hash  Block]   -- sizes in bytes
-           [gost        .  [ 32   32 ]]
            [md2         .  [ 16   16 ]]
            [md4         .  [ 16   64 ]]
            [md5         .  [ 16   64 ]]
-           [ripemd      .  [ 16   64 ]]
-           [ripemd128   .  [ 16   64 ]]
-           [ripemd256   .  [ 32   64 ]]
+           ;; [gost        .  [ 32   32 ]]
+           ;; [ripemd      .  [ 16   64 ]]
+           ;; [ripemd128   .  [ 16   64 ]]
+           ;; [ripemd256   .  [ 32   64 ]]
            [ripemd160   .  [ 20   64 ]]
-           [ripemd320   .  [ 40   64 ]]
+           ;; [ripemd320   .  [ 40   64 ]]
            [tiger1      .  [ 24   64 ]]
            [tiger2      .  [ 24   64 ]]
-           ;; Note: 3 versions: Whirlpool-0 (2000), Whirlpool-T (2001), Whirlpool (2003)
-           [whirlpool   .  [ 64   64 ]] 
+           [whirlpool   .  [ 64   64 ]] ;; Note: 3 versions, W-0 (2000), W-T (2001), W (2003)
            [sha0        .  [ 20   64 ]]
            [sha1        .  [ 20   64 ]]
            [sha224      .  [ 28   64 ]]
@@ -98,16 +97,15 @@
            [blowfish   .  [ 8     #s(variable-size 4 56 1)]]
            [cast128    .  [ 8     #s(variable-size 5 16 1)]]
            [camellia   .  [ 16    (16 24 32)]]
-           [idea       .  [ 8     (16)]]
-           [rc5        .  [ 8     #s(variable-size 0 255 1)]]
-           [rc5-64     .  [ 16    #s(variable-size 0 255 1)]]
-           [rc6-64     .  [ 32    #s(variable-size 0 255 1)]]
-           [cast256    .  [ 16    #s(variable-size 16 32 4)]]
-           ;; AES finalists
            [serpent    .  [ 16    #s(variable-size 0 32 1)]]
            [twofish    .  [ 16    #s(variable-size 8 32 1)]]
-           [rc6        .  [ 16    #s(variable-size 0 255 1)]]
-           [mars       .  [ 16    #s(variable-size 16 56 4)]] ;; aka Mars-2 ???
+           ;; [idea       .  [ 8     (16)]]
+           ;; [rc5        .  [ 8     #s(variable-size 0 255 1)]]
+           ;; [rc5-64     .  [ 16    #s(variable-size 0 255 1)]]
+           ;; [rc6-64     .  [ 32    #s(variable-size 0 255 1)]]
+           ;; [cast256    .  [ 16    #s(variable-size 16 32 4)]]
+           ;; [rc6        .  [ 16    #s(variable-size 0 255 1)]]
+           ;; [mars       .  [ 16    #s(variable-size 16 56 4)]] ;; aka Mars-2 ???
            ))
 
 (define known-stream-ciphers
