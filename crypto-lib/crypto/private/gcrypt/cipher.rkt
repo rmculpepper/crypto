@@ -61,6 +61,13 @@
             (ptr-add outbuf outstart) (- outend outstart)
             (ptr-add inbuf instart) (- inend instart))))
 
+    (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
+      (case (cadr (send impl get-spec))
+        [(ctr ofb cfb stream)
+         (*crypt inbuf instart inend outbuf outstart outend)
+         (- inend instart)]
+        [else #f]))
+
     (define/override (*open?)
       (and ctx #t))
 

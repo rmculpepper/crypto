@@ -52,7 +52,7 @@
     [camellia ([128 "camellia128"]
                [192 "camellia192"]
                [256 "camellia256"])]
-    [cast-128 ([128 "cast128"])]
+    [cast128 ([128 "cast128"])]
     [salsa20 "salsa20"]
     [salsa20r12 "salsa20r12"]
     [serpent ([128 "serpent128"]

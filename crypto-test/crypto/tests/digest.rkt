@@ -18,66 +18,53 @@
 (require racket/class
          racket/dict
          rackunit
-         "../private/common/functions.rkt"
+         crypto/private/common/catalog
+         crypto/private/common/digest
+         crypto/private/common/util
          "util.rkt")
 (provide test-digests
-         digest-names
          digest-inputs)
 
 (define (test-digest/in+out di in out)
-  (test-case (format "~a: ~e" (send di get-name) in)
+  (eprintf "testing ~a (~s)\n" (send di get-spec) (bytes-length in))
+  (test-case (format "~a: ~e" (send di get-spec) in)
     (check-equal? (digest di in) out)
     (check-equal? (digest di (open-input-bytes in)) out)
     (let ([ctx (make-digest-ctx di)])
-      (digest-update! ctx in)
+      (digest-update ctx in)
       (check-equal? (digest-peek-final ctx) out)
       (check-equal? (digest-final ctx) out))
     (let* ([r 57]
            [in* (bytes-append (make-bytes r 65) in (make-bytes r 66))])
-      (let ([ctx (make-digest-ctx di)]
-            [dibuf (make-bytes (digest-size di))])
-        (digest-update! ctx in* r (+ r (bytes-length in)))
-        (digest-final! ctx dibuf 0 (bytes-length dibuf))
-        (check-equal? dibuf out))
+      (let ([ctx (make-digest-ctx di)])
+        (digest-update ctx in* r (+ r (bytes-length in)))
+        (check-equal? (digest-final ctx) out))
       (let ([ctx (make-digest-ctx di)])
         (for ([i (in-range r (+ r (bytes-length in)))])
-          (digest-update! ctx in* i (add1 i)))
+          (digest-update ctx in* i (add1 i))
+          (let ([so-far (digest-peek-final ctx)])
+            (when so-far
+              (check-equal? so-far (digest-bytes di in* r (+ i 1))))))
         (check-equal? (digest-final ctx) out)))))
-
-#|
-(define (test-digest/ins+outs di ins+outs)
-  (test-case (format "incremental ~a" (send di get-name))
-    (let ([ctx (make-digest-ctx di)]
-          [in-so-far #""])
-      (for ([in+out ins+outs])
-        (let ([in (car in+out)] [out (cadr in+out)])
-          (digest-update! ctx in)
-          (set! in-so-far (bytes-append in-so-far in))
-          (let ([out-so-far (digest-peek-final ctx)])
-            (check-equal? out-so-far out)
-            (check-equal? out-so-far (digest in-so-far))))))))
-|#
 
 (define (test-digest-impls-agree di di-base in)
   (test-digest/in+out di in (digest di-base in)))
 
 (define (test-hmac/in+out di key in out)
-  (test-case (format "HMAC ~a: ~e" (send di get-name) in)
+  (test-case (format "HMAC ~a: ~e" (send di get-spec) in)
     (check-equal? (hmac di key in) out)
     (check-equal? (hmac di key (open-input-bytes in)) out)
     (let ([ctx (make-hmac-ctx di key)])
-      (digest-update! ctx in)
+      (digest-update ctx in)
       (check-equal? (digest-final ctx) out))
     (let* ([r 57]
            [in* (bytes-append (make-bytes r 65) in (make-bytes r 66))])
-      (let ([ctx (make-hmac-ctx di key)]
-            [dibuf (make-bytes (digest-size di))])
-        (digest-update! ctx in* r (+ r (bytes-length in)))
-        (digest-final! ctx dibuf 0 (bytes-length dibuf))
-        (check-equal? dibuf out))
+      (let ([ctx (make-hmac-ctx di key)])
+        (digest-update ctx in* r (+ r (bytes-length in)))
+        (check-equal? (digest-final ctx) out))
       (let ([ctx (make-hmac-ctx di key)])
         (for ([i (in-range r (+ r (bytes-length in)))])
-          (digest-update! ctx in* i (add1 i)))
+          (digest-update ctx in* i (add1 i)))
         (check-equal? (digest-final ctx) out)))))
 
 (define (test-hmac-impls-agree di di-base key in)
@@ -124,18 +111,16 @@
     ,(semirandom-bytes/alpha 20)
     ,(semirandom-bytes/alpha 40)))
 
-(define digest-names
-  '(sha1 md5 ripemd160 sha224 sha256 sha384 sha512 dss1))
-
 (define (test-digests factory base-factory)
-  (for ([name digest-names])
-    (let ([di (send factory get-digest-by-name name)]
-          [di-base (send base-factory get-digest-by-name name)])
-      (when (and di di-base)
+  (for ([name (hash-keys known-digests)])
+    (let ([di (send factory get-digest name)]
+          [di-base (send base-factory get-digest name)])
+      (when di
         (for ([in+out (dict-ref digest-test-vectors name null)])
           (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out))))
-        (for ([in digest-inputs])
-          (test-digest-impls-agree di di-base in))
-        (for* ([key digest-keys]
-               [in digest-inputs])
-          (test-hmac-impls-agree di di-base key in))))))
+        (when di-base
+          (for ([in digest-inputs])
+            (test-digest-impls-agree di di-base in))
+          (for* ([key digest-keys]
+                 [in digest-inputs])
+                (test-hmac-impls-agree di di-base key in)))))))

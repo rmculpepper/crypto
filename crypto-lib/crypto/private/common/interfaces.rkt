@@ -150,7 +150,7 @@
     ))
 
 (define (cipher-impl? x) (is-a? x cipher-impl<%>))
-(define (cipher-ctx? x) (is-a? x cipher-ctx?))
+(define (cipher-ctx? x) (is-a? x cipher-ctx<%>))
 
 ;; ============================================================
 ;; Public-Key Cryptography

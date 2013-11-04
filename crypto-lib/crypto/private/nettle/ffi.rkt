@@ -126,7 +126,7 @@
         (if next
             (cons (nettle-cipher (nettle_cipher-name next)
                                  (nettle_cipher-context_size next)
-                                 (nettle_cipher-block_size next)
+                                 (max 1 (nettle_cipher-block_size next))
                                  (nettle_cipher-key_size next)
                                  (nettle_cipher-set_encrypt_key next)
                                  (nettle_cipher-set_decrypt_key next)
@@ -191,9 +191,6 @@
 
 ;; ----
 
-;; CBC_CTX(type, size) = { type ctx; uint8_t iv[size]; }
-(define-cpointer-type _CBC_CTX)
-
 (define-nettle nettle_cbc_encrypt
   (_fun (ctx     : _CIPHER_CTX)
         (encrypt : _nettle_crypt_func)
@@ -205,7 +202,7 @@
         -> _void))
 
 (define-nettle nettle_cbc_decrypt
-  (_fun (ctx     : _CBC_CTX)
+  (_fun (ctx     : _CIPHER_CTX)
         (decrypt : _nettle_crypt_func)
         (blksize : _uint)
         (iv      : _pointer)
@@ -214,11 +211,8 @@
         (src     : _pointer)
         -> _void))
 
-;; CTR_CTX(type, size) = { type ctx; uint8_t ctr[size]; }
-(define-cpointer-type _CTR_CTX)
-
 (define-nettle nettle_ctr_crypt
-  (_fun (ctx     : _CTR_CTX)
+  (_fun (ctx     : _CIPHER_CTX)
         (crypt   : _nettle_crypt_func)
         (blksize : _uint)
         (ctr     : _pointer)

@@ -64,7 +64,7 @@
     (define/public (set-key+iv key iv*)
       (when (positive? (bytes-length iv))
         (bytes-copy! iv 0 iv* 0 (bytes-length iv)))
-      (if encrypt?
+      (if (or encrypt? (memq mode '(ctr))) ;; CTR mode uses block cipher's encrypt
           ((nettle-cipher-set-encrypt-key nc) ctx (bytes-length key) key)
           ((nettle-cipher-set-decrypt-key nc) ctx (bytes-length key) key))
       (for ([extra (in-list (nettle-cipher-extras nc))])
@@ -76,7 +76,6 @@
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
       (define crypt (if encrypt? (nettle-cipher-encrypt nc) (nettle-cipher-decrypt nc)))
-      (eprintf "in *crypt, in=~s,~s out=~s,~s\n" instart inend outstart outend)
       (case mode
         [(ecb stream)
          (crypt ctx (- inend instart) (ptr-add outbuf outstart) (ptr-add inbuf instart))]

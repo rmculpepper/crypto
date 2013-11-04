@@ -48,7 +48,7 @@
 
 (define ciphers
   `(;;[Name   ([KeySize AlgId] ...)]
-    [cast-128 ([128 ,GCRY_CIPHER_CAST5])]
+    [cast128 ([128 ,GCRY_CIPHER_CAST5])]
     [blowfish ([128 ,GCRY_CIPHER_BLOWFISH])]
     [aes      ([128 ,GCRY_CIPHER_AES]
                [192 ,GCRY_CIPHER_AES192]
@@ -117,10 +117,11 @@
                     [(list _ keylens+algids)
                      (for/list ([keylen+algid (in-list keylens+algids)])
                        (cons (quotient (car keylen+algid) 8)
-                             (new gcrypt-cipher-impl%
-                                  (spec spec)
-                                  (cipher (cadr keylen+algid))
-                                  (mode (cadr (assq (cadr spec) modes))))))]
+                             (and (gcry_cipher_test_algo (cadr keylen+algid))
+                                  (new gcrypt-cipher-impl%
+                                       (spec spec)
+                                       (cipher (cadr keylen+algid))
+                                       (mode (cadr (assq (cadr spec) modes)))))))]
                     [_ #f]))]
             [else #f]))
 

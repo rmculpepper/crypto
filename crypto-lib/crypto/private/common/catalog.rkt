@@ -93,11 +93,11 @@
   ;;  - (vector 'variable min max step)
   '#hasheq(;; symbol  -> (Block AllowedKeys)   -- sizes in bytes
            [aes        .  [ 16    (16 24 32)]]
-           [des        .  [ 8     (7)]]      ;; key expressed as 8 bytes w/ parity bits
-           [des-ede2   .  [ 8     (14)]]     ;; key expressed as 16 bytes w/ parity bits
-           [des-ede3   .  [ 8     (21)]]     ;; key expressed as 24 bytes w/ parity bits
-           [blowfish   .  [ 8     #s(variable-size 32 56 1)]]
-           [cast128    .  [ 8     #s(variable-size 40 16 1)]]
+           [des        .  [ 8     (8)]]      ;; key expressed as 8 bytes w/ parity bits
+           [des-ede2   .  [ 8     (16)]]     ;; key expressed as 16 bytes w/ parity bits
+           [des-ede3   .  [ 8     (24)]]     ;; key expressed as 24 bytes w/ parity bits
+           [blowfish   .  [ 8     #s(variable-size 4 56 1)]]
+           [cast128    .  [ 8     #s(variable-size 5 16 1)]]
            [camellia   .  [ 16    (16 24 32)]]
            [idea       .  [ 8     (16)]]
            [rc5        .  [ 8     #s(variable-size 0 255 1)]]
@@ -115,8 +115,8 @@
   '#hasheq(;; symbol  ->  IV  AllowedKeys      -- sizes in bytes
            [rc4        .  [ 0   #s(variable-size 5 256 1)]]
            [salsa20    .  [ 8   (32)]]
-           [salsa20/8  .  [ 8   (32)]]
-           [salsa20/12 .  [ 8   (32)]]
+           [salsa20r8  .  [ 8   (32)]]
+           [salsa20r12 .  [ 8   (32)]]
            ))
 
 ;; Mode effects:
@@ -167,22 +167,22 @@
        [(list _ allowed-keys) allowed-keys]
        [_ #f])]))
 
-(define MIN-DEFAULT-KEY-SIZE 128)
+(define MIN-DEFAULT-KEY-SIZE (quotient 128 8))
 
 (define (cipher-spec-default-key-size cipher-spec)
   (define allowed (cipher-spec-key-sizes cipher-spec))
   (cond [(list? allowed)
          (or (for/or ([size (in-list allowed)] #:when (>= size MIN-DEFAULT-KEY-SIZE)) size)
-             (max allowed))]
+             (apply max allowed))]
         [(variable-size? allowed)
          (let* ([minks (variable-size-min allowed)]
                 [maxks (variable-size-max allowed)]
                 [step (variable-size-step allowed)]
                 [diff (- MIN-DEFAULT-KEY-SIZE minks)]
                 [diff-steps (quotient diff step)]
-                [best-default (+ MIN-DEFAULT-KEY-SIZE
+                [best-default (+ minks
                                  (* step diff-steps)
-                                 (if (zero? (remainder diff step)) step 0))])
+                                 (if (zero? (remainder diff step)) 0 step))])
            (cond [(<= minks best-default maxks)
                   best-default]
                  [else maxks]))]
@@ -222,8 +222,8 @@
            (if (member key-size allowed) #f allowed)]
           [(variable-size? allowed)
            (if (and (<= (variable-size-min allowed) key-size (variable-size-max allowed))
-                    (zero? (quotient (- key-size (variable-size-min allowed))
-                                     (variable-size-step allowed))))
+                    (zero? (remainder (- key-size (variable-size-min allowed))
+                                      (variable-size-step allowed))))
                #f
                allowed)]
           [else '()])))

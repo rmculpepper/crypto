@@ -18,31 +18,34 @@
 (require racket/class
          rackunit
          rackunit/text-ui
-         "../private/common/functions.rkt"
-         "../private/ssl/factory.rkt"
-         "../private/ssl/dh.rkt"
-         "../private/cmd-ssl/cmd.rkt"
+         crypto
+         crypto/private/cmd-ssl/cmd
          "digest.rkt"
          "cipher.rkt"
-         "pkey.rkt")
-(provide make-ssl-tests
-         main)
+         #| "pkey.rkt" |#)
+(provide make-factory-tests)
 
-(define (make-ssl-tests)
+(define (make-factory-tests name factory)
+  #|
   (define (test-dh dhi)
     (test-case (format "DH ~a" (dh-bits dhi))
       (define-values (priv1 pub1) (generate-dhkey dhi))
       (define-values (priv2 pub2) (generate-dhkey dhi))
       (check-equal? (compute-key priv1 pub2)
                     (compute-key priv2 pub1))))
-  (test-suite "ssl-based implementation"
-    (test-suite "DH"
-      (for ([dhi (list dh:192 dh:512 dh:1024 dh:2048 dh:4096)])
-        (test-dh dhi)))
+  |#
+  (eprintf ">>> Testing ~a\n" name)
+  (test-suite name
     ;; Test ssl impl against cmd-ssl impl
-    (test-suite "digests" (test-digests ssl-factory cmdssl-factory))
-    (test-suite "cipers" (test-ciphers ssl-factory cmdssl-factory))
-    (test-suite "pkey" (test-pkeys ssl-factory cmdssl-factory))))
+    (test-suite "digests" (test-digests factory cmdssl-factory))
+    ;; (test-suite "cipers" (test-ciphers factory cmdssl-factory))
+    #| (test-suite "pkey" (test-pkeys factory cmdssl-factory)) |#))
 
-(define (main)
-  (run-tests (make-ssl-tests)))
+(module+ main
+  (run-tests
+   (test-suite "crypto tests"
+     (make-factory-tests "libcrypto" libcrypto-factory)
+     (make-factory-tests "gcrypt" gcrypt-factory)
+     (make-factory-tests "nettle" nettle-factory)
+     ;; (make-cipher-agreement-tests (list libcrypto-factory gcrypt-factory nettle-factory))
+     )))

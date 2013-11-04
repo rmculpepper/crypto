@@ -217,6 +217,13 @@
 (define-gcrypt gcry_cipher_get_algo_keylen (_fun _int -> _size))
 (define-gcrypt gcry_cipher_get_algo_blklen (_fun _int -> _size))
 
+(define-gcrypt gcry_cipher_algo_info
+  ;; no #:wrap check because result sometimes encodes boolean (inverted)
+  (_fun _int _int _pointer _pointer -> _gcry_error))
+
+(define (gcry_cipher_test_algo a)
+  (zero? (gcry_cipher_algo_info a GCRYCTL_TEST_ALGO #f #f)))
+
 ;; ----
 
 (define GCRY_WEAK_RANDOM        0)
