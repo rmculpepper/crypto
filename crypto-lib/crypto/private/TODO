@@ -5,6 +5,13 @@ To Do
 - check synchronization & race conditions
 - check error reporting
 
+- RSA
+  - padding: use "RSAES-OAEP" for encryption, "RSASSA-PSS" for signing
+    http://rdist.root.org/2009/10/06/why-rsa-encryption-padding-is-critical/
+  - "If you're using PKCS#1v1.5 padding for RSA encryption, *cut it out*!"
+    http://blog.cryptographyengineering.com/2012/06/bad-couple-of-years-for-cryptographic.html
+    http://blog.cryptographyengineering.com/2012/09/on-provable-security-of-tls-part-1.html
+
 - reorg modules
   - crypto/main - provides generic operations + crypto-factories param
   - crypto/factory/{libcrypto,nettle,etc} - provides factories + init code

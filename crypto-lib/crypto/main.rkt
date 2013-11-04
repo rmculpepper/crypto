@@ -8,6 +8,7 @@
 (provide (all-from-out "private/common/digest.rkt")
          (all-from-out "private/common/cipher.rkt")
          (all-from-out "private/common/util.rkt")
+         get-factory
          get-digest
          digest-spec?
          digest-impl?

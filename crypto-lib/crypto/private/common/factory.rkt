@@ -22,6 +22,9 @@
  (contract-out
   [crypto-factories
    (parameter/c (listof factory?))]
+  [get-factory
+   (-> (or/c digest-impl? cipher-impl? random-impl?)
+       factory?)]
   [get-digest
    (->* [digest-spec?] [factories/c] (or/c digest-impl? #f))]
   [get-cipher
@@ -34,6 +37,9 @@
 
 ;; crypto-factories : parameter of (listof factory<%>)
 (define crypto-factories (make-parameter null))
+
+(define (get-factory i)
+  (send i get-factory))
 
 (define (get-digest di [factory/s (crypto-factories)])
   (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])

@@ -86,9 +86,9 @@
   ;;       output-port?)]
 
   [generate-cipher-key
-   (->* [cipher/c] [nat?] key/c)]
+   (->* [cipher/c] [nat? random-impl?] key/c)]
   [generate-cipher-iv
-   (-> cipher/c iv/c)]))
+   (->* [cipher/c] [random-impl?] iv/c)]))
 
 (define cipher/c (or/c cipher-spec? cipher-impl?))
 
