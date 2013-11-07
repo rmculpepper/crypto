@@ -32,7 +32,13 @@
 
 (define _gcry_error _uint)
 
+(define (gcry_error-code e)
+  ;; From gpg-error.h: the lower 16 bits are used to store error codes;
+  ;; higher bits store other information (eg error source).
+  (bitwise-and e #xFFFF))
+
 (define GPG_ERR_NO_ERROR 0)
+(define GPG_ERR_BAD_SIGNATURE 8)
 
 (define-gcrypt gcry_strerror (_fun _gcry_error -> _string))
 
@@ -241,9 +247,34 @@
 (define-cpointer-type _gcry_mpi)
 
 (define-gcrypt gcry_mpi_release
-  (_fun _gcry_mpi -> _void))
+  (_fun _gcry_mpi -> _void)
+  #:wrap (deallocator))
 
-(define-gcrypt gcry_mpi_nbits
+#|
+(define-gcrypt gcry_mpi_new
+  (_fun (_uint = 0) -> _gcry_mpi)
+  #:wrap (allocator gcry_mpi_release))
+
+(define-gcrypt gcry_mpi_sub_ui
+  (_fun (dst : _gcry_mpi)
+        (a   : _gcry_mpi)
+        (b   : _ulong)
+        -> _void))
+
+(define-gcrypt gcry_mpi_mul
+  (_fun (dst : _gcry_mpi)
+        (a   : _gcry_mpi)
+        (b   : _gcry_mpi)
+        -> _void))
+
+(define-gcrypt gcry_mpi_invm
+  (_fun (dst : _gcry_mpi)
+        (a   : _gcry_mpi)
+        (m   : _gcry_mpi)
+        -> _int))
+|#
+
+(define-gcrypt gcry_mpi_get_nbits
   (_fun _gcry_mpi -> _uint))
 
 (define-gcrypt gcry_mpi_scan
@@ -275,6 +306,16 @@
 (define-gcrypt gcry_sexp_release
   (_fun _gcry_sexp -> _void)
   #:wrap (deallocator))
+
+(define-gcrypt gcry_sexp_new
+  (_fun (buf) ::
+        (result  : (_ptr o _gcry_sexp))
+        (buf     : _bytes)
+        (buflen  : _size = (bytes-length buf))
+        (autofmt : _int = 0)
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:wrap (compose (allocator gcry_sexp_release) check2))
 
 (define-gcrypt gcry_sexp_build
   (_fun (fmt . args) ::
@@ -334,16 +375,16 @@
         -> _size))
 
 (define (gcry_sexp->bytes s)
-  (let* ([n (gcry_sexp_sprint s #f)]
+  (let* ([n (gcry_sexp_sprint s #f GCRYSEXP_FMT_CANON)]
          [buf (make-bytes n)])
     (gcry_sexp_sprint s buf GCRYSEXP_FMT_CANON)
-    buf))
+    (subbytes buf 0 (sub1 n))))
 
 (define (gcry_sexp->string s)
-  (let* ([n (gcry_sexp_sprint s #f)]
+  (let* ([n (gcry_sexp_sprint s #f GCRYSEXP_FMT_ADVANCED)]
          [buf (make-bytes n)])
     (gcry_sexp_sprint s buf GCRYSEXP_FMT_ADVANCED)
-    buf))
+    (bytes->string/utf-8 buf #f 0 (sub1 n))))
 
 ;; ----
 
@@ -379,8 +420,16 @@
         (sig  : _gcry_sexp)
         (data : _gcry_sexp)
         (pubkey : _gcry_sexp)
-        -> (status : _gcry_error))
-  #:wrap check)
+        -> (status : _gcry_error)
+        -> (cond [(= status GPG_ERR_NO_ERROR)
+                  (values status #t)]
+                 [(= (gcry_error-code status) GPG_ERR_BAD_SIGNATURE)
+                  ;; Convert status to avoid raising exn, return #f for "not verified"
+                  (values GPG_ERR_NO_ERROR #f)]
+                 [else
+                  (eprintf "got status ~s\n" status)
+                  (values status #f)]))
+  #:wrap check2)
 
 (define-gcrypt gcry_pk_nbits
   (_fun _gcry_sexp -> _uint))
