@@ -51,3 +51,41 @@ To Do
   cmd-ssl impl already exposes some problems
 
 - figure out what to do with leftover pieces (eg DH libcrypto code)
+
+
+#|
+Misc resources
+ - http://wiki.openssl.org/index.php/Libcrypto_API
+ - http://www.openssl.org/docs/crypto/crypto.html
+ - http://wiki.openssl.org/index.php/EVP
+ - http://www.openssl.org/docs/crypto/EVP_PKEY_set1_RSA.html
+ - http://www.openssl.org/docs/crypto/EVP_PKEY_keygen.html
+ - http://en.wikipedia.org/wiki/PKCS1
+ - http://www.openssl.org/docs/crypto/EVP_PKEY_sign.html
+ - http://www.openssl.org/docs/crypto/EVP_PKEY_verify.html
+ - http://www.openssl.org/docs/crypto/EVP_PKEY_derive.html
+
+High-level crypto lib design (?)
+ - http://www.gnupg.org/related_software/gpgme/
+
+Crypto talks
+ - http://rdist.root.org/2009/08/06/google-tech-talk-on-common-crypto-flaws/
+ - http://rdist.root.org/2009/06/10/when-crypto-attacks-slides-posted/
+
+Authenticated encryption, GCM, etc
+ - http://stackoverflow.com/questions/12153009/openssl-c-example-of-aes-gcm-using-evp-interfaces
+ - http://www.cryptopp.com/wiki/Authenticated_Encryption
+ - http://www.cryptopp.com/wiki/CCM
+ - http://www.cryptopp.com/wiki/GCM
+ - http://www.openssl.org/docs/crypto/EVP_EncryptInit.html (see GCM Mode notes)
+ - http://stackoverflow.com/questions/12153009/openssl-c-example-of-aes-gcm-using-evp-interfaces
+ - http://incog-izick.blogspot.com/2011/08/using-openssl-aes-gcm.html
+
+Certificate pinning
+ - https://www.owasp.org/index.php/Certificate_and_Public_Key_Pinning
+ - https://www.owasp.org/index.php/Pinning_Cheat_Sheet
+ - http://www.thoughtcrime.org/blog/authenticity-is-broken-in-ssl-but-your-app-ha/
+ - https://www.imperialviolet.org/2011/05/04/pinning.html
+ - http://dev.chromium.org/sts
+
+|#
