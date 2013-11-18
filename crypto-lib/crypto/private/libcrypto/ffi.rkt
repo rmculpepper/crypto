@@ -531,7 +531,7 @@
 
 (define-crypto EVP_PKEY_verify
   (_fun _EVP_PKEY_CTX _pointer _size _pointer _size -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_sign
+  #:wrap (err-wrap 'EVP_PKEY_verify
                    (lambda (r) (member r '(0 1)))
                    (lambda (r) (case r ((0) #f) ((1) #t)))))
 
@@ -560,20 +560,6 @@
   #:wrap (err-wrap 'EVP_PKEY_cmp
                    (lambda (r) (member r '(0 1)))
                    (lambda (r) (case r ((0) #f) ((1) #t)))))
-
-(define-crypto RSA_generate_key_ex
-  (_fun _RSA _int _BIGNUM (_pointer = #f) -> _int)
-  #:wrap (err-wrap/check 'RSA_generate_key_ex))
-
-(define-crypto DSA_generate_parameters_ex
-  (_fun _DSA _int
-        (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) (_pointer = #f)
-        -> _int)
-  #:wrap (err-wrap/check 'DSA_generate_parameters_ex))
-
-(define-crypto DSA_generate_key
-  (_fun _DSA -> _int)
-  #:wrap (err-wrap/check 'DSA_generate_key))
 
 (define-crypto d2i_PublicKey
   (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)

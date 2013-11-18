@@ -127,6 +127,8 @@ References:
         (i2d_DSAparams dsa buf (bytes-length buf))
         (DSA_free dsa)
         buf))
+    (define/override (generate-key who config)
+      (error who "direct key generation not supported;\n generate paramters first"))
     (define/override (generate-params who config)
       (check-keygen-spec 'generate-dsa-key config allowed-dsa-paramgen)
       (let ([nbits (keygen-spec-ref config 'nbits)]
