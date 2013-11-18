@@ -78,26 +78,6 @@ To print all ciphers:
 ;; openssl-0.9.9 is supposed to remove the restriction for digest types
 (define pkey:rsa:digests '(ripemd160 sha1 sha224 sha256 sha384 sha512))
 (define pkey:dsa:digests '(dss1))
-
-(define (make-pkey:rsa)
-  (new libcrypto-pkey-impl%
-       (spec 'rsa)
-       (factory libcrypto-factory)
-       (pktype EVP_PKEY_RSA)
-       (keygen rsa-keygen)
-       (ok-digests pkey:rsa:digests)
-       (encrypt-ok? #t)))
-
-(define (make-pkey:dsa)
-  (new libcrypto-pkey-impl%
-       (spec 'dsa)
-       (factory libcrypto-factory)
-       (pktype EVP_PKEY_DSA)
-       (keygen dsa-keygen)
-       (ok-digests pkey:dsa:digests)
-       (encrypt-ok? #f)))
-
-(define pkey-table (hasheq 'rsa (make-pkey:rsa) 'dsa (make-pkey:dsa)))
 |#
 
 ;; ============================================================
@@ -137,7 +117,7 @@ To print all ciphers:
 
     ;; ----
 
-    (define/override (get-pkey* spec)
+    (define/override (get-pk* spec)
       (case spec
         [(rsa) (new libcrypto-rsa-impl% (factory this) (spec spec))]
         [(dsa) (new libcrypto-dsa-impl% (factory this) (spec spec))]

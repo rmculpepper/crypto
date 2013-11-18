@@ -24,9 +24,9 @@
          hmac-impl<%>
          cipher-impl<%>
          cipher-ctx<%>
-         pkey-impl<%>
-         pkey-params<%>
-         pkey-key<%>
+         pk-impl<%>
+         pk-params<%>
+         pk-key<%>
          random-impl<%>
 
          factory?
@@ -34,7 +34,7 @@
          digest-ctx?
          cipher-impl?
          cipher-ctx?
-         pkey-impl?
+         pk-impl?
          random-impl?)
 
 ;; ============================================================
@@ -63,7 +63,7 @@
 ;; ============================================================
 ;; Implementation Factories
 
-;; FIXME: add all-digests, all-ciphers, all-pkeys methods ???
+;; FIXME: add all-digests, all-ciphers, all-pks methods ???
 ;; (mostly for testing?)
 
 ;; FIXME: add more flexible description language for requests
@@ -74,11 +74,11 @@
     #|
     all-digests        ;; -> (listof digest-impl<%>)
     all-ciphers        ;; -> (listof cipher-impl<%>)
-    all-pkeys          ;; -> (listof pkey-impl<%>)
+    all-pks          ;; -> (listof pk-impl<%>)
     |#
     get-digest  ;; DigestSpec -> digest-impl<%>/#f
     get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
-    get-pkey    ;; symbol -> pkey-impl<%>/#f
+    get-pk      ;; symbol -> pk-impl<%>/#f
     get-random  ;; -> random-impl<%>/#f
     ))
 
@@ -159,30 +159,30 @@
 ;; ============================================================
 ;; Public-Key Cryptography
 
-(define pkey-impl<%>
+(define pk-impl<%>
   (interface (impl<%>)
-    read-key     ;; sym bytes 'public/'private KeyFormat -> pkey-key<%>
-    read-params  ;; sym bytes ParamsFormat -> pkey-params<%>
-    generate-key ;; sym GenKeySpec -> pkey-key<%>
-    generate-params ;; sym GenKeySpec -> pkey-params<%>
+    read-key     ;; sym bytes 'public/'private KeyFormat -> pk-key<%>
+    read-params  ;; sym bytes ParamsFormat -> pk-params<%>
+    generate-key ;; sym GenKeySpec -> pk-key<%>
+    generate-params ;; sym GenKeySpec -> pk-params<%>
     can-sign?    ;; -> boolean
     can-encrypt? ;; -> boolean
     ))
 
-(define pkey-params<%>
+(define pk-params<%>
   (interface (ctx<%>)
-    generate-key ;; sym GenKeySpec -> pkey-key<%>
+    generate-key ;; sym GenKeySpec -> pk-key<%>
     write-params ;; sym ParamsFormat -> bytes
     ))
 
-(define pkey-key<%>
+(define pk-key<%>
   (interface (ctx<%>)
     is-private?             ;; -> boolean
-    get-public-key          ;; sym -> pkey-key<%>
-    get-params              ;; sym -> pkey-params<%> or #f
+    get-public-key          ;; sym -> pk-key<%>
+    get-params              ;; sym -> pk-params<%> or #f
 
     write-key       ;; sym 'public/'private KeyFormat -> bytes
-    equal-to-key?   ;; pkey-key<%> -> boolean
+    equal-to-key?   ;; pk-key<%> -> boolean
 
     sign            ;; sym bytes DigestSpec Padding -> bytes
     verify          ;; sym bytes DigestSpec Padding bytes -> boolean
@@ -200,7 +200,7 @@
 ;; GenKeySpec is a (listof (list symbol any)) w/o duplicates,
 ;; where only known keys are allowed (impl-specific).
 
-(define (pkey-impl? x) (is-a? x pkey-impl<%>))
+(define (pk-impl? x) (is-a? x pk-impl<%>))
 
 ;; ============================================================
 ;; Randomness

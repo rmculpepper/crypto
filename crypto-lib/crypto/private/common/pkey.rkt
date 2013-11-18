@@ -29,10 +29,10 @@
   [public-key?
    (-> any/c boolean?)]
 
-  [pkey-can-sign?
-   (-> pkey-impl? boolean?)]
-  [pkey-can-encrypt?
-   (-> pkey-impl? boolean?)]
+  [pk-can-sign?
+   (-> pk-impl? boolean?)]
+  [pk-can-encrypt?
+   (-> pk-impl? boolean?)]
   [public-key=?
    (->* [public-key?] [] #:rest (listof public-key?) boolean?)]
   [key->public-key
@@ -42,20 +42,20 @@
    (->* [public-key?] [#:format key-format/c]
         bytes?)]
   [bytes->public-key
-   (->* [pkey-impl? bytes?] [#:format key-format/c]
+   (->* [pk-impl? bytes?] [#:format key-format/c]
        (and/c public-key? (not/c private-key?)))]
   [private-key->bytes
    (->* [private-key?] [#:format key-format/c]
         bytes?)]
   [bytes->private-key
-   (->* [pkey-impl? bytes?] [#:format key-format/c]
+   (->* [pk-impl? bytes?] [#:format key-format/c]
         private-key?)]
 
-  [pkey-sign-digest
+  [pk-sign-digest
    (->* [private-key? bytes? (or/c digest-spec? digest-impl?)]
         [#:pad  sign-pad/c]
         bytes?)]
-  [pkey-verify-digest
+  [pk-verify-digest
    (->* [public-key? bytes? (or/c digest-spec? digest-impl?) bytes?]
         [#:pad sign-pad/c]
         boolean?)]
@@ -68,10 +68,10 @@
         [#:pad sign-pad/c]
         boolean?)]
 
-  [pkey-encrypt
+  [pk-encrypt
    (->* [public-key? bytes?] [#:pad encrypt-pad/c]
         bytes?)]
-  [pkey-decrypt
+  [pk-decrypt
    (->* [private-key? bytes?] [#:pad encrypt-pad/c]
         bytes?)]
 
@@ -82,11 +82,11 @@
   ;;  (-> private-key? (or/c cipher-spec? cipher-impl?) key/c iv/c (or/c bytes? input-port?)
   ;;      bytes?)]
 
-  [generate-pkey-parameters
-   (-> pkey-impl? keygen-spec/c
-       pkey-parameters?)]
+  [generate-pk-parameters
+   (-> pk-impl? keygen-spec/c
+       pk-parameters?)]
   [generate-private-key
-   (-> (or/c pkey-impl? pkey-parameters?) keygen-spec/c
+   (-> (or/c pk-impl? pk-parameters?) keygen-spec/c
        private-key?)]))
 
 (define nat? exact-nonnegative-integer?)
@@ -103,18 +103,18 @@
 
 ;; ============================================================
 
-(define (pkey-parameters? x) (is-a? pkey-params<%>))
+(define (pk-parameters? x) (is-a? pk-params<%>))
 
 ;; A private key is really a keypair, including both private and public parts.
 ;; A public key contains only the public part.
 (define (private-key? x)
-  (and (is-a? x pkey-key<%>) (send x is-private?)))
+  (and (is-a? x pk-key<%>) (send x is-private?)))
 (define (public-key? x)
-  (and (is-a? x pkey-key<%>) #t))
+  (and (is-a? x pk-key<%>) #t))
 
-(define (pkey-can-sign? pki)
+(define (pk-can-sign? pki)
   (send pki can-sign?))
-(define (pkey-can-encrypt? pki)
+(define (pk-can-encrypt? pki)
   (send pki can-encrypt?))
 
 ;; Are the *public parts* of the given keys equal?
@@ -136,13 +136,13 @@
 
 ;; ============================================================
 
-(define (pkey-sign-digest pk dbuf di #:pad [pad #f])
+(define (pk-sign-digest pk dbuf di #:pad [pad #f])
   (let ([di (get-spec* di)])
-    (send pk sign 'pkey-sign-digest dbuf di pad)))
+    (send pk sign 'pk-sign-digest dbuf di pad)))
 
-(define (pkey-verify-digest pk dbuf di sig #:pad [pad #f])
+(define (pk-verify-digest pk dbuf di sig #:pad [pad #f])
   (let ([di (get-spec* di)])
-    (send pk verify 'pkey-verify-digest dbuf di pad sig)))
+    (send pk verify 'pk-verify-digest dbuf di pad sig)))
 
 ;; ============================================================
 
@@ -156,11 +156,11 @@
 
 ;; ============================================================
 
-(define (pkey-encrypt pk buf #:pad [pad #f])
-  (send pk encrypt 'pkey-encrypt buf pad))
+(define (pk-encrypt pk buf #:pad [pad #f])
+  (send pk encrypt 'pk-encrypt buf pad))
 
-(define (pkey-decrypt pk buf #:pad [pad #f])
-  (send pk decrypt 'pkey-decrypt buf pad))
+(define (pk-decrypt pk buf #:pad [pad #f])
+  (send pk decrypt 'pk-decrypt buf pad))
 
 ;; ============================================================
 
@@ -168,16 +168,16 @@
 ;; (define (encrypt-envelope pk ci buf)
 ;;   (define k (generate-cipher-key ci))
 ;;   (define iv (generate-cipher-iv ci))
-;;   (define sk (pkey-encrypt pk k))
+;;   (define sk (pk-encrypt pk k))
 ;;   (values sk iv (encrypt ci k iv buf)))
 
 ;; (define (decrypt-envelope pk ci sk iv buf)
-;;   (decrypt ci (pkey-decrypt pk sk) iv buf))
+;;   (decrypt ci (pk-decrypt pk sk) iv buf))
 
 ;; ============================================================
 
 (define (generate-private-key pki config)
   (send pki generate-key 'generate-private-key config))
 
-(define (generate-pkey-parameters pki config)
-  (send pki generate-params 'generate-pkey-parameters config))
+(define (generate-pk-parameters pki config)
+  (send pki generate-params 'generate-pk-parameters config))

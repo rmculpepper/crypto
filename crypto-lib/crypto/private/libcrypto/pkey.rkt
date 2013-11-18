@@ -52,8 +52,8 @@ Generating keys & params for testing:
 
 |#
 
-(define libcrypto-pkey-impl%
-  (class* impl-base% (pkey-impl<%>)
+(define libcrypto-pk-impl%
+  (class* impl-base% (pk-impl<%>)
     (super-new)
 
     (define/public (read-key who buf pub/priv fmt)
@@ -63,7 +63,7 @@ Generating keys & params for testing:
              (case pub/priv
                [(private) (d2i_PrivateKey (pktype) buf (bytes-length buf))]
                [(public) (d2i_PublicKey (pktype) buf (bytes-length buf))])])
-        (new libcrypto-pkey-key% (impl this) (evp evp) (private? (eq? pub/priv 'private)))))
+        (new libcrypto-pk-key% (impl this) (evp evp) (private? (eq? pub/priv 'private)))))
 
     (abstract pktype)
     (abstract read-params)
@@ -78,7 +78,7 @@ Generating keys & params for testing:
     (e     ,exact-positive-integer? "exact-positive-integer?")))
 
 (define libcrypto-rsa-impl%
-  (class libcrypto-pkey-impl%
+  (class libcrypto-pk-impl%
     (super-new)
     (define/override (pktype) EVP_PKEY_RSA)
     (define/override (can-encrypt?) #t)
@@ -111,7 +111,7 @@ Generating keys & params for testing:
             #|(BN_free ebn)|#))
         (let ([evp (EVP_PKEY_keygen ctx)])
           (EVP_PKEY_CTX_free ctx)
-          (new libcrypto-pkey-key% (impl this) (evp evp) (private? #t)))))
+          (new libcrypto-pk-key% (impl this) (evp evp) (private? #t)))))
     |#
     (define/override (generate-key who config)
       (check-keygen-spec who config allowed-rsa-keygen)
@@ -124,7 +124,7 @@ Generating keys & params for testing:
         (define evp (EVP_PKEY_new))
         (EVP_PKEY_set1_RSA evp rsa)
         (RSA_free rsa)
-        (new libcrypto-pkey-key% (impl this) (evp evp) (private? #t))))
+        (new libcrypto-pk-key% (impl this) (evp evp) (private? #t))))
     (define/public (*set-sign-padding who ctx pad)
       (EVP_PKEY_CTX_set_rsa_padding ctx
         (case pad
@@ -143,7 +143,7 @@ Generating keys & params for testing:
   `((nbits ,exact-positive-integer? "exact-positive-integer?")))
 
 (define libcrypto-dsa-impl%
-  (class libcrypto-pkey-impl%
+  (class libcrypto-pk-impl%
     (super-new)
     (define/override (pktype) EVP_PKEY_DSA)
     (define/override (can-encrypt?) #f)
@@ -154,7 +154,7 @@ Generating keys & params for testing:
             [evp (EVP_PKEY_new)])
         (EVP_PKEY_set1_DSA evp dsa)
         (DSA_free dsa)
-        (new libcrypto-pkey-params% (impl this) (evp evp))))
+        (new libcrypto-pk-params% (impl this) (evp evp))))
     (define/public (*write-params who evp)
       (let* ([dsa (EVP_PKEY_get1_DSA evp)]
              [buf (make-bytes (i2d_DSAparams dsa #f))])
@@ -174,7 +174,7 @@ Generating keys & params for testing:
           (EVP_PKEY_CTX_set_dsa_paramgen_bits ctx nbits))
         (let ([evp (EVP_PKEY_paramgen ctx)])
           (EVP_PKEY_CTX_free ctx)
-          (new libcrypto-pkey-params% (impl this) (evp evp)))))
+          (new libcrypto-pk-params% (impl this) (evp evp)))))
     |#
     (define/override (generate-params who config)
       (check-keygen-spec who config allowed-dsa-paramgen)
@@ -184,7 +184,7 @@ Generating keys & params for testing:
         (define evp (EVP_PKEY_new))
         (EVP_PKEY_set1_DSA evp dsa)
         (DSA_free dsa)
-        (new libcrypto-pkey-params% (impl this) (evp evp))))
+        (new libcrypto-pk-params% (impl this) (evp evp))))
     (define/public (*set-sign-padding who ctx pad)
       (case pad
         [(#f) (void)]
@@ -193,8 +193,8 @@ Generating keys & params for testing:
 
 (define allowed-dsa-keygen '())
 
-(define libcrypto-pkey-params%
-  (class* ctx-base% (pkey-params<%>)
+(define libcrypto-pk-params%
+  (class* ctx-base% (pk-params<%>)
     (init-field evp)
     (inherit-field impl)
     (super-new)
@@ -208,7 +208,7 @@ Generating keys & params for testing:
         (EVP_PKEY_keygen_init ctx)
         (let ([kevp (EVP_PKEY_keygen ctx)])
           (EVP_PKEY_CTX_free ctx)
-          (new libcrypto-pkey-key% (impl impl) (evp kevp) (private? #t)))))
+          (new libcrypto-pk-key% (impl impl) (evp kevp) (private? #t)))))
 
     (define/public (write-params who fmt)
       (unless (eq? fmt #f)
@@ -216,8 +216,8 @@ Generating keys & params for testing:
       (send impl *write-params who evp))
     ))
 
-(define libcrypto-pkey-key%
-  (class* ctx-base% (pkey-key<%>)
+(define libcrypto-pk-key%
+  (class* ctx-base% (pk-key<%>)
     (init-field evp private?)
     (inherit-field impl)
     (super-new)
@@ -227,12 +227,12 @@ Generating keys & params for testing:
     (define/public (get-public-key who)
       (let ([pub (write-key 'get-public-key 'public #f)])
         (let ([pubevp (d2i_PublicKey (send impl pktype) pub (bytes-length pub))])
-          (new libcrypto-pkey-key% (impl impl) (evp evp) (private? #f)))))
+          (new libcrypto-pk-key% (impl impl) (evp evp) (private? #f)))))
 
     (define/public (get-params who)
       (let ([pevp (EVP_PKEY_new)])
         (EVP_PKEY_copy_parameters pevp evp)
-        (new libcrypto-pkey-params% (impl impl) (evp pevp))))
+        (new libcrypto-pk-params% (impl impl) (evp pevp))))
 
     (define/public (write-key who pub/priv fmt)
       (unless (eq? fmt #f)
@@ -245,7 +245,7 @@ Generating keys & params for testing:
         buf))
 
     (define/public (equal-to-key? other)
-      (and (is-a? other libcrypto-pkey-key%)
+      (and (is-a? other libcrypto-pk-key%)
            (EVP_PKEY_cmp evp (get-field evp other))))
 
     ;; From headers, EVP_{Sign,Verify}{Init_ex,Update} are just macros for

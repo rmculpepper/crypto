@@ -236,54 +236,49 @@ FIXME: check again whether DER available in older versions
 |#
 
 
-(define pkey-impl%
-  (class* impl-base% (pkey-impl<%>)
+(define pk-impl%
+  (class* impl-base% (pk-impl<%>)
     (init-field sys)
     (super-new)
 
     (define/public (get-name) sys)
 
-    (define/public (read-key who public? buf start end)
-      (let ([key (subbytes buf start end)])
-        (new pkey-ctx% (impl this) (key key) (private? (not public?)))))
+    (define/public (read-key who key pub/priv fmt)
+      (new pk-key% (impl this) (key key) (private? (eq? pub/priv 'private))))
+    (define/public (read-params who buf fmt)
+      (error who "unimplemented"))
 
-    (define/public (generate-key args)
+    (define/public (generate-key who args)
       (let* ([key
               (case sys
-                ((rsa) (openssl "genrsa" (car args)))
-                ((dsa)
+                [(rsa) (openssl "genrsa" (car args))]
+                [(dsa)
                  (let ([params (openssl "dsaparam" (car args))])
                    (with-tmp-files ([paramfile params])
-                     (openssl "gendsa" paramfile)))))])
-        (new pkey-ctx% (impl this) (key key) (private? #t))))
+                     (openssl "gendsa" paramfile)))])])
+        (new pk-key% (impl this) (key key) (private? #t))))
+    (define/public (generate-params who args)
+      (error who "unimplemented"))
 
-    (define/public (digest-ok? di)
-      (case sys
-        ((rsa)
-         (and (memq (send di get-name) '(ripemd160 sha1 sha224 sha256 sha384 sha512)) #t))
-        ((dsa)
-         (and (memq (send di get-name) '(dss1)) #t))
-        (else #f)))
-
-    (define/public (can-encrypt?)
-      (case sys
-        ((rsa) #t)
-        (else #f)))
+    (define/public (can-sign?) #t)
+    (define/public (can-encrypt?) (and (memq sys '(rsa)) #t))
     ))
 
-(define pkey-ctx%
-  (class* ctx-base% (pkey-ctx<%>)
+(define pk-key%
+  (class* ctx-base% (pk-key<%>)
     (init-field key private?)
     (inherit-field impl)
     (super-new)
 
     (define/public (is-private?) private?)
-    (define/public (get-max-signature-size) 10000) ;; FIXME
-    (define/public (get-key-size/bits)
-      (error 'get-key-size/bits "not implemented"))
 
-    (define/public (write-key who want-public?)
-      (let ([want-private? (not want-public?)])
+    (define/public (get-public-key who)
+      (error who "unimplemented"))
+    (define/public (get-params who)
+      (error who "unimplemented"))
+
+    (define/public (write-key who pub/priv fmt)
+      (let ([want-private? (eq? pub/priv 'private)])
         (cond [(and private? want-private?) key]
               [(and private? (not want-private?))
                (openssl (send impl get-name) "-pubout" #:in key)]
@@ -296,19 +291,20 @@ FIXME: check again whether DER available in older versions
               (send other write-key 'equal-to-key? #t)))
 
     #|
-    Cannot sign an existing digest-context using command line, so we make
-    digest store all data.
+    ;; New:
+    Not sure if "openssl pkeyutl" supports signing predigested data.
 
-    Again, suggests a more flexible interface might be good.
+    ;; Old comments:
+    Cannot sign an existing digest-context using command line, so we make
+    digest store all data. Again, suggests a more flexible interface might be good.
     |#
 
-    (define/public (sign! who dg buf start end)
-      (unless private?
-        (error who "cannot sign with public key"))
+    #|
+    (define/public (sign who digest di)
+      (unless private? (error who "cannot sign with public key"))
       (with-tmp-files ([keyfile key])
-        (let* ([impl (send dg get-impl)]
-               [signature
-                (openssl "dgst" (format "-~a" (send impl get-name)) "-binary"
+        (let* ([signature
+                (openssl "pkeyutl" "-sign" "-binary"
                          "-sign" keyfile
                          #:in (send dg get-content who #f))])
           (bytes-copy! buf start signature)
@@ -346,6 +342,7 @@ FIXME: check again whether DER available in older versions
                            (if encrypt? "-encrypt" "-decrypt")
                            #:in (subbytes inbuf instart inend))])
              result)))))
+    |#
     ))
 
 ;; ============================================================

@@ -59,8 +59,8 @@
     (define digest-table (make-hasheq))
     ;; cipher-table : hash[CipherSpec => CipherImpl/'none]
     (define cipher-table (make-hash))
-    ;; pkey-table : hasheq[PKeySpec => PKeyImpl/'none]
-    (define pkey-table (make-hasheq))
+    ;; pk-table : hasheq[PKSpec => PKImpl/'none]
+    (define pk-table (make-hasheq))
 
     (define/public (get-digest spec)
       (cond [(hash-ref digest-table spec #f)
@@ -89,20 +89,20 @@
                (hash-set! cipher-table spec (or ci 'none))
                ci)]))
 
-    (define/public (get-pkey spec)
-      (cond [(hash-ref pkey-table spec #f)
+    (define/public (get-pk spec)
+      (cond [(hash-ref pk-table spec #f)
              => (lambda (impl/none)
-                  (and (pkey-impl? impl/none) impl/none))]
+                  (and (pk-impl? impl/none) impl/none))]
             [else
-             (let ([pki (get-pkey* spec)])
-               (hash-set! pkey-table spec (or pki 'none))
+             (let ([pki (get-pk* spec)])
+               (hash-set! pk-table spec (or pki 'none))
                pki)]))
 
     (define/public (get-random) #f)
 
     (define/public (get-digest* spec) #f) ;; -> (U #f DigestImpl)
     (define/public (get-cipher* spec) #f) ;; -> (U #f CipherImpl (listof (cons nat CipherImpl)))
-    (define/public (get-pkey* spec) #f)   ;; -> (U #f DigestIpl
+    (define/public (get-pk* spec) #f)   ;; -> (U #f DigestIpl
     ))
 
 ;; ----
