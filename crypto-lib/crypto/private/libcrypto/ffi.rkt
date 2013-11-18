@@ -315,21 +315,44 @@
 
 (define-crypto DH_new
   (_fun -> _DH/null)
-  #:wrap (allocator DH_free))
+  #:wrap (compose (allocator DH_free) (error-wrap/pointer 'DH_new)))
+
+(define-crypto DHparams_dup
+  (_fun _DH -> _DH))
 
 (define-crypto DH_size
   (_fun _DH -> _int))
+
+(define-crypto DH_generate_parameters_ex
+  (_fun _DH _int _int (_fpointer = #f) -> _int)
+  #:wrap (err-wrap/check 'DH_generate_parameters_ex))
+
+;; PKCS#3 DH params
+(define-crypto i2d_DHparams
+  (_fun _DH (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_DHparams positive?))
+(define-crypto d2i_DHparams
+  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _DH/null)
+  #:wrap (compose (allocator DH_free) (err-wrap/pointer 'd2i_DHparams)))
+
+(define-crypto DH_check   ;; -> #t, or flags for failure
+  (_fun _DH (codes : (_ptr o _int))
+        -> (status : _int)
+        -> (or (positive? status)
+               codes)))
 
 (define-crypto DH_generate_key
   (_fun _DH -> _int)
   #:wrap (err-wrap/check 'DH_generate_key))
 
 (define-crypto DH_compute_key
-  (_fun _pointer
-        _BIGNUM
-        _DH
-        -> _int)
-  #:wrap (err-wrap/check 'DH_compute_key))
+  (_fun (dh pub) ::
+        (secret : _pointer = (make-bytes (DH_size dh)))
+        (pub : _BIGNUM)
+        (dh : _DH)
+        -> (status : _int)
+        -> (and (positive? status) secret))
+  #:wrap (err-wrap 'DH_compute_key values))
 
 (define-crypto d2i_DHparams
   (_fun (_pointer = #f)

@@ -25,7 +25,72 @@
          (for-syntax racket/base
                      racket/syntax))
 
-;; ------------------------------------------------------------
+#|
+Key Agreement
+
+ - generate shared params => key-agree-params<%>
+ - generate private key-part => key-agree-private-key<%>
+ - compute shared secret from private key-part and public key-part (?) => bytes
+   - Note: result is biased, not uniform, so unsuitable as key!
+   - RFC 2631 calls this ZZ
+ - compute key from shared secret
+   - eg, use digest (see RFC 2631)
+
+RFC 2631
+ - Parties: ZZ (shared secret), KEK (key-encryption key), CEK (content-encryption key)
+ - ZZ = (dh-compute-secret ....)
+ - KM = H (ZZ || other-material)
+ - ....
+
+References:
+ - http://wiki.openssl.org/index.php/EVP_Key_Agreement
+ - https://tools.ietf.org/html/rfc2631
+
+|#
+
+(define allowed-dh-paramgen
+  `((nbits ,exact-positive-integer? "exact-positive-integer?")
+    (generator ,(or/c 2 5) "(or/c 2 5)")))
+
+(define (dh-paramgen config)
+  (check-keygen-spec 'dh-paramgen config allowed-dh-paramgen)
+  (let ([nbits (keygen-spec-ref config 'nbits)]
+        [generator (or (keygen-spec-ref config 'generator) 2)])
+    (define dh (DH_new))
+    (DH_generate_parameters_ex dh nbits generator)
+    (new libcrypto-dh-params% (dh dh))))
+
+(define allowed-dh-keygen '())
+
+(define (dh-keygen dhp config)
+  (check-keygen-spec 'dh-keygen config allowed-dh-keygen)
+  (define dh (DHparams_dup dhp))
+  (DH_generate_key dh)
+  (new libcrypto-dh-key% (dh dh)))
+
+(define (dh-compute-secret dh peer-pubkey)
+  (define pub-bn (BN_new))
+  (define pub-bn (BN_dec2bn (number->string peer-pubkey))) ;; or whatever
+  (DH_compute_key dh pub-bn))
+
+(define (key-digest who size-bytes)
+  (cond [(<= size-bytes 16) 'sha256]
+        [(<= size-bytes 32) 'sha512]
+        [else
+         (error who "cannot get key digest with requested size\n  key size: ~s bytes" size-bytes)]))
+
+
+
+
+(define (dh-compute-key dh peer-pubkey [size-bytes 16]
+                        #:digest [di (key-digest 'dh-compute-key size-bytes)])
+  (define secret (dh-compute-secret dh peer-pubkey))
+  (define secret*
+    (cond [(eq? di #f) secret]
+          [else (digest di secret)]))
+  (shrink-bytes secret* 0 size-bytes))
+
+;; ============================================================
 
 (define (bn-size bn)
   (ceiling (/ (BN_num_bits bn) 8)))
