@@ -369,6 +369,9 @@
   (_fun _int (_pointer = #f) -> _EVP_PKEY_CTX)
   #:wrap (compose (allocator EVP_PKEY_CTX_free) (err-wrap/pointer 'EVP_Pkey_CTX_new_id)))
 
+(define-crypto EVP_PKEY_CTX_set_cb
+  (_fun _EVP_PKEY_CTX _fpointer -> _void))
+
 (define-crypto EVP_PKEY_keygen_init
   (_fun _EVP_PKEY_CTX -> _int)
   #:wrap (err-wrap 'EVP_PKEY_keygen_init positive?))
@@ -479,6 +482,10 @@
   (_fun -> _RSA/null)
   #:wrap (compose (allocator RSA_free) (err-wrap/pointer 'RSA_new)))
 
+(define-crypto RSA_generate_key_ex
+  (_fun _RSA _int _BIGNUM/null _fpointer -> _int)
+  #:wrap (err-wrap 'RSA_generate_key_ex positive?))
+
 (define-crypto DSA_free
   (_fun _DSA -> _void)
   #:wrap (deallocator))
@@ -486,6 +493,11 @@
 (define-crypto DSA_new
   (_fun -> _DSA/null)
   #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'DSA_new)))
+
+(define-crypto DSA_generate_parameters_ex
+  (_fun _DSA _int (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) (_fpointer = #f)
+        -> _int)
+  #:wrap (err-wrap 'DSA_generate_parameters_ex positive?))
 
 (define-crypto EVP_PKEY_type
   (_fun _int -> _int)

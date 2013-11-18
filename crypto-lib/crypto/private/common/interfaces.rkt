@@ -163,8 +163,8 @@
   (interface (impl<%>)
     read-key     ;; sym bytes 'public/'private KeyFormat -> pkey-key<%>
     read-params  ;; sym bytes ParamsFormat -> pkey-params<%>
-    generate-key ;; GenKeySpec -> pkey-key<%>
-    generate-params ;; GenKeySpec -> pkey-params<%>
+    generate-key ;; sym GenKeySpec -> pkey-key<%>
+    generate-params ;; sym GenKeySpec -> pkey-params<%>
     can-sign?    ;; -> boolean
     can-encrypt? ;; -> boolean
     ))

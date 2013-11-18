@@ -38,6 +38,18 @@ References:
  - https://groups.google.com/forum/#!topic/mailing.openssl.users/HsiN-8Lt0H8
  - http://openssl.6102.n7.nabble.com/difference-between-i2d-PUBKEY-and-i2d-PublicKey-td43869.html
  - http://www.openssl.org/docs/crypto/pem.html
+
+Generating keys & params for testing:
+
+  openssl genrsa -out rsa-512.key 512
+  openssl rsa -inform pem -outform der -in rsa-512.key -out rsa-512.der
+  (bytes->private-key rsai (file->bytes "rsa-512.der"))
+
+  openssl dsaparam -outform pem -out dsa-512.params 512
+  openssl gendsa -out dsa-512.key dsa-512.params
+  openssl dsa -inform pem -outform der -in dsa-512.key -out dsa-512.der
+  (bytes->private-key dsai (file->bytes "dsa-512.der"))
+
 |#
 
 (define libcrypto-pkey-impl%
@@ -70,17 +82,24 @@ References:
     (super-new)
     (define/override (pktype) EVP_PKEY_RSA)
     (define/override (can-encrypt?) #t)
-    (define/override (read-params who buf)
+    (define/override (read-params who buf fmt)
       (error who "reading parameters not supported"))
     (define/public (*write-params who evp)
       (error who "internal error; writing parameters not supported"))
     (define/override (generate-params who config)
       (error who "parameter generation not supported"))
+    #|
+    ;; Key generation currently fails, possibly due to something like the following
+    ;; issue (but the suggested workaround doesn't work for me).
+    ;;   [openssl.org #2244]
+    ;;   https://groups.google.com/forum/#!topic/mailing.openssl.dev/jhooibXLmWk
+    ;; Try using RSA_generate_key directly.
     (define/override (generate-key who config)
       (check-keygen-spec who config allowed-rsa-keygen)
       (let ([nbits (keygen-spec-ref config 'nbits)]
             [e (keygen-spec-ref config 'e)]
             [ctx (EVP_PKEY_CTX_new_id (pktype))])
+        (EVP_PKEY_CTX_set_cb ctx #f)
         (EVP_PKEY_keygen_init ctx)
         (when nbits
           (EVP_PKEY_CTX_set_rsa_keygen_bits ctx nbits))
@@ -89,10 +108,23 @@ References:
             (BN_add_word ebn e)
             ;; FIXME: refcount?
             (EVP_PKEY_CTX_set_rsa_keygen_pubexp ctx ebn)
-            (BN_free ebn)))
+            #|(BN_free ebn)|#))
         (let ([evp (EVP_PKEY_keygen ctx)])
           (EVP_PKEY_CTX_free ctx)
           (new libcrypto-pkey-key% (impl this) (evp evp) (private? #t)))))
+    |#
+    (define/override (generate-key who config)
+      (check-keygen-spec who config allowed-rsa-keygen)
+      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
+            [e (or (keygen-spec-ref config 'e) 65537)])
+        (define rsa (RSA_new))
+        (define bn-e (BN_new))
+        (BN_add_word bn-e e)
+        (RSA_generate_key_ex rsa nbits bn-e #f)
+        (define evp (EVP_PKEY_new))
+        (EVP_PKEY_set1_RSA evp rsa)
+        (RSA_free rsa)
+        (new libcrypto-pkey-key% (impl this) (evp evp) (private? #t))))
     (define/public (*set-sign-padding who ctx pad)
       (EVP_PKEY_CTX_set_rsa_padding ctx
         (case pad
@@ -115,7 +147,9 @@ References:
     (super-new)
     (define/override (pktype) EVP_PKEY_DSA)
     (define/override (can-encrypt?) #f)
-    (define/override (read-params who buf)
+    (define/override (read-params who buf fmt)
+      (unless (eq? fmt #f)
+        (error who "parameter format not supported\n  format: ~e" fmt))
       (let ([dsa (d2i_DSAparams buf (bytes-length buf))]
             [evp (EVP_PKEY_new)])
         (EVP_PKEY_set1_DSA evp dsa)
@@ -124,11 +158,13 @@ References:
     (define/public (*write-params who evp)
       (let* ([dsa (EVP_PKEY_get1_DSA evp)]
              [buf (make-bytes (i2d_DSAparams dsa #f))])
-        (i2d_DSAparams dsa buf (bytes-length buf))
+        (i2d_DSAparams dsa buf)
         (DSA_free dsa)
         buf))
     (define/override (generate-key who config)
-      (error who "direct key generation not supported;\n generate paramters first"))
+      (error who "direct key generation not supported;\n generate key from parameters"))
+    #|
+    ;; Similarly, this version of generate-params crashes.
     (define/override (generate-params who config)
       (check-keygen-spec 'generate-dsa-key config allowed-dsa-paramgen)
       (let ([nbits (keygen-spec-ref config 'nbits)]
@@ -139,6 +175,16 @@ References:
         (let ([evp (EVP_PKEY_paramgen ctx)])
           (EVP_PKEY_CTX_free ctx)
           (new libcrypto-pkey-params% (impl this) (evp evp)))))
+    |#
+    (define/override (generate-params who config)
+      (check-keygen-spec who config allowed-dsa-paramgen)
+      (let ([nbits (or (keygen-spec-ref config 'nbits) 1024)])
+        (define dsa (DSA_new))
+        (DSA_generate_parameters_ex dsa nbits)
+        (define evp (EVP_PKEY_new))
+        (EVP_PKEY_set1_DSA evp dsa)
+        (DSA_free dsa)
+        (new libcrypto-pkey-params% (impl this) (evp evp))))
     (define/public (*set-sign-padding who ctx pad)
       (case pad
         [(#f) (void)]
@@ -152,6 +198,10 @@ References:
     (init-field evp)
     (inherit-field impl)
     (super-new)
+
+    ;; In contrast to the generate-{key,params} methods above, this use of
+    ;; EVP_PKEY_keygen seems to work, but that may be because DSA keygen is
+    ;; simple after paramgen is done.
     (define/public (generate-key who config)
       (check-keygen-spec who config allowed-dsa-keygen)
       (let ([ctx (EVP_PKEY_CTX_new evp)])
@@ -163,7 +213,7 @@ References:
     (define/public (write-params who fmt)
       (unless (eq? fmt #f)
         (error who "parameter format not supported\n  format: ~e" fmt))
-      (send impl *write-params evp))
+      (send impl *write-params who evp))
     ))
 
 (define libcrypto-pkey-key%
