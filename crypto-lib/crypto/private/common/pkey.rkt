@@ -82,8 +82,11 @@
   ;;  (-> private-key? (or/c cipher-spec? cipher-impl?) key/c iv/c (or/c bytes? input-port?)
   ;;      bytes?)]
 
+  [generate-pkey-parameters
+   (-> pkey-impl? keygen-spec/c
+       pkey-parameters?)]
   [generate-private-key
-   (-> pkey-impl? any/c
+   (-> (or/c pkey-impl? pkey-parameters?) keygen-spec/c
        private-key?)]))
 
 (define nat? exact-nonnegative-integer?)
@@ -173,5 +176,8 @@
 
 ;; ============================================================
 
-(define (generate-private-key pki spec)
-  (send pki generate-key 'generate-private-key spec))
+(define (generate-private-key pki config)
+  (send pki generate-key 'generate-private-key config))
+
+(define (generate-pkey-parameters pki config)
+  (send pki generate-params 'generate-pkey-parameters config))
