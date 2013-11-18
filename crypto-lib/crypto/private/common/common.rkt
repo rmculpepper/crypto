@@ -16,6 +16,7 @@
 
 #lang racket/base
 (require racket/class
+         racket/contract/base
          racket/string
          "catalog.rkt"
          "interfaces.rkt"
@@ -26,8 +27,12 @@
          factory-base%
          multikeylen-cipher-impl%
          whole-block-cipher-ctx%
+         get-spec*
          get-random*
-         shrink-bytes)
+         shrink-bytes
+         keygen-spec/c
+         check-keygen-spec
+         keygen-spec-ref)
 
 ;; ----
 
@@ -54,6 +59,8 @@
     (define digest-table (make-hasheq))
     ;; cipher-table : hash[CipherSpec => CipherImpl/'none]
     (define cipher-table (make-hash))
+    ;; pkey-table : hasheq[PKeySpec => PKeyImpl/'none]
+    (define pkey-table (make-hasheq))
 
     (define/public (get-digest spec)
       (cond [(hash-ref digest-table spec #f)
@@ -61,7 +68,7 @@
                   (and (digest-impl? impl/none) impl/none))]
             [else
              (let ([di (get-digest* spec)])
-               (when di (hash-set! digest-table spec di))
+               (hash-set! digest-table spec (or di 'none))
                di)]))
 
     (define/public (get-cipher spec)
@@ -79,14 +86,23 @@
                                          (impls ci/s)))]
                               [(cipher-impl? ci/s) ci/s]
                               [else #f])])
-               (when ci (hash-set! cipher-table spec ci))
+               (hash-set! cipher-table spec (or ci 'none))
                ci)]))
 
-    (define/public (get-pkey spec) #f)
+    (define/public (get-pkey spec)
+      (cond [(hash-ref pkey-table spec #f)
+             => (lambda (impl/none)
+                  (and (pkey-impl? impl/none) impl/none))]
+            [else
+             (let ([pki (get-pkey* spec)])
+               (hash-set! pkey-table spec (or pki 'none))
+               pki)]))
+
     (define/public (get-random) #f)
 
-    (abstract get-digest*)
-    (abstract get-cipher*) ;; CipherSpec -> (U #f CipherImpl (listof (cons nat CipherImpl)))
+    (define/public (get-digest* spec) #f) ;; -> (U #f DigestImpl)
+    (define/public (get-cipher* spec) #f) ;; -> (U #f CipherImpl (listof (cons nat CipherImpl)))
+    (define/public (get-pkey* spec) #f)   ;; -> (U #f DigestIpl
     ))
 
 ;; ----
@@ -226,6 +242,16 @@
 
 ;; ----
 
+(define (get-spec* src0)
+  (let loop ([src src0])
+    (cond [(is-a? src impl<%>)
+           (send src get-spec)]
+          [(is-a? src ctx<%>)
+           (loop (send src get-impl))]
+          [(or (symbol? src) (list? src))
+           src]
+          [else (error 'get-spec* "internal error: cannot get spec from: ~e" src0)])))
+
 (define (get-factory* who src0)
   (let loop ([src src0])
     (cond [(factory? src)
@@ -252,3 +278,28 @@
   (if (< len (bytes-length bs))
     (subbytes bs 0 len)
     bs))
+
+(define keygen-spec/c
+  (listof (list/c symbol? any/c)))
+
+(define (check-keygen-spec who spec allowed)
+  ;; Assume already checked keygen-spec/c
+  ;; Check entries
+  (for ([entry (in-list spec)])
+    (cond [(assq (car entry) allowed)
+           => (lambda (allowed-entry)
+                (unless ((cadr allowed-entry) (cadr entry))
+                  (error who
+                         "bad key-generation option value\n  key: ~e\n  expected: ~a\n  got: ~e"
+                         (car entry)
+                         (caddr allowed-entry)
+                         (cadr entry))))]
+          [else
+           (error who "bad key-generation option\n  key: ~e\n  value: ~e"
+                  (car entry) (cadr entry))]))
+  ;; FIXME: check duplicates?
+  (void))
+
+(define (keygen-spec-ref spec key)
+  (cond [(assq key spec) => cadr]
+        [else #f]))

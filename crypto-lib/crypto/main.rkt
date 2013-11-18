@@ -4,9 +4,11 @@
          "private/common/factory.rkt"
          "private/common/digest.rkt"
          "private/common/cipher.rkt"
+         "private/common/pkey.rkt"
          "private/common/util.rkt")
 (provide (all-from-out "private/common/digest.rkt")
          (all-from-out "private/common/cipher.rkt")
+         (all-from-out "private/common/pkey.rkt")
          (all-from-out "private/common/util.rkt")
          get-factory
          get-digest

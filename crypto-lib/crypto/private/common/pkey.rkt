@@ -18,179 +18,160 @@
 (require racket/class
          racket/contract/base
          "interfaces.rkt"
+         "catalog.rkt"
          "common.rkt"
          "digest.rkt"
          "cipher.rkt")
 (provide
  (contract-out
-  [pkey-impl?
-   (-> any/c boolean?)]
-  [pkey-ctx?
-   (-> any/c boolean?)]
   [private-key?
-   (-> pkey-ctx? boolean?)]
+   (-> any/c boolean?)]
   [public-key?
-   (-> pkey-ctx? boolean?)]
-  [pkey-signature-size
-   (-> pkey-ctx? nat?)]
-  [pkey-bits
-   (-> pkey-ctx? nat?)]
-  [pkey-can-encrypt?
-   (-> (or/c pkey-impl? pkey-ctx?) boolean?)]
-  [public-key=?
-   (->* [pkey-ctx?] [] #:rest (listof pkey-ctx?) boolean?)]
-  [pkey->public-key
-   (-> pkey-ctx? (and/c pkey-ctx? public-key?))]
-  [public-key->bytes
-   (-> pkey-ctx? bytes?)]
-  [bytes->public-key
-   (-> pkey-impl? bytes? (and/c pkey-ctx? public-key?))]
-  [private-key->bytes
-   (-> (and/c pkey-ctx? private-key?) bytes?)]
-  [bytes->private-key
-   (-> pkey-impl? bytes? (and/c pkey-ctx? private-key?))]
+   (-> any/c boolean?)]
 
-  [digest-sign
-   (-> digest-ctx? pkey-ctx? bytes?)]
-  [digest-verify
-   (->* [digest-ctx? pkey-ctx? bytes?] [nat? nat?]
+  [pkey-can-sign?
+   (-> pkey-impl? boolean?)]
+  [pkey-can-encrypt?
+   (-> pkey-impl? boolean?)]
+  [public-key=?
+   (->* [public-key?] [] #:rest (listof public-key?) boolean?)]
+  [key->public-key
+   (-> public-key? (and/c public-key? (not/c private-key?)))]
+
+  [public-key->bytes
+   (->* [public-key?] [#:format key-format/c]
+        bytes?)]
+  [bytes->public-key
+   (->* [pkey-impl? bytes?] [#:format key-format/c]
+       (and/c public-key? (not/c private-key?)))]
+  [private-key->bytes
+   (->* [private-key?] [#:format key-format/c]
+        bytes?)]
+  [bytes->private-key
+   (->* [pkey-impl? bytes?] [#:format key-format/c]
+        private-key?)]
+
+  [pkey-sign-digest
+   (->* [private-key? bytes? (or/c digest-spec? digest-impl?)]
+        [#:pad  sign-pad/c]
+        bytes?)]
+  [pkey-verify-digest
+   (->* [public-key? bytes? (or/c digest-spec? digest-impl?) bytes?]
+        [#:pad sign-pad/c]
         boolean?)]
-  [sign
-   (-> pkey-ctx? digest-impl? (or/c bytes? input-port?)
-       bytes?)]
-  [verify
-   (-> pkey-ctx? digest-impl? bytes? (or/c bytes? input-port?)
-       boolean?)]
+  [digest/sign
+   (->* [private-key? (or/c digest-spec? digest-impl?) (or/c bytes? string? input-port?)]
+        [#:pad sign-pad/c]
+        bytes?)]
+  [digest/verify
+   (->* [public-key? (or/c digest-spec? digest-impl?) (or/c bytes? string? input-port?) bytes?]
+        [#:pad sign-pad/c]
+        boolean?)]
+
   [pkey-encrypt
-   (->* [pkey-ctx? bytes?] [nat? nat?]
+   (->* [public-key? bytes?] [#:pad encrypt-pad/c]
         bytes?)]
   [pkey-decrypt
-   (->* [pkey-ctx? bytes?] [nat? nat?]
+   (->* [private-key? bytes?] [#:pad encrypt-pad/c]
         bytes?)]
-  [encrypt-envelope
-   (-> pkey-ctx? cipher-impl? (or/c bytes? input-port?)
-       (values key/c iv/c bytes?))]
-  [decrypt-envelope
-   (-> pkey-ctx? cipher-impl? key/c iv/c (or/c bytes? input-port?)
-       bytes?)]
 
-  [generate-pkey
-   (->* (pkey-impl? nat?) () #:rest any/c
-        pkey-ctx?)]))
+  ;; [encrypt-envelope
+  ;;  (-> public-key? (or/c cipher-spec? cipher-impl?) (or/c bytes? string? input-port?)
+  ;;      (values key/c iv/c bytes?))]
+  ;; [decrypt-envelope
+  ;;  (-> private-key? (or/c cipher-spec? cipher-impl?) key/c iv/c (or/c bytes? input-port?)
+  ;;      bytes?)]
+
+  [generate-private-key
+   (-> pkey-impl? any/c
+       private-key?)]))
 
 (define nat? exact-nonnegative-integer?)
 (define key/c bytes?)
 (define iv/c (or/c bytes? #f))
 
+(define encrypt-pad/c
+  (or/c 'pkcs1 'oaep 'none #f))
+(define sign-pad/c
+  (or/c 'pkcs1 'pss 'none #f))
+
+(define key-format/c
+  (or/c #f))
+
 ;; ============================================================
 
-(define (pkey-impl? x) (is-a? x pkey-impl<%>))
-(define (pkey-ctx? x) (is-a? x pkey-ctx<%>))
+(define (pkey-parameters? x) (is-a? pkey-params<%>))
 
 ;; A private key is really a keypair, including both private and public parts.
 ;; A public key contains only the public part.
-(define (private-key? pk) (send pk is-private?))
-(define (public-key? pk) (not (send pk is-private?)))
+(define (private-key? x)
+  (and (is-a? x pkey-key<%>) (send x is-private?)))
+(define (public-key? x)
+  (and (is-a? x pkey-key<%>) #t))
 
-(define (pkey-signature-size pk) (send pk get-max-signature-size))
-(define (pkey-bits pk) (send pk get-key-size/bits))
-
-(define (pkey-can-encrypt? x)
-  (cond [(is-a? x pkey-impl<%>) (send x can-encrypt?)]
-        [(is-a? x pkey-ctx<%>) (send (send x get-impl) can-encrypt?)]))
+(define (pkey-can-sign? pki)
+  (send pki can-sign?))
+(define (pkey-can-encrypt? pki)
+  (send pki can-encrypt?))
 
 ;; Are the *public parts* of the given keys equal?
 (define (public-key=? k1 . ks)
   (for/and ([k (in-list ks)])
     (send k1 equal-to-key? k)))
 
-(define (bytes->private-key pki bs) (-read-pkey 'bytes->private-key pki #f bs))
-(define (bytes->public-key pki bs)  (-read-pkey 'bytes->public-key pki #t bs))
-(define (private-key->bytes pk) (-write-pkey 'private-key->bytes pk #f))
-(define (public-key->bytes pk)  (-write-pkey 'public-key->bytes pk #t))
+(define (bytes->private-key pki bs #:format [fmt #f])
+  (send pki read-key 'bytes->private-key bs 'private fmt))
+(define (bytes->public-key pki bs #:format [fmt #f])
+  (send pki read-key 'bytes->public-key bs 'public fmt))
+(define (private-key->bytes pk #:format [fmt #f])
+  (send pk write-key 'private-key->bytes 'private fmt))
+(define (public-key->bytes pk #:format [fmt #f])
+  (send pk write-key 'public-key->bytes 'public fmt))
 
-(define (-read-pkey who pki public? bs)
-  (send pki read-key who public? bs 0 (bytes-length bs)))
-(define (-write-pkey who pk public?)
-  (send pk write-key who public?))
-
-(define (pkey->public-key pk)
-  (if (private-key? pk)
-      (bytes->public-key (send pk get-impl) (public-key->bytes pk))
-      pk))
+(define (key->public-key pk)
+  (send pk get-public-key 'key->public-key))
 
 ;; ============================================================
 
-;; pkey-sign      ;; basic sign op     = EVP_PKEY_sign
-;; pkey-verify    ;; basic verify op   = EVP_PKEY_verify
+(define (pkey-sign-digest pk dbuf di #:pad [pad #f])
+  (let ([di (get-spec* di)])
+    (send pk sign 'pkey-sign-digest dbuf di pad)))
 
-;; Two APIs for signing:
-;;  - (old) just create and update MD_CTX normally, call EVP_SignFinal at end
-;;  - (new, since v1.0.0) create MD_CTX with EVP_DigestSignInit w/ key
-;;    update normally, then call EVP_DigestSignFinal at end
-
-;; Old API:
-
-(define (digest-sign dg pk)
-  (let* ([est-len (pkey-signature-size pk)]
-         [buf (make-bytes est-len)]
-         [len (send pk sign! 'digest-sign dg buf 0 est-len)])
-    (shrink-bytes buf len)))
-
-(define (digest-verify dg pk buf [start 0] [end (bytes-length buf)])
-  (send pk verify 'digest-verify dg buf start end))
-
-;; New API: TODO
+(define (pkey-verify-digest pk dbuf di sig #:pad [pad #f])
+  (let ([di (get-spec* di)])
+    (send pk verify 'pkey-verify-digest dbuf di pad sig)))
 
 ;; ============================================================
 
-(define (sign pk dgi inp)
-  (cond [(bytes? inp) (-sign-bytes dgi pk inp)]
-        [(string? inp) (-sign-port dgi pk (open-input-string inp))]
-        [(input-port? inp) (-sign-port dgi pk inp)]))
+(define (digest/sign pk di inp #:pad [pad #f])
+  (let ([di (get-spec* di)])
+    (send pk sign 'digest/sign (digest di inp) di pad)))
 
-(define (verify pk dgi inp sigbs)
-  (cond [(bytes? inp) (-verify-bytes dgi pk inp sigbs)]
-        [(string? inp) (-verify-port dgi pk (open-input-string inp) sigbs)]
-        [(input-port? inp) (-verify-port dgi pk inp sigbs)]))
-
-(define (-sign-bytes dgi pk bs)
-  (let ([dg (make-digest-ctx dgi)])
-    (digest-update dg bs)
-    (digest-sign dg pk)))
-
-(define (-sign-port dgi pk inp)
-  (digest-sign (-digest-port* dgi inp) pk))
-
-(define (-verify-bytes dgi pk bs sigbs)
-  (let ([dg (make-digest-ctx dgi)])
-    (digest-update dg bs)
-    (digest-verify dg pk sigbs)))
-
-(define (-verify-port dgi pk sigbs inp)
-  (digest-verify (-digest-port* dgi inp) pk sigbs))
+(define (digest/verify pk di inp sig #:pad [pad #f])
+  (let ([di (get-spec* di)])
+    (send pk verify 'digest/verify (digest di inp) di pad sig)))
 
 ;; ============================================================
 
-(define (pkey-encrypt pk buf)
-  (send pk encrypt/decrypt 'pkey-encrypt #t #t buf 0 (bytes-length buf)))
+(define (pkey-encrypt pk buf #:pad [pad #f])
+  (send pk encrypt 'pkey-encrypt buf pad))
 
-(define (pkey-decrypt pk buf)
-  (send pk encrypt/decrypt 'pkey-decrypt #f #f buf 0 (bytes-length buf)))
-
-;; ============================================================
-
-;; sk = "sealed key"
-(define (encrypt-envelope pk ci buf)
-  (define k (generate-cipher-key ci))
-  (define iv (generate-cipher-iv ci))
-  (define sk (pkey-encrypt pk k))
-  (values sk iv (encrypt ci k iv buf)))
-
-(define (decrypt-envelope pk ci sk iv buf)
-  (decrypt ci (pkey-decrypt pk sk) iv buf))
+(define (pkey-decrypt pk buf #:pad [pad #f])
+  (send pk decrypt 'pkey-decrypt buf pad))
 
 ;; ============================================================
 
-(define (generate-pkey pki bits . args)
-  (send pki generate-key (cons bits args)))
+;; ;; sk = "sealed key"
+;; (define (encrypt-envelope pk ci buf)
+;;   (define k (generate-cipher-key ci))
+;;   (define iv (generate-cipher-iv ci))
+;;   (define sk (pkey-encrypt pk k))
+;;   (values sk iv (encrypt ci k iv buf)))
+
+;; (define (decrypt-envelope pk ci sk iv buf)
+;;   (decrypt ci (pkey-decrypt pk sk) iv buf))
+
+;; ============================================================
+
+(define (generate-private-key pki spec)
+  (send pki generate-key 'generate-private-key spec))

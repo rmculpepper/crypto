@@ -79,26 +79,6 @@ To print all ciphers:
 (define pkey:rsa:digests '(ripemd160 sha1 sha224 sha256 sha384 sha512))
 (define pkey:dsa:digests '(dss1))
 
-(define (rsa-keygen bits [exp 65537])
-  (let/fini ([ep (BN_new) BN_free])
-    (BN_add_word ep exp)
-    (let/error ([rsap (RSA_new) RSA_free]
-                [evp (EVP_PKEY_new) EVP_PKEY_free])
-      (RSA_generate_key_ex rsap bits ep)
-      (EVP_PKEY_set1_RSA evp rsap)
-      (new libcrypto-pkey-ctx% (impl pkey:rsa) (evp evp) (private? #t)))))
-
-(define (dsa-keygen bits)
-  (let/error ([dsap (DSA_new) DSA_free]
-              [evp (EVP_PKEY_new) EVP_PKEY_free])
-    (DSA_generate_parameters_ex dsap bits)
-    (DSA_generate_key dsap)
-    (EVP_PKEY_set1_DSA evp dsap)
-    (new libcrypto-pkey-ctx% (impl pkey:dsa) (evp evp) (private? #t))))
-
-(define EVP_PKEY_RSA	6)
-(define EVP_PKEY_DSA	116)
-
 (define (make-pkey:rsa)
   (new libcrypto-pkey-impl%
        (spec 'rsa)
@@ -157,10 +137,11 @@ To print all ciphers:
 
     ;; ----
 
-    #|
-    (define/override (get-pkey name-sym)
-      (hash-ref pkey-table name-sym #f))
-    |#
+    (define/override (get-pkey* spec)
+      (case spec
+        [(rsa) (new libcrypto-rsa-impl% (factory this) (spec spec))]
+        [(dsa) (new libcrypto-dsa-impl% (factory this) (spec spec))]
+        [else #f]))
 
     (define random-impl #f)
     (define/override (get-random)

@@ -342,8 +342,12 @@
 ;; Public-Key Cryptography
 
 (define-cpointer-type _EVP_PKEY)
+(define-cpointer-type _EVP_PKEY_CTX)
 (define-cpointer-type _RSA)
 (define-cpointer-type _DSA)
+
+(define EVP_PKEY_RSA	6)
+(define EVP_PKEY_DSA	116)
 
 (define-crypto EVP_PKEY_free
   (_fun _EVP_PKEY -> _void)
@@ -352,6 +356,120 @@
 (define-crypto EVP_PKEY_new
   (_fun -> _EVP_PKEY/null)
   #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'EVP_PKEY_new)))
+
+(define-crypto EVP_PKEY_CTX_free
+  (_fun _EVP_PKEY_CTX -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_PKEY_CTX_new
+  (_fun _EVP_PKEY (_pointer = #f) -> _EVP_PKEY_CTX)
+  #:wrap (compose (allocator EVP_PKEY_CTX_free) (err-wrap/pointer 'EVP_Pkey_CTX_new)))
+
+(define-crypto EVP_PKEY_CTX_new_id
+  (_fun _int (_pointer = #f) -> _EVP_PKEY_CTX)
+  #:wrap (compose (allocator EVP_PKEY_CTX_free) (err-wrap/pointer 'EVP_Pkey_CTX_new_id)))
+
+(define-crypto EVP_PKEY_keygen_init
+  (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_keygen_init positive?))
+
+(define-crypto EVP_PKEY_paramgen_init
+  (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_paramgen_init positive?))
+
+(define-crypto EVP_PKEY_CTX_ctrl
+  (_fun _EVP_PKEY_CTX
+        (keytype : _int)
+        (optype : _int)
+        (cmd : _int)
+        (p1 : _int)
+        (p2 : _pointer)
+        -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_CTX_ctrl positive?))
+
+(define (EVP_PKEY_CTX_set_signature_md ctx md)
+  (EVP_PKEY_CTX_ctrl ctx  -1 EVP_PKEY_OP_TYPE_SIG
+                     EVP_PKEY_CTRL_MD 0 md))
+
+(define (EVP_PKEY_CTX_set_rsa_padding ctx pad)
+  (EVP_PKEY_CTX_ctrl ctx EVP_PKEY_RSA -1 EVP_PKEY_CTRL_RSA_PADDING pad #f))
+(define (EVP_PKEY_CTX_set_rsa_pss_saltlen ctx len)
+  (EVP_PKEY_CTX_ctrl ctx EVP_PKEY_RSA
+                     (bitwise-ior EVP_PKEY_OP_SIGN EVP_PKEY_OP_VERIFY)
+                     EVP_PKEY_CTRL_RSA_PSS_SALTLEN
+                     len
+                     #f))
+(define (EVP_PKEY_CTX_set_rsa_keygen_bits ctx bits)
+  (EVP_PKEY_CTX_ctrl ctx EVP_PKEY_RSA EVP_PKEY_OP_KEYGEN
+                     EVP_PKEY_CTRL_RSA_KEYGEN_BITS bits #f))
+(define (EVP_PKEY_CTX_set_rsa_keygen_pubexp ctx pubexp)
+  (EVP_PKEY_CTX_ctrl ctx EVP_PKEY_RSA EVP_PKEY_OP_KEYGEN
+                     EVP_PKEY_CTRL_RSA_KEYGEN_PUBEXP 0 pubexp))
+;;(define (EVP_PKEY_CTX_set_rsa_mgf1_md ctx md)
+;;  (EVP_PKEY_CTX_ctrl ctx EVP_PKEY_RSA EVP_PKEY_OP_TYPE_SIG
+;;                     EVP_PKEY_CTRL_RSA_MGF1_MD 0 md))
+
+(define EVP_PKEY_OP_PARAMGEN            (arithmetic-shift 1 1))
+(define EVP_PKEY_OP_KEYGEN              (arithmetic-shift 1 2))
+(define EVP_PKEY_OP_SIGN                (arithmetic-shift 1 3))
+(define EVP_PKEY_OP_VERIFY              (arithmetic-shift 1 4))
+(define EVP_PKEY_OP_VERIFYRECOVER       (arithmetic-shift 1 5))
+(define EVP_PKEY_OP_SIGNCTX             (arithmetic-shift 1 6))
+(define EVP_PKEY_OP_VERIFYCTX           (arithmetic-shift 1 7))
+
+(define EVP_PKEY_OP_TYPE_SIG
+  (bitwise-ior EVP_PKEY_OP_SIGN EVP_PKEY_OP_VERIFY EVP_PKEY_OP_VERIFYRECOVER
+               EVP_PKEY_OP_SIGNCTX EVP_PKEY_OP_VERIFYCTX))
+
+(define EVP_PKEY_CTRL_MD                1)
+(define EVP_PKEY_ALG_CTRL               #x1000)
+(define EVP_PKEY_CTRL_RSA_PADDING       (+ EVP_PKEY_ALG_CTRL 1))
+(define EVP_PKEY_CTRL_RSA_PSS_SALTLEN   (+ EVP_PKEY_ALG_CTRL 2))
+(define EVP_PKEY_CTRL_RSA_KEYGEN_BITS   (+ EVP_PKEY_ALG_CTRL 3))
+(define EVP_PKEY_CTRL_RSA_KEYGEN_PUBEXP (+ EVP_PKEY_ALG_CTRL 4))
+(define EVP_PKEY_CTRL_RSA_MGF1_MD       (+ EVP_PKEY_ALG_CTRL 5))
+(define EVP_PKEY_CTRL_GET_RSA_PADDING           (+ EVP_PKEY_ALG_CTRL 6))
+(define EVP_PKEY_CTRL_GET_RSA_PSS_SALTLEN       (+ EVP_PKEY_ALG_CTRL 7))
+(define EVP_PKEY_CTRL_GET_RSA_MGF1_MD           (+ EVP_PKEY_ALG_CTRL 8))
+
+(define RSA_PKCS1_PADDING       1)
+(define RSA_NO_PADDING          3)
+(define RSA_PKCS1_OAEP_PADDING  4)
+(define RSA_PKCS1_PSS_PADDING   6)
+
+(define (EVP_PKEY_CTX_set_dsa_paramgen_bits ctx nbits)
+  (EVP_PKEY_CTX_ctrl ctx EVP_PKEY_DSA EVP_PKEY_OP_PARAMGEN
+                     EVP_PKEY_CTRL_DSA_PARAMGEN_BITS nbits #f))
+
+(define EVP_PKEY_CTRL_DSA_PARAMGEN_BITS         (+ EVP_PKEY_ALG_CTRL 1))
+(define EVP_PKEY_CTRL_DSA_PARAMGEN_Q_BITS       (+ EVP_PKEY_ALG_CTRL 2))
+(define EVP_PKEY_CTRL_DSA_PARAMGEN_MD           (+ EVP_PKEY_ALG_CTRL 3))
+
+(define-crypto EVP_PKEY_keygen
+  (_fun _EVP_PKEY_CTX
+        (result : (_ptr o _EVP_PKEY/null))
+        -> (status : _int)
+        -> (and (> status 0) result))
+  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'EVP_PKEY_keygen)))
+
+(define-crypto EVP_PKEY_paramgen
+  (_fun _EVP_PKEY_CTX
+        (result : (_ptr o _EVP_PKEY/null))
+        -> (status : _int)
+        -> (and (> status 0) result))
+  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'EVP_PKEY_paramgen)))
+
+(define-crypto EVP_PKEY_copy_parameters
+  (_fun _EVP_PKEY _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_copy_parameters positive?))
+
+(define-crypto EVP_PKEY_cmp_parameters
+  (_fun _EVP_PKEY _EVP_PKEY -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_cmp
+                   (lambda (r) (member r '(0 1)))
+                   (lambda (r) (case r ((0) #f) ((1) #t)))))
+
+
 
 (define-crypto RSA_free
   (_fun _RSA -> _void)
@@ -389,34 +507,59 @@
   (_fun _EVP_PKEY _DSA -> _int)
   #:wrap (err-wrap/check 'EVP_PKEY_set1_DSA))
 
-(define-crypto EVP_SignFinal
-  (_fun _EVP_MD_CTX
-        (sig : _pointer)
-        (count : (_ptr o _uint))
-        _EVP_PKEY
-        -> (result : _int)
-        -> (and (= result 1) count))
-  #:wrap (err-wrap 'EVP_SignFinal values))
+(define-crypto EVP_PKEY_get1_RSA
+  (_fun _EVP_PKEY -> _RSA/null)
+  #:wrap (compose (allocator RSA_free) (err-wrap/pointer 'EVP_PKEY_get1_RSA)))
 
-(define-crypto EVP_VerifyFinal
-  (_fun _EVP_MD_CTX (buf : _pointer) (len : _uint) _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_VerifyFinal
+(define-crypto EVP_PKEY_get1_DSA
+  (_fun _EVP_PKEY -> _DSA/null)
+  #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'EVP_PKEY_get1_DSA)))
+
+(define-crypto EVP_PKEY_sign_init
+  (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_sign_init positive?))
+
+(define-crypto EVP_PKEY_sign
+  (_fun _EVP_PKEY_CTX _pointer (siglen : (_ptr io _size)) _pointer _size
+        -> (status : _int)
+        -> (if (positive? status) siglen status))
+  #:wrap (err-wrap 'EVP_PKEY_sign positive?))
+
+(define-crypto EVP_PKEY_verify_init
+  (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_verify_init positive?))
+
+(define-crypto EVP_PKEY_verify
+  (_fun _EVP_PKEY_CTX _pointer _size _pointer _size -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_sign
                    (lambda (r) (member r '(0 1)))
                    (lambda (r) (case r ((0) #f) ((1) #t)))))
+
+(define-crypto EVP_PKEY_encrypt_init
+  (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_encrypt_init positive?))
+
+(define-crypto EVP_PKEY_encrypt
+  (_fun _EVP_PKEY_CTX _pointer (outlen : (_ptr io _size)) _pointer _size
+        -> (status : _int)
+        -> (if (positive? status) outlen status))
+  #:wrap (err-wrap 'EVP_PKEY_encrypt positive?))
+
+(define-crypto EVP_PKEY_decrypt_init
+  (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_decrypt_init positive?))
+
+(define-crypto EVP_PKEY_decrypt
+  (_fun _EVP_PKEY_CTX _pointer (outlen : (_ptr io _size)) _pointer _size
+        -> (status : _int)
+        -> (if (positive? status) outlen status))
+  #:wrap (err-wrap 'EVP_PKEY_decrypt positive?))
 
 (define-crypto EVP_PKEY_cmp
   (_fun _EVP_PKEY _EVP_PKEY -> _int)
   #:wrap (err-wrap 'EVP_PKEY_cmp
                    (lambda (r) (member r '(0 1)))
                    (lambda (r) (case r ((0) #f) ((1) #t)))))
-
-(define-crypto EVP_PKEY_encrypt
-  (_fun _pointer _pointer _int _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_encrypt exact-nonnegative-integer?))
-
-(define-crypto EVP_PKEY_decrypt
-  (_fun _pointer _pointer _int _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_decrypt exact-nonnegative-integer?))
 
 (define-crypto RSA_generate_key_ex
   (_fun _RSA _int _BIGNUM (_pointer = #f) -> _int)
@@ -448,13 +591,14 @@
   (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
   #:wrap (err-wrap 'i2d_PrivateKey positive?))
 
-(define-values (i2d_PublicKey-length i2d_PrivateKey-length)
-  (let ()
-    (define-crypto i2d_PublicKey (_fun _EVP_PKEY (_pointer = #f) -> _int)
-      #:wrap (err-wrap 'i2d_PublicKey-length positive?))
-    (define-crypto i2d_PrivateKey (_fun _EVP_PKEY (_pointer = #f) -> _int)
-      #:wrap (err-wrap 'i2d_PrivateKey-length positive?))
-    (values i2d_PublicKey i2d_PrivateKey)))
+(define-crypto d2i_DSAparams
+  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _DSA/null)
+  #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'd2i_DSAparams)))
+
+(define-crypto i2d_DSAparams
+  (_fun _DSA (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_DSAparams positive?))
+
 
 ;; ============================================================
 ;; Random Numbers

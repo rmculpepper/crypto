@@ -25,7 +25,8 @@
          cipher-impl<%>
          cipher-ctx<%>
          pkey-impl<%>
-         pkey-ctx<%>
+         pkey-params<%>
+         pkey-key<%>
          random-impl<%>
 
          factory?
@@ -33,6 +34,7 @@
          digest-ctx?
          cipher-impl?
          cipher-ctx?
+         pkey-impl?
          random-impl?)
 
 ;; ============================================================
@@ -159,26 +161,46 @@
 
 (define pkey-impl<%>
   (interface (impl<%>)
-    read-key     ;; sym boolean bytes nat nat -> pkey-ctx<%>
-    generate-key ;; (listof ???) -> pkey-ctx<%>
-    digest-ok?   ;; digest-impl<%> -> boolean
+    read-key     ;; sym bytes 'public/'private KeyFormat -> pkey-key<%>
+    read-params  ;; sym bytes ParamsFormat -> pkey-params<%>
+    generate-key ;; GenKeySpec -> pkey-key<%>
+    generate-params ;; GenKeySpec -> pkey-params<%>
+    can-sign?    ;; -> boolean
     can-encrypt? ;; -> boolean
     ))
 
-(define pkey-ctx<%>
+(define pkey-params<%>
+  (interface (ctx<%>)
+    generate-key ;; sym GenKeySpec -> pkey-key<%>
+    write-params ;; sym ParamsFormat -> bytes
+    ))
+
+(define pkey-key<%>
   (interface (ctx<%>)
     is-private?             ;; -> boolean
-    get-max-signature-size  ;; -> nat
-    get-key-size/bits       ;; -> nat
+    get-public-key          ;; sym -> pkey-key<%>
+    get-params              ;; sym -> pkey-params<%> or #f
 
-    write-key       ;; sym boolean -> bytes
-    equal-to-key?   ;; pkey-ctx<%> -> boolean
+    write-key       ;; sym 'public/'private KeyFormat -> bytes
+    equal-to-key?   ;; pkey-key<%> -> boolean
 
-    sign!           ;; sym digest-ctx<%> bytes nat nat -> nat
-    verify          ;; sym digest-ctx<%> bytes nat nat -> boolean
+    sign            ;; sym bytes DigestSpec Padding -> bytes
+    verify          ;; sym bytes DigestSpec Padding bytes -> boolean
 
-    encrypt/decrypt ;; sym boolean boolean bytes nat nat -> bytes
+    encrypt         ;; sym bytes Padding -> bytes
+    decrypt         ;; sym bytes Padding -> bytes
     ))
+
+;; KeyFormat
+;;  #f means *impl-specific*, may alias another defined format
+
+;; Padding is a symbol (eg 'oaep) or #f
+;;  #f means *impl-specific* default
+
+;; GenKeySpec is a (listof (list symbol any)) w/o duplicates,
+;; where only known keys are allowed (impl-specific).
+
+(define (pkey-impl? x) (is-a? x pkey-impl<%>))
 
 ;; ============================================================
 ;; Randomness
