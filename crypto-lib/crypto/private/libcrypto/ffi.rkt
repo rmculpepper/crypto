@@ -22,6 +22,11 @@
          openssl/libcrypto)
 (provide (protect-out (all-defined-out)))
 
+(define-ffi-definer define-racket #f)
+
+(define-racket scheme_make_utf8_string
+  (_fun _pointer -> _racket))
+
 ;; ============================================================
 ;; Library initialization & error-catching wrappers
 
@@ -35,6 +40,9 @@
   (ERR_load_crypto_strings)
   (OpenSSL_add_all_ciphers)
   (OpenSSL_add_all_digests))
+
+(define-crypto CRYPTO_free
+  (_fun _pointer -> _void))
 
 ;; ----
 
@@ -90,9 +98,15 @@
         -> _void)
   #:wrap (deallocator))
 
+(define BN-no-gc ((deallocator) void))
+
 (define-crypto BN_new
   (_fun -> _BIGNUM/null)
   #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_new)))
+
+(define-crypto BN_copy
+  (_fun _BIGNUM _BIGNUM -> _BIGNUM)
+  #:wrap (err-wrap/pointer 'BN_copy))
 
 (define-crypto BN_add_word
   (_fun _BIGNUM
@@ -103,6 +117,23 @@
 (define-crypto BN_num_bits
   (_fun _BIGNUM -> _int))
 
+(define (BN_num_bytes bn)
+  (quotient (+ (BN_num_bits bn) 7) 8))
+
+(define-crypto BN_hex2bn
+  (_fun (bn : (_ptr o _BIGNUM/null)) _string/utf-8
+        -> (status : _int)
+        -> (and (positive? status) bn))
+  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_hex2bin)))
+
+(define-crypto BN_bn2hex
+  (_fun _BIGNUM ->
+        (s : _pointer)
+        -> (and s
+                (begin0 (scheme_make_utf8_string s)
+                  (CRYPTO_free s))))
+  #:wrap (err-wrap/pointer 'BN_bn2hex))
+
 (define-crypto BN_bn2bin
   (_fun _BIGNUM _bytes -> _int))
 
@@ -112,6 +143,12 @@
         (_pointer = #f)
         -> _BIGNUM/null)
   #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_bin2bn)))
+
+(define (BN->bytes/bin bn)
+  (define len (BN_num_bytes bn))
+  (define buf (make-bytes len))
+  (BN_bn2bin bn buf)
+  buf)
 
 ;; ============================================================
 ;; Digest
@@ -307,7 +344,19 @@
 ;; ============================================================
 ;; Diffie-Hellman
 
-(define-cpointer-type _DH)
+(define-cstruct _DH_st_prefix
+  ([pad     _int]
+   [version _int]
+   [p       _BIGNUM]
+   [g       _BIGNUM]
+   [length  _long]
+   [pubkey  _BIGNUM/null]
+   [privkey _BIGNUM/null]
+   ;; more fields
+   ))
+
+(define _DH _DH_st_prefix-pointer)
+(define _DH/null _DH_st_prefix-pointer/null)
 
 (define-crypto DH_free
   (_fun _DH -> _void)
@@ -315,7 +364,7 @@
 
 (define-crypto DH_new
   (_fun -> _DH/null)
-  #:wrap (compose (allocator DH_free) (error-wrap/pointer 'DH_new)))
+  #:wrap (compose (allocator DH_free) (err-wrap/pointer 'DH_new)))
 
 (define-crypto DHparams_dup
   (_fun _DH -> _DH))
@@ -353,13 +402,6 @@
         -> (status : _int)
         -> (and (positive? status) secret))
   #:wrap (err-wrap 'DH_compute_key values))
-
-(define-crypto d2i_DHparams
-  (_fun (_pointer = #f)
-        (_ptr i _pointer)
-        _long
-        -> (result : _DH/null))
-  #:wrap (compose (allocator DH_free) (err-wrap/pointer 'd2i_DHparams)))
 
 ;; ============================================================
 ;; Public-Key Cryptography
