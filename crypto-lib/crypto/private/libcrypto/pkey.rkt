@@ -53,6 +53,16 @@ Generating keys & params for testing:
 
 |#
 
+#|
+Key Formats
+ - {d2i,i2d}_{PublicKey,PrivateKey} doesn't work on EC keys
+ - {d2i,i2d}_PUBKEY encodes key as SubjectPublicKeyInfo (ie, includes type of key)
+ - PKCS#8 might handle all kinds of private keys
+   - {d2i,i2d}_PKCS8_PRIV_KEY_INFO(...);
+   - EVP_PKEY *EVP_PKCS82PKEY(PKCS8_PRIV_KEY_INFO *p8);
+   - PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(EVP_PKEY *pkey);
+
+|#
 
 ;; ============================================================
 
@@ -70,10 +80,16 @@ Generating keys & params for testing:
         (match sk
           [(list 'libcrypto (? symbol? alg) 'public (? bytes? buf))
            (unless (eq? alg spec) (bad))
-           (values (d2i_PublicKey (pktype) buf (bytes-length buf)) #f)]
+           (values (d2i_PUBKEY buf (bytes-length buf))
+                   ;; (d2i_PublicKey (pktype) buf (bytes-length buf))
+                   #f)]
           [(list 'libcrypto (? symbol? alg) 'private (? bytes? buf))
            (unless (eq? alg spec) (bad))
-           (values (d2i_PrivateKey (pktype) buf (bytes-length buf)) #t)]
+           (values (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
+                     (begin0 (EVP_PKCS82PKEY pkcs8info)
+                       (PKCS8_PRIV_KEY_INFO_free pkcs8info)))
+                   ;; (d2i_PrivateKey (pktype) buf (bytes-length buf))
+                   #t)]
           [_ (bad)]))
       (new libcrypto-pk-key% (impl this) (evp evp) (private? private?)))
 
@@ -292,6 +308,89 @@ Generating keys & params for testing:
       peer-evp)
     ))
 
+;; ----
+
+(define allowed-ec-paramgen
+  `((curve-nid ,exact-nonnegative-integer? "exact-nonnegative-integer?")))
+
+(define libcrypto-ec-impl%
+  (class libcrypto-pk-impl%
+    (super-new (spec 'ec))
+
+    (define/override (pktype) EVP_PKEY_EC)
+    (define/override (can-sign?) #t)
+    (define/override (can-key-agree?) #t)
+
+    (define/override (generate-params who config)
+      (check-keygen-spec who config allowed-ec-paramgen)
+      (let ([curve-nid (keygen-spec-ref config 'curve-nid)])
+        (unless curve-nid
+          (error who "missing required configuration key\n  key: ~s" 'curve-nid))
+        (define ec (EC_KEY_new_by_curve_name curve-nid))
+        (unless ec
+          (error who "named curve not found\n  curve NID: ~e" curve-nid))
+        (define evp (EVP_PKEY_new))
+        (EVP_PKEY_set1_EC_KEY evp ec)
+        (EC_KEY_free ec)
+        (new libcrypto-pk-params% (impl this) (evp evp))))
+
+    (define/override (read-params who sp)
+      (match sp
+        [(list 'libcrypto 'ec (? bytes? buf))
+         (define group (d2i_ECPKParameters buf (bytes-length buf)))
+         ;; FIXME: check?
+         (define ec (EC_KEY_new group))
+         (EC_GROUP_free group)
+         (define evp (EVP_PKEY_new))
+         (EVP_PKEY_set1_EC_KEY evp ec)
+         (EC_KEY_free ec)
+         (new libcrypto-pk-params% (impl this) (evp evp))]
+        [_ (error who "bad serialized EC parameters\n  value: ~e" sp)]))
+
+    (define/public (*write-params who fmt evp)
+      (unless (memq fmt '(#f libcrypto))
+        (error who "parameter format not supported\n  format: ~e" fmt))
+      (define ec (EVP_PKEY_get1_EC_KEY evp))
+      (define group (EC_KEY_get0_group ec))
+      (define len (i2d_ECPKParameters group #f))
+      (define buf (make-bytes len))
+      (define len2 (i2d_ECPKParameters group buf))
+      (EC_KEY_free ec)
+      `(libcrypto ec ,(shrink-bytes buf len2)))
+
+    (define/public (*generate-key who config evp)
+      (define kec
+        (let ([ec0 (EVP_PKEY_get1_EC_KEY evp)])
+          (begin0 (EC_KEY_dup ec0)
+            (EC_KEY_free ec0))))
+      (EC_KEY_generate_key kec)
+      (define kevp (EVP_PKEY_new))
+      (EVP_PKEY_set1_EC_KEY kevp kec)
+      (EC_KEY_free kec)
+      (new libcrypto-pk-key% (impl this) (evp evp) (private? #t)))
+
+    (define/public (*convert-peer-pubkey who evp peer-pubkey0)
+      (define ec (EVP_PKEY_get1_EC_KEY evp))
+      (define group (EC_KEY_get0_group ec))
+      (define group-degree (EC_GROUP_get_degree group))
+      (define buf (make-bytes (quotient (+ group-degree 7) 8)))
+      (define peer-pubkey-point (EC_POINT_new group))
+      (EC_POINT_oct2point group peer-pubkey-point peer-pubkey0 (bytes-length peer-pubkey0))
+      (define peer-ec (EC_KEY_new group))
+      (EC_KEY_set_public_key peer-ec peer-pubkey-point)
+      (EC_POINT_free peer-pubkey-point)
+      (EC_KEY_free ec)
+      (define peer-evp (EVP_PKEY_new))
+      (EVP_PKEY_set1_EC_KEY peer-evp peer-ec)
+      (EC_KEY_free peer-ec)
+      peer-evp)
+
+    (define/public (*set-sign-padding who ctx pad)
+      (case pad
+        [(#f) (void)]
+        [else (error who "invalid padding argument for ECDSA\n  padding: ~e" pad)]))
+    ))
+
 ;; ============================================================
 
 (define allowed-params-keygen '())
@@ -322,9 +421,11 @@ Generating keys & params for testing:
     (define/public (is-private?) private?)
 
     (define/public (get-public-key who)
-      (let ([pub (write-key 'get-public-key 'public #f)])
-        (let ([pubevp (d2i_PublicKey (send impl pktype) pub (bytes-length pub))])
-          (new libcrypto-pk-key% (impl impl) (evp evp) (private? #f)))))
+      (define outlen (i2d_PUBKEY evp #f))
+      (define outbuf (make-bytes outlen))
+      (define outlen2 (i2d_PUBKEY evp outbuf))
+      (define pub-evp (d2i_PUBKEY outbuf outlen2))
+      (new libcrypto-pk-key% (impl impl) (evp pub-evp) (private? #f)))
 
     (define/public (get-params who)
       (let ([pevp (EVP_PKEY_new)])
@@ -334,10 +435,26 @@ Generating keys & params for testing:
     (define/public (write-key who fmt)
       (unless (memq fmt '(#f libcrypto))
         (error who "key format not supported\n  format: ~e" fmt))
+      #|
       (let* ([i2d (if private? i2d_PrivateKey i2d_PublicKey)]
              [buf (make-bytes (i2d evp #f))])
         (i2d evp buf)
-        `(libcrypto ,(send impl get-spec) ,(if private? 'private 'public) ,buf)))
+        `(libcrypto ,(send impl get-spec) ,(if private? 'private 'public) ,buf))
+      |#
+      (*write-key who private?))
+
+    (define/private (*write-key who private?)
+      (cond [private?
+             (define pkcs8info (EVP_PKEY2PKCS8 evp))
+             (define outlen (i2d_PKCS8_PRIV_KEY_INFO pkcs8info #f))
+             (define outbuf (make-bytes outlen))
+             (define outlen2 (i2d_PKCS8_PRIV_KEY_INFO pkcs8info outbuf))
+             `(libcrypto ,(send impl get-sepc) private ,(shrink-bytes outbuf outlen2))]
+            [else
+             (define outlen (i2d_PUBKEY evp #f))
+             (define outbuf (make-bytes outlen))
+             (define outlen2 (i2d_PUBKEY evp outbuf))
+             `(libcrypto ,(send impl get-spec) public ,(shrink-bytes outbuf outlen2))]))
 
     (define/public (equal-to-key? other)
       (and (is-a? other libcrypto-pk-key%)

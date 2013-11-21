@@ -473,6 +473,13 @@
   (_fun -> _EC_KEY/null)
   #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'EC_KEY_new)))
 
+(define-crypto EC_KEY_dup
+  (_fun _EC_KEY -> _EC_KEY))
+
+(define-crypto EC_KEY_new_by_curve_name
+  (_fun _int -> _EC_KEY/null)
+  #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'EC_KEY_new_by_curve_name)))
+
 (define-crypto EC_KEY_set_group
   (_fun _EC_KEY _EC_GROUP -> _int)
   #:wrap (err-wrap 'EC_KEY_set_group positive?))
@@ -789,6 +796,32 @@
 (define-crypto i2d_PrivateKey
   (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
   #:wrap (err-wrap 'i2d_PrivateKey positive?))
+
+(define-crypto d2i_PUBKEY
+  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
+  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PUBKEY)))
+(define-crypto i2d_PUBKEY
+  (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_PUBKEY positive?))
+
+(define-cpointer-type _PKCS8_PRIV_KEY_INFO)
+(define-crypto PKCS8_PRIV_KEY_INFO_free
+  (_fun _PKCS8_PRIV_KEY_INFO -> _void))
+
+(define-crypto EVP_PKCS82PKEY
+  (_fun _PKCS8_PRIV_KEY_INFO -> _EVP_PKEY/null)
+  #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'EVP_PKCS82PKEY)))
+(define-crypto EVP_PKEY2PKCS8
+  (_fun _EVP_PKEY -> _PKCS8_PRIV_KEY_INFO/null)
+  #:wrap (compose (allocator PKCS8_PRIV_KEY_INFO_free) (err-wrap/pointer 'EVP_PKEY2PKCS8)))
+
+(define-crypto d2i_PKCS8_PRIV_KEY_INFO
+  (_fun (_pointer = #f) (_ptr i _PKCS8_PRIV_KEY_INFO) _long -> _PKCS8_PRIV_KEY_INFO)
+  #:wrap (compose (allocator PKCS8_PRIV_KEY_INFO_free)
+                  (err-wrap/pointer 'd2i_PKCS8_PRIV_KEY_INFO)))
+(define-crypto i2d_PKCS8_PRIV_KEY_INFO
+  (_fun _PKCS8_PRIV_KEY_INFO _pointer -> _int)
+  #:wrap (err-wrap 'i2d_PKCS8_PRIV_KEY_INFO positive?))
 
 (define-crypto d2i_DSAparams
   (_fun (_pointer = #f) (_ptr i _pointer) _long -> _DSA/null)
