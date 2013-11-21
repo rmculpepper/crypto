@@ -717,9 +717,13 @@
         -> _EC_GROUP)
   #:wrap (err-wrap/pointer 'd2i_ECPKParameters))
 
+(define-crypto EC_KEY_free
+  (_fun _EC_KEY -> _void)
+  #:wrap (deallocator))
+
 (define-crypto EC_KEY_new
   (_fun -> _EC_KEY/null)
-  #:wrap (err-wrap/pointer 'EC_KEY_new))
+  #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'EC_KEY_new)))
 
 (define-crypto EC_KEY_set_group
   (_fun _EC_KEY _EC_GROUP -> _int)
@@ -737,7 +741,6 @@
   (_fun _pointer _size _EC_POINT _EC_KEY (_fpointer = #f)
         -> _int)
   #:wrap (err-wrap 'ECDH_compute_key positive?))
-
 
 (define-crypto EC_POINT_free
   (_fun _EC_POINT -> _void)

@@ -66,23 +66,23 @@ TODO: support predefined DH params
 
 (define key-agree-impl<%>
   (interface ()
-    generate-params
-    read-params
-    ;; read-params+key
+    generate-params  ;; sym ParamgenSpec -> key-agree-params<%>
+    read-params      ;; sym bytes -> key-agree-params<%>
+    ;; read-params+key  ;; sym (list bytes^3) -> key-agree-key<%>
     ))
 
 (define key-agree-params<%>
   (interface ()
-    generate-key
-    ;; read-key
-    write-params
+    generate-key     ;; sym KeygenSpec -> key-agree-key<%>
+    read-key         ;; sym (list bytes^2) -> key-agree-key<%>
+    write-params     ;; sym KeyFormat -> bytes
     ))
 
 (define key-agree-key<%>
   (interface ()
-    get-params
-    write-key
-    compute-secret
+    get-params       ;; -> key-agree-params<%>
+    write-key        ;; sym KeyFormat -> (list bytes^3)
+    compute-secret   ;; sym bytes -> bytes
     ))
 
 (define allowed-dh-paramgen
@@ -163,24 +163,23 @@ TODO: support predefined DH params
     (inherit-field impl)
     (super-new)
 
-    (define/public (compute-secret peer-pubkey)
-      (define pub-bn (BN_bin2bn peer-pubkey))
-      (DH_compute_key dh pub-bn))
-
     (define/public (get-params who)
       (unless params
         (define dhp (DHparams_dup dh))
         (set! params (new libcrypto-dh-params% (impl impl) (dh dhp))))
       params)
 
-    (define/public (write-key who private? fmt)
+    (define/public (write-key who fmt)
       (unless (eq? fmt #f)
         (error who "bad DH key format\n  format: ~e" fmt))
       (define pubkey (DH_st_prefix-pubkey dh))
-      (define privkey (and private? (DH_st_prefix-privkey dh)))
-      (list* (send (get-params who) write-params who fmt)
-             (BN->bytes/bin pubkey)
-             (if private?
-                 (list (BN->bytes/bin privkey))
-                 '())))
+      (define privkey (DH_st_prefix-privkey dh))
+      (list (send (get-params who) write-params who fmt)
+            (BN->bytes/bin pubkey)
+            (BN->bytes/bin privkey)))
+
+    (define/public (compute-secret peer-pubkey)
+      (define pub-bn (BN_bin2bn peer-pubkey))
+      (DH_compute_key dh pub-bn))
+
     ))
