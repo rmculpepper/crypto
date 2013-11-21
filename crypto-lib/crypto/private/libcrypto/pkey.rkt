@@ -62,6 +62,34 @@ Key Formats
    - EVP_PKEY *EVP_PKCS82PKEY(PKCS8_PRIV_KEY_INFO *p8);
    - PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(EVP_PKEY *pkey);
  - Nope, both PUBKEY and PKCS8_PRIV_KEY_INFO functions also crash on EC keys.
+
+ECPKParameters vs ECParameters
+ - According to http://www.faqs.org/rfcs/rfc3279.html:
+   ECPKParameters = CHOICE { ECParameters | ...}
+
+The 'libcrypto key format:
+
+ - (list 'libcrypto (U 'rsa 'dsa 'ec) 'private key-bytes)
+   for 'rsa: key-bytes is PKCS#1 RSAPrivateKey
+   for 'dsa: key-bytes is ???
+   for 'ec:  key-bytes is SEC1 ECPrivateKey
+ - (list 'libcrypto (U 'rsa 'dsa 'ec) 'public key-bytes)
+   for 'rsa and 'dsa: key-bytes is SubjectPublicKeyInfo (citation???)
+   for 'ec: key-bytes is an octet string representation of an EC_POINT (citation???)
+
+ - (list 'libcrypto 'dh 'private param-bytes pubkey-bytes privkey-bytes)
+ - (list 'libcrypto 'dh 'public  param-bytes pubkey-bytes)
+   param-bytes is PKCS#3 DHParameter
+   pubkey-bytes is unsigned binary rep of public key bignum
+   privkey-bytes is unsigned binary rep of private key bignum
+
+The 'libcrypto params format:
+
+ - (list 'libcrypto (U 'dsa 'dh 'ec) params-bytes)
+   for 'dsa: key-bytes is ???
+   for 'dh:  params-bytes is PKCS#3 DHParameter
+   for 'ec:  param-bytes is ECPKParameters (RFC 3279)
+
 |#
 
 ;; ============================================================
@@ -383,6 +411,7 @@ Key Formats
 
 (define libcrypto-ec-impl%
   (class libcrypto-pk-impl%
+    (inherit-field spec)
     (super-new (spec 'ec))
 
     (define/override (pktype) EVP_PKEY_EC)
@@ -416,29 +445,19 @@ Key Formats
         [_ (error who "bad serialized EC parameters\n  value: ~e" sp)]))
 
     (define/override (read-key who sk)
-      (define-values (paramsbuf pubkeybuf privkeybuf)
+      (define (bad)
+        (error who "bad serialized key\n  algorithm: ~e\n  value: ~e" spec sk))
+      (define-values (ec private?)
         (match sk
-          [(list 'libcrypto 'ec 'private (? bytes? params) (? bytes? pub) (? bytes? priv))
-           (values params pub priv)]
-          [(list 'libcrypto 'ec 'public (? bytes? params) (? bytes? pub))
-           (values params pub #f)]))
-      (define group (d2i_ECPKParameters paramsbuf (bytes-length paramsbuf)))
-      ;; FIXME: check?
-      (define pubkey (EC_POINT_new group))
-      (EC_POINT_oct2point group pubkey pubkeybuf (bytes-length pubkeybuf))
-      (define privkey (and privkeybuf (BN_bin2bn privkeybuf)))
-      (define ec (EC_KEY_new))
-      (EC_KEY_set_group ec group)
-      (EC_GROUP_free group)
-      (EC_KEY_set_public_key ec pubkey)
-      (EC_POINT_free pubkey)
-      (when privkey
-        (EC_KEY_set_private_key ec privkey)
-        (BN_free privkey))
+          [(list 'libcrypto 'ec 'private (? bytes? buf))
+           (values (d2i_ECPrivateKey buf (bytes-length buf)) #t)]
+          [(list 'libcrypto 'ec 'public (? bytes? buf))
+           (values (o2i_ECPublicKey buf (bytes-length buf)) #f)]
+          [_ (bad)]))
       (define evp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY evp ec)
       (EC_KEY_free ec)
-      (new libcrypto-pk-key% (impl this) (evp evp) (private? (and privkey #t))))
+      (new libcrypto-pk-key% (impl this) (evp evp) (private? private?)))
 
     (define/public (*write-params who fmt evp)
       (unless (memq fmt '(#f libcrypto))
@@ -453,18 +472,18 @@ Key Formats
 
     (define/override (*write-key who private? fmt evp)
       (define ec (EVP_PKEY_get1_EC_KEY evp))
-      (define group (EC_KEY_get0_group ec))
-      (define pubkey (EC_KEY_get0_public_key ec))
-      (define pubkey-len (EC_POINT_point2oct group pubkey POINT_CONVERSION_COMPRESSED #f 0))
-      (define pubkeybuf (make-bytes pubkey-len))
-      (EC_POINT_point2oct group pubkey POINT_CONVERSION_COMPRESSED pubkeybuf pubkey-len)
-      (define privkey (and private? (EC_KEY_get0_private_key ec)))
-      (define privkey-buf (and privkey (BN->bytes/bin privkey)))
-      (EC_KEY_free ec)
-      (list* 'libcrypto 'ec (if private? 'private 'public)
-             (caddr (*write-params who fmt evp))
-             pubkeybuf
-             (if private? (list privkey-buf) null)))
+      (cond [private?
+             (define outlen (i2d_ECPrivateKey ec #f))
+             (define outbuf (make-bytes outlen))
+             (define outlen2 (i2d_ECPrivateKey ec outbuf))
+             (EC_KEY_free ec)
+             `(libcrypto ec private ,(shrink-bytes outbuf outlen2))]
+            [else ;; public
+             (define outlen (i2o_ECPublicKey ec #f))
+             (define outbuf (make-bytes outlen))
+             (define outlen2 (i2o_ECPublicKey ec outbuf))
+             (EC_KEY_free ec)
+             `(libcrypto ec public ,(shrink-bytes outbuf outlen2))]))
 
     (define/public (*generate-key who config evp)
       (define kec

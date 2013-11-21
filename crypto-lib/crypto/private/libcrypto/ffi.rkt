@@ -831,6 +831,23 @@
   (_fun _DSA (_ptr i _pointer) -> _int)
   #:wrap (err-wrap 'i2d_DSAparams positive?))
 
+(define-crypto d2i_ECPrivateKey
+  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EC_KEY/null)
+  #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'd2i_ECPrivateKey)))
+
+(define-crypto i2d_ECPrivateKey
+  (_fun _EC_KEY (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_ECPrivateKey positive?))
+
+(define-crypto o2i_ECPublicKey
+  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EC_KEY/null)
+  #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'o2i_ECPublicKey)))
+
+(define-crypto i2o_ECPublicKey
+  (_fun _EC_KEY (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_ECPublicKey positive?))
+
+
 
 ;; ============================================================
 ;; Random Numbers
