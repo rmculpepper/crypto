@@ -1,6 +1,7 @@
 To Do
 =====
 
+- keygen/paramgen support: add required flag, auto-check
 - libcrypto: add yield callbacks for interactivity
 - check safety
 - check synchronization & race conditions
