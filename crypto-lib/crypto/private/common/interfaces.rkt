@@ -161,18 +161,19 @@
 
 (define pk-impl<%>
   (interface (impl<%>)
-    read-key     ;; sym bytes 'public/'private KeyFormat -> pk-key<%>
-    read-params  ;; sym bytes ParamsFormat -> pk-params<%>
-    generate-key ;; sym GenKeySpec -> pk-key<%>
-    generate-params ;; sym GenKeySpec -> pk-params<%>
-    can-sign?    ;; -> boolean
-    can-encrypt? ;; -> boolean
+    read-key        ;; sym SerializedKey -> pk-key<%>
+    read-params     ;; sym SerializedParams -> pk-params<%>
+    generate-key    ;; sym GenKeySpec -> pk-key<%>
+    generate-params ;; sym GenParamSpec -> pk-params<%>
+    can-key-agree?  ;; -> boolean
+    can-sign?       ;; -> boolean
+    can-encrypt?    ;; -> boolean
     ))
 
 (define pk-params<%>
   (interface (ctx<%>)
-    generate-key ;; sym GenKeySpec -> pk-key<%>
-    write-params ;; sym ParamsFormat -> bytes
+    generate-key    ;; sym GenKeySpec -> pk-key<%>
+    write-params    ;; sym ParamsFormat -> SerializedParams
     ))
 
 (define pk-key<%>
@@ -181,7 +182,7 @@
     get-public-key          ;; sym -> pk-key<%>
     get-params              ;; sym -> pk-params<%> or #f
 
-    write-key       ;; sym 'public/'private KeyFormat -> bytes
+    write-key       ;; sym KeyFormat -> SerializedKey
     equal-to-key?   ;; pk-key<%> -> boolean
 
     sign            ;; sym bytes DigestSpec Padding -> bytes
@@ -189,10 +190,21 @@
 
     encrypt         ;; sym bytes Padding -> bytes
     decrypt         ;; sym bytes Padding -> bytes
+
+    compute-secret  ;; sym bytes -> bytes
     ))
 
 ;; KeyFormat
+;;  any symbol which is the head of a legal SerializedKey or SerializedParams
 ;;  #f means *impl-specific*, may alias another defined format
+
+;; SerializedKey is one of
+;;  - (list 'libcrypto (U 'rsa 'dsa 'ec 'dh) (U 'public 'private) bytes)
+;;  - ...
+
+;; SerializedParams is one of
+;;  - (list 'libcrypto (U 'dsa 'ec 'dh) bytes)
+;;  - ...
 
 ;; Padding is a symbol (eg 'oaep) or #f
 ;;  #f means *impl-specific* default

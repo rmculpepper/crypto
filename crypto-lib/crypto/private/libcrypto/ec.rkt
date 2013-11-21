@@ -61,7 +61,7 @@ secret = ECDH_compute_key(key, peerpubkey)
   `((curve-nid ,exact-nonnegative-integer? "exact-nonnegative-integer?")))
 
 (define libcrypto-ec-impl%
-  (class* impl-base% ( #| key-agree-impl<%> |# )
+  (class* impl-base% (key-agree-impl<%>)
     (super-new (spec 'ecdh))
 
     (define/public (generate-params who config)
@@ -90,7 +90,7 @@ secret = ECDH_compute_key(key, peerpubkey)
 (define allowed-ec-keygen '())
 
 (define libcrypto-ec-curve%
-  (class* ctx-base% ( #| key-agree-params<%> |# )
+  (class* ctx-base% (key-agree-params<%>)
     (init-field group)
     (inherit-field impl)
     (super-new)
@@ -131,7 +131,7 @@ secret = ECDH_compute_key(key, peerpubkey)
     ))
 
 (define libcrypto-ec-key%
-  (class* ctx-base% ()
+  (class* ctx-base% (key-agree-key<%>)
     (init-field ec [curve #f])
     (inherit-field impl)
     (super-new)

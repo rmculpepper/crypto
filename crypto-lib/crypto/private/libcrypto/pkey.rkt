@@ -17,6 +17,7 @@
 #lang racket/base
 (require ffi/unsafe
          racket/class
+         racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
@@ -52,26 +53,42 @@ Generating keys & params for testing:
 
 |#
 
+
+;; ============================================================
+
 (define libcrypto-pk-impl%
   (class* impl-base% (pk-impl<%>)
+    (inherit-field spec)
     (super-new)
 
-    (define/public (read-key who buf pub/priv fmt)
-      (unless (eq? fmt #f)
-        (error who "key format not supported\n  format: ~e" fmt))
-      (let ([evp
-             (case pub/priv
-               [(private) (d2i_PrivateKey (pktype) buf (bytes-length buf))]
-               [(public) (d2i_PublicKey (pktype) buf (bytes-length buf))])])
-        (new libcrypto-pk-key% (impl this) (evp evp) (private? (eq? pub/priv 'private)))))
-
     (abstract pktype)
-    (abstract read-params)
-    (abstract generate-params)
-    (abstract generate-key)
-    (abstract can-encrypt?)
-    (define/public (can-sign?) #t)
+
+    (define/public (read-key who sk)
+      (define (bad)
+        (error who "bad serialized key\n  algorithm: ~e\n  value: ~e" spec sk))
+      (define-values (evp private?)
+        (match sk
+          [(list 'libcrypto (? symbol? alg) 'public (? bytes? buf))
+           (unless (eq? alg spec) (bad))
+           (values (d2i_PublicKey (pktype) buf (bytes-length buf)) #f)]
+          [(list 'libcrypto (? symbol? alg) 'private (? bytes? buf))
+           (unless (eq? alg spec) (bad))
+           (values (d2i_PrivateKey (pktype) buf (bytes-length buf)) #t)]
+          [_ (bad)]))
+      (new libcrypto-pk-key% (impl this) (evp evp) (private? private?)))
+
+    (define/public (generate-key who config)
+      (error who "algorithm does not support direct key generation\n  algorithm: ~e" spec))
+    (define/public (read-params who sp)
+      (error who "algorithm does not support parameters\n  algorithm: ~e" spec))
+    (define/public (generate-params who config)
+      (error who "algorithm does not support parameters\n  algorithm: ~e" spec))
+    (define/public (can-encrypt?) #f)
+    (define/public (can-sign?) #f)
+    (define/public (can-key-agree?) #f)
     ))
+
+;; ============================================================
 
 (define allowed-rsa-keygen
   `((nbits ,exact-positive-integer? "exact-positive-integer?")
@@ -79,15 +96,10 @@ Generating keys & params for testing:
 
 (define libcrypto-rsa-impl%
   (class libcrypto-pk-impl%
-    (super-new)
+    (super-new (spec 'rsa))
     (define/override (pktype) EVP_PKEY_RSA)
     (define/override (can-encrypt?) #t)
-    (define/override (read-params who buf fmt)
-      (error who "reading parameters not supported"))
-    (define/public (*write-params who evp)
-      (error who "internal error; writing parameters not supported"))
-    (define/override (generate-params who config)
-      (error who "parameter generation not supported"))
+    (define/override (can-sign?) #t)
     #|
     ;; Key generation currently fails, possibly due to something like the following
     ;; issue (but the suggested workaround doesn't work for me).
@@ -139,30 +151,38 @@ Generating keys & params for testing:
           [else (error who "bad RSA encryption padding mode\n  padding: ~e" pad)])))
     ))
 
+;; ----
+
 (define allowed-dsa-paramgen
   `((nbits ,exact-positive-integer? "exact-positive-integer?")))
 
 (define libcrypto-dsa-impl%
   (class libcrypto-pk-impl%
-    (super-new)
+    (inherit-field spec)
+    (super-new (spec 'dsa))
+
     (define/override (pktype) EVP_PKEY_DSA)
-    (define/override (can-encrypt?) #f)
-    (define/override (read-params who buf fmt)
-      (unless (eq? fmt #f)
+    (define/override (can-sign?) #t)
+
+    (define/override (read-params who sp)
+      (match sp
+        [(list 'libcrypto 'dsa (? bytes? buf))
+         (define dsa (d2i_DSAparams buf (bytes-length buf)))
+         (define evp (EVP_PKEY_new))
+         (EVP_PKEY_set1_DSA evp dsa)
+         (DSA_free dsa)
+         (new libcrypto-pk-params% (impl this) (evp evp))]
+        [_ (error who "bad serialized parameters\n  algorithm: ~e\n  value: ~e" spec sp)]))
+
+    (define/public (*write-params who fmt evp)
+      (unless (memq fmt '(#f libcrypto))
         (error who "parameter format not supported\n  format: ~e" fmt))
-      (let ([dsa (d2i_DSAparams buf (bytes-length buf))]
-            [evp (EVP_PKEY_new)])
-        (EVP_PKEY_set1_DSA evp dsa)
-        (DSA_free dsa)
-        (new libcrypto-pk-params% (impl this) (evp evp))))
-    (define/public (*write-params who evp)
-      (let* ([dsa (EVP_PKEY_get1_DSA evp)]
-             [buf (make-bytes (i2d_DSAparams dsa #f))])
-        (i2d_DSAparams dsa buf)
-        (DSA_free dsa)
-        buf))
-    (define/override (generate-key who config)
-      (error who "direct key generation not supported;\n generate key from parameters"))
+      (define dsa (EVP_PKEY_get1_DSA evp))
+      (define buf (make-bytes (i2d_DSAparams dsa #f)))
+      (i2d_DSAparams dsa buf)
+      (DSA_free dsa)
+      `(libcrypto dsa ,buf))
+
     #|
     ;; Similarly, this version of generate-params crashes.
     (define/override (generate-params who config)
@@ -185,13 +205,96 @@ Generating keys & params for testing:
         (EVP_PKEY_set1_DSA evp dsa)
         (DSA_free dsa)
         (new libcrypto-pk-params% (impl this) (evp evp))))
+
+    ;; In contrast to other generate-{key,params} methods above, this use of
+    ;; EVP_PKEY_keygen seems to work, but that may just be because DSA keygen
+    ;; is simple after paramgen is done.
+    (define/public (*generate-key who config evp)
+      (let ([ctx (EVP_PKEY_CTX_new evp)])
+        (EVP_PKEY_keygen_init ctx)
+        (let ([kevp (EVP_PKEY_keygen ctx)])
+          (EVP_PKEY_CTX_free ctx)
+          (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))))
+
     (define/public (*set-sign-padding who ctx pad)
       (case pad
         [(#f) (void)]
         [else (error who "invalid padding argument for DSA\n  padding: ~e" pad)]))
     ))
 
-(define allowed-dsa-keygen '())
+;; ----
+
+(define allowed-dh-paramgen
+  `((nbits ,exact-positive-integer? "exact-positive-integer?")
+    (generator ,(lambda (x) (member x '(2 5))) "(or/c 2 5)")))
+
+(define libcrypto-dh-impl%
+  (class libcrypto-pk-impl%
+    (super-new (spec 'dh))
+
+    (define/override (pktype) EVP_PKEY_DH)
+    (define/override (can-key-agree?) #t)
+
+    (define/override (generate-params who config)
+      (check-keygen-spec who config allowed-dh-paramgen)
+      (let ([nbits (keygen-spec-ref config 'nbits)]
+            [generator (or (keygen-spec-ref config 'generator) 2)])
+        (define dh (DH_new))
+        (DH_generate_parameters_ex dh nbits generator)
+        ;; FIXME: DH_check ???
+        (define evp (EVP_PKEY_new))
+        (EVP_PKEY_set1_DH evp dh)
+        (DH_free dh)
+        (new libcrypto-pk-params% (impl this) (evp evp))))
+
+    (define/override (read-params who sp)
+      (match sp
+        [(list 'libcrypto 'dh (? bytes? buf))
+         (define dh (d2i_DHparams buf (bytes-length buf)))
+         ;; FIXME: DH_check
+         (define evp (EVP_PKEY_new))
+         (EVP_PKEY_set1_DH evp dh)
+         (DH_free dh)
+         (new libcrypto-pk-params% (impl this) (evp evp))]
+        [_ (error who "bad serialized DH parameters\n  value: ~e" sp)]))
+
+    (define/public (*write-params who fmt evp)
+      (unless (memq fmt '(#f libcrypto))
+        (error who "parameter format not supported\n  format: ~e" fmt))
+      (define dh (EVP_PKEY_get1_DH evp))
+      (define buf (make-bytes (i2d_DHparams dh #f)))
+      (i2d_DHparams dh buf)
+      (DH_free dh)
+      `(libcrypto dh ,buf))
+
+    (define/public (*generate-key who config evp)
+      (define kdh
+        (let ([dh0 (EVP_PKEY_get1_DH evp)])
+          (begin0 (DHparams_dup dh0)
+            (DH_free dh0))))
+      (DH_generate_key kdh)
+      (define kevp (EVP_PKEY_new))
+      (EVP_PKEY_set1_DH kevp kdh)
+      (DH_free kdh)
+      (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))
+
+    (define/public (*convert-peer-pubkey who evp peer-pubkey0)
+      (define peer-dh
+        (let ([dh0 (EVP_PKEY_get1_DH evp)])
+          (begin0 (DHparams_dup dh0)
+            (DH_free dh0))))
+      (let ([pubkey (BN_bin2bn peer-pubkey0)])
+        (set-DH_st_prefix-pubkey! peer-dh pubkey)
+        (BN-no-gc pubkey))
+      (define peer-evp (EVP_PKEY_new))
+      (EVP_PKEY_set1_DH peer-evp peer-dh)
+      (DH_free peer-dh)
+      peer-evp)
+    ))
+
+;; ============================================================
+
+(define allowed-params-keygen '())
 
 (define libcrypto-pk-params%
   (class* ctx-base% (pk-params<%>)
@@ -199,22 +302,16 @@ Generating keys & params for testing:
     (inherit-field impl)
     (super-new)
 
-    ;; In contrast to the generate-{key,params} methods above, this use of
-    ;; EVP_PKEY_keygen seems to work, but that may be because DSA keygen is
-    ;; simple after paramgen is done.
+    ;; EVP_PKEY_keygen tends to crash, so call back to impl for low-level keygen.
     (define/public (generate-key who config)
-      (check-keygen-spec who config allowed-dsa-keygen)
-      (let ([ctx (EVP_PKEY_CTX_new evp)])
-        (EVP_PKEY_keygen_init ctx)
-        (let ([kevp (EVP_PKEY_keygen ctx)])
-          (EVP_PKEY_CTX_free ctx)
-          (new libcrypto-pk-key% (impl impl) (evp kevp) (private? #t)))))
+      (check-keygen-spec who config allowed-params-keygen)
+      (send impl *generate-key who config evp))
 
     (define/public (write-params who fmt)
-      (unless (eq? fmt #f)
-        (error who "parameter format not supported\n  format: ~e" fmt))
-      (send impl *write-params who evp))
+      (send impl *write-params who fmt evp))
     ))
+
+;; ============================================================
 
 (define libcrypto-pk-key%
   (class* ctx-base% (pk-key<%>)
@@ -234,25 +331,23 @@ Generating keys & params for testing:
         (EVP_PKEY_copy_parameters pevp evp)
         (new libcrypto-pk-params% (impl impl) (evp pevp))))
 
-    (define/public (write-key who pub/priv fmt)
-      (unless (eq? fmt #f)
+    (define/public (write-key who fmt)
+      (unless (memq fmt '(#f libcrypto))
         (error who "key format not supported\n  format: ~e" fmt))
-      (let* ([i2d (case pub/priv
-                    [(public) i2d_PublicKey]
-                    [(private) i2d_PrivateKey])]
+      (let* ([i2d (if private? i2d_PrivateKey i2d_PublicKey)]
              [buf (make-bytes (i2d evp #f))])
         (i2d evp buf)
-        buf))
+        `(libcrypto ,(send impl get-spec) ,(if private? 'private 'public) ,buf)))
 
     (define/public (equal-to-key? other)
       (and (is-a? other libcrypto-pk-key%)
            (EVP_PKEY_cmp evp (get-field evp other))))
 
-    ;; From headers, EVP_{Sign,Verify}{Init_ex,Update} are just macros for
-    ;; EVP_Digest{Init_ex,Update}. So digest state is compatible.
-
     (define/public (sign who digest digest-spec pad)
-      (unless private? (error who "signing requires private key"))
+      (unless (send impl can-sign?)
+        (error who "sign/verify not supported\n  algorithm: ~e" (send impl get-spec)))
+      (unless private?
+        (error who "signing requires private key"))
       (define di (send (send impl get-factory) get-digest digest-spec))
       (unless (is-a? di libcrypto-digest-impl%)
         (error who "could not get digest implementation\n  digest spec: ~e"
@@ -268,6 +363,8 @@ Generating keys & params for testing:
       (shrink-bytes sigbuf siglen2))
 
     (define/public (verify who digest digest-spec pad sig)
+      (unless (send impl can-sign?)
+        (error who "sign/verify not supported\n  algorithm: ~e" (send impl get-spec)))
       (define di (send (send impl get-factory) get-digest digest-spec))
       (unless (is-a? di libcrypto-digest-impl%)
         (error who "could not get digest implementation\n  digest spec: ~e"
@@ -280,6 +377,8 @@ Generating keys & params for testing:
         (EVP_PKEY_CTX_free ctx)))
 
     (define/public (encrypt who buf pad)
+      (unless (send impl can-encrypt?)
+        (error who "encrypt/decrypt not supported\n  algorithm: ~e" (send impl get-spec)))
       (*crypt who buf pad EVP_PKEY_encrypt_init EVP_PKEY_encrypt))
 
     (define/public (decrypt who buf pad)
@@ -295,4 +394,20 @@ Generating keys & params for testing:
       (define outlen2 (EVP_*crypt ctx outbuf outlen buf (bytes-length buf)))
       (EVP_PKEY_CTX_free ctx)
       (shrink-bytes outbuf outlen2))
+
+    (define/public (compute-secret who peer-pubkey0)
+      (unless (send impl can-key-agree?)
+        (error who "key agreement not supported\n  algorithm: ~e" (send impl get-spec)))
+      (define peer-pubkey
+        (cond [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
+                    (eq? (send peer-pubkey0 get-impl) impl))
+               (get-field evp peer-pubkey0)]
+              [else (send impl *convert-peer-pubkey who peer-pubkey0)]))
+      (define ctx (EVP_PKEY_CTX_new evp))
+      (EVP_PKEY_derive_init ctx)
+      (EVP_PKEY_derive_set_peer ctx peer-pubkey)
+      (define outlen (EVP_PKEY_derive ctx #f 0))
+      (define buf (make-bytes outlen))
+      (define outlen2 (EVP_PKEY_derive ctx buf (bytes-length buf)))
+      (shrink-bytes buf outlen2))
     ))

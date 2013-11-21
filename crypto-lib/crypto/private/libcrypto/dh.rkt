@@ -67,15 +67,13 @@ TODO: support predefined DH params
 (define key-agree-impl<%>
   (interface ()
     generate-params  ;; sym ParamgenSpec -> key-agree-params<%>
-    read-params      ;; sym bytes -> key-agree-params<%>
-    ;; read-params+key  ;; sym (list bytes^3) -> key-agree-key<%>
+    read-params      ;; sym SerializedParams -> key-agree-params<%>
     ))
 
 (define key-agree-params<%>
   (interface ()
     generate-key     ;; sym KeygenSpec -> key-agree-key<%>
-    read-key         ;; sym (list bytes^2) -> key-agree-key<%>
-    write-params     ;; sym KeyFormat -> bytes
+    write-params     ;; sym KeyFormat -> SerializedParams
     ))
 
 (define key-agree-key<%>
@@ -83,41 +81,6 @@ TODO: support predefined DH params
     get-params       ;; -> key-agree-params<%>
     write-key        ;; sym KeyFormat -> (list bytes^3)
     compute-secret   ;; sym bytes -> bytes
-    ))
-
-(define allowed-dh-paramgen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?")
-    (generator ,(or/c 2 5) "(or/c 2 5)")))
-
-(define libcrypto-dh-impl%
-  (class* impl-base% (key-agree-impl<%>)
-    (super-new (spec 'dh))
-
-    (define/public (generate-params who config)
-      (check-keygen-spec who config allowed-dh-paramgen)
-      (let ([nbits (keygen-spec-ref config 'nbits)]
-            [generator (or (keygen-spec-ref config 'generator) 2)])
-        (define dh (DH_new))
-        (DH_generate_parameters_ex dh nbits generator)
-        ;; FIXME: DH_check ???
-
-        (eprintf "dh->privkey = ~e\n" (DH_st_prefix-privkey dh))
-        (eprintf "dh->pubkey = ~e\n" (DH_st_prefix-pubkey dh))
-
-        (new libcrypto-dh-params% (impl this) (dh dh))))
-
-    (define/public (read-params who buf fmt)
-      (unless (eq? fmt #f)
-        (error who "bad DH parameters format\n  format: ~e" fmt))
-      (define dh (d2i_DHparams buf (bytes-length buf)))
-      ;; FIXME: DH_check
-      (new libcrypto-dh-params% (impl this) (dh dh)))
-
-    (define/public (read-params+key who bufs fmt)
-      (unless (eq? fmt #f)
-        (error who "bad DH parameters and key format\n  format: ~e" fmt))
-      (define params (read-params who (car bufs) fmt))
-      (send params read-key who (cdr bufs) fmt))
     ))
 
 (define allowed-dh-keygen '())
@@ -147,14 +110,6 @@ TODO: support predefined DH params
       (BN-no-gc pubkey)
       (BN-no-gc privkey)
       (new libcrypto-dh-key% (impl impl) (dh kdh) (params this)))
-
-    (define/public (write-params who fmt)
-      (unless (eq? fmt #f)
-        (error who "bad DH parameters format\n  format: ~e" fmt))
-      (define len (i2d_DHparams dh #f))
-      (define buf (make-bytes len))
-      (define len2 (i2d_DHparams dh buf))
-      (shrink-bytes buf len2))
     ))
 
 (define libcrypto-dh-key%
