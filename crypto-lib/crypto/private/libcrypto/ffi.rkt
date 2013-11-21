@@ -584,6 +584,10 @@
   (_fun _EVP_PKEY _DSA -> _int)
   #:wrap (err-wrap/check 'EVP_PKEY_set1_DSA))
 
+(define-crypto EVP_PKEY_set1_EC_KEY
+  (_fun _EVP_PKEY _EC_KEY -> _int)
+  #:wrap (err-wrap/check 'EVP_PKEY_set1_EC))
+
 (define-crypto EVP_PKEY_get1_RSA
   (_fun _EVP_PKEY -> _RSA/null)
   #:wrap (compose (allocator RSA_free) (err-wrap/pointer 'EVP_PKEY_get1_RSA)))
@@ -591,6 +595,10 @@
 (define-crypto EVP_PKEY_get1_DSA
   (_fun _EVP_PKEY -> _DSA/null)
   #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'EVP_PKEY_get1_DSA)))
+
+(define-crypto EVP_PKEY_get1_EC_KEY
+  (_fun _EVP_PKEY -> _EC_KEY/null)
+  #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'EVP_PKEY_get1_EC_KEY)))
 
 (define-crypto EVP_PKEY_sign_init
   (_fun _EVP_PKEY_CTX -> _int)
@@ -677,3 +685,103 @@
         (len : _uint)
         -> _int)
   #:wrap (err-wrap/check 'RAND_pseudo_bytes))
+
+;; ============================================================
+;; EC
+
+(define-cpointer-type _EC_GROUP)
+(define-cpointer-type _EC_POINT)
+(define-cpointer-type _EC_KEY)
+
+(define-crypto EC_GROUP_free
+  (_fun _EC_GROUP -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EC_GROUP_dup
+  (_fun _EC_GROUP -> _EC_GROUP))
+
+(define-crypto EC_GROUP_get_degree
+  (_fun _EC_GROUP -> _int)
+  #:wrap (err-wrap 'EC_GROUP_get_degree positive?))
+
+(define-crypto EC_GROUP_new_by_curve_name
+  (_fun _int -> _EC_GROUP/null)
+  #:wrap (err-wrap/pointer 'EC_GROUP_new_by_curve_name))
+
+(define-crypto i2d_ECPKParameters
+  (_fun _EC_GROUP (_ptr i _pointer) -> _int)
+  #:wrap (err-wrap 'i2d_ECPKParameters positive?))
+
+(define-crypto d2i_ECPKParameters
+  (_fun (_pointer = #f) (_ptr i _pointer) _long
+        -> _EC_GROUP)
+  #:wrap (err-wrap/pointer 'd2i_ECPKParameters))
+
+(define-crypto EC_KEY_new
+  (_fun -> _EC_KEY/null)
+  #:wrap (err-wrap/pointer 'EC_KEY_new))
+
+(define-crypto EC_KEY_set_group
+  (_fun _EC_KEY _EC_GROUP -> _int)
+  #:wrap (err-wrap 'EC_KEY_set_group positive?))
+
+(define-crypto EC_KEY_get0_group
+  (_fun _EC_KEY -> _EC_GROUP/null)
+  #:wrap (err-wrap/pointer 'EC_KEY_get0_group))
+
+(define-crypto EC_KEY_generate_key
+  (_fun _EC_KEY -> _int)
+  #:wrap (err-wrap 'EC_KEY_generate_key positive?))
+
+(define-crypto ECDH_compute_key
+  (_fun _pointer _size _EC_POINT _EC_KEY (_fpointer = #f)
+        -> _int)
+  #:wrap (err-wrap 'ECDH_compute_key positive?))
+
+
+(define-crypto EC_POINT_free
+  (_fun _EC_POINT -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EC_POINT_new
+  (_fun _EC_GROUP -> _EC_POINT/null)
+  #:wrap (compose (allocator EC_POINT_free) (err-wrap/pointer 'EC_POINT_new)))
+
+(define-crypto EC_POINT_oct2point
+  (_fun _EC_GROUP _EC_POINT _pointer _size (_pointer = #f)
+        -> _int)
+  #:wrap (err-wrap 'EC_POINT_oct2point positive?))
+
+(define _point_conversion_form _int)
+(define POINT_CONVERSION_COMPRESSED 2)
+(define POINT_CONVERSION_UNCOMPRESSED 4)
+(define POINT_CONVERSION_HYBRID 6)
+
+(define-crypto EC_POINT_point2oct
+  (_fun _EC_GROUP _EC_POINT _point_conversion_form _pointer _size (_pointer = #f)
+        -> _size)
+  #:wrap (err-wrap 'EC_POINT_point2oct positive?))
+
+(define-crypto EC_KEY_get0_public_key
+  (_fun _EC_KEY -> _EC_POINT/null)
+  #:wrap (err-wrap/pointer 'EC_KEY_get0_public_key))
+
+(define-crypto EC_KEY_set_public_key
+  (_fun _EC_KEY _EC_POINT -> _int)
+  #:wrap (err-wrap 'EC_KEY_set_public_key positive?))
+
+(define-crypto EC_KEY_get0_private_key
+  (_fun _EC_KEY -> _BIGNUM/null)
+  #:wrap (err-wrap/pointer 'EC_KEY_get0_private_key))
+
+(define-crypto EC_KEY_set_private_key
+  (_fun _EC_KEY _BIGNUM -> _int)
+  #:wrap (err-wrap 'EC_KEY_set_private_key positive?))
+
+(define-cstruct _EC_builtin_curve
+  ([nid     _int]
+   [comment _string/utf-8]))
+
+(define-crypto EC_get_builtin_curves
+  (_fun _EC_builtin_curve-pointer/null _size -> _size))
+
