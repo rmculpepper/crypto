@@ -119,8 +119,10 @@ To print all ciphers:
 
     (define/override (get-pk* spec)
       (case spec
-        [(rsa) (new libcrypto-rsa-impl% (factory this) (spec spec))]
-        [(dsa) (new libcrypto-dsa-impl% (factory this) (spec spec))]
+        [(rsa) (new libcrypto-rsa-impl% (factory this))]
+        [(dsa) (new libcrypto-dsa-impl% (factory this))]
+        [(dh)  (new libcrypto-dh-impl%  (factory this))]
+        [(ec)  (new libcrypto-ec-impl%  (factory this))]
         [else #f]))
 
     (define random-impl #f)
