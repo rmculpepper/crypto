@@ -31,9 +31,18 @@ Key formats
  - SubjectPublicKeyInfo ({i2d,d2i}_PUBKEY) (public key only)
  - PKCS8 DER/PEM (private key only, optional encryption/password)
    - for DSA, format actually specified by PKCS11 v2.01 section 11.9
-
  - {i2d,d2i}_{Private,Public}Key uses *some* format, possibly ad hoc
    d2i needs to be told what kind of key expected
+ - {d2i,i2d}_{PublicKey,PrivateKey} doesn't seem to work on EC keys
+ - {d2i,i2d}_PUBKEY encodes key as SubjectPublicKeyInfo (ie, includes type of key)
+ - PKCS#8 might handle all kinds of private keys
+   - {d2i,i2d}_PKCS8_PRIV_KEY_INFO(...);
+   - EVP_PKEY *EVP_PKCS82PKEY(PKCS8_PRIV_KEY_INFO *p8);
+   - PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(EVP_PKEY *pkey);
+ - Nope, both PUBKEY and PKCS8_PRIV_KEY_INFO functions also crash on EC keys.
+ - ECPKParameters vs ECParameters
+   - according to http://www.faqs.org/rfcs/rfc3279.html:
+     ECPKParameters = CHOICE { ECParameters | ...}
 
 References:
  - https://groups.google.com/forum/#!topic/mailing.openssl.users/HsiN-8Lt0H8
@@ -51,21 +60,24 @@ Generating keys & params for testing:
   openssl dsa -inform pem -outform der -in dsa-512.key -out dsa-512.der
   (bytes->private-key dsai (file->bytes "dsa-512.der"))
 
+Key Agreement
+ - generate shared params => params%
+ - generate private key-part => key%
+ - compute shared secret from private key-part and public key-part (?) => bytes
+   - Note: result is biased, not uniform, so unsuitable as key!
+ - compute key from shared secret
+   - eg, use digest (see RFC 2631)
+
+TODO: check params (eg safe primes) on generate-params OR read-params
+
+TODO: support predefined DH params
+ - http://tools.ietf.org/html/rfc3526
+ - http://tools.ietf.org/html/rfc5114
+
 |#
 
 #|
-Key Formats
- - {d2i,i2d}_{PublicKey,PrivateKey} doesn't seem to work on EC keys
- - {d2i,i2d}_PUBKEY encodes key as SubjectPublicKeyInfo (ie, includes type of key)
- - PKCS#8 might handle all kinds of private keys
-   - {d2i,i2d}_PKCS8_PRIV_KEY_INFO(...);
-   - EVP_PKEY *EVP_PKCS82PKEY(PKCS8_PRIV_KEY_INFO *p8);
-   - PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(EVP_PKEY *pkey);
- - Nope, both PUBKEY and PKCS8_PRIV_KEY_INFO functions also crash on EC keys.
-
-ECPKParameters vs ECParameters
- - According to http://www.faqs.org/rfcs/rfc3279.html:
-   ECPKParameters = CHOICE { ECParameters | ...}
+Key Format
 
 The 'libcrypto key format:
 
@@ -90,6 +102,19 @@ The 'libcrypto params format:
    for 'dh:  params-bytes is PKCS#3 DHParameter
    for 'ec:  param-bytes is ECPKParameters (RFC 3279)
 
+|#
+
+#|
+;; Enumerate and describe all builtin elliptic curves.
+;; Is there a standard, canonical name for curves?
+;; Maybe NID => SN (short name) using OBJ_??? ?
+(define curve-count (EC_get_builtin_curves #f 0))
+(define ci0 (malloc curve-count _EC_builtin_curve 'atomic))
+(set! ci0 (cast ci0 _pointer _EC_builtin_curve-pointer))
+(EC_get_builtin_curves ci0 curve-count)
+(for/list ([i curve-count])
+  (define ci (ptr-add ci0 i _EC_builtin_curve))
+  (list (EC_builtin_curve-nid ci) (EC_builtin_curve-comment ci)))
 |#
 
 ;; ============================================================
