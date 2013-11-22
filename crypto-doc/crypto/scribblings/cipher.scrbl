@@ -94,6 +94,10 @@ multiple of the block size.
 
 Returns the size in bytes of the IV (initialization vector) used by
 the cipher. Returns @racket[0] if the cipher does not use an IV.
+
+This library uses a broad interpretation of the term ``IV''; for
+example, if @racket[ci] is a block cipher in CTR mode, this function
+returns the size of the counter.
 }
 
 @section{High-level Cipher Operations}
@@ -115,6 +119,8 @@ the cipher. Returns @racket[0] if the cipher does not use an IV.
 
 Encrypt or decrypt, respectively, using the secret @racket[key],
 initialization vector @racket[iv], and padding mode @racket[pad-mode].
+This @racket[iv] argument is the IV for CBC mode, the initial counters
+for CTR mode, etc.
 
 If @racket[input] is a string, it is converted to bytes using
 @racket[string->bytes/utf-8]. If @racket[input] is an input port, its

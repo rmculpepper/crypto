@@ -10,14 +10,17 @@
 
 @defmodule[crypto]
 
-This library provides a high-level interface for cryptographic
-operations.  To use this library you will need OpenSSL (0.9.8 or
-later) installed on your system.
+This library provides an interface for cryptographic operations,
+including message digests, symmetric-key encryption, and public-key
+signatures, encryption, and key agreement.
 
 @bold{Development} Development of this library is hosted by
 @hyperlink["http://github.com"]{GitHub} at the following project page:
 
 @centered{@url{https://github.com/rmculpepper/crypto}}
+
+@bold{Acknowledgements} This library is partly based on the
+@racketmodname[(planet vyzo/crypto)] library by Dimitris Vyzovitis.
 
 @bold{Copying} This program is free software: you can redistribute
 it and/or modify it under the terms of the

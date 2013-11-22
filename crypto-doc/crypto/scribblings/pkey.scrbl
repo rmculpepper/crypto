@@ -9,8 +9,9 @@
 
 @title[#:tag "pk"]{Public-Key Cryptography}
 
-Public-key cryptography (PK) covers operations such as message
-signing, encryption, and secret derivation between parties that do not
+Public-key (PK) cryptography covers operations such as
+@seclink["pk-sign"]{signing}, @seclink["pk-encrypt"]{encryption}, and
+@seclink["pk-keyagree"]{key agreement} between parties that do not
 start with any shared secrets. Instead of shared secrets, each party
 possesses a keypair consisting of a secret private key and a
 widely-published public key. Not all PK cryptosystems support all PK
@@ -18,41 +19,8 @@ operations (for example, DSA does not support encryption or secret
 derivation), and some PK implementations may support a subset of a PK
 cryptosystem's potential operations.
 
-In PK encryption, the sender uses the public key of the intented
-receiver to encrypt a message; the receiver decrypts the message with
-the receiver's own private key. Only short messages can be directly
-encrypted using PK cryptosystems (limits are generally proportional to
-the size of the PK keys), so a typical approach is to encrypt the
-message using a symmetric cipher with a randomly-generated key
-(sometimes called the bulk encryption key) and encrypt that key using
-PK cryptography. The symmetric-key-encrypted message and PK-encrypted
-symmetric key are sent together, perhaps with additional data such as
-a MAC. PK encryption is supported by the RSA and ElGamal
-cryptosystems.
 
-In PK signing, the sender uses their own private key to sign a
-message; any other party can verify the sender's signature using the
-sender's public key. As with PK encryption, only short messages can be
-directly signed using PK cryptosystems, so a typical approach is to
-compute a digest of the message and sign the digest. The message and
-digest signature are sent together, possibly with additional data. PK
-signing and verification is supported by the RSA, DSA, ECDSA, and
-ElGamal cryptosystems.
-
-In PK secret derivation, more often called ``key agreement'' or ``key
-exchange,'' two parties derive a shared secret by exchanging public
-keys. Each party can compute the secret from their own private key and
-the other's public key, but it is believed infeasible for an observer
-to compute the secret from the two public keys alone. The shared
-secret is a deterministic function of the private keys and it contains
-statistical biases; both properties make it unsuitable for use
-directly as a key. Instead, keys are derived from the shared secret,
-typically by applying a digest function to the secret and some
-combination of party identifiers, session data, and nonces. PK secret
-derivation is supported by the DH and ECDH cryptosystems.
-
-
-@section{Administrative PK Functions}
+@section[#:tag "pk-admin"]{Administrative PK Functions}
 
 @defproc[(pk-spec? [v any/c]) boolean?]{
 
@@ -78,12 +46,12 @@ Returns @racket[#t] if @racket[v] is a PK cryptosystem implementation,
 @deftogether[[
 @defproc[(pk-can-sign? [pk (or/c pk-impl? pk-key?)]) boolean?]
 @defproc[(pk-can-encrypt? [pk (or/c pk-impl? pk-key?)]) boolean?]
-@defproc[(pk-can-derive-secret? [pk (or/c pk-impl? pk-key?)]) boolean?]
+@defproc[(pk-can-key-agree? [pk (or/c pk-impl? pk-key?)]) boolean?]
 ]]{
 
 Indicates whether the cryptosystem implementation @racket[pk] (or the
 implementation corresponding to @racket[pk], if @racket[pk] is a key)
-supports signing, encryption, and secret derivation, respectively.
+supports signing, encryption, and key agreement, respectively.
 
 Note that the functions only report the capabilities of the
 cryptosystem implementation, regardless of the limitations of
@@ -100,14 +68,15 @@ more information.
 }
 
 
-@section[#:tag "pk-keys"]{PK Keys}
+@section[#:tag "pk-keys"]{PK Keys and Parameters}
 
 A PK keypair consists of public key component and private key
-components. A ``public key'' is a key that contains the public key
-components. In this library, a ``private key'' contains both private
-and public components, so it can also be used wherever a public key is
-required. This library uses the term ``public-only key'' to refer to a
-public key that is not a private key.
+components. A public key is a key that contains the public key
+components. In this library, a private key contains both private and
+public components, so it can also be used wherever a public key is
+required. That is, every private key is also a public key. This
+library uses the term ``public-only key'' to refer to a public key
+that is not a private key.
 
 In some PK cryptosystems, the public components are further divided
 into key-specific values and ``key parameters.'' Key parameters are
@@ -117,12 +86,11 @@ a DSA key requires a large prime with certain relatively rare
 mathematical properties, and so finding such a prime is relatively
 expensive, but once a suitable prime is found, generating private keys
 is relatively fast, and since the prime is public, many keypairs can
-use the same prime. Elliptic curve (EC) cryptosystems is another
-example: the parameter is the curve equation, and the public and
+use the same prime. Elliptic curve (EC) cryptography is another
+example: the key parameter is the curve equation, and the public and
 private key components are points on the curve. In contrast, RSA does
-not have key parameters (simple quantities like the size of an RSA
-modulus are not key parameters).
-
+not have key parameters; simple quantities like the size of an RSA
+modulus are not key parameters.
 
 @defproc[(pk-key? [v any/c]) boolean?]{
 
@@ -170,108 +138,36 @@ Returns a public-only key @racket[_pub-pk] such that
 public-only key, the function may simply return @racket[pk].
 }
 
-@defproc[(pk-parameters->sexpr [pkp pk-parameters?]
-                               [#:format params-format (or/c symbol? #f) #f])
-         printable/c]{
 
-Returns an S-expression representation of the key parameters
-@racket[pkp] using the parameters-format specifier
-@racket[params-format]. If @racket[params-format] is @racket[#f], then
-an implementation-dependent format is chosen. If @racket[pkp] does not
-support @racket[params-format], an exception is raised.
-
-A parameters-format specifier is one of the following:
-@itemlist[
-@item{@racket['libcrypto]: the S-expression is one of the following:
-      @itemlist[
-      @item{@racket[(list 'libcrypto 'dsa _der-bytes)]
-
-      DSA key parameters encoded as a bytestring (DER).}
-
-      @item{@racket[(list 'libcrypto 'ec _der-bytes)]
-
-      EC key parameters encoded as a RFC 3279 ECPKParameters value (DER).}
-
-      @item{@racket[(list 'libcrypto 'dh _der-bytes)]
-
-      DH key parameters encoded as a PKCS#3 DHParameter value (DER).}]}
-]
-
-More parameters-format specifiers may be added in future versions of
-this library.
-}
-
-@defproc[(sexpr->pk-parameters [pki pk-impl?] [sexpr printable/c])
+@defproc[(generate-pk-parameters [pki pk-impl?]
+                                 [paramgen-config (listof (list/c symbol? any/c)) '()])
          pk-parameters?]{
 
-Parses @racket[sexpr] and returns a key-parameters value associated
-with the @racket[pki] implementation. If @racket[pki] does not support
-the format of @racket[sexpr], an exception is raised.
+Generate PK parameter values for the cryptosystem of @racket[pki].
+
+@;{FIXME: document paramgen-config}
 }
 
-@defproc[(pk-key->sexpr [pk pk-key?]
-                        [#:format key-format (or/c symbol? #f) #f])
-         printable/c]{
+@defproc[(generate-private-key [pki (or/c pk-impl? pk-parameters?)]
+                               [keygen-config (listof (list/c symbol? any/c)) '()])
+         private-key?]{
 
-Returns an S-expression representation of the key @racket[pk] using
-the key-format specifier @racket[key-format]. If @racket[key-format]
-is @racket[#f], then an implementation-dependent format is chosen. If
-@racket[pk] does not support @racket[key-format], an exception is
-raised.
+Generate a private key from the given PK implementation or PK parameters.
 
-A key-format specifier is one of the following:
-@itemlist[
-@item{@racket['libcrypto]: the S-expression is one of the following:
-  @itemlist[
-  @item{@racket[(list 'libcrypto 'rsa 'public _der-bytes)]
-
-  RSA public key as SubjectPublicKeyInfo (DER).}
-
-  @item{@racket[(list 'libcrypto 'rsa 'private _der-bytes)]
-
-  RSA private key as PKCS#1 RSAPrivateKey (DER).}
-
-  @item{@racket[(list 'libcrypto 'dsa 'public _der-bytes)]
-
-  DSA public key as SubjectPublicKeyInfo (DER).}
-
-  @item{@racket[(list 'libcrypto 'dsa 'private _der-bytes)]
-
-  DSA private key (DER).}
-
-  @item{@racket[(list 'libcrypto 'ec 'public _ecpoint-bytes)]
-
-  EC public key as octet-string encoded EC point.}
-
-  @item{@racket[(list 'libcrypto 'ec 'private _der-bytes)]
-
-  EC private key as SEC1 ECPrivateKey (DER).}
-
-  @item{@racket[(list 'libcrypto 'dh 'public _param-bytes _pub-bytes)]
-
-  DH public key as separate PKCS#3 DHParameter (DER) and unsigned
-  base-256 encoding of the public key integer.}
-
-  @item{@racket[(list 'libcrypto 'dh 'private _param-bytes _pub-bytes _priv-bytes)]
-
-  DH private key, like public key but with additional unsigned
-  base-256 encoding of the private key integer.}
-  ]}
-]
-
-More key-format specifiers may be added in future versions of this library.
-}
-
-@defproc[(sexpr->pk-key [pki pk-impl?] [sexpr printable/c])
-         pk-key?]{
-
-Parses @racket[sexpr] and returns a PK key associated with the
-@racket[pki] implementation. If @racket[pki] does not support the
-format of @racket[sexpr], an exception is raised.
+@;{FIXME: document keygen-config}
 }
 
 
-@section{PK Operations}
+@section[#:tag "pk-sign"]{PK Signatures}
+
+In PK signing, the sender uses their own private key to sign a
+message; any other party can verify the sender's signature using the
+sender's public key. Only short messages can be directly signed using
+PK cryptosystems (limits are generally proportional to the size of the
+PK keys), so a typical process is to compute a digest of the message
+and sign the digest. The message and digest signature are sent
+together, possibly with additional data. PK signing and verification
+is supported by the RSA, DSA, ECDSA, and ElGamal cryptosystems.
 
 @defproc[(pk-sign-digest [pk private-key?]
                          [dgst bytes?] 
@@ -284,9 +180,9 @@ Returns the signature using the private key @racket[pk] of
 using digest function @racket[di].
 
 If @racket[pk] is an RSA private key, then @racket[padding] selects
-between PKCS#1-v1.5 and PSS. If @racket[padding] is @racket[#f], then
-an implementation-dependent mode is chosen. For all other
-cryptosystems, @racket[padding] must be @racket[#f].
+between PKCS#1-v1.5 and PSS @cite{PKCS1}. If @racket[padding] is
+@racket[#f], then an implementation-dependent mode is chosen. For all
+other cryptosystems, @racket[padding] must be @racket[#f].
 
 If @racket[di] is not a digest compatible with @racket[pk], or if the
 size of @racket[dgst] is not the digest size of @racket[di], or if the
@@ -324,6 +220,21 @@ Computes or verifies signature of the @racket[di] message digest of
 @racket[pk-sign-digest] or @racket[pk-verify-digest], respectively.
 }
 
+
+@section[#:tag "pk-encrypt"]{PK Encryption}
+
+In PK encryption, the sender uses the public key of the intented
+receiver to encrypt a message; the receiver decrypts the message with
+the receiver's own private key. Only short messages can be directly
+encrypted using PK cryptosystems (limits are generally proportional to
+the size of the PK keys), so a typical approach is to encrypt the
+message using a symmetric cipher with a randomly-generated key
+(sometimes called the bulk encryption key) and encrypt that key using
+PK cryptography. The symmetric-key-encrypted message and PK-encrypted
+symmetric key are sent together, perhaps with additional data such as
+a MAC. PK encryption is supported by the RSA and ElGamal
+cryptosystems.
+
 @deftogether[[
 @defproc[(pk-encrypt [pk pk-key?]
                      [msg bytes?]
@@ -339,15 +250,29 @@ Encrypt or decrypt, respectively, the message @racket[msg] using PK
 key @racket[pk].
 
 If @racket[pk] is an RSA key, then @racket[padding] choses between
-PKCS#1-v1.5 padding and OAEP padding. If @racket[padding] is
-@racket[#f], then an implementation-dependent mode is chosen. For all
-other cryptosystems, @racket[padding] must be @racket[#f].
+PKCS#1-v1.5 padding and OAEP padding @cite{PKCS1}. If @racket[padding]
+is @racket[#f], then an implementation-dependent mode is chosen. For
+all other cryptosystems, @racket[padding] must be @racket[#f].
 
 If @racket[msg] is too large to encrypt using @racket[pk], then an
 exception is raised.
 
 @;{FIXME: what if decryption fails???!!!}
 }
+
+@section[#:tag "pk-keyagree"]{PK Key Agreement}
+
+In PK key agreement (sometimes called key exchange) two parties derive
+a shared secret by exchanging public keys. Each party can compute the
+secret from their own private key and the other's public key, but it
+is believed infeasible for an observer to compute the secret from the
+two public keys alone. The shared secret is a deterministic function
+of the private keys and it contains statistical biases; both
+properties make it unsuitable for use directly as a key. Instead, keys
+are derived from the shared secret, typically by applying a digest
+function to the secret and some combination of party identifiers,
+session data, and nonces. PK secret derivation is supported by the DH
+and ECDH cryptosystems.
 
 @defproc[(pk-derive-secret [pk private-key?]
                            [peer-pk (or/c pk-key? bytes?)])
@@ -361,28 +286,144 @@ a bytestring, an exception is raised if it cannot be interpreted as
 public key data.
 
 Note that the secret is deterministic: if two parties perform secret
-derivation (``key agreement'') twice, they will produce the same
-secret both times. In addition, the secret is not uniformly
-distributed. For these reasons, the secret should not be used directly
-as a key; instead, it should be used to generate key material using a
-process such as described in RFC 2631.
+derivation twice, they will produce the same secret both times. In
+addition, the secret is not uniformly distributed. For these reasons,
+the secret should not be used directly as a key; instead, it should be
+used to generate key material using a process such as described in RFC
+2631 @cite{RFC2631}.
 }
 
+@section[#:tag "pk-external"]{PK External Representations}
 
-@defproc[(generate-pk-parameters [pki pk-impl?]
-                                 [paramgen-config (listof (list/c symbol? any/c)) '()])
+@defproc[(pk-parameters->sexpr [pkp pk-parameters?]
+                               [#:format params-format (or/c symbol? #f) #f])
+         printable/c]{
+
+Returns an S-expression representation of the key parameters
+@racket[pkp] using the parameters-format specified by
+@racket[params-format]. If @racket[params-format] is @racket[#f], then
+a format is chosen automatically. If @racket[pkp] does not support
+@racket[params-format], an exception is raised.
+
+A parameters-format is one of the following:
+@itemlist[
+@item{@racket['libcrypto]: the S-expression is one of the following:
+      @itemlist[
+      @item{@racket[(list 'libcrypto 'dsa _der-bytes)]
+
+      DSA key parameters encoded as DSS-Parms @cite{RFC2459} (DER).}
+
+      @item{@racket[(list 'libcrypto 'ec _der-bytes)]
+
+      EC key parameters encoded as ECPKParameters @cite{RFC3279} (DER).}
+
+      @item{@racket[(list 'libcrypto 'dh _der-bytes)]
+
+      DH key parameters encoded as DHParameter @cite{PKCS3} (DER).}]}
+]
+
+More parameters-formats may be added in future versions of
+this library.
+}
+
+@defproc[(sexpr->pk-parameters [pki pk-impl?] [sexpr printable/c])
          pk-parameters?]{
 
-Generate PK parameter values for the cryptosystem of @racket[pki].
-
-@;{FIXME: document paramgen-config}
+Parses @racket[sexpr] and returns a key-parameters value associated
+with the @racket[pki] implementation. If @racket[pki] does not support
+the format of @racket[sexpr], an exception is raised.
 }
 
-@defproc[(generate-private-key [pki (or/c pk-impl? pk-parameters?)]
-                               [keygen-config (listof (list/c symbol? any/c)) '()])
-         private-key?]{
+@defproc[(pk-key->sexpr [pk pk-key?]
+                        [#:format key-format (or/c symbol? #f) #f])
+         printable/c]{
 
-Generate a private key from the given PK implementation or PK parameters.
+Returns an S-expression representation of the key @racket[pk] using
+the key-format specified by @racket[key-format]. If
+@racket[key-format] is @racket[#f], then a format is chosen
+automatically. If @racket[pk] does not support @racket[key-format], an
+exception is raised.
 
-@;{FIXME: document keygen-config}
+A key-format is one of the following:
+@itemlist[
+@item{@racket['libcrypto]: the S-expression is one of the following:
+  @itemlist[
+  @item{@racket[(list 'libcrypto 'rsa 'public _der-bytes)]
+
+  RSA public key encoded as SubjectPublicKeyInfo @cite{RFC2459} (DER).}
+
+  @item{@racket[(list 'libcrypto 'rsa 'private _der-bytes)]
+
+  RSA private key encoded as (unencrypted) PrivateKeyInfo @cite{PKCS8} (DER).}
+
+  @item{@racket[(list 'libcrypto 'dsa 'public _der-bytes)]
+
+  DSA public key encoded as SubjectPublicKeyInfo @cite{RFC2459} (DER).}
+
+  @item{@racket[(list 'libcrypto 'dsa 'private _der-bytes)]
+
+  DSA private key encoded as (unencrypted) PrivateKeyInfo @cite{PKCS8} (DER).}
+
+  @item{@racket[(list 'libcrypto 'ec 'public _ecpoint-bytes)]
+
+  EC public key as octet-string encoded EC point.}
+
+  @item{@racket[(list 'libcrypto 'ec 'private _der-bytes)]
+
+  EC private key as ECPrivateKey @cite{SEC1} (DER).}
+
+  @item{@racket[(list 'libcrypto 'dh 'public _param-bytes _pub-bytes)]
+
+  DH public key as separate DHParameter @cite{PKCS3} (DER) and unsigned
+  base-256 encoding of the public key integer.}
+
+  @item{@racket[(list 'libcrypto 'dh 'private _param-bytes _pub-bytes _priv-bytes)]
+
+  DH private key, like public key but with additional unsigned
+  base-256 encoding of the private key integer.}
+  ]}
+]
+
+More key-formats may be added in future versions of this library.
 }
+
+@defproc[(sexpr->pk-key [pki pk-impl?] [sexpr printable/c])
+         pk-key?]{
+
+Parses @racket[sexpr] and returns a PK key associated with the
+@racket[pki] implementation. If @racket[pki] does not support the
+format of @racket[sexpr], an exception is raised.
+}
+        
+
+@bibliography[
+#:tag "pk-bibliography"
+
+@bib-entry[#:key "PKCS1"
+           #:title "PKCS #1: RSA Cryptography, version 2.1"
+           #:url "http://www.ietf.org/rfc/rfc3447.txt"]
+
+@bib-entry[#:key "PKCS3"
+           #:title "PKCS #3: Diffie-Hellman Key-Agreement Standard"
+           #:url "http://www.emc.com/emc-plus/rsa-labs/standards-initiatives/pkcs-3-diffie-hellman-key-agreement-standar.htm"]
+
+@bib-entry[#:key "PKCS8"
+           #:title "PKCS #8: Private-Key Information Syntax Specification, version 1.2"
+           #:url "http://www.ietf.org/rfc/rfc5208.txt"]
+
+@bib-entry[#:key "RFC2459"
+           #:title "RFC 2459: Internet X.509 Public Key Infrastructure: Certificate and CRL Profile"
+           #:url "http://www.ietf.org/rfc/rfc2459.txt"]
+
+@bib-entry[#:key "RFC2631"
+           #:title "RFC 2631: Diffie-Hellman Key Agreement Method"
+           #:url "http://www.ietf.org/rfc/rfc2631.txt"]
+
+@bib-entry[#:key "RFC3279"
+           #:title "RFC 3279: Algorithms and Identifiers for the Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile"
+           #:url "http://www.ietf.org/rfc/rfc3279.txt"]
+
+@bib-entry[#:key "SEC1"
+           #:title "SEC 1: Elliptic Curve Cryptography"
+           #:url "www.secg.org/download/aid-780/sec1-v2.pdf"]
+]

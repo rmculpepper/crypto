@@ -49,6 +49,12 @@ References:
  - http://openssl.6102.n7.nabble.com/difference-between-i2d-PUBKEY-and-i2d-PublicKey-td43869.html
  - http://www.openssl.org/docs/crypto/pem.html
 
+ - http://www.ietf.org/rfc/rfc2459.txt
+   encodings including SubjectPublicKeyInfo
+ - http://tools.ietf.org/html/rfc5480
+   Elliptic Curve Cryptography Subject Public Key Information
+
+
 Generating keys & params for testing:
 
   openssl genrsa -out rsa-512.key 512
