@@ -27,7 +27,9 @@
          factory-base%
          multikeylen-cipher-impl%
          whole-block-cipher-ctx%
+         get-impl*
          get-spec*
+         get-factory*
          get-random*
          shrink-bytes
          keygen-spec/c
@@ -242,36 +244,46 @@
 
 ;; ----
 
-(define (get-spec* src0)
+(define (get-impl* src0 [fail-ok? #f])
   (let loop ([src src0])
     (cond [(is-a? src impl<%>)
-           (send src get-spec)]
+           src]
           [(is-a? src ctx<%>)
            (loop (send src get-impl))]
-          [(or (symbol? src) (list? src))
-           src]
-          [else (error 'get-spec* "internal error: cannot get spec from: ~e" src0)])))
-
-(define (get-factory* who src0)
-  (let loop ([src src0])
-    (cond [(factory? src)
-           src]
-          [(is-a? src impl<%>)
-           (get-factory* who (send src get-factory))]
-          [(is-a? src ctx<%>)
-           (get-factory* who (send src get-impl))]
+          [fail-ok?
+           #f]
           [else
-           (error who "internal error: cannot get factory from: ~e" src0)])))
+           (error 'get-impl* "internal error: cannot get impl\n  from: ~e" src0)])))
 
-(define (get-random* who src0)
+(define (get-spec* src [fail-ok? #f])
+  (cond [(or (symbol? src) (list? src))
+         src]
+        [(get-impl* src #t)
+         => (lambda (i) (send i get-spec))]
+        [fail-ok?
+         #f]
+        [else
+         (error 'get-spec* "internal error: cannot get spec\n  from: ~e" src)]))
+
+(define (get-factory* src [fail-ok? #f])
+  (cond [(is-a? src factory<%>)
+         src]
+        [(get-impl* src #t)
+         => (lambda (i) (send i get-factory))]
+        [fail-ok?
+         #f]
+        [else
+         (error 'get-factory* "internal error: cannot get factory\n  from: ~e" src)]))
+
+(define (get-random* who src)
   (let ([random-impl
-         (if src0
-             (send (get-factory* who src0) get-random)
+         (if src
+             (send (get-factory* src) get-random)
              (get-random))])
     (or random-impl
         (error who "no source of randomness available~a"
-               (if src0
-                   (format "\n  from: ~e" src0)
+               (if src
+                   (format "\n  from: ~e" src)
                    "")))))
 
 (define (shrink-bytes bs len)

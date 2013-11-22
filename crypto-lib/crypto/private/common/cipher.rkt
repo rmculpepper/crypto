@@ -101,28 +101,20 @@
 
 ;; ----
 
-(define (-get-spec o)
-  (cond [(cipher-spec? o) o]
-        [(is-a? o cipher-impl<%>)
-         (send o get-spec)]
-        [(is-a? o cipher-ctx<%>)
-         (send (send o get-impl) get-spec)]))
-
 (define (-get-impl who o)
   (cond [(cipher-spec? o)
          (or (get-cipher o)
              (error who "could not get cipher implementation\n  cipher: ~e" o))]
-        [(is-a? o cipher-impl<%>) o]
-        [(is-a? o cipher-ctx<%>) (send o get-impl)]))
+        [else (get-impl* o)]))
 
 (define (cipher-default-key-size o)
-  (cipher-spec-default-key-size (-get-spec o)))
+  (cipher-spec-default-key-size (get-spec* o)))
 (define (cipher-key-sizes o)
-  (cipher-spec-key-sizes (-get-spec o)))
+  (cipher-spec-key-sizes (get-spec* o)))
 (define (cipher-block-size o)
-  (cipher-spec-block-size (-get-spec o)))
+  (cipher-spec-block-size (get-spec* o)))
 (define (cipher-iv-size o)
-  (cipher-spec-iv-size (-get-spec o)))
+  (cipher-spec-iv-size (get-spec* o)))
 
 ;; ----
 

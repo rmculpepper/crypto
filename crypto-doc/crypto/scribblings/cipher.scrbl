@@ -9,11 +9,11 @@
 
 @title[#:tag "cipher"]{Ciphers: Symmetric Encryption}
 
-A @deftech{cryptographic cipher} (or @deftech{symmetric-key encryption
-algorithm}) is a reversable function from variable-length messages to
-messages. The input is called the ``plaintext'' and the output is
-called the ``ciphertext''. For a good cipher, the ciphertext reveals
-no information about the contents of the plaintext (only its length or
+A cryptographic cipher (or symmetric-key encryption algorithm) is a
+reversable function from variable-length messages to messages. The
+input is called the ``plaintext'' and the output is called the
+``ciphertext.'' For a good cipher, the ciphertext reveals no
+information about the contents of the plaintext (only its length or
 approximate length); in particular, it is infeasible to compute the
 plaintext corresponding to a given ciphertext without knowing the
 secret key.
@@ -29,10 +29,10 @@ decryption operations and low-level, incremental operations.
 
 @defproc[(cipher-spec? [v any/c]) boolean?]{
 
-Returns @racket[#t] if @racket[v] represents a @tech{cipher
-specification}, @racket[#f] otherwise.
+Returns @racket[#t] if @racket[v] represents a cipher specifier,
+@racket[#f] otherwise.
 
-A @deftech{cipher specification} is one of the following:
+A cipher specifier is one of the following:
 @itemlist[
 
 @item{@racket[(list _stream-cipher 'stream)]---where
@@ -55,7 +55,7 @@ and @racket[_block-mode] is one of the following symbols:
 ]
 
 Future versions of this library may add more ciphers to the lists
-above and other forms of cipher specifications.
+above and other forms of cipher specifiers.
 }
 
 @defproc[(cipher-impl? [v any/c]) boolean?]{

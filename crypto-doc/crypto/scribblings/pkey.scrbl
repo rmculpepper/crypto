@@ -1,125 +1,388 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
+          racket/list
+          crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
                      crypto))
 
-@title[#:tag "pkey"]{Public Key Cryptography}
+@title[#:tag "pk"]{Public-Key Cryptography}
 
-@section{Algorithms and Keys}
+Public-key cryptography (PK) covers operations such as message
+signing, encryption, and secret derivation between parties that do not
+start with any shared secrets. Instead of shared secrets, each party
+possesses a keypair consisting of a secret private key and a
+widely-published public key. Not all PK cryptosystems support all PK
+operations (for example, DSA does not support encryption or secret
+derivation), and some PK implementations may support a subset of a PK
+cryptosystem's potential operations.
 
-A @scheme[<pkey>] is a first class object which captures public key algorithm 
-details. Key-pairs can be generated using @scheme[generate-key] with a 
-@scheme[<pkey>].
+In PK encryption, the sender uses the public key of the intented
+receiver to encrypt a message; the receiver decrypts the message with
+the receiver's own private key. Only short messages can be directly
+encrypted using PK cryptosystems (limits are generally proportional to
+the size of the PK keys), so a typical approach is to encrypt the
+message using a symmetric cipher with a randomly-generated key
+(sometimes called the bulk encryption key) and encrypt that key using
+PK cryptography. The symmetric-key-encrypted message and PK-encrypted
+symmetric key are sent together, perhaps with additional data such as
+a MAC. PK encryption is supported by the RSA and ElGamal
+cryptosystems.
 
-@deftogether[(
-@defthing[pkey:rsa <pkey>]
-@defthing[pkey:dsa <pkey>]
-)]{
-Builtin @scheme[<pkey>] algorithms.
+In PK signing, the sender uses their own private key to sign a
+message; any other party can verify the sender's signature using the
+sender's public key. As with PK encryption, only short messages can be
+directly signed using PK cryptosystems, so a typical approach is to
+compute a digest of the message and sign the digest. The message and
+digest signature are sent together, possibly with additional data. PK
+signing and verification is supported by the RSA, DSA, ECDSA, and
+ElGamal cryptosystems.
+
+In PK secret derivation, more often called ``key agreement'' or ``key
+exchange,'' two parties derive a shared secret by exchanging public
+keys. Each party can compute the secret from their own private key and
+the other's public key, but it is believed infeasible for an observer
+to compute the secret from the two public keys alone. The shared
+secret is a deterministic function of the private keys and it contains
+statistical biases; both properties make it unsuitable for use
+directly as a key. Instead, keys are derived from the shared secret,
+typically by applying a digest function to the secret and some
+combination of party identifiers, session data, and nonces. PK secret
+derivation is supported by the DH and ECDH cryptosystems.
+
+
+@section{Administrative PK Functions}
+
+@defproc[(pk-spec? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a PK cryptosystem specifier,
+@racket[#f] otherwise.
+
+A PK cryptosystem specifier is one of the following: @racket['rsa],
+@racket['dsa], @racket['dh], @racket['ec], or
+@racket['elgamal]. Strictly speaking, it specifies the information
+represented by the public and private keys and the algorithms that
+operate on that information. For example, @racket['rsa] specifies RSA
+keys with RSAES-* encryption algorithms and the RSASSA-* signature
+algorithms, and @racket['ec] specifies EC keys with ECDSA signing and
+ECDH secret derivation.
 }
 
-@defproc[(!pkey? (o _)) boolean?]{
-True if @scheme[o] is a @scheme[<pkey>].
+@defproc[(pk-impl? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a PK cryptosystem implementation,
+@racket[#f] otherwise.
 }
 
-@defproc[(pkey? (o _)) boolean?]{
-True if @scheme[o] is a public or private key.
+@deftogether[[
+@defproc[(pk-can-sign? [pk (or/c pk-impl? pk-key?)]) boolean?]
+@defproc[(pk-can-encrypt? [pk (or/c pk-impl? pk-key?)]) boolean?]
+@defproc[(pk-can-derive-secret? [pk (or/c pk-impl? pk-key?)]) boolean?]
+]]{
+
+Indicates whether the cryptosystem implementation @racket[pk] (or the
+implementation corresponding to @racket[pk], if @racket[pk] is a key)
+supports signing, encryption, and secret derivation, respectively.
+
+Note that the functions only report the capabilities of the
+cryptosystem implementation, regardless of the limitations of
+@racket[pk] if @racket[pk] is a key. For example,
+@racket[(pk-can-sign? pk)] would return true when @racket[pk] is an
+RSA public-only key, even though signing requires a private key.
 }
 
-@defproc[(pkey-private? (o pkey?)) boolean?]{
-True if @scheme[o] is a private key.
+@defproc[(pk-has-parameters? [pk (or/c pk-impl? pk-pkey?)]) boolean?]{
+
+Returns @racket[#f] if the PK cryptosystem represented by @racket[pk]
+uses key parameters, @racket[#f] otherwise. See @secref["pk-keys"] for
+more information.
 }
 
-@defproc[(pkey->public-key (o pkey?)) pkey?]{
-Extracts the public key component.
+
+@section[#:tag "pk-keys"]{PK Keys}
+
+A PK keypair consists of public key component and private key
+components. A ``public key'' is a key that contains the public key
+components. In this library, a ``private key'' contains both private
+and public components, so it can also be used wherever a public key is
+required. This library uses the term ``public-only key'' to refer to a
+public key that is not a private key.
+
+In some PK cryptosystems, the public components are further divided
+into key-specific values and ``key parameters.'' Key parameters are
+public quantities that are expensive to compute; they can be generated
+once and many keypairs can use the same parameter values. For example,
+a DSA key requires a large prime with certain relatively rare
+mathematical properties, and so finding such a prime is relatively
+expensive, but once a suitable prime is found, generating private keys
+is relatively fast, and since the prime is public, many keypairs can
+use the same prime. Elliptic curve (EC) cryptosystems is another
+example: the parameter is the curve equation, and the public and
+private key components are points on the curve. In contrast, RSA does
+not have key parameters (simple quantities like the size of an RSA
+modulus are not key parameters).
+
+
+@defproc[(pk-key? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a public key or a private key,
+@racket[#f] otherwise. Since all PK keys contain the public key
+components, @racket[pk-key?] is a predicate for public keys.
 }
 
-@deftogether[(
-@defproc[(public-key->bytes (o pkey?)) bytes?]
-@defproc[(private-key->bytes  (o pkey?)) bytes?]
-@defproc[(bytes->public-key (bs bytes?)) pkey?]
-@defproc[(bytes->private-key (bs bytes?)) pkey?]
-)]{
-Conversions between keys and bytes.
+@defproc[(private-key? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a private key.
 }
 
-@deftogether[(
-@defproc[(pkey-size (o pkey?)) exact-nonnegative-integer?]
-@defproc[(pkey-bits (o pkey?)) exact-nonnegative-integer?]
-)]{
-The size of a key in bytes and bits respectively.
+@defproc[(public-only-key? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a public key but not a private
+key, @racket[#f] otherwise. Equivalent to @racket[(and (pk-key? v)
+(not (private-key? v)))].
 }
 
-@defproc[(pkey=? (x pkey?) ...+) boolean?]{
-Key equality predicate.
+@defproc[(pk-parameters? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a value representing PK key
+parameters for some cryptosystem, @racket[#f] otherwise.
 }
 
-@section{Signatures}
+@defproc[(pk-key->parameters [pk pk-key?]) pk-parameters?]{
 
-@defproc[(sign (pk pkey?) (t <digest>) (data (or bytes? input-port?)))
-          bytes?]{
-Computes a signature, using the @emph{private} key @scheme[pk] and @scheme[t]
-as the digest type.
-
-@bold{Note}: As of openssl-0.9.8 only certain types of digests can be used
-with specific public key algorithms. Specifically, @scheme[pkey:rsa] keys
-can only sign using @scheme[sha*] and @scheme[ripemd160] as digests, 
-while @scheme[pkey:dsa] can only sign with @scheme[dss1] digests.
-
-This restriction has been removed in development versions of openssl (0.9.9).
+Returns a value representing the key parameters of @racket[pk], or
+@racket[#f] if @racket[pk]'s cryptosystem does not use key parameters.
 }
 
-@defproc[(verify (pk pkey?) (t <digest>) (sig bytes?) (data (or bytes? input-port?)))
+@defproc[(public-key=? [pk1 pk-key?] [pk2 pk-key?] ...) boolean?]{
+
+Returns @racket[#t] if the public key components of @racket[pk1] and
+@racket[pk2] are equal, @racket[#f] otherwise. One use of this
+function is to check whether a private key matches some public-only
+key.
+}
+
+@defproc[(pk-key->public-only-key [pk pk-key?]) public-only-key?]{
+
+Returns a public-only key @racket[_pub-pk] such that
+@racket[(public-key=? pk _pub-pk)]. If @racket[pk] is already a
+public-only key, the function may simply return @racket[pk].
+}
+
+@defproc[(pk-parameters->sexpr [pkp pk-parameters?]
+                               [#:format params-format (or/c symbol? #f) #f])
+         printable/c]{
+
+Returns an S-expression representation of the key parameters
+@racket[pkp] using the parameters-format specifier
+@racket[params-format]. If @racket[params-format] is @racket[#f], then
+an implementation-dependent format is chosen. If @racket[pkp] does not
+support @racket[params-format], an exception is raised.
+
+A parameters-format specifier is one of the following:
+@itemlist[
+@item{@racket['libcrypto]: the S-expression is one of the following:
+      @itemlist[
+      @item{@racket[(list 'libcrypto 'dsa _der-bytes)]
+
+      DSA key parameters encoded as a bytestring (DER).}
+
+      @item{@racket[(list 'libcrypto 'ec _der-bytes)]
+
+      EC key parameters encoded as a RFC 3279 ECPKParameters value (DER).}
+
+      @item{@racket[(list 'libcrypto 'dh _der-bytes)]
+
+      DH key parameters encoded as a PKCS#3 DHParameter value (DER).}]}
+]
+
+More parameters-format specifiers may be added in future versions of
+this library.
+}
+
+@defproc[(sexpr->pk-parameters [pki pk-impl?] [sexpr printable/c])
+         pk-parameters?]{
+
+Parses @racket[sexpr] and returns a key-parameters value associated
+with the @racket[pki] implementation. If @racket[pki] does not support
+the format of @racket[sexpr], an exception is raised.
+}
+
+@defproc[(pk-key->sexpr [pk pk-key?]
+                        [#:format key-format (or/c symbol? #f) #f])
+         printable/c]{
+
+Returns an S-expression representation of the key @racket[pk] using
+the key-format specifier @racket[key-format]. If @racket[key-format]
+is @racket[#f], then an implementation-dependent format is chosen. If
+@racket[pk] does not support @racket[key-format], an exception is
+raised.
+
+A key-format specifier is one of the following:
+@itemlist[
+@item{@racket['libcrypto]: the S-expression is one of the following:
+  @itemlist[
+  @item{@racket[(list 'libcrypto 'rsa 'public _der-bytes)]
+
+  RSA public key as SubjectPublicKeyInfo (DER).}
+
+  @item{@racket[(list 'libcrypto 'rsa 'private _der-bytes)]
+
+  RSA private key as PKCS#1 RSAPrivateKey (DER).}
+
+  @item{@racket[(list 'libcrypto 'dsa 'public _der-bytes)]
+
+  DSA public key as SubjectPublicKeyInfo (DER).}
+
+  @item{@racket[(list 'libcrypto 'dsa 'private _der-bytes)]
+
+  DSA private key (DER).}
+
+  @item{@racket[(list 'libcrypto 'ec 'public _ecpoint-bytes)]
+
+  EC public key as octet-string encoded EC point.}
+
+  @item{@racket[(list 'libcrypto 'ec 'private _der-bytes)]
+
+  EC private key as SEC1 ECPrivateKey (DER).}
+
+  @item{@racket[(list 'libcrypto 'dh 'public _param-bytes _pub-bytes)]
+
+  DH public key as separate PKCS#3 DHParameter (DER) and unsigned
+  base-256 encoding of the public key integer.}
+
+  @item{@racket[(list 'libcrypto 'dh 'private _param-bytes _pub-bytes _priv-bytes)]
+
+  DH private key, like public key but with additional unsigned
+  base-256 encoding of the private key integer.}
+  ]}
+]
+
+More key-format specifiers may be added in future versions of this library.
+}
+
+@defproc[(sexpr->pk-key [pki pk-impl?] [sexpr printable/c])
+         pk-key?]{
+
+Parses @racket[sexpr] and returns a PK key associated with the
+@racket[pki] implementation. If @racket[pki] does not support the
+format of @racket[sexpr], an exception is raised.
+}
+
+
+@section{PK Operations}
+
+@defproc[(pk-sign-digest [pk private-key?]
+                         [dgst bytes?] 
+                         [di (or/c digest-spec? digest-impl?)]
+                         [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
+         bytes?]{
+
+Returns the signature using the private key @racket[pk] of
+@racket[dgst] and metadata indicating that @racket[dgst] was computed
+using digest function @racket[di].
+
+If @racket[pk] is an RSA private key, then @racket[padding] selects
+between PKCS#1-v1.5 and PSS. If @racket[padding] is @racket[#f], then
+an implementation-dependent mode is chosen. For all other
+cryptosystems, @racket[padding] must be @racket[#f].
+
+If @racket[di] is not a digest compatible with @racket[pk], or if the
+size of @racket[dgst] is not the digest size of @racket[di], or if the
+digest size is too large for @racket[pk], then an exception is raised.
+}
+
+@defproc[(pk-verify-digest [pk pk-key?]
+                           [dgst bytes?] 
+                           [di (or/c digest-spec? digest-impl?)]
+                           [sig bytes?]
+                           [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
          boolean?]{
-Verifies a signature @scheme[sig], using the @emph{public} key @scheme[pk] and
-@scheme[t] as the digest type.
+
+Returns @racket[#t] if @racket[pk] verifies that @racket[sig] is a
+valid signature of the message digest @racket[dgst] using digest
+function @racket[di], or @racket[#f] if the signature is invalid.
 }
 
-@deftogether[(
-@defproc*[(
-[(digest-sign (dg digest?) (pk pkey?)) bytes?]
-[(digest-sign (dg digest?) (pk pkey?) (bs bytes?) 
-              (start exact-nonnegative-integer? 0)
-              (end exact-nonnegative-integer? (bytes-length bs)))
- exact-nonnegative-integer?]
-)]
-@defproc[(digest-verify (dg digest?) (pk pkey?) (bs bytes?)
-                        (start exact-nonnegative-integer? 0)
-                        (end exact-nonnegative-integer? (bytes-length bs)))
-          boolean?]
-)]{
-Signature and verification using digest contexts directly.
+@deftogether[[
+@defproc[(digest/sign [pk private-key?]
+                      [di (or/c digest-spec? digest-impl?)]
+                      [input (or/c bytes? string? input-port?)]
+                      [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
+         bytes?]
+@defproc[(digest/verify [pk pk-key?]
+                        [di (or/c digest-spec? digest-impl?)]
+                        [input (or/c bytes? string? input-port?)]
+                        [sig bytes?]
+                        [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
+         boolean?]
+]]{
+
+Computes or verifies signature of the @racket[di] message digest of
+@racket[input]; equivalent to calling @racket[digest] then
+@racket[pk-sign-digest] or @racket[pk-verify-digest], respectively.
 }
 
-@section{Encryption}
+@deftogether[[
+@defproc[(pk-encrypt [pk pk-key?]
+                     [msg bytes?]
+                     [#:pad padding (or/c #f 'pkcs1-v1.5 'oaep) #f])
+         bytes?]
+@defproc[(pk-decrypt [pk private-key?]
+                     [msg bytes?]
+                     [#:pad padding (or/c #f 'pkcs1-v1.5 'oaep) #f])
+         bytes?]
+]]{
 
-@deftogether[(
-@defproc[(encrypt/pkey (pk pkey?) (data bytes?)
-                       (start exact-nonnegative-integer? 0)
-                       (end exact-nonnegative-integer? (bytes-length data)))
-          bytes?]
-@defproc[(decrypt/pkey (pk pkey?) (data bytes?)
-                       (start exact-nonnegative-integer? 0)
-                       (end exact-nonnegative-integer? (bytes-length data)))
-          bytes?]
-)]{
-Encrypt and decrypt using a public/private key.
+Encrypt or decrypt, respectively, the message @racket[msg] using PK
+key @racket[pk].
+
+If @racket[pk] is an RSA key, then @racket[padding] choses between
+PKCS#1-v1.5 padding and OAEP padding. If @racket[padding] is
+@racket[#f], then an implementation-dependent mode is chosen. For all
+other cryptosystems, @racket[padding] must be @racket[#f].
+
+If @racket[msg] is too large to encrypt using @racket[pk], then an
+exception is raised.
+
+@;{FIXME: what if decryption fails???!!!}
 }
 
-@defproc[(encrypt/envelope (pk pkey?) (c <cipher>) (arg _) ...)
-         (values bytes? bytes? _ ...)]{
-Encrypt using @scheme[c] as the @scheme[<cipher>] with a random key
-sealed using the @emph{public} key @scheme[pkey].
+@defproc[(pk-derive-secret [pk private-key?]
+                           [peer-pk (or/c pk-key? bytes?)])
+         bytes?]{
 
-Returns the sealed key and iv for the cipher, prepended to the values
-returned by the nested @scheme[encrypt].
+Returns the shared secret derived from the private key @racket[pk] and
+the public key @racket[peer-pk]. If @racket[peer-pk] is a PK key, it
+must be a key belonging to the same cryptosystem and implementation as
+@racket[pk]; otherwise an exception is raised. If @racket[peer-pk] is
+a bytestring, an exception is raised if it cannot be interpreted as
+public key data.
+
+Note that the secret is deterministic: if two parties perform secret
+derivation (``key agreement'') twice, they will produce the same
+secret both times. In addition, the secret is not uniformly
+distributed. For these reasons, the secret should not be used directly
+as a key; instead, it should be used to generate key material using a
+process such as described in RFC 2631.
 }
 
-@defproc[(decrypt/envelope (pk pkey?) (c <cipher>) (sk bytes?) (iv bytes?)
-          (arg _) ...)
-         (values _ ...)]{
-Decrypt using @scheme[c] as the @scheme[<cipher>], using the 
-sealed key @scheme[sk] decrypted with the @emph{private} key @scheme[pk].
+
+@defproc[(generate-pk-parameters [pki pk-impl?]
+                                 [paramgen-config (listof (list/c symbol? any/c)) '()])
+         pk-parameters?]{
+
+Generate PK parameter values for the cryptosystem of @racket[pki].
+
+@;{FIXME: document paramgen-config}
+}
+
+@defproc[(generate-private-key [pki (or/c pk-impl? pk-parameters?)]
+                               [keygen-config (listof (list/c symbol? any/c)) '()])
+         private-key?]{
+
+Generate a private key from the given PK implementation or PK parameters.
+
+@;{FIXME: document keygen-config}
 }

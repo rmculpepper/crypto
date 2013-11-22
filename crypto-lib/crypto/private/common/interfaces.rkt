@@ -35,6 +35,8 @@
          cipher-impl?
          cipher-ctx?
          pk-impl?
+         pk-parameters?
+         pk-key?
          random-impl?)
 
 ;; ============================================================
@@ -168,6 +170,7 @@
     can-key-agree?  ;; -> boolean
     can-sign?       ;; -> boolean
     can-encrypt?    ;; -> boolean
+    has-params?     ;; -> boolean
     ))
 
 (define pk-params<%>
@@ -213,6 +216,8 @@
 ;; where only known keys are allowed (impl-specific).
 
 (define (pk-impl? x) (is-a? x pk-impl<%>))
+(define (pk-parameters? x) (is-a? x pk-params<%>))
+(define (pk-key? x) (is-a? x pk-key<%>))
 
 ;; ============================================================
 ;; Randomness

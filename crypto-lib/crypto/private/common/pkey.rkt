@@ -23,40 +23,46 @@
          "digest.rkt"
          "cipher.rkt")
 (provide
+ private-key?
+ public-only-key?
  (contract-out
-  [private-key?
-   (-> any/c boolean?)]
-  [public-key?
-   (-> any/c boolean?)]
-
   [pk-can-sign?
-   (-> pk-impl? boolean?)]
+   (-> (or/c pk-impl? pk-key?) boolean?)]
   [pk-can-encrypt?
-   (-> pk-impl? boolean?)]
-  [public-key=?
-   (->* [public-key?] [] #:rest (listof public-key?) boolean?)]
-  [key->public-key
-   (-> public-key? (and/c public-key? (not/c private-key?)))]
+   (-> (or/c pk-impl? pk-key?) boolean?)]
+  [pk-can-key-agree?
+   (-> (or/c pk-impl? pk-key?) boolean?)]
+  [pk-has-parameters?
+   (-> (or/c pk-impl? pk-key?) boolean?)]
 
-  [public-key->bytes
-   (->* [public-key?] [#:format key-format/c]
-        bytes?)]
-  [bytes->public-key
-   (->* [pk-impl? bytes?] [#:format key-format/c]
-       (and/c public-key? (not/c private-key?)))]
-  [private-key->bytes
-   (->* [private-key?] [#:format key-format/c]
-        bytes?)]
-  [bytes->private-key
-   (->* [pk-impl? bytes?] [#:format key-format/c]
-        private-key?)]
+  [pk-key->parameters
+   (-> pk-key? (or/c pk-parameters? #f))]
+
+  [public-key=?
+   (->* [pk-key?] [] #:rest (listof pk-key?) boolean?)]
+  [pk-key->public-only-key
+   (-> pk-key? public-only-key?)]
+
+  [pk-key->sexpr
+   (->* [pk-key?] [#:format key-format/c]
+        any/c)]
+  [sexpr->pk-key
+   (-> pk-impl? any/c
+       pk-key?)]
+
+  [pk-parameters->sexpr
+   (->* [pk-parameters?] [#:format key-format/c]
+        any/c)]
+  [sexpr->pk-parameters
+   (-> pk-impl? any/c
+       pk-parameters?)]
 
   [pk-sign-digest
    (->* [private-key? bytes? (or/c digest-spec? digest-impl?)]
         [#:pad  sign-pad/c]
         bytes?)]
   [pk-verify-digest
-   (->* [public-key? bytes? (or/c digest-spec? digest-impl?) bytes?]
+   (->* [pk-key? bytes? (or/c digest-spec? digest-impl?) bytes?]
         [#:pad sign-pad/c]
         boolean?)]
   [digest/sign
@@ -64,75 +70,86 @@
         [#:pad sign-pad/c]
         bytes?)]
   [digest/verify
-   (->* [public-key? (or/c digest-spec? digest-impl?) (or/c bytes? string? input-port?) bytes?]
+   (->* [pk-key? (or/c digest-spec? digest-impl?) (or/c bytes? string? input-port?) bytes?]
         [#:pad sign-pad/c]
         boolean?)]
 
   [pk-encrypt
-   (->* [public-key? bytes?] [#:pad encrypt-pad/c]
+   (->* [pk-key? bytes?] [#:pad encrypt-pad/c]
         bytes?)]
   [pk-decrypt
    (->* [private-key? bytes?] [#:pad encrypt-pad/c]
         bytes?)]
 
   ;; [encrypt-envelope
-  ;;  (-> public-key? (or/c cipher-spec? cipher-impl?) (or/c bytes? string? input-port?)
+  ;;  (-> pk-key? (or/c cipher-spec? cipher-impl?) (or/c bytes? string? input-port?)
   ;;      (values key/c iv/c bytes?))]
   ;; [decrypt-envelope
   ;;  (-> private-key? (or/c cipher-spec? cipher-impl?) key/c iv/c (or/c bytes? input-port?)
   ;;      bytes?)]
 
+  [pk-derive-secret
+   (-> private-key? (or/c pk-key? bytes?)
+       bytes?)]
+
   [generate-pk-parameters
-   (-> pk-impl? keygen-spec/c
-       pk-parameters?)]
+   (->* [pk-impl?] [keygen-spec/c]
+        pk-parameters?)]
   [generate-private-key
-   (-> (or/c pk-impl? pk-parameters?) keygen-spec/c
-       private-key?)]))
+   (->* [(or/c pk-impl? pk-parameters?)] [keygen-spec/c]
+        private-key?)]))
 
 (define nat? exact-nonnegative-integer?)
 (define key/c bytes?)
 (define iv/c (or/c bytes? #f))
 
 (define encrypt-pad/c
-  (or/c 'pkcs1 'oaep 'none #f))
+  (or/c 'pkcs1-v1.5 'oaep 'none #f))
 (define sign-pad/c
-  (or/c 'pkcs1 'pss 'none #f))
+  (or/c 'pkcs1-v1.5 'pss 'none #f))
 
 (define key-format/c
-  (or/c #f))
+  (or/c symbol? #f))
 
 ;; ============================================================
-
-(define (pk-parameters? x) (is-a? pk-params<%>))
 
 ;; A private key is really a keypair, including both private and public parts.
 ;; A public key contains only the public part.
 (define (private-key? x)
   (and (is-a? x pk-key<%>) (send x is-private?)))
-(define (public-key? x)
-  (and (is-a? x pk-key<%>) #t))
+(define (public-only-key? x)
+  (and (is-a? x pk-key<%>) (not (send x is-private?))))
 
 (define (pk-can-sign? pki)
-  (send pki can-sign?))
+  (send (get-impl* pki) can-sign?))
 (define (pk-can-encrypt? pki)
-  (send pki can-encrypt?))
+  (send (get-impl* pki) can-encrypt?))
+(define (pk-can-key-agree? pki)
+  (send (get-impl* pki) can-key-agree?))
+(define (pk-has-parameters? pki)
+  (send (get-impl* pki) has-parameters?))
+
+(define (pk-key->parameters pk)
+  (and (pk-has-parameters? pk)
+       (send pk get-params 'pk-key->parameters)))
 
 ;; Are the *public parts* of the given keys equal?
 (define (public-key=? k1 . ks)
   (for/and ([k (in-list ks)])
     (send k1 equal-to-key? k)))
 
-(define (bytes->private-key pki bs #:format [fmt #f])
-  (send pki read-key 'bytes->private-key bs 'private fmt))
-(define (bytes->public-key pki bs #:format [fmt #f])
-  (send pki read-key 'bytes->public-key bs 'public fmt))
-(define (private-key->bytes pk #:format [fmt #f])
-  (send pk write-key 'private-key->bytes 'private fmt))
-(define (public-key->bytes pk #:format [fmt #f])
-  (send pk write-key 'public-key->bytes 'public fmt))
+(define (pk-key->sexpr pk #:format [fmt #f])
+  (send pk write-key 'pk-key->sexpr fmt))
+(define (sexpr->pk-key pki sexpr)
+  (send pki read-key 'sexpr->pk-key sexpr))
 
-(define (key->public-key pk)
-  (send pk get-public-key 'key->public-key))
+(define (pk-parameters->sexpr pkp #:format [fmt #f])
+  (send pkp write-params 'pk-parameters->sexpr fmt))
+(define (sexpr->pk-parameters pki sexpr)
+  (send pki read-parameters 'sexpr->pk-parameters sexpr))
+
+(define (pk-key->public-only-key pk)
+  (send pk get-public-key 'pk-key->public-only-key))
 
 ;; ============================================================
 
@@ -173,6 +190,11 @@
 
 ;; (define (decrypt-envelope pk ci sk iv buf)
 ;;   (decrypt ci (pk-decrypt pk sk) iv buf))
+
+;; ============================================================
+
+(define (pk-derive-secret pk peer-key)
+  (send pk compute-secret 'pk-derive-secret peer-key))
 
 ;; ============================================================
 

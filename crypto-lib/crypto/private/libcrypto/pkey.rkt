@@ -237,14 +237,14 @@ The 'libcrypto params format:
     (define/public (*set-sign-padding who ctx pad)
       (EVP_PKEY_CTX_set_rsa_padding ctx
         (case pad
-          [(pkcs1) RSA_PKCS1_PADDING]
+          [(pkcs1-v1.5) RSA_PKCS1_PADDING]
           [(pss #f)   RSA_PKCS1_PSS_PADDING]
           [else (error who "bad RSA signing padding mode\n  padding: ~e" pad)])))
 
     (define/public (*set-encrypt-padding who ctx pad)
       (EVP_PKEY_CTX_set_rsa_padding ctx
         (case pad
-          [(pkcs1) RSA_PKCS1_PADDING]
+          [(pkcs1-v1.5) RSA_PKCS1_PADDING]
           [(oaep #f)  RSA_PKCS1_OAEP_PADDING]
           [else (error who "bad RSA encryption padding mode\n  padding: ~e" pad)])))
     ))

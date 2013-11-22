@@ -61,22 +61,16 @@
 (define (make-digest-ctx di)
   (send (-get-impl 'make-digest-ctx di) new-ctx))
 
-(define (-get-spec o)
-  (cond [(digest-spec? o) o]
-        [(is-a? o digest-impl<%>) (send o get-spec)]
-        [(is-a? o digest-ctx<%>) (send (send o get-impl) get-spec)]))
-
 (define (-get-impl who o)
   (cond [(digest-spec? o)
          (or (get-digest o)
              (error who "could not get digest implementation\n  digest: ~e" o))]
-        [(is-a? o digest-impl<%>) o]
-        [(is-a? o digest-ctx<%>) (send o get-impl)]))
+        [else (get-impl* o)]))
 
 (define (digest-size o)
-  (digest-spec-size (-get-spec o)))
+  (digest-spec-size (get-spec* o)))
 (define (digest-block-size o)
-  (digest-spec-block-size (-get-spec o)))
+  (digest-spec-block-size (get-spec* o)))
 
 ;; ----
 

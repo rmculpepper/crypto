@@ -9,14 +9,14 @@
 
 @title[#:tag "digest"]{Message Digests}
 
-A @deftech{message digest} function (sometimes called a
-@deftech{cryptographic hash} function) maps variable-length (and
-potentially long) messages to fixed-length (and relatively short)
-digests. @;{For a good digest function, it is infeasible to find a
-preimage of a given digest; that is, given an output, it is very hard
-to find a corresponding input.} Different digest functions, or
-algorithms, compute digests of different sizes and have different
-characteristics that may affect their security.
+A message digest function (sometimes called a cryptographic hash
+function) maps variable-length (and potentially long) messages to
+fixed-length (and relatively short) digests. @;{For a good digest
+function, it is infeasible to find a preimage of a given digest; that
+is, given an output, it is very hard to find a corresponding input.}
+Different digest functions, or algorithms, compute digests of
+different sizes and have different characteristics that may affect
+their security.
 
 @emph{Take care when choosing a digest for new development.}  Several
 of the digests listed available through this library are now
@@ -37,27 +37,27 @@ and low-level, incremental operations.
 
 @defproc[(digest-spec? [v any/c]) boolean?]{
 
-Returns @racket[#f] if @racket[v] represents a @tech{digest
-specification}, @racket[#f] otherwise.
+Returns @racket[#f] if @racket[v] represents a digest
+specifier, @racket[#f] otherwise.
 
-A @deftech{digest specification} is a symbol, which is interpreted as
-the name of a digest. The following symbols are valid:
+A digest specifier is a symbol, which is interpreted as the name of a
+digest. The following symbols are valid:
+
 @(let ([digest-names (sort (hash-keys known-digests) symbol<?)])
    (add-between (for/list ([digest-name digest-names])
                   (racket '#,(racketvalfont (format "~a" digest-name))))
                 ", ")).
 Not every digest name in the list above may have an available
-@tech[#:key "digest implementation"]{implementation}, depending on the
-cryptography providers installed.
+implementation, depending on the cryptography providers installed.
 
 Future versions of this library may add other forms of digest
-specifications.
+specifiers.
 }
 
 @defproc[(digest-impl? [v any/c]) boolean?]{
 
-Returns @racket[#f] if @racket[v] represents a @deftech{digest
-implementation}, @racket[#f] otherwise.
+Returns @racket[#f] if @racket[v] represents a digest implementation,
+@racket[#f] otherwise.
 }
 
 @defproc[(digest-size [di (or/c digest-spec? digest-impl? digest-ctx?)])
@@ -109,15 +109,15 @@ security of the key is limited to @racket[(digest-block-size di)].
 @defproc[(make-digest-ctx [di (or/c digest-spec? digest-impl?)])
          digest-ctx?]{
 
-Creates a @deftech{digest context} for the digest function represented
-by @racket[di]. A digest context can be incrementally updated with
+Creates a digest context for the digest function represented by
+@racket[di]. A digest context can be incrementally updated with
 message data.
 }
 
 @defproc[(digest-ctx? [v any/c]) boolean?]{
 
-Returns @racket[#t] if @racket[v] is a @tech{digest context},
-@racket[#f] otherwise.
+Returns @racket[#t] if @racket[v] is a digest context, @racket[#f]
+otherwise.
 }
 
 @defproc[(digest-update [dctx digest-ctx?]
