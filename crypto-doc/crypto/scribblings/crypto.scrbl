@@ -34,6 +34,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 General Public License and GNU Lesser General Public License for more
 details.
 
+@include-section["intro.scrbl"]
 @include-section["digest.scrbl"]
 @include-section["cipher.scrbl"]
 @include-section["pkey.scrbl"]
