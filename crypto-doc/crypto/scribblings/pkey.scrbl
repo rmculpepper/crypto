@@ -34,7 +34,7 @@ represented by the public and private keys and the algorithms that
 operate on that information. For example, @racket['rsa] specifies RSA
 keys with RSAES-* encryption algorithms and the RSASSA-* signature
 algorithms, and @racket['ec] specifies EC keys with ECDSA signing and
-ECDH secret derivation.
+ECDH key agreement.
 }
 
 @defproc[(pk-impl? [v any/c]) boolean?]{
