@@ -871,13 +871,17 @@
 ;; Random Numbers
 
 (define-crypto RAND_bytes
-  (_fun (buf : _pointer)
-        (len : _uint)
-        -> _int)
+  (_fun _pointer _int -> _int)
   #:wrap (err-wrap/check 'RAND_bytes))
 
-(define-crypto RAND_pseudo_bytes
-  (_fun (buf : _pointer)
-        (len : _uint)
-        -> _int)
-  #:wrap (err-wrap/check 'RAND_pseudo_bytes))
+(define-crypto RAND_status
+  (_fun -> _int))
+
+(define-crypto RAND_add
+  (_fun _pointer _int _double -> _void))
+
+(define-crypto RAND_load_file
+  (_fun _path _long -> _int))
+
+(define-crypto RAND_write_file
+  (_fun _path -> _int))

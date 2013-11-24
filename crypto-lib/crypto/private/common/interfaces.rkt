@@ -231,8 +231,13 @@
 (define random-impl<%>
   (interface (impl<%>)
     ;; get-spec          ;; -> 'random
-    random-bytes!        ;; sym bytes nat nat -> void
-    pseudo-random-bytes! ;; sym bytes nat nat -> void
+    random-bytes!        ;; sym bytes nat nat RandomLevel -> void
+
+    ok?                  ;; -> boolean
+    can-add-entropy?     ;; -> boolean
+    add-entropy          ;; sym bytes nat real -> void
     ))
+
+;; RandomLevel is one of 'strong, 'very-strong.
 
 (define (random-impl? x) (is-a? x random-impl<%>))

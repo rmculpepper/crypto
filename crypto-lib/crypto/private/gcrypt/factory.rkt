@@ -83,11 +83,12 @@
     (super-new)
     (define/public (get-spec) 'random)
     (define/public (get-factory) gcrypt-factory)
-    (define/public (random-bytes! who buf start end)
+    (define/public (random-bytes! who buf start end level)
       ;; FIXME: better mapping to quality levels
-      (gcry_randomize (ptr-add buf start) (- end start) GCRY_STRONG_RANDOM))
-    (define/public (pseudo-random-bytes! who buf start end)
-      (gcry_randomize (ptr-add buf start) (- end start) GCRY_STRONG_RANDOM))
+      (gcry_randomize (ptr-add buf start) (- end start)
+                      (case level
+                        [(very-strong) GCRY_VERY_STRONG_RANDOM]
+                        [else GCRY_STRONG_RANDOM])))
     ))
 
 (define gcrypt-random-impl (new gcrypt-random-impl%))

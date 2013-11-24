@@ -39,5 +39,6 @@ details.
 @include-section["digest.scrbl"]
 @include-section["cipher.scrbl"]
 @include-section["pkey.scrbl"]
+@include-section["random.scrbl"]
 @include-section["util.scrbl"]
 @include-section["examples.scrbl"]

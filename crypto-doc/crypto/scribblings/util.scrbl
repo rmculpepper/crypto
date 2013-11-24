@@ -36,26 +36,6 @@ the private @scheme[dh] key and the public key part for the exchange.
 @section{Randomness}
 
 @deftogether[(
-@defproc[(random-bytes (len exact-nonnegative-integer?)) bytes?]
-@defproc[(random-bytes! (o bytes?) 
-                        (start exact-nonnegative-integer? 0)
-                        (end exact-nonnegative-integer? (bytes-length o)))
-         bytes?]
-)]{
-Generate cryptographically secure random data.
-}
-
-@deftogether[(
-@defproc[(pseudo-random-bytes (len exact-nonnegative-integer?)) bytes?]
-@defproc[(pseudo-random-bytes! (o bytes?) 
-                               (start exact-nonnegative-integer? 0)
-                               (end exact-nonnegative-integer? (bytes-length o)))
-         bytes?]
-)]{
-Generate pseudorandom data (not cryptographically secure).
-}
-
-@deftogether[(
 @defproc[(random-rnd-status) boolean?]
 @defproc[(random-rnd-add (o bytes?)) _]
 @defproc[(random-rnd-seed (o bytes?)) _]

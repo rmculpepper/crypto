@@ -17,6 +17,7 @@
 #lang racket/base
 (require racket/class
          ffi/unsafe
+         ffi/file
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
@@ -26,9 +27,24 @@
 (define libcrypto-random-impl%
   (class* impl-base% (random-impl<%>)
     (super-new)
-    (define/public (random-bytes! who buf start end)
+    (define/public (random-bytes! who buf start end _level)
       (check-output-range who buf start end)
       (void (RAND_bytes (ptr-add buf start) (- end start))))
-    (define/public (pseudo-random-bytes! who buf start end)
-      (check-output-range who buf start end)
-      (void (RAND_pseudo_bytes (ptr-add buf start) (- end start))))))
+
+    (define/public (ok?)
+      (= (RAND_status) 1))
+
+    (define/public (can-add-entropy?) #t)
+
+    (define/public (add-entropy who buf entropy-in-bytes)
+      (void (RAND_add buf (bytes-length buf) entropy-in-bytes)))
+
+    (define/public (load-file file max-bytes)
+      (let ([max-bytes (if (= max-bytes +inf.0) -1 max-bytes)])
+        (security-guard-check-file 'rand-load-file file '(read))
+        (void (RAND_load_file file max-bytes))))
+
+    (define/public (rand-write-file file)
+      (security-guard-check-file 'rand-write-file file '(write))
+      (void (RAND_write_file file)))
+    ))

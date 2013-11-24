@@ -57,37 +57,41 @@ implementation.
 
 @defmodule[crypto/provider/libcrypto]
 
+@hyperlink["http://www.openssl.org/docs/crypto/crypto.html"]{Libcrypto}
+is the cryptography library component of OpenSSL. The necessary
+foreign library is typically part of the operating system or
+distributed with Racket.
+
 @defthing[libcrypto-factory crypto-factory?]{
 
-Factory for libcrypto, the cryptography library that is part of
-OpenSSL. The necessary foreign library is typically part of the
-operating system or distributed with Racket.
+Factory for libcrypto.
 }
 
 @section{GCrypt}
 
 @defmodule[crypto/provider/gcrypt]
 
+@hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt} is a
+cryptography library from the GNU project, originally part of GnuPG.
+
+The @tt{libgcrypt.so.11} foreign library is required.
+
 @defthing[gcrypt-factory crypto-factory?]{
 
-Factory for the GCrypt cryptography library.
+Factory for GCrypt.
 }
 
 @section{Nettle}
 
 @defmodule[crypto/provider/nettle]
 
+@hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle} is a
+cryptography library.
+
+The @tt{libnettle.so.4} foreign library is required.
+
 @defthing[nettle-factory crypto-factory?]{
 
-Factory for the Nettle cryptography library.
+Factory for Nettle.
 }
 
-
-@;{
-;; Doc the following in appropriate sections
-
-@defproc[(get-random [fs (or/c crypto-factory? (listof crypto-factory?)) (crypto-factories)])
-         random-impl?]{
-
-}
-}
