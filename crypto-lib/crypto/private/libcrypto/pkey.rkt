@@ -125,6 +125,98 @@ The 'libcrypto params format:
 
 ;; ============================================================
 
+(define libcrypto-read-key%
+  (class* impl-base% (pk-read-key<%>)
+    (inherit-field factory)
+    (super-new)
+
+    (define/public (read-key who sk)
+      (define-values (evp private?)
+        (match sk
+          ;; RSA, DSA private keys
+          [(list 'pkcs8 (or 'rsa 'dsa) 'private (? bytes? buf)) ;; PrivateKeyInfo
+           (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
+             (begin0 (EVP_PKCS82PKEY pkcs8info)
+               (values (PKCS8_PRIV_KEY_INFO_free pkcs8info) #t)))]
+          ;; RSA, DSA public keys (and maybe others too?)
+          [(list 'pkix (or 'rsa 'dsa) 'public (? bytes? buf)) ;; SubjectPublicKeyInfo
+           (values (d2i_PUBKEY buf (bytes-length buf)) #f)]
+          [(list 'sec1 'ec 'private (? bytes? buf)) ;; ECPrivateKey
+           (values (read-ec-key who #t buf) #t)]
+          [(list 'sec1 'ec 'public (? bytes? buf)) ;; ECPoint OCTET STRING
+           (values (read-ec-key who #f buf) #f)]
+          [(list 'libcrypto 'dh 'public (? bytes? params) (? bytes? pub))
+           (values (read-dh-key who params pub #f) #f)]
+          [(list 'libcrypto 'dh 'private (? bytes? params) (? bytes? pub) (? bytes? priv))
+           (values (read-dh-key who params pub priv) #t)]
+          [_ #f]))
+      (define impl (and evp (evp->impl evp)))
+      (and evp impl (new libcrypto-pk-key% (impl impl) (evp evp) (private? private?))))
+
+    (define/private (evp->impl evp)
+      (define type (EVP->type evp))
+      (define spec
+        (cond [(assoc type type=>spec) => cdr]
+              [else #f]))
+      (and spec (send factory get-pk spec)))
+
+    (define/private (read-dh-key who params-buf pub-buf priv-buf)
+      (define dh (d2i_DHparams params-buf (bytes-length params-buf)))
+      ;; FIXME: DH check
+      (when (or (DH_st_prefix-pubkey dh) (DH_st_prefix-privkey dh))
+        (error who "internal error; keys found in DH parameters object"))
+      (let ([pubkey (BN_bin2bn pub-buf)])
+        (set-DH_st_prefix-pubkey! dh pubkey)
+        (BN-no-gc pubkey))
+      (when priv-buf
+        (let ([privkey (BN_bin2bn priv-buf)])
+          (set-DH_st_prefix-privkey! dh privkey)
+          (BN-no-gc privkey)))
+      (define evp (EVP_PKEY_new))
+      (EVP_PKEY_set1_DH evp dh)
+      (DH_free dh)
+      evp)
+
+    (define/private (read-ec-key who private? buf)
+      (define ec
+        (cond [private? (d2i_ECPrivateKey buf (bytes-length buf))]
+              [else     (o2i_ECPublicKey buf (bytes-length buf))]))
+      (define evp (EVP_PKEY_new))
+      (EVP_PKEY_set1_EC_KEY evp ec)
+      (EC_KEY_free ec)
+      evp)
+
+    (define/public (read-params who sp)
+      (define evp
+        (match sp
+          [(list 'libcrypto 'dsa (? bytes? buf))
+           (define dsa (d2i_DSAparams buf (bytes-length buf)))
+           (define evp (EVP_PKEY_new))
+           (EVP_PKEY_set1_DSA evp dsa)
+           (DSA_free dsa)
+           evp]
+          [(list 'libcrypto 'dh (? bytes? buf))
+           (define dh (d2i_DHparams buf (bytes-length buf)))
+           ;; FIXME: DH_check
+           (define evp (EVP_PKEY_new))
+           (EVP_PKEY_set1_DH evp dh)
+           (DH_free dh)
+           evp]
+          [(list 'libcrypto 'ec (? bytes? buf))
+           (define group (d2i_ECPKParameters buf (bytes-length buf)))
+           ;; FIXME: check?
+           (define ec (EC_KEY_new group))
+           (EC_GROUP_free group)
+           (define evp (EVP_PKEY_new))
+           (EVP_PKEY_set1_EC_KEY evp ec)
+           (EC_KEY_free ec)
+           evp]))
+      (define impl (and evp (evp->impl evp)))
+      (new libcrypto-pk-params% (impl impl) (evp evp)))
+    ))
+
+;; ============================================================
+
 (define libcrypto-pk-impl%
   (class* impl-base% (pk-impl<%>)
     (inherit-field spec)
@@ -132,55 +224,24 @@ The 'libcrypto params format:
 
     (abstract pktype)
 
-    (define/public (read-key who sk)
-      (define (bad)
-        (error who "bad serialized key\n  algorithm: ~e\n  value: ~e" spec sk))
-      (define-values (evp private?)
-        (match sk
-          [(list 'libcrypto (? symbol? alg) 'private (? bytes? buf))
-           (unless (eq? alg spec) (bad))
-           (values (*read-key #t buf) #t)]
-          [(list 'libcrypto (? symbol? alg) 'public (? bytes? buf))
-           (unless (eq? alg spec) (bad))
-           (values (*read-key #f buf) #f)]
-          [_ (bad)]))
-      (new libcrypto-pk-key% (impl this) (evp evp) (private? private?)))
-
-    (define/private (*read-key who private? buf)
-      (cond [private?
-             ;; Two alternatives; keep them both around
-             (define (read-as-PrivateKey)
-               (d2i_PrivateKey (pktype) buf (bytes-length buf)))
-             (define (read-as-PKCS8Info)
-               (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
-                 (begin0 (EVP_PKCS82PKEY pkcs8info)
-                   (PKCS8_PRIV_KEY_INFO_free pkcs8info))))
-             (read-as-PKCS8Info)]
-            [else ;; public
-             ;; Two alternatives; keep them both around
-             (define (read-as-PublicKey)
-               (d2i_PublicKey (pktype) buf (bytes-length buf)))
-             (define (read-as-PUBKEY)
-               (d2i_PUBKEY buf (bytes-length buf)))
-             (read-as-PUBKEY)]))
-
     (define/public (*write-key who private? fmt evp)
       (cond [private?
-             (define pkcs8info (EVP_PKEY2PKCS8 evp))
-             (define outlen (i2d_PKCS8_PRIV_KEY_INFO pkcs8info #f))
-             (define outbuf (make-bytes outlen))
-             (define outlen2 (i2d_PKCS8_PRIV_KEY_INFO pkcs8info outbuf))
-             `(libcrypto ,spec private ,(shrink-bytes outbuf outlen2))]
-            [else
-             (define outlen (i2d_PUBKEY evp #f))
-             (define outbuf (make-bytes outlen))
-             (define outlen2 (i2d_PUBKEY evp outbuf))
-             `(libcrypto ,spec public ,(shrink-bytes outbuf outlen2))]))
+             (case fmt
+               [(pkcs8 #f)
+                (define pkcs8info (EVP_PKEY2PKCS8 evp))
+                `(pkcs8 ,spec private ,(i2d i2d_PKCS8_PRIV_KEY_INFO pkcs8info))]
+               [else
+                (error who "key format not supported\n  format: ~e" fmt)])]
+            [else ;; public
+             (case fmt
+               [(#f) ;; PUBKEY
+                (define outbuf (i2d_PUBKEY evp))
+                `(pkix ,spec public ,(i2d i2d_PUBKEY evp))]
+               [else
+                (error who "key format not supported\n  format: ~e" fmt)])]))
 
     (define/public (generate-key who config)
       (error who "algorithm does not support direct key generation\n  algorithm: ~e" spec))
-    (define/public (read-params who sp)
-      (error who "algorithm does not support parameters\n  algorithm: ~e" spec))
     (define/public (generate-params who config)
       (error who "algorithm does not support parameters\n  algorithm: ~e" spec))
     (define/public (can-encrypt?) #f)
@@ -268,16 +329,6 @@ The 'libcrypto params format:
     (define/override (pktype) EVP_PKEY_DSA)
     (define/override (can-sign?) #t)
 
-    (define/override (read-params who sp)
-      (match sp
-        [(list 'libcrypto 'dsa (? bytes? buf))
-         (define dsa (d2i_DSAparams buf (bytes-length buf)))
-         (define evp (EVP_PKEY_new))
-         (EVP_PKEY_set1_DSA evp dsa)
-         (DSA_free dsa)
-         (new libcrypto-pk-params% (impl this) (evp evp))]
-        [_ (error who "bad serialized parameters\n  algorithm: ~e\n  value: ~e" spec sp)]))
-
     (define/public (*write-params who fmt evp)
       (unless (memq fmt '(#f libcrypto))
         (error who "parameter format not supported\n  format: ~e" fmt))
@@ -352,43 +403,6 @@ The 'libcrypto params format:
         (DH_free dh)
         (new libcrypto-pk-params% (impl this) (evp evp))))
 
-    (define/override (read-params who sp)
-      (match sp
-        [(list 'libcrypto 'dh (? bytes? buf))
-         (define dh (d2i_DHparams buf (bytes-length buf)))
-         ;; FIXME: DH_check
-         (define evp (EVP_PKEY_new))
-         (EVP_PKEY_set1_DH evp dh)
-         (DH_free dh)
-         (new libcrypto-pk-params% (impl this) (evp evp))]
-        [_ (error who "bad serialized DH parameters\n  value: ~e" sp)]))
-
-    (define/override (read-key who sk)
-      (define (bad)
-        (error who "bad serialized key\n  algorithm: ~e\n  value: ~e" spec sk))
-      (define-values (params pub priv )
-        (match sk
-          [(list 'libcrypto 'dh 'private (? bytes? params) (? bytes? pub) (? bytes? priv))
-           (values params pub priv)]
-          [(list 'libcrypto 'dh 'public (? bytes? params) (? bytes? pub))
-           (values params pub #f)]
-          [else (bad)]))
-      (define dh (d2i_DHparams params (bytes-length params)))
-      ;; FIXME: DH check
-      (when (or (DH_st_prefix-pubkey dh) (DH_st_prefix-privkey dh))
-        (error who "internal error; keys found in DH parameters object"))
-      (let ([pubkey (BN_bin2bn pub)])
-        (set-DH_st_prefix-pubkey! dh pubkey)
-        (BN-no-gc pubkey))
-      (when priv
-        (let ([privkey (BN_bin2bn priv)])
-          (set-DH_st_prefix-privkey! dh privkey)
-          (BN-no-gc privkey)))
-      (define evp (EVP_PKEY_new))
-      (EVP_PKEY_set1_DH evp dh)
-      (DH_free dh)
-      (new libcrypto-pk-key% (impl this) (evp evp) (private? (and priv #t))))
-
     (define/public (*write-params who fmt evp)
       (unless (memq fmt '(#f libcrypto))
         (error who "parameter format not supported\n  format: ~e" fmt))
@@ -462,34 +476,6 @@ The 'libcrypto params format:
         (EC_KEY_free ec)
         (new libcrypto-pk-params% (impl this) (evp evp))))
 
-    (define/override (read-params who sp)
-      (match sp
-        [(list 'libcrypto 'ec (? bytes? buf))
-         (define group (d2i_ECPKParameters buf (bytes-length buf)))
-         ;; FIXME: check?
-         (define ec (EC_KEY_new group))
-         (EC_GROUP_free group)
-         (define evp (EVP_PKEY_new))
-         (EVP_PKEY_set1_EC_KEY evp ec)
-         (EC_KEY_free ec)
-         (new libcrypto-pk-params% (impl this) (evp evp))]
-        [_ (error who "bad serialized EC parameters\n  value: ~e" sp)]))
-
-    (define/override (read-key who sk)
-      (define (bad)
-        (error who "bad serialized key\n  algorithm: ~e\n  value: ~e" spec sk))
-      (define-values (ec private?)
-        (match sk
-          [(list 'libcrypto 'ec 'private (? bytes? buf))
-           (values (d2i_ECPrivateKey buf (bytes-length buf)) #t)]
-          [(list 'libcrypto 'ec 'public (? bytes? buf))
-           (values (o2i_ECPublicKey buf (bytes-length buf)) #f)]
-          [_ (bad)]))
-      (define evp (EVP_PKEY_new))
-      (EVP_PKEY_set1_EC_KEY evp ec)
-      (EC_KEY_free ec)
-      (new libcrypto-pk-key% (impl this) (evp evp) (private? private?)))
-
     (define/public (*write-params who fmt evp)
       (unless (memq fmt '(#f libcrypto))
         (error who "parameter format not supported\n  format: ~e" fmt))
@@ -502,6 +488,8 @@ The 'libcrypto params format:
       `(libcrypto ec ,(shrink-bytes buf len2)))
 
     (define/override (*write-key who private? fmt evp)
+      (unless (memq fmt '(#f libcrypto))
+        (error who "key format not supported\n  format: ~e" fmt))
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (cond [private?
              (define outlen (i2d_ECPrivateKey ec #f))
@@ -591,8 +579,6 @@ The 'libcrypto params format:
         (new libcrypto-pk-params% (impl impl) (evp pevp))))
 
     (define/public (write-key who write-priv? fmt)
-      (unless (memq fmt '(#f libcrypto))
-        (error who "key format not supported\n  format: ~e" fmt))
       (when (and write-priv? (not private?))
         (error who "cannot serialize public key as private"))
       #|

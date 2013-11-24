@@ -64,6 +64,19 @@ Returns @racket[#t] if @racket[v] represents a cipher implementation,
 @racket[#f] otherwise.
 }
 
+
+@defproc[(get-cipher [ci cipher-spec?]
+                     [factories (or/c crypto-factory? (listof crypto-factory?))
+                                (crypto-factories)])
+         (or/c cipher-impl? #f)]{
+
+Returns an implementation of cipher @racket[ci] from the given
+@racket[factories]. If no factory in @racket[factories] implements
+@racket[ci], returns @racket[#f].
+}
+
+
+
 @defproc[(cipher-default-key-size [ci (or/c cipher-spec? cipher-impl?)])
          exact-nonnegative-integer?]{
 

@@ -42,12 +42,11 @@ specifier, @racket[#f] otherwise.
 
 A digest specifier is a symbol, which is interpreted as the name of a
 digest. The following symbols are valid:
-
 @(let ([digest-names (sort (hash-keys known-digests) symbol<?)])
    (add-between (for/list ([digest-name digest-names])
                   (racket '#,(racketvalfont (format "~a" digest-name))))
                 ", ")).
-Not every digest name in the list above may have an available
+Not every digest name in the list above necessarily has an available
 implementation, depending on the cryptography providers installed.
 
 Future versions of this library may add other forms of digest
@@ -58,6 +57,16 @@ specifiers.
 
 Returns @racket[#f] if @racket[v] represents a digest implementation,
 @racket[#f] otherwise.
+}
+
+@defproc[(get-digest [di digest-spec?]
+                     [factories (or/c crypto-factory? (listof crypto-factory?))
+                                (crypto-factories)])
+         (or/c digest-impl? #f)]{
+
+Returns an implementation of digest @racket[di] from the given
+@racket[factories]. If no factory in @racket[factories] implements
+@racket[di], returns @racket[#f].
 }
 
 @defproc[(digest-size [di (or/c digest-spec? digest-impl? digest-ctx?)])
@@ -71,7 +80,7 @@ represented by @racket[di].
          exact-positive-integer?]{
 
 Returns the size in bytes of the digest's internal block size. This
-information is generally not needed by applications, but some
+information is usually not needed by applications, but some
 constructions (such as HMAC) are defined in terms of a digest
 function's block size.
 }

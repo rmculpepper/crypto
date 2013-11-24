@@ -20,7 +20,8 @@
          cipher-impl?
          cipher-ctx?
          get-random
-         random-impl?)
+         random-impl?
+         crypto-factories)
 
 (require (only-in "private/libcrypto/factory.rkt" libcrypto-factory)
          (only-in "private/gcrypt/factory.rkt" gcrypt-factory)

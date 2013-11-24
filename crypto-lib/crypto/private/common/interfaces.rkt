@@ -25,6 +25,7 @@
          cipher-impl<%>
          cipher-ctx<%>
          pk-impl<%>
+         pk-read-key<%>
          pk-params<%>
          pk-key<%>
          random-impl<%>
@@ -82,6 +83,7 @@
     get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
     get-pk      ;; symbol -> pk-impl<%>/#f
     get-random  ;; -> random-impl<%>/#f
+    get-pk-reader ;; -> pk-read-key<%>/#f
     ))
 
 (define (factory? x) (is-a? x factory<%>))
@@ -163,14 +165,18 @@
 
 (define pk-impl<%>
   (interface (impl<%>)
-    read-key        ;; sym SerializedKey -> pk-key<%>
-    read-params     ;; sym SerializedParams -> pk-params<%>
     generate-key    ;; sym GenKeySpec -> pk-key<%>
     generate-params ;; sym GenParamSpec -> pk-params<%>
     can-key-agree?  ;; -> boolean
     can-sign?       ;; -> boolean
     can-encrypt?    ;; -> boolean
     has-params?     ;; -> boolean
+    ))
+
+(define pk-read-key<%>
+  (interface (impl<%>)
+    read-key        ;; sym SerializedKey -> pk-key<%>
+    read-params     ;; sym SerializedParams -> pk-params<%>
     ))
 
 (define pk-params<%>

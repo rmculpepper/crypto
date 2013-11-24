@@ -266,13 +266,8 @@ In PK key agreement (sometimes called key exchange) two parties derive
 a shared secret by exchanging public keys. Each party can compute the
 secret from their own private key and the other's public key, but it
 is believed infeasible for an observer to compute the secret from the
-two public keys alone. The shared secret is a deterministic function
-of the private keys and it contains statistical biases; both
-properties make it unsuitable for use directly as a key. Instead, keys
-are derived from the shared secret, typically by applying a digest
-function to the secret and some combination of party identifiers,
-session data, and nonces. PK secret derivation is supported by the DH
-and ECDH cryptosystems.
+two public keys alone. PK secret derivation is supported by the DH and
+ECDH cryptosystems.
 
 @defproc[(pk-derive-secret [pk private-key?]
                            [peer-pk (or/c pk-key? bytes?)])
@@ -285,106 +280,61 @@ must be a key belonging to the same cryptosystem and implementation as
 a bytestring, an exception is raised if it cannot be interpreted as
 public key data.
 
-Note that the secret is deterministic: if two parties perform secret
-derivation twice, they will produce the same secret both times. In
-addition, the secret is not uniformly distributed. For these reasons,
-the secret should not be used directly as a key; instead, it should be
-used to generate key material using a process such as described in RFC
-2631 @cite{RFC2631}.
+Note that the derived secret is a deterministic function of the
+private keys: if two parties perform secret derivation twice, they
+will produce the same secret both times. In addition, the secret is
+not uniformly distributed. For these reasons, the derived secret
+should not be used directly as a key; instead, it should be used to
+generate key material using a process such as described in RFC 2631
+@cite{RFC2631}.
 }
 
 @section[#:tag "pk-external"]{PK External Representations}
 
-@defproc[(pk-parameters->sexpr [pkp pk-parameters?]
-                               [#:format params-format (or/c symbol? #f) #f])
+@defproc[(pk-key->sexpr [pk pk-key?])
          printable/c]{
 
-Returns an S-expression representation of the key parameters
-@racket[pkp] using the parameters-format specified by
-@racket[params-format]. If @racket[params-format] is @racket[#f], then
-a format is chosen automatically. If @racket[pkp] does not support
-@racket[params-format], an exception is raised.
+Returns an S-expression representation of the key @racket[pk]. The
+result has one of the following forms:
 
-A parameters-format is one of the following:
 @itemlist[
-@item{@racket['libcrypto]: the S-expression is one of the following:
-      @itemlist[
-      @item{@racket[(list 'libcrypto 'dsa _der-bytes)]
+@item{@racket[(list 'pkix 'rsa 'public _der-bytes)]
 
-      DSA key parameters encoded as DSS-Parms @cite{RFC2459} (DER).}
+RSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
 
-      @item{@racket[(list 'libcrypto 'ec _der-bytes)]
+@item{@racket[(list 'pkcs8 'rsa 'private _der-bytes)]
 
-      EC key parameters encoded as ECPKParameters @cite{RFC3279} (DER).}
+RSA private key as DER-encoded (unencrypted) PrivateKeyInfo @cite{PKCS8}.}
 
-      @item{@racket[(list 'libcrypto 'dh _der-bytes)]
+@item{@racket[(list 'pkix 'dsa 'public _der-bytes)]
 
-      DH key parameters encoded as DHParameter @cite{PKCS3} (DER).}]}
+DSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
+
+@item{@racket[(list 'pkcs8 'dsa 'private _der-bytes)]
+
+DSA private key as DER-encoded (unencrypted) PrivateKeyInfo @cite{PKCS8}.}
+
+@item{@racket[(list 'sec1 'ec 'public _ecpoint-bytes)]
+
+EC public-only key as octet-string-encoded ECPoint @cite{SEC1}.}
+
+@item{@racket[(list 'sec1 'ec 'private _der-bytes)]
+
+EC private key as DER-encoded ECPrivateKey @cite{SEC1}.}
+
+@item{@racket[(list 'libcrypto 'dh 'public _param-bytes _pub-bytes)]
+
+DH public-only key as separate DER-encoded DHParameter @cite{PKCS3} and unsigned
+base-256 encoding of the public integer.}
+
+@item{@racket[(list 'libcrypto 'dh 'private _param-bytes _pub-bytes _priv-bytes)]
+
+DH private key, like public-only key but with additional unsigned
+base-256 encoding of the private integer.}
 ]
 
-More parameters-formats may be added in future versions of
-this library.
-}
-
-@defproc[(sexpr->pk-parameters [pki pk-impl?] [sexpr printable/c])
-         pk-parameters?]{
-
-Parses @racket[sexpr] and returns a key-parameters value associated
-with the @racket[pki] implementation. If @racket[pki] does not support
-the format of @racket[sexpr], an exception is raised.
-}
-
-@defproc[(pk-key->sexpr [pk pk-key?]
-                        [#:format key-format (or/c symbol? #f) #f])
-         printable/c]{
-
-Returns an S-expression representation of the key @racket[pk] using
-the key-format specified by @racket[key-format]. If
-@racket[key-format] is @racket[#f], then a format is chosen
-automatically. If @racket[pk] does not support @racket[key-format], an
-exception is raised.
-
-A key-format is one of the following:
-@itemlist[
-@item{@racket['libcrypto]: the S-expression is one of the following:
-  @itemlist[
-  @item{@racket[(list 'libcrypto 'rsa 'public _der-bytes)]
-
-  RSA public key encoded as SubjectPublicKeyInfo @cite{RFC2459} (DER).}
-
-  @item{@racket[(list 'libcrypto 'rsa 'private _der-bytes)]
-
-  RSA private key encoded as (unencrypted) PrivateKeyInfo @cite{PKCS8} (DER).}
-
-  @item{@racket[(list 'libcrypto 'dsa 'public _der-bytes)]
-
-  DSA public key encoded as SubjectPublicKeyInfo @cite{RFC2459} (DER).}
-
-  @item{@racket[(list 'libcrypto 'dsa 'private _der-bytes)]
-
-  DSA private key encoded as (unencrypted) PrivateKeyInfo @cite{PKCS8} (DER).}
-
-  @item{@racket[(list 'libcrypto 'ec 'public _ecpoint-bytes)]
-
-  EC public key as octet-string encoded EC point.}
-
-  @item{@racket[(list 'libcrypto 'ec 'private _der-bytes)]
-
-  EC private key as ECPrivateKey @cite{SEC1} (DER).}
-
-  @item{@racket[(list 'libcrypto 'dh 'public _param-bytes _pub-bytes)]
-
-  DH public key as separate DHParameter @cite{PKCS3} (DER) and unsigned
-  base-256 encoding of the public key integer.}
-
-  @item{@racket[(list 'libcrypto 'dh 'private _param-bytes _pub-bytes _priv-bytes)]
-
-  DH private key, like public key but with additional unsigned
-  base-256 encoding of the private key integer.}
-  ]}
-]
-
-More key-formats may be added in future versions of this library.
+More formats may be added in future versions of this library, as
+well as options to select a preferred format.
 }
 
 @defproc[(sexpr->pk-key [pki pk-impl?] [sexpr printable/c])
@@ -393,6 +343,38 @@ More key-formats may be added in future versions of this library.
 Parses @racket[sexpr] and returns a PK key associated with the
 @racket[pki] implementation. If @racket[pki] does not support the
 format of @racket[sexpr], an exception is raised.
+}
+
+@defproc[(pk-parameters->sexpr [pkp pk-parameters?])
+         printable/c]{
+
+Returns an S-expression representation of the key parameters
+@racket[pkp]. The result has one of the following forms:
+
+@itemlist[
+@item{@racket[(list 'pkix 'dsa _der-bytes)]
+
+DSA key parameters encoded as DSS-Parms @cite{RFC2459} (DER).}
+
+@item{@racket[(list 'sec1 'ec _der-bytes)]
+
+EC key parameters encoded as ECDomainParameters @cite{SEC1} (DER).}
+
+@item{@racket[(list 'pkcs3 'dh _der-bytes)]
+
+DH key parameters encoded as DHParameter @cite{PKCS3} (DER).}
+]
+
+More formats may be added in future versions of this library, as well
+as options to select a preferred format.
+}
+
+@defproc[(sexpr->pk-parameters [pki pk-impl?] [sexpr printable/c])
+         pk-parameters?]{
+
+Parses @racket[sexpr] and returns a key-parameters value associated
+with the @racket[pki] implementation. If @racket[pki] does not support
+the format of @racket[sexpr], an exception is raised.
 }
         
 
@@ -425,5 +407,5 @@ format of @racket[sexpr], an exception is raised.
 
 @bib-entry[#:key "SEC1"
            #:title "SEC 1: Elliptic Curve Cryptography"
-           #:url "www.secg.org/download/aid-780/sec1-v2.pdf"]
+           #:url "http://www.secg.org/download/aid-780/sec1-v2.pdf"]
 ]

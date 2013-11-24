@@ -88,6 +88,14 @@
            (if info " " "")
            (or info ""))))
 
+(define (i2d i2d_Type x)
+  (define outlen (i2d_Type x #f))
+  (define outbuf (make-bytes outlen 0))
+  (define outlen2 (i2d_Type x outbuf))
+  (if (< outlen2 outlen)
+      (subbytes outbuf 0 outlen2)
+      outbuf))
+
 ;; ============================================================
 ;; Bignum
 
@@ -554,6 +562,12 @@
 (define EVP_PKEY_DH     28)
 (define EVP_PKEY_EC     408)
 
+(define type=>spec
+  '((6   . rsa)
+    (116 . dsa)
+    (28  . dh)
+    (408 . ec)))
+
 (define-crypto EVP_PKEY_free
   (_fun _EVP_PKEY -> _void)
   #:wrap (deallocator))
@@ -561,6 +575,10 @@
 (define-crypto EVP_PKEY_new
   (_fun -> _EVP_PKEY/null)
   #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'EVP_PKEY_new)))
+
+(define (EVP->type evp)
+  ;; Don't bother defining whole cstruct, since type is first field (ie, offset 0)
+  (EVP_PKEY_type (ptr-ref evp _int)))
 
 (define-crypto EVP_PKEY_CTX_free
   (_fun _EVP_PKEY_CTX -> _void)

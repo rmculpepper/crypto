@@ -100,6 +100,7 @@
                (hash-set! pk-table spec (or pki 'none))
                pki)]))
 
+    (define/public (get-pk-reader) #f)  ; -> pk-read-key<%>
     (define/public (get-random) #f)
 
     (define/public (get-digest* spec) #f) ;; -> (U #f DigestImpl)
