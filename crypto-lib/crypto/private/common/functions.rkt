@@ -17,8 +17,10 @@
 (require "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
+         "random.rkt"
          "util.rkt")
 (provide (all-from-out "digest.rkt")
          (all-from-out "cipher.rkt")
          (all-from-out "pkey.rkt")
+         (all-from-out "random.rkt")
          (all-from-out "util.rkt"))

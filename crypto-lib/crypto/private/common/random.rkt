@@ -29,7 +29,7 @@
   [random-can-add-entropy?
    (-> random-impl? boolean?)]
   [random-add-entropy
-   (->* [random-impl? bytes?] [entropy-in-bytes real?]
+   (->* [random-impl? bytes?] [real?]
         void?)]
   ))
 
@@ -53,4 +53,4 @@
            "entropy estimate out of range\n  range: [0,~s]\n  estimate: ~e"
            (bytes-length buf)
            entropy-in-bytes))
-  (send impl add-entropy 'random-add-entropy buf entropy-in-bytes))
+  (send ri add-entropy 'random-add-entropy buf entropy-in-bytes))

@@ -5,10 +5,12 @@
          "private/common/digest.rkt"
          "private/common/cipher.rkt"
          "private/common/pkey.rkt"
+         "private/common/random.rkt"
          "private/common/util.rkt")
 (provide (all-from-out "private/common/digest.rkt")
          (all-from-out "private/common/cipher.rkt")
          (all-from-out "private/common/pkey.rkt")
+         (all-from-out "private/common/random.rkt")
          (all-from-out "private/common/util.rkt")
          get-factory
          get-digest
@@ -22,16 +24,3 @@
          get-random
          random-impl?
          crypto-factories)
-
-(require (only-in "private/libcrypto/factory.rkt" libcrypto-factory)
-         (only-in "private/gcrypt/factory.rkt" gcrypt-factory)
-         (only-in "private/nettle/factory.rkt" nettle-factory))
-(provide libcrypto-factory
-         gcrypt-factory
-         nettle-factory)
-
-(crypto-factories
- (list* libcrypto-factory
-        nettle-factory
-        gcrypt-factory
-        (crypto-factories)))

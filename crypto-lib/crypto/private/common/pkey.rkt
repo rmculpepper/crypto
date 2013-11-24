@@ -198,8 +198,8 @@
 
 ;; ============================================================
 
-(define (generate-private-key pki config)
+(define (generate-private-key pki [config '()])
   (send pki generate-key 'generate-private-key config))
 
-(define (generate-pk-parameters pki config)
+(define (generate-pk-parameters pki [config '()])
   (send pki generate-params 'generate-pk-parameters config))

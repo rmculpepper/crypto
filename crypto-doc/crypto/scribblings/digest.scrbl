@@ -85,6 +85,13 @@ constructions (such as HMAC) are defined in terms of a digest
 function's block size.
 }
 
+@defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
+         bytes?]{
+
+Generate a random secret key appropriate for HMAC parameterized over
+digest @racket[di]. The length of the key is @racket[(digest-size di)].
+}
+
 
 @section{High-level Digest Functions}
 
@@ -109,9 +116,9 @@ is not closed.
 Like @racket[digest], but computes the HMAC of @racket[input]
 parameterized by digest @racket[di] using the secret key
 @racket[key]. The @racket[key] may be of any length, but the effective
-security of the key is limited to @racket[(digest-block-size di)].
+security of the key is limited to @racket[(digest-block-size di)]; a
+common key-length is @racket[(digest-size di)] @cite{HMAC}.
 }
-
 
 @section{Low-level Digest Functions}
 
@@ -171,9 +178,11 @@ parameterized over the digest @racket[di] and using the secret key
 @racket[key].
 }
 
-@defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
-         bytes?]{
+@bibliography[
+#:tag "digest-bibliography"
 
-Generate a random secret key appropriate for HMAC parameterized over
-digest @racket[di].
-}
+@bib-entry[#:key "HMAC"
+           #:title "RFC 2104: HMAC: Keyed-Hashing for Message Authentication"
+           #:url "http://www.ietf.org/rfc/rfc2104.txt"]
+
+]

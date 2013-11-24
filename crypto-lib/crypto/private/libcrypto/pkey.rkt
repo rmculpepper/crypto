@@ -247,6 +247,7 @@ The 'libcrypto params format:
     (define/public (can-encrypt?) #f)
     (define/public (can-sign?) #f)
     (define/public (can-key-agree?) #f)
+    (define/public (has-params?) #f)
     ))
 
 ;; ============================================================
@@ -328,6 +329,7 @@ The 'libcrypto params format:
 
     (define/override (pktype) EVP_PKEY_DSA)
     (define/override (can-sign?) #t)
+    (define/override (has-params?) #t)
 
     (define/public (*write-params who fmt evp)
       (unless (memq fmt '(#f libcrypto))
@@ -390,6 +392,7 @@ The 'libcrypto params format:
 
     (define/override (pktype) EVP_PKEY_DH)
     (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
 
     (define/override (generate-params who config)
       (check-keygen-spec who config allowed-dh-paramgen)
@@ -462,6 +465,7 @@ The 'libcrypto params format:
     (define/override (pktype) EVP_PKEY_EC)
     (define/override (can-sign?) #t)
     (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
 
     (define/override (generate-params who config)
       (check-keygen-spec who config allowed-ec-paramgen)

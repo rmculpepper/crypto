@@ -9,6 +9,17 @@ To Do
 - check synchronization & race conditions
 - check error reporting
 
+- securing key storage memory
+  - "zero memory when done with" (memset, variants of memset that don't get optimized away)
+  - advice: "don't swap key memory to disk" (gcry_malloc_secure, mlock)
+  - problems:
+    - GC can create copies (maybe malloc 'atomic-interior (non-moving) memory?)
+    - IO can create copies, eg read pkcs8 from file, decode... file buffer may linger
+  - partial solutions:
+    - make-crypto-bytes: malloc 'atomic-interior (non-moving), attach zeroing finalizer
+  - may need to create alt path that circumvents Racket code as much as possible
+  - alternative: write crypto core in C (or similar), bind to Racket
+
 - RSA
   - padding: use "RSAES-OAEP" for encryption, "RSASSA-PSS" for signing
     http://rdist.root.org/2009/10/06/why-rsa-encryption-padding-is-critical/

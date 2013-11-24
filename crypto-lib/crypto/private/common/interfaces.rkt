@@ -235,7 +235,7 @@
 
     ok?                  ;; -> boolean
     can-add-entropy?     ;; -> boolean
-    add-entropy          ;; sym bytes nat real -> void
+    add-entropy          ;; sym bytes real -> void
     ))
 
 ;; RandomLevel is one of 'strong, 'very-strong.
