@@ -21,19 +21,20 @@
          "catalog.rkt"
          "common.rkt"
          "digest.rkt"
-         "cipher.rkt")
+         ;; "cipher.rkt"
+         "factory.rkt")
 (provide
  private-key?
  public-only-key?
  (contract-out
   [pk-can-sign?
-   (-> (or/c pk-impl? pk-key?) boolean?)]
+   (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
   [pk-can-encrypt?
-   (-> (or/c pk-impl? pk-key?) boolean?)]
+   (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
   [pk-can-key-agree?
-   (-> (or/c pk-impl? pk-key?) boolean?)]
+   (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
   [pk-has-parameters?
-   (-> (or/c pk-impl? pk-key?) boolean?)]
+   (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
 
   [pk-key->parameters
    (-> pk-key? (or/c pk-parameters? #f))]
@@ -44,25 +45,23 @@
    (-> pk-key? public-only-key?)]
 
   [pk-key->sexpr
-   (->* [pk-key?] [#:format key-format/c]
-        any/c)]
+   (-> pk-key? any/c)]
   [sexpr->pk-key
-   (-> pk-impl? any/c
-       pk-key?)]
+   (->* [any/c] [(or/c crypto-factory? (listof crypto-factory?))]
+        pk-key?)]
 
   [pk-parameters->sexpr
-   (->* [pk-parameters?] [#:format key-format/c]
-        any/c)]
+   (-> pk-parameters? any/c)]
   [sexpr->pk-parameters
-   (-> pk-impl? any/c
-       pk-parameters?)]
+   (->* [any/c] [(or/c crypto-factory? (listof crypto-factory?))]
+        pk-parameters?)]
 
   [pk-sign-digest
-   (->* [private-key? bytes? (or/c digest-spec? digest-impl?)]
+   (->* [private-key? (or/c digest-spec? digest-impl?) bytes?]
         [#:pad  sign-pad/c]
         bytes?)]
   [pk-verify-digest
-   (->* [pk-key? bytes? (or/c digest-spec? digest-impl?) bytes?]
+   (->* [pk-key? (or/c digest-spec? digest-impl?) bytes? bytes?]
         [#:pad sign-pad/c]
         boolean?)]
   [digest/sign
@@ -93,10 +92,10 @@
        bytes?)]
 
   [generate-pk-parameters
-   (->* [pk-impl?] [keygen-spec/c]
+   (->* [(or/c pk-spec? pk-impl?)] [keygen-spec/c]
         pk-parameters?)]
   [generate-private-key
-   (->* [(or/c pk-impl? pk-parameters?)] [keygen-spec/c]
+   (->* [(or/c pk-spec? pk-impl? pk-parameters?)] [keygen-spec/c]
         private-key?)]))
 
 (define nat? exact-nonnegative-integer?)
@@ -121,13 +120,21 @@
   (and (is-a? x pk-key<%>) (not (send x is-private?))))
 
 (define (pk-can-sign? pki)
-  (send (get-impl* pki) can-sign?))
+  (cond [(pk-spec? pki)
+         (pk-spec-can-sign? pki)]
+        [else (send (get-impl* pki) can-sign?)]))
 (define (pk-can-encrypt? pki)
-  (send (get-impl* pki) can-encrypt?))
+  (cond [(pk-spec? pki)
+         (pk-spec-can-encrypt? pki)]
+        [else (send (get-impl* pki) can-encrypt?)]))
 (define (pk-can-key-agree? pki)
-  (send (get-impl* pki) can-key-agree?))
+  (cond [(pk-spec? pki)
+         (pk-spec-can-key-agree? pki)]
+        [else (send (get-impl* pki) can-key-agree?)]))
 (define (pk-has-parameters? pki)
-  (send (get-impl* pki) has-parameters?))
+  (cond [(pk-spec? pki)
+         (pk-spec-has-parameters? pki)]
+        [else (send (get-impl* pki) has-parameters?)]))
 
 (define (pk-key->parameters pk)
   (and (pk-has-parameters? pk)
@@ -138,26 +145,32 @@
   (for/and ([k (in-list ks)])
     (send k1 equal-to-key? k)))
 
-(define (pk-key->sexpr pk #:format [fmt #f])
-  (send pk write-key 'pk-key->sexpr fmt))
-(define (sexpr->pk-key pki sexpr)
-  (send pki read-key 'sexpr->pk-key sexpr))
+(define (pk-key->sexpr pk)
+  (send pk write-key 'pk-key->sexpr #f))
+(define (sexpr->pk-key sexpr [factory/s (crypto-factories)])
+  (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
+        (let ([reader (send factory get-key-reader)])
+          (and reader (send reader read-key 'sexpr->pk-key sexpr)))) 
+      (error 'sexpr->pk-key "unable to read key\n  key: ~e" sexpr)))
 
-(define (pk-parameters->sexpr pkp #:format [fmt #f])
-  (send pkp write-params 'pk-parameters->sexpr fmt))
-(define (sexpr->pk-parameters pki sexpr)
-  (send pki read-parameters 'sexpr->pk-parameters sexpr))
+(define (pk-parameters->sexpr pkp)
+  (send pkp write-params 'pk-parameters->sexpr #f))
+(define (sexpr->pk-parameters sexpr [factory/s (crypto-factories)])
+  (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
+        (let ([reader (send factory get-key-reader)])
+          (and reader (send reader read-params 'sexpr->pk-parameters sexpr)))) 
+      (error 'sexpr->pk-parameters "unable to read parameters\n  key: ~e" sexpr)))
 
 (define (pk-key->public-only-key pk)
   (send pk get-public-key 'pk-key->public-only-key))
 
 ;; ============================================================
 
-(define (pk-sign-digest pk dbuf di #:pad [pad #f])
+(define (pk-sign-digest pk di dbuf #:pad [pad #f])
   (let ([di (get-spec* di)])
     (send pk sign 'pk-sign-digest dbuf di pad)))
 
-(define (pk-verify-digest pk dbuf di sig #:pad [pad #f])
+(define (pk-verify-digest pk di dbuf sig #:pad [pad #f])
   (let ([di (get-spec* di)])
     (send pk verify 'pk-verify-digest dbuf di pad sig)))
 
@@ -198,8 +211,17 @@
 
 ;; ============================================================
 
+(define (-get-impl who pki)
+  (cond [(pk-spec? pki)
+         (or (get-pk pki)
+             (error 'generate-private-key
+                    "could not get pk implementation\n  PK algorithm: ~e" pki))]
+        [else pki]))
+
 (define (generate-private-key pki [config '()])
-  (send pki generate-key 'generate-private-key config))
+  (let ([pki (-get-impl 'generate-private-key pki)])
+    (send pki generate-key 'generate-private-key config)))
 
 (define (generate-pk-parameters pki [config '()])
-  (send pki generate-params 'generate-pk-parameters config))
+  (let ([pki (-get-impl 'generate-pk-parameters pki)])
+    (send pki generate-params 'generate-pk-parameters config)))

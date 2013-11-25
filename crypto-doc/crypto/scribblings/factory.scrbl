@@ -58,9 +58,8 @@ implementation.
 @defmodule[crypto/provider/libcrypto]
 
 @hyperlink["http://www.openssl.org/docs/crypto/crypto.html"]{Libcrypto}
-is the cryptography library component of OpenSSL. The necessary
-foreign library is typically part of the operating system or
-distributed with Racket.
+is the cryptography library of OpenSSL. The necessary foreign library
+is typically part of the operating system or distributed with Racket.
 
 @defthing[libcrypto-factory crypto-factory?]{
 

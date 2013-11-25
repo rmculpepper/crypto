@@ -263,3 +263,24 @@
       (match (assq mode known-block-modes)
         [(list _ _ _ effective-mode _)
          (eq? effective-mode 'block)])))
+
+;; ============================================================
+;; PK
+
+(define known-pk
+  '#hasheq([rsa . (sign encrypt)]
+           [dsa . (sign params)]
+           [dh  . (key-agree params)]
+           [ec  . (sign key-agree params)]))
+
+(define (pk-spec? x)
+  (and (hash-ref known-pk x #f) #t))
+
+(define (pk-spec-can-sign? pk)
+  (and (memq 'sign (hash-ref known-pk pk '())) #t))
+(define (pk-spec-can-encrypt? pk)
+  (and (memq 'encrypt (hash-ref known-pk pk '())) #t))
+(define (pk-spec-can-key-agree? pk)
+  (and (memq 'key-agree (hash-ref known-pk pk '())) #t))
+(define (pk-spec-has-parameters? pk)
+  (and (memq 'params (hash-ref known-pk pk '())) #t))

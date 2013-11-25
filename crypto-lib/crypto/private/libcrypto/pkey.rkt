@@ -134,6 +134,10 @@ The 'libcrypto params format:
       (define-values (evp private?)
         (match sk
           ;; RSA, DSA private keys
+          [(list 'pkcs1 'rsa 'private (? bytes? buf))
+           (d2i_PrivateKey EVP_PKEY_RSA buf (bytes-length buf))]
+          [(list 'libcrypto 'dsa 'private (? bytes? buf))
+           (d2i_PrivateKey EVP_PKEY_DSA buf (bytes-length buf))]
           [(list 'pkcs8 (or 'rsa 'dsa) 'private (? bytes? buf)) ;; PrivateKeyInfo
            (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
              (begin0 (EVP_PKCS82PKEY pkcs8info)
@@ -205,7 +209,8 @@ The 'libcrypto params format:
           [(list 'libcrypto 'ec (? bytes? buf))
            (define group (d2i_ECPKParameters buf (bytes-length buf)))
            ;; FIXME: check?
-           (define ec (EC_KEY_new group))
+           (define ec (EC_KEY_new))
+           (EC_KEY_set_group ec group)
            (EC_GROUP_free group)
            (define evp (EVP_PKEY_new))
            (EVP_PKEY_set1_EC_KEY evp ec)
@@ -228,6 +233,8 @@ The 'libcrypto params format:
       (cond [private?
              (case fmt
                [(pkcs8 #f)
+                ;; FIXME: doesn't seem to work!
+                ;; Writing RSA key gives only 3 non-NUL bytes at beginning.
                 (define pkcs8info (EVP_PKEY2PKCS8 evp))
                 `(pkcs8 ,spec private ,(i2d i2d_PKCS8_PRIV_KEY_INFO pkcs8info))]
                [else
@@ -235,7 +242,6 @@ The 'libcrypto params format:
             [else ;; public
              (case fmt
                [(#f) ;; PUBKEY
-                (define outbuf (i2d_PUBKEY evp))
                 `(pkix ,spec public ,(i2d i2d_PUBKEY evp))]
                [else
                 (error who "key format not supported\n  format: ~e" fmt)])]))
@@ -263,6 +269,11 @@ The 'libcrypto params format:
     (define/override (pktype) EVP_PKEY_RSA)
     (define/override (can-encrypt?) #t)
     (define/override (can-sign?) #t)
+
+    (define/override (*write-key who private? fmt evp)
+      (cond [(and private? (memq fmt '(pkcs1 #f)))
+             `(pkcs1 rsa private ,(i2d i2d_PrivateKey evp))]
+            [else (super *write-key who private? fmt evp)]))
 
     #|
     ;; Key generation currently fails, possibly due to something like the following
@@ -330,6 +341,11 @@ The 'libcrypto params format:
     (define/override (pktype) EVP_PKEY_DSA)
     (define/override (can-sign?) #t)
     (define/override (has-params?) #t)
+
+    (define/override (*write-key who private? fmt evp)
+      (cond [(and private? (memq fmt '(#f)))
+             `(libcrypto dsa private ,(i2d i2d_PrivateKey evp))]
+            [else (super *write-key who private? fmt evp)]))
 
     (define/public (*write-params who fmt evp)
       (unless (memq fmt '(#f libcrypto))
@@ -500,13 +516,13 @@ The 'libcrypto params format:
              (define outbuf (make-bytes outlen))
              (define outlen2 (i2d_ECPrivateKey ec outbuf))
              (EC_KEY_free ec)
-             `(libcrypto ec private ,(shrink-bytes outbuf outlen2))]
+             `(sec1 ec private ,(shrink-bytes outbuf outlen2))]
             [else ;; public
              (define outlen (i2o_ECPublicKey ec #f))
              (define outbuf (make-bytes outlen))
              (define outlen2 (i2o_ECPublicKey ec outbuf))
              (EC_KEY_free ec)
-             `(libcrypto ec public ,(shrink-bytes outbuf outlen2))]))
+             `(sec1 ec public ,(shrink-bytes outbuf outlen2))]))
 
     (define/public (*generate-key who config evp)
       (define kec
@@ -526,7 +542,8 @@ The 'libcrypto params format:
       (define buf (make-bytes (quotient (+ group-degree 7) 8)))
       (define peer-pubkey-point (EC_POINT_new group))
       (EC_POINT_oct2point group peer-pubkey-point peer-pubkey0 (bytes-length peer-pubkey0))
-      (define peer-ec (EC_KEY_new group))
+      (define peer-ec (EC_KEY_new))
+      (EC_KEY_set_group peer-ec group)
       (EC_KEY_set_public_key peer-ec peer-pubkey-point)
       (EC_POINT_free peer-pubkey-point)
       (EC_KEY_free ec)
@@ -582,16 +599,8 @@ The 'libcrypto params format:
         (EVP_PKEY_copy_parameters pevp evp)
         (new libcrypto-pk-params% (impl impl) (evp pevp))))
 
-    (define/public (write-key who write-priv? fmt)
-      (when (and write-priv? (not private?))
-        (error who "cannot serialize public key as private"))
-      #|
-      (let* ([i2d (if private? i2d_PrivateKey i2d_PublicKey)]
-             [buf (make-bytes (i2d evp #f))])
-        (i2d evp buf)
-        `(libcrypto ,(send impl get-spec) ,(if private? 'private 'public) ,buf))
-      |#
-      (send impl *write-key who write-priv? fmt evp))
+    (define/public (write-key who fmt)
+      (send impl *write-key who private? fmt evp))
 
     (define/public (equal-to-key? other)
       (and (is-a? other libcrypto-pk-key%)
@@ -656,7 +665,7 @@ The 'libcrypto params format:
         (cond [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
                     (eq? (send peer-pubkey0 get-impl) impl))
                (get-field evp peer-pubkey0)]
-              [else (send impl *convert-peer-pubkey who peer-pubkey0)]))
+              [else (send impl *convert-peer-pubkey who evp peer-pubkey0)]))
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_derive_init ctx)
       (EVP_PKEY_derive_set_peer ctx peer-pubkey)

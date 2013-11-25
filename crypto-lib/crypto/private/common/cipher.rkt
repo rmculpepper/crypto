@@ -58,12 +58,7 @@
    (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?)]
         [#:pad pad-mode/c]
         bytes?)]
-  [encrypt-bytes
-   (->* [cipher/c key/c iv/c bytes?] [nat? nat? #:pad pad-mode/c]
-        bytes?)]
-  [decrypt-bytes
-   (->* [cipher/c key/c iv/c bytes?] [nat? nat? #:pad pad-mode/c]
-        bytes?)]
+
   [encrypt-write
    (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?) output-port?]
         [#:pad pad-mode/c]
@@ -72,6 +67,13 @@
    (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?) output-port?]
         [#:pad pad-mode/c]
         nat?)]
+
+  ;; [encrypt-bytes
+  ;;  (->* [cipher/c key/c iv/c bytes?] [nat? nat? #:pad pad-mode/c]
+  ;;       bytes?)]
+  ;; [decrypt-bytes
+  ;;  (->* [cipher/c key/c iv/c bytes?] [nat? nat? #:pad pad-mode/c]
+  ;;       bytes?)]
   ;; [make-encrypt-pipe
   ;;  (->* [cipher/c key/c iv/c] [#:pad pad-mode/c]
   ;;       (values input-port? output-port?))]

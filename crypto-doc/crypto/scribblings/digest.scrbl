@@ -10,25 +10,14 @@
 @title[#:tag "digest"]{Message Digests}
 
 A message digest function (sometimes called a cryptographic hash
-function) maps variable-length (and potentially long) messages to
-fixed-length (and relatively short) digests. @;{For a good digest
-function, it is infeasible to find a preimage of a given digest; that
-is, given an output, it is very hard to find a corresponding input.}
-Different digest functions, or algorithms, compute digests of
-different sizes and have different characteristics that may affect
-their security.
+function) maps variable-length, potentially long messages to
+fixed-length, relatively short digests. Different digest functions, or
+algorithms, compute digests of different sizes and have different
+characteristics that may affect their security.
 
-@emph{Take care when choosing a digest for new development.}  Several
-of the digests listed available through this library are now
-considered insecure or broken. At the time of this writing (October
-2013), the safest choices are probably the SHA2 family
-(@racket['sha224], @racket['sha256], @racket['sha384], and
-@racket['sha512]).
-
-The HMAC (``Hash-based Message Authentication Code'') construction
-combines a digest function together with a secret key. A Message
-Authentication Code can be used in a security protocol to guarantee
-message authentication and integrity.
+The HMAC construction combines a digest function together with a
+secret key to form an authenticity and integrity mechanism
+@cite{HMAC}.
 
 This library provides both high-level, all-at-once digest operations
 and low-level, incremental operations.
@@ -88,8 +77,8 @@ function's block size.
 @defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
          bytes?]{
 
-Generate a random secret key appropriate for HMAC parameterized over
-digest @racket[di]. The length of the key is @racket[(digest-size di)].
+Generate a random secret key appropriate for HMAC using digest
+@racket[di]. The length of the key is @racket[(digest-size di)].
 }
 
 
@@ -113,11 +102,10 @@ is not closed.
                [input (or/c bytes? string? input-port?)])
          bytes?]{
 
-Like @racket[digest], but computes the HMAC of @racket[input]
-parameterized by digest @racket[di] using the secret key
-@racket[key]. The @racket[key] may be of any length, but the effective
-security of the key is limited to @racket[(digest-block-size di)]; a
-common key-length is @racket[(digest-size di)] @cite{HMAC}.
+Like @racket[digest], but computes the HMAC of @racket[input] using
+digest @racket[di] and the secret key @racket[key]. The @racket[key]
+may be of any length, but @racket[(digest-size di)] is a typical
+key length @cite{HMAC}.
 }
 
 @section{Low-level Digest Functions}
@@ -151,15 +139,18 @@ computes the digest of the concatenated inputs.
 @defproc[(digest-final [dctx digest-ctx?])
          bytes?]{
 
-Closes @racket[dctx] and returns the digest of the message.
+Returns the digest of the message accumulated in @racket[dctx] so far
+and closes @racket[dctx]. Once @racket[dctx] is closed, any further
+operation performed on it will raise an exception.
 }
 
 @defproc[(digest-copy [dctx digest-ctx?])
          (or/c digest-ctx? #f)]{
 
 Returns a copy of @racket[dctx], or @racket[#f] is the implementation
-does not support copying. Use @racket[digest-copy] to efficiently
-compute digests for messages with a common prefix.
+does not support copying. Use @racket[digest-copy] (or
+@racket[digest-peek-final]) to efficiently compute digests for
+messages with a common prefix.
 }
 
 @defproc[(digest-peek-final [dctx digest-ctx?])

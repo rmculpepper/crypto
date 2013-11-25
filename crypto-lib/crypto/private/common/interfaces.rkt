@@ -30,7 +30,7 @@
          pk-key<%>
          random-impl<%>
 
-         factory?
+         crypto-factory?
          digest-impl?
          digest-ctx?
          cipher-impl?
@@ -86,7 +86,7 @@
     get-pk-reader ;; -> pk-read-key<%>/#f
     ))
 
-(define (factory? x) (is-a? x factory<%>))
+(define (crypto-factory? x) (is-a? x factory<%>))
 
 
 ;; ============================================================
@@ -175,8 +175,8 @@
 
 (define pk-read-key<%>
   (interface (impl<%>)
-    read-key        ;; sym SerializedKey -> pk-key<%>
-    read-params     ;; sym SerializedParams -> pk-params<%>
+    read-key        ;; sym SerializedKey -> pk-key<%>/#f
+    read-params     ;; sym SerializedParams -> pk-params<%>/#f
     ))
 
 (define pk-params<%>

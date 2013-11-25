@@ -43,6 +43,15 @@ Returns @racket[#t] if @racket[v] is a PK cryptosystem implementation,
 @racket[#f] otherwise.
 }
 
+@defproc[(get-pk [pki pk-spec?]
+                 [factories (or/c crypto-factory? (listof crypto-factory?))])
+         (or/c pk-impl? #f)]{
+
+Returns an implementation of PK algorithm @racket[pki] from the given
+@racket[factories]. If no factory in @racket[factories] implements
+@racket[pki], returns @racket[#f].
+}
+
 @deftogether[[
 @defproc[(pk-can-sign? [pk (or/c pk-impl? pk-key?)]) boolean?]
 @defproc[(pk-can-encrypt? [pk (or/c pk-impl? pk-key?)]) boolean?]
@@ -302,17 +311,17 @@ result has one of the following forms:
 
 RSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
 
-@item{@racket[(list 'pkcs8 'rsa 'private _der-bytes)]
+@item{@racket[(list 'pkcs1 'rsa 'private _der-bytes)]
 
-RSA private key as DER-encoded (unencrypted) PrivateKeyInfo @cite{PKCS8}.}
+RSA private key as DER-encoded (unencrypted) RSAPrivateKey @cite{PKCS1}.}
 
 @item{@racket[(list 'pkix 'dsa 'public _der-bytes)]
 
 DSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
 
-@item{@racket[(list 'pkcs8 'dsa 'private _der-bytes)]
+@item{@racket[(list 'libcrypto 'dsa 'private _der-bytes)]
 
-DSA private key as DER-encoded (unencrypted) PrivateKeyInfo @cite{PKCS8}.}
+DSA private key.}
 
 @item{@racket[(list 'sec1 'ec 'public _ecpoint-bytes)]
 

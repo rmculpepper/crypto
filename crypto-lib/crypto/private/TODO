@@ -9,6 +9,9 @@ To Do
 - check synchronization & race conditions
 - check error reporting
 
+- info functions on impls should use impl methods, not catalog info
+  to allow extension with unknown algs
+
 - securing key storage memory
   - "zero memory when done with" (memset, variants of memset that don't get optimized away)
   - advice: "don't swap key memory to disk" (gcry_malloc_secure, mlock)
