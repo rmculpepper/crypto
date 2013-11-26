@@ -132,7 +132,7 @@
     [ofb 1 0 stream 0]
     [cfb 1 0 stream 0]
     [ctr 1 0 stream 0]
-    ;;[gcm ? ? stream ?]
+    [gcm 0 12 stream 0]
     ))
 
 (define (block-mode? x) (and (symbol? x) (assq x known-block-modes) #t))

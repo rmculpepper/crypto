@@ -38,7 +38,7 @@
    (->* [cipher/c key/c iv/c] [#:pad pad-mode/c]
         encrypt-ctx?)]
   [make-decrypt-ctx
-   (->* [cipher/c key/c iv/c] [#:pad pad-mode/c]
+   (->* [cipher/c key/c iv/c] [#:pad pad-mode/c #:auth-tag (or/c bytes? #f)]
         decrypt-ctx?)]
   [encrypt-ctx?
    (-> any/c boolean?)]
@@ -47,8 +47,14 @@
   [cipher-update
    (->* [cipher-ctx? bytes?] [nat? nat?]
         bytes?)]
+  [cipher-update-AAD
+   (->* [cipher-ctx? bytes?] [nat? nat?]
+        void?)]
   [cipher-final
    (-> cipher-ctx? bytes?)]
+  [cipher-final/tag
+   (-> cipher-ctx? nat?
+       (values bytes? bytes?))]
 
   [encrypt
    (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?)]
@@ -131,9 +137,11 @@
 (define (make-encrypt-ctx ci key iv #:pad [pad? #t])
   (with-crypto-entry 'make-encrypt-ctx
     (-encrypt-ctx ci key iv pad?)))
-(define (make-decrypt-ctx ci key iv #:pad [pad? #t])
+(define (make-decrypt-ctx ci key iv #:pad [pad? #t] #:auth-tag [auth-tag #f])
   (with-crypto-entry 'make-decrypt-ctx
-    (-decrypt-ctx ci key iv pad?)))
+    (let ([ctx (-decrypt-ctx ci key iv pad?)])
+      (when auth-tag (send ctx set-auth-tag auth-tag))
+      ctx)))
 
 (define (-encrypt-ctx ci key iv pad)
   (let ([ci (-get-impl ci)])
@@ -142,12 +150,18 @@
   (let ([ci (-get-impl ci)])
     (send ci new-ctx key iv #f pad)))
 
+(define (cipher-update-AAD c ibuf [istart 0] [iend (bytes-length ibuf)])
+  (with-crypto-entry 'cipher-update-AAD
+    (check-input-range ibuf istart iend)
+    (send c update-AAD ibuf istart iend)
+    (void)))
+
 (define (cipher-update c ibuf [istart 0] [iend (bytes-length ibuf)])
   (with-crypto-entry 'cipher-update
-    (check-input-range 'cipher-update ibuf istart iend)
+    (check-input-range ibuf istart iend)
     (let* ([ilen (- iend istart)]
            [obuf (make-bytes (+ ilen (cipher-block-size c)))]
-           [len (send c update! 'cipher-update
+           [len (send c update!
                       ibuf istart iend
                       obuf 0 (bytes-length obuf))])
       (shrink-bytes obuf len))))
@@ -155,8 +169,17 @@
 (define (cipher-final c)
   (with-crypto-entry 'cipher-final
     (let* ([buf (make-bytes (cipher-block-size c))]
-           [len (send c final! 'cipher-final buf 0 (bytes-length buf))])
+           [len (send c final! buf 0 (bytes-length buf))])
+      (send c close)
       (shrink-bytes buf len))))
+
+(define (cipher-final/tag c taglen)
+  (with-crypto-entry 'cipher-final
+    (let* ([buf (make-bytes (cipher-block-size c))]
+           [len (send c final! buf 0 (bytes-length buf))]
+           [tag (send c get-auth-tag taglen)])
+      (send c close)
+      (values (shrink-bytes buf len) tag))))
 
 ;; ----
 

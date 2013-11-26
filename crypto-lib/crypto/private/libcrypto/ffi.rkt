@@ -48,6 +48,8 @@
 
 (define-crypto ERR_get_error
   (_fun -> _ulong))
+(define-crypto ERR_peek_error
+  (_fun -> _ulong))
 (define-crypto ERR_peek_last_error
   (_fun -> _ulong))
 (define-crypto ERR_lib_error_string
@@ -75,18 +77,16 @@
 (define (err-wrap/pointer who)
   (err-wrap who values))
 
-(define (raise-crypto-error where (info #f))
+(define (raise-crypto-error where)
   (let* ([e (ERR_get_error)]
          [le (ERR_lib_error_string e)]
          [fe (and le (ERR_func_error_string e))]
          [re (and fe (ERR_reason_error_string e))])
-    (error where "~a [~a:~a:~a]~a~a"
+    (error where "~a [~a:~a:~a]"
            (or (ERR_reason_error_string e) "?")
            (or (ERR_lib_error_string e) "?")
            (or (ERR_func_error_string e) "?")
-           e
-           (if info " " "")
-           (or info ""))))
+           e)))
 
 (define (i2d i2d_Type x)
   (define outlen (i2d_Type x #f))
@@ -328,26 +328,41 @@
                 olen))
   #:wrap (err-wrap 'EVP_CipherUpdate values))
 
+;; Returns 0 on AE decryption auth-failure, but no ERR_get_error.
+;; FIXME: Assuming if no error, means auth failure.
 (define-crypto EVP_CipherFinal_ex
-  (_fun _EVP_CIPHER_CTX
+  (_fun (ctx out) ::
+        (ctx : _EVP_CIPHER_CTX)
         (out : _pointer)
         (olen : (_ptr o _int))
         -> (result : _int)
-        -> (and (= result 1) ;; okay
-                olen))
-  #:wrap (err-wrap 'EVP_CipherFinal_ex values))
+        -> (cond [(= result 1) olen]
+                 [(positive? (ERR_peek_error))
+                  (raise-crypto-error 'EVP_CipherFinal_ex)]
+                 [else #f])))
 
 (define-crypto EVP_CIPHER_CTX_set_key_length
   (_fun _EVP_CIPHER_CTX _int -> _int)
   #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_key_length))
 
 (define-crypto EVP_CIPHER_CTX_ctrl
-  (_fun _EVP_CIPHER_CTX _int _int _bytes -> _int)
+  (_fun _EVP_CIPHER_CTX _int _int _pointer -> _int)
   #:wrap (err-wrap/check 'EVP_CIPHER_CTX_ctrl))
 
 (define-crypto EVP_CIPHER_CTX_set_padding
   (_fun _EVP_CIPHER_CTX _bool -> _int)
   #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_padding))
+
+(define         EVP_CTRL_GCM_SET_IVLEN          #x9)
+(define         EVP_CTRL_GCM_GET_TAG            #x10)
+(define         EVP_CTRL_GCM_SET_TAG            #x11)
+(define         EVP_CTRL_GCM_SET_IV_FIXED       #x12)
+(define         EVP_CTRL_GCM_IV_GEN             #x13)
+(define         EVP_CTRL_CCM_SET_IVLEN          EVP_CTRL_GCM_SET_IVLEN)
+(define         EVP_CTRL_CCM_GET_TAG            EVP_CTRL_GCM_GET_TAG)
+(define         EVP_CTRL_CCM_SET_TAG            EVP_CTRL_GCM_SET_TAG)
+(define         EVP_CTRL_CCM_SET_L              #x14)
+(define         EVP_CTRL_CCM_SET_MSGLEN         #x15)
 
 ;; ============================================================
 ;; Diffie-Hellman
