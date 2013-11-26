@@ -7,6 +7,8 @@ To Do
 - check safety
 - check synchronization & race conditions
 - check error reporting
+- GCM support
+- gcrypt initialization
 
 - info functions on impls should use impl methods, not catalog info
   to allow extension with unknown algs
@@ -32,12 +34,6 @@ To Do
   - regarding nettle padding support (lacking):
     http://blog.gmane.org/gmane.comp.encryption.nettle.bugs/month=20130601
 
-- abstract classes for digest, cipher w/ error checking
-- GCM support
-- doc: how to get impls from specs
-- new API for sign/verify
-- gcrypt initialization
-
 - nettle RSA
   - encrypt/decrypt undocumented, uses PKCS#1 v1.5 padding (bad!)
 
@@ -50,19 +46,15 @@ To Do
 
 - ciphers: track bytes encrypted, better space checking
 
-- add error checking and reporting code to libgcrypt impls
 - update tests
 - update docs
 - offer multiple padding options?
 
 - add more Racket impls
-- add support for gnutls, etc (?)
 
 - fix balance of code between operations and impls
   current interfaces are designed around openssl/libcrypto; 
   cmd-ssl impl already exposes some problems
-
-- figure out what to do with leftover pieces (eg DH libcrypto code)
 
 
 #|
