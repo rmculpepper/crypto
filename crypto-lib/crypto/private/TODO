@@ -33,11 +33,6 @@ To Do
   - regarding nettle padding support (lacking):
     http://blog.gmane.org/gmane.comp.encryption.nettle.bugs/month=20130601
 
-- reorg modules
-  - crypto/main - provides generic operations + crypto-factories param
-  - crypto/factory/{libcrypto,nettle,etc} - provides factories + init code
-  - user must set crypto-factories
-
 - abstract classes for digest, cipher w/ error checking
 - GCM support
 - doc: how to get impls from specs
