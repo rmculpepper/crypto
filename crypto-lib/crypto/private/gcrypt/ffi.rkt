@@ -25,6 +25,13 @@
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)
 
+(define-gcrypt gcry_check_version
+  (_fun _bytes -> _void)
+  #:fail (lambda () void))
+
+;; Initializes library
+(void (gcry_check_version #f))
+
 ;; ----
 
 (define-ffi-definer define-racket #f)

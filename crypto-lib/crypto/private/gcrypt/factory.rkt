@@ -89,6 +89,9 @@
                       (case level
                         [(very-strong) GCRY_VERY_STRONG_RANDOM]
                         [else GCRY_STRONG_RANDOM])))
+    (define/public (ok?) #t)
+    (define/public (can-add-entropy?) #f)
+    (define/public (add-entropy buf entropy-in-bytes) (void))
     ))
 
 (define gcrypt-random-impl (new gcrypt-random-impl%))
