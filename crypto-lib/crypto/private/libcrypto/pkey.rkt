@@ -237,19 +237,17 @@ The 'libcrypto params format:
                 ;; Writing RSA key gives only 3 non-NUL bytes at beginning.
                 (define pkcs8info (EVP_PKEY2PKCS8 evp))
                 `(pkcs8 ,spec private ,(i2d i2d_PKCS8_PRIV_KEY_INFO pkcs8info))]
-               [else
-                (crypto-error "key format not supported\n  format: ~e" fmt)])]
+               [else (err/key-format fmt)])]
             [else ;; public
              (case fmt
                [(#f) ;; PUBKEY
                 `(pkix ,spec public ,(i2d i2d_PUBKEY evp))]
-               [else
-                (crypto-error "key format not supported\n  format: ~e" fmt)])]))
+               [else (err/key-format fmt)])]))
 
     (define/public (generate-key config)
-      (crypto-error "algorithm does not support direct key generation\n  algorithm: ~e" spec))
+      (err/no-direct-keygen spec))
     (define/public (generate-params config)
-      (crypto-error "algorithm does not support parameters\n  algorithm: ~e" spec))
+      (err/no-params spec))
     (define/public (can-encrypt?) #f)
     (define/public (can-sign?) #f)
     (define/public (can-key-agree?) #f)
@@ -264,6 +262,7 @@ The 'libcrypto params format:
 
 (define libcrypto-rsa-impl%
   (class libcrypto-pk-impl%
+    (inherit-field spec)
     (super-new (spec 'rsa))
 
     (define/override (pktype) EVP_PKEY_RSA)
@@ -318,14 +317,14 @@ The 'libcrypto params format:
         (case pad
           [(pkcs1-v1.5) RSA_PKCS1_PADDING]
           [(pss #f)   RSA_PKCS1_PSS_PADDING]
-          [else (crypto-error "bad RSA signing padding mode\n  padding: ~e" pad)])))
+          [else (err/bad-signature-pad spec pad)])))
 
     (define/public (*set-encrypt-padding ctx pad)
       (EVP_PKEY_CTX_set_rsa_padding ctx
         (case pad
           [(pkcs1-v1.5) RSA_PKCS1_PADDING]
           [(oaep #f)  RSA_PKCS1_OAEP_PADDING]
-          [else (crypto-error "bad RSA encryption padding mode\n  padding: ~e" pad)])))
+          [else (err/bad-encrypt-pad spec pad)])))
     ))
 
 ;; ----
@@ -349,7 +348,7 @@ The 'libcrypto params format:
 
     (define/public (*write-params fmt evp)
       (unless (memq fmt '(#f libcrypto))
-        (crypto-error "parameter format not supported\n  format: ~e" fmt))
+        (err/params-format spec fmt))
       (define dsa (EVP_PKEY_get1_DSA evp))
       (define buf (make-bytes (i2d_DSAparams dsa #f)))
       (i2d_DSAparams dsa buf)
@@ -392,7 +391,7 @@ The 'libcrypto params format:
     (define/public (*set-sign-padding ctx pad)
       (case pad
         [(#f) (void)]
-        [else (crypto-error "invalid padding argument for DSA\n  padding: ~e" pad)]))
+        [else (err/bad-signature-pad spec pad)]))
     ))
 
 ;; ----
@@ -424,7 +423,7 @@ The 'libcrypto params format:
 
     (define/public (*write-params fmt evp)
       (unless (memq fmt '(#f libcrypto))
-        (crypto-error "parameter format not supported\n  format: ~e" fmt))
+        (err/params-format spec fmt))
       (define dh (EVP_PKEY_get1_DH evp))
       (define buf (make-bytes (i2d_DHparams dh #f)))
       (i2d_DHparams dh buf)
@@ -433,7 +432,7 @@ The 'libcrypto params format:
 
     (define/override (*write-key private? fmt evp)
       (unless (eq? fmt #f)
-        (crypto-error "bad DH key format\n  format: ~e" fmt))
+        (err/key-format fmt))
       (define dh (EVP_PKEY_get1_DH evp))
       (define pubkey-buf (BN->bytes/bin (DH_st_prefix-pubkey dh)))
       (define privkey-buf (and private? (BN->bytes/bin (DH_st_prefix-privkey dh))))
@@ -498,7 +497,7 @@ The 'libcrypto params format:
 
     (define/public (*write-params fmt evp)
       (unless (memq fmt '(#f libcrypto))
-        (crypto-error "parameter format not supported\n  format: ~e" fmt))
+        (err/params-format spec fmt))
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (define group (EC_KEY_get0_group ec))
       (define len (i2d_ECPKParameters group #f))
@@ -509,7 +508,7 @@ The 'libcrypto params format:
 
     (define/override (*write-key private? fmt evp)
       (unless (memq fmt '(#f libcrypto))
-        (crypto-error "key format not supported\n  format: ~e" fmt))
+        (err/key-format spec fmt))
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (cond [private?
              (define outlen (i2d_ECPrivateKey ec #f))
@@ -555,7 +554,7 @@ The 'libcrypto params format:
     (define/public (*set-sign-padding ctx pad)
       (case pad
         [(#f) (void)]
-        [else (crypto-error "invalid padding argument for ECDSA\n  padding: ~e" pad)]))
+        [else (err/bad-signature-pad spec pad)]))
     ))
 
 ;; ============================================================
@@ -607,14 +606,10 @@ The 'libcrypto params format:
            (EVP_PKEY_cmp evp (get-field evp other))))
 
     (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign?)
-        (crypto-error "sign/verify not supported\n  algorithm: ~e" (send impl get-spec)))
-      (unless private?
-        (crypto-error "signing requires private key"))
+      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
+      (unless private? (err/sign-requires-private))
       (define di (send (send impl get-factory) get-digest digest-spec))
-      (unless (is-a? di libcrypto-digest-impl%)
-        (crypto-error "could not get digest implementation\n  digest spec: ~e"
-                      digest-spec))
+      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_sign_init ctx)
       (send impl *set-sign-padding ctx pad)
@@ -626,12 +621,9 @@ The 'libcrypto params format:
       (shrink-bytes sigbuf siglen2))
 
     (define/public (verify digest digest-spec pad sig)
-      (unless (send impl can-sign?)
-        (crypto-error "sign/verify not supported\n  algorithm: ~e" (send impl get-spec)))
+      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
       (define di (send (send impl get-factory) get-digest digest-spec))
-      (unless (is-a? di libcrypto-digest-impl%)
-        (crypto-error "could not get digest implementation\n  digest spec: ~e"
-                      digest-spec))
+      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_verify_init ctx)
       (send impl *set-sign-padding ctx pad)
@@ -640,14 +632,12 @@ The 'libcrypto params format:
         (EVP_PKEY_CTX_free ctx)))
 
     (define/public (encrypt buf pad)
-      (unless (send impl can-encrypt?)
-        (crypto-error "encrypt/decrypt not supported\n  algorithm: ~e" (send impl get-spec)))
+      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (*crypt buf pad EVP_PKEY_encrypt_init EVP_PKEY_encrypt))
 
     (define/public (decrypt buf pad)
-      (unless (send impl can-encrypt?)
-        (crypto-error "encrypt/decrypt not supported\n  algorithm: ~e" (send impl get-spec)))
-      (unless private? (crypto-error "decryption requires private key"))
+      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
+      (unless private? (err/decrypt-requires-private))
       (*crypt buf pad EVP_PKEY_decrypt_init EVP_PKEY_decrypt))
 
     (define/private (*crypt buf pad EVP_*crypt_init EVP_*crypt)
@@ -661,8 +651,7 @@ The 'libcrypto params format:
       (shrink-bytes outbuf outlen2))
 
     (define/public (compute-secret peer-pubkey0)
-      (unless (send impl can-key-agree?)
-        (crypto-error "key agreement not supported\n  algorithm: ~e" (send impl get-spec)))
+      (unless (send impl can-key-agree?) (err/no-key-agree (send impl get-spec)))
       (define peer-pubkey
         (cond [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
                     (eq? (send peer-pubkey0 get-impl) impl))

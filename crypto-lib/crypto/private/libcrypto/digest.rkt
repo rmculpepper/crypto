@@ -69,12 +69,12 @@
     (super-new)
 
     (define/public (update buf start end)
-      (unless ctx (crypto-error "digest context is closed"))
+      (unless ctx (err/digest-closed))
       (check-input-range buf start end)
       (EVP_DigestUpdate ctx (ptr-add buf start) (- end start)))
 
     (define/public (final! buf start end)
-      (unless ctx (crypto-error "digest context is closed"))
+      (unless ctx (err/digest-closed))
       (let ([size (send impl get-size)])
         (check-output-range buf start end size)
         (EVP_DigestFinal_ex ctx (ptr-add buf start))
@@ -83,10 +83,10 @@
         size))
 
     (define/public (copy)
-      (and ctx
-           (let ([other (send impl new-ctx)])
-             (EVP_MD_CTX_copy_ex (get-field ctx other) ctx)
-             other)))
+      (unless ctx (err/digest-closed))
+      (let ([other (send impl new-ctx)])
+        (EVP_MD_CTX_copy_ex (get-field ctx other) ctx)
+        other))
     ))
 
 ;; ============================================================
@@ -111,11 +111,12 @@
     (super-new)
 
     (define/public (update buf start end)
+      (unless ctx (err/digest-closed))
       (check-input-range buf start end)
       (HMAC_Update ctx (ptr-add buf start) (- end start)))
 
     (define/public (final! buf start end)
-      (unless ctx (crypto-error "HMAC context is closed"))
+      (unless ctx (err/digest-closed))
       (let ([size (send impl get-size)])
         (check-output-range buf start end size)
         (HMAC_Final ctx (ptr-add buf start))
@@ -123,5 +124,7 @@
         (set! ctx #f)
         size))
 
-    (define/public (copy) #f) ;; FIXME (?)
+    (define/public (copy)
+      (unless ctx (err/digest-closed))
+      #f) ;; FIXME (?)
     ))

@@ -64,8 +64,7 @@
 
 (define (-get-impl o)
   (cond [(digest-spec? o)
-         (or (get-digest o)
-             (crypto-error "could not get digest implementation\n  digest: ~e" o))]
+         (or (get-digest o) (err/missing-digest o))]
         [else (get-impl* o)]))
 
 (define (digest-size o)

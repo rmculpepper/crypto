@@ -2,7 +2,6 @@ To Do
 =====
 
 - implement other key formats: pkcs1 pkcs3 pkcs8 ...
-- consolidate error-reporting
 - keygen/paramgen support: add required flag, auto-check
 - libcrypto: add yield callbacks for interactivity
 - check safety

@@ -105,8 +105,7 @@
 
 (define (-get-impl o)
   (cond [(cipher-spec? o)
-         (or (get-cipher o)
-             (crypto-error "could not get cipher implementation\n  cipher: ~e" o))]
+         (or (get-cipher o) (err/missing-cipher o))]
         [else (get-impl* o)]))
 
 (define (cipher-default-key-size o)
@@ -121,8 +120,6 @@
 (define (cipher-iv-size o)
   (with-crypto-entry 'cipher-iv-size
     (cipher-spec-iv-size (get-spec* o))))
-
-
 
 ;; ----
 

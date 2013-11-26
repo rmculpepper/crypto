@@ -150,7 +150,7 @@
     (define/public (get-encrypt?) encrypt?)
 
     (define/public (update! inbuf instart inend outbuf outstart outend)
-      (unless (*open?) (crypto-error "cipher context is closed"))
+      (unless (*open?) (err/cipher-closed))
       (define len (- inend instart))
       (define total (+ len partlen))
       ;; First complete fill partial to *crypt separately
@@ -191,7 +191,7 @@
       (+ pfxoutlen alignlen))
 
     (define/public (final! outbuf outstart outend)
-      (unless (*open?) (crypto-error "cipher context is closed"))
+      (unless (*open?) (err/cipher-closed))
       (begin0
           (cond [encrypt?
                  (cond [pad?
