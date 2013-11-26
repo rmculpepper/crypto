@@ -133,7 +133,7 @@
   (check-input-range bs start end)
   (cond [(send di can-digest-buffer!?)
          (let ([outbuf (make-bytes (send di get-size))])
-           (send di digest-buffer! 'digest bs start end outbuf 0)
+           (send di digest-buffer! bs start end outbuf 0)
            outbuf)]
         [else
          (let ([dg (make-digest-ctx di)])

@@ -38,6 +38,8 @@
     (define/public (get-iv-size) iv-size)
 
     (define/public (new-ctx key iv enc? pad?)
+      (check-key-size spec (bytes-length key))
+      (check-iv-size spec iv-size iv)
       (let ([ctx (gcry_cipher_open cipher mode 0)]
             [pad? (and pad? (cipher-spec-uses-padding? spec))])
         (gcry_cipher_setkey ctx key (bytes-length key))
@@ -65,6 +67,7 @@
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
       (case (cadr (send impl get-spec))
         [(ctr ofb cfb stream)
+         (check-output-range outbuf outstart outend (- inend instart))
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]
         [else #f]))
@@ -73,6 +76,7 @@
       (and ctx #t))
 
     (define/override (*close)
-      (gcry_cipher_close ctx)
-      (set! ctx #f))
+      (when ctx
+        (gcry_cipher_close ctx)
+        (set! ctx #f)))
     ))

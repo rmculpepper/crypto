@@ -40,9 +40,7 @@
 
     (define/public (new-ctx key iv enc? pad?)
       (check-key-size spec (bytes-length key))
-      (unless (= (if (bytes? iv) (bytes-length iv) 0) iv-size)
-        (crypto-error "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
-                      spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
+      (check-iv-size spec iv-size iv)
       (let* ([pad? (and pad? (cipher-spec-uses-padding? spec))]
              [ctx (new nettle-cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
         (send ctx set-key+iv key iv)
@@ -92,6 +90,7 @@
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
       (case mode
         [(ctr stream)
+         (check-output-range outbuf outstart outend (- inend instart))
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]
         [else #f]))

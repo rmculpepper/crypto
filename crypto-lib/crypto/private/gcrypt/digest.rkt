@@ -47,6 +47,8 @@
 
     (define/public (can-digest-buffer!?) #t)
     (define/public (digest-buffer! buf start end outbuf outstart)
+      (check-input-range buf start end)
+      (check-output-range outbuf outstart (bytes-length outbuf) size)
       (gcry_md_hash_buffer md (ptr-add outbuf outstart)
                            (ptr-add buf start) (- end start)))
 
@@ -61,9 +63,11 @@
     (super-new)
 
     (define/public (update buf start end)
+      (check-input-range buf start end)
       (gcry_md_write ctx (ptr-add buf start) (- end start)))
 
     (define/public (final! buf start end)
+      (check-output-range buf start end (send impl get-size))
       (gcry_md_read ctx (ptr-add buf start) (- end start))
       (gcry_md_close ctx)
       (set! ctx #f)

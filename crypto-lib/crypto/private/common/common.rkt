@@ -151,6 +151,7 @@
 
     (define/public (update! inbuf instart inend outbuf outstart outend)
       (unless (*open?) (err/cipher-closed))
+      (check-input-range inbuf instart inend)
       (define len (- inend instart))
       (define total (+ len partlen))
       ;; First complete fill partial to *crypt separately
@@ -163,6 +164,7 @@
              (if (or encrypt? (not pad?))
                  (>= total block-size)
                  (> total block-size))))
+      ;; Then do aligned blocks: [alignstart,alignend)
       (define alignstart (+ instart prefixlen))
       (define alignend0 (- inend (remainder (- inend alignstart) block-size)))
       (define alignend1
@@ -173,6 +175,10 @@
                 alignend0)))
       (define alignend (max alignstart alignend1))
       (define pfxoutlen (if flush-partial? block-size 0))
+      (define outstart* (+ outstart pfxoutlen))
+      (define alignlen (- alignend alignstart))
+      ;; Total output space needed:
+      (check-output-range outbuf outstart outend (+ pfxoutlen alignlen))
       (when (< instart alignstart)
         (bytes-copy! partial partlen inbuf instart alignstart))
       (cond [flush-partial?
@@ -181,8 +187,6 @@
              (set! partlen 0)]
             [else
              (set! partlen (+ partlen prefixlen))])
-      (define outstart* (+ outstart pfxoutlen))
-      (define alignlen (- alignend alignstart))
       (when (< alignstart alignend)
         (*crypt inbuf alignstart alignend outbuf outstart* (+ outstart* alignlen))) ;; outend
       (when (< alignend inend) ;; implies flush-partial?
@@ -196,6 +200,7 @@
           (cond [encrypt?
                  (cond [pad?
                         (pad-bytes!/pkcs7 partial partlen)
+                        (check-output-range outbuf outstart outend block-size)
                         (*crypt partial 0 block-size outbuf outstart outend)
                         block-size]
                        [(zero? partlen)
@@ -205,6 +210,9 @@
                             (err/partial))])]
                 [else ;; decrypting
                  (cond [pad?
+                        ;; Don't know actual output size until after decypted &
+                        ;; de-padded, so require whole block of room.
+                        (check-output-range outbuf outstart outend block-size)
                         (unless (= partlen block-size)
                           (err/partial))
                         (let ([tmp (make-bytes block-size)])
@@ -225,6 +233,7 @@
     ;; encrypt partial final block (eg for CTR mode)
     ;; returns number of bytes or #f to indicate refusal to handle partial block
     ;; only called if pad? is #f, (- inend instart) < block-size
+    ;; Must do own check-output-range!
     (define/public (*crypt-partial inbuf instart inend outbuf outstart outend)
       #f)
 
