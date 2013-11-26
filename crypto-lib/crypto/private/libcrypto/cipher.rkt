@@ -46,12 +46,11 @@
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)
 
-    (define/public (new-ctx who key iv enc? pad?)
-      (check-key-size who spec (bytes-length key))
+    (define/public (new-ctx key iv enc? pad?)
+      (check-key-size spec (bytes-length key))
       (unless (= (if (bytes? iv) (bytes-length iv) 0) iv-size)
-        (error who
-               "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
-               spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
+        (crypto-error "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
+                      spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
       (let ([ctx (EVP_CIPHER_CTX_new)])
         (EVP_CipherInit_ex ctx cipher #f #f enc?)
         (EVP_CIPHER_CTX_set_key_length ctx (bytes-length key))
@@ -74,17 +73,17 @@
 
     (define/public (get-encrypt?) encrypt?)
 
-    (define/public (update! who inbuf instart inend outbuf outstart outend)
-      (unless ctx (error who "cipher context is closed"))
-      (check-input-range who inbuf instart inend)
-      (check-output-range who outbuf outstart outend (maxlen (- inend instart)))
+    (define/public (update! inbuf instart inend outbuf outstart outend)
+      (unless ctx (crypto-error "cipher context is closed"))
+      (check-input-range inbuf instart inend)
+      (check-output-range outbuf outstart outend (maxlen (- inend instart)))
       (EVP_CipherUpdate ctx (ptr-add outbuf outstart)
                         (ptr-add inbuf instart)
                         (- inend instart)))
 
-    (define/public (final! who outbuf outstart outend)
-      (unless ctx (error who "cipher context is closed"))
-      (check-output-range who outbuf outstart outend (maxlen 0))
+    (define/public (final! outbuf outstart outend)
+      (unless ctx (crypto-error "cipher context is closed"))
+      (check-output-range outbuf outstart outend (maxlen 0))
       (begin0 (EVP_CipherFinal_ex ctx (ptr-add outbuf outstart))
         (EVP_CIPHER_CTX_free ctx)
         (set! ctx #f)))

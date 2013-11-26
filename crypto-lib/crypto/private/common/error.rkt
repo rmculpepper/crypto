@@ -15,60 +15,47 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(provide check-input-range
+(require racket/list)
+(provide crypto-entry-point
+         with-crypto-entry
+         crypto-who
+         crypto-error
+         check-input-range
          check-output-range)
 
-(define (check-input-range who buf start end [maxlen #f])
+(define crypto-entry-point (gensym))
+
+(define-syntax-rule (with-crypto-entry who body ...)
+  (with-continuation-mark crypto-entry-point who (let () body ...)))
+
+(define (crypto-who)
+  (define entry-points
+    (continuation-mark-set->list (current-continuation-marks) crypto-entry-point))
+  (if (pair? entry-points) (last entry-points) 'crypto))
+
+(define (crypto-error fmt . args)
+  (apply error (crypto-who) fmt args))
+
+;; ----
+
+(define (check-input-range buf start end [maxlen #f])
   (unless (and (<= 0 start end (bytes-length buf))
                (or (not maxlen) (<= (- end start) maxlen)))
-    (error who "bad range for input buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a"
-           start end (bytes-length buf)
-           (if maxlen
-               (format " of length at most ~a" maxlen)
-               ""))))
+    (crypto-error
+     "bad range for input buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a"
+     start end (bytes-length buf)
+     (if maxlen
+         (format " of length at most ~a" maxlen)
+         ""))))
 
-(define (check-output-range who buf start end [minlen #f])
+(define (check-output-range buf start end [minlen #f])
   (when (immutable? buf)
-    (error who "expected mutable output buffer"))
+    (crypto-error "expected mutable output buffer"))
   (unless (and (<= 0 start end (bytes-length buf))
                (or (not minlen) (>= (- end start) minlen)))
-    (error who "bad range for output buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a"
-           start end (bytes-length buf)
-           (if minlen
-               (format " of length at least ~a" minlen)
-               ""))))
-
-#|
-(define check-input-range
-  (case-lambda
-    [(where bs maxlen)
-     (unless (<= (bytes-length bs) maxlen)
-       (error where "bad input range"))]
-    [(where bs start end)
-     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs)))
-       (error where "bad input range: [~a,~a); expected range within [0,~a)"
-              start end (bytes-length bs)))]
-    [(where bs start end maxlen)
-     (unless (and (<= 0 start) (<= start end) (<= end (bytes-length bs))
-                  (<= (- end start) maxlen))
-       (error where "bad input range: [~a,~a); expected range within [0,~a) of length at most ~a"
-              start end (bytes-length bs) maxlen))]))
-(define check-output-range
-  (case-lambda
-    [(where bs minlen)
-     (when (or (not (bytes? bs)) (immutable? bs))
-       (error where "expects mutable bytes"))
-     (unless (>= (bytes-length bs) minlen)
-       (error where "bad output range"))]
-    [(where bs start end)
-     (when (or (not (bytes? bs)) (immutable? bs))
-       (error where "expects mutable bytes"))
-     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs)))
-       (error where "bad output range"))]
-    [(where bs start end minlen)
-     (when (or (not (bytes? bs)) (immutable? bs))
-       (error where "expects mutable bytes"))
-     (unless (and (<= 0 start) (< start end) (<= end (bytes-length bs))
-                  (>= (- end start) minlen))
-       (error where "bad output range"))]))
-|#
+    (crypto-error
+     "bad range for output buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a"
+     start end (bytes-length buf)
+     (if minlen
+         (format " of length at least ~a" minlen)
+         ""))))

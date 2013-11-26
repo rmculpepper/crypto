@@ -17,6 +17,7 @@
 (require racket/class
          racket/contract
          "interfaces.rkt"
+         "error.rkt"
          "catalog.rkt")
 (provide
  (contract-out
@@ -41,20 +42,25 @@
 (define crypto-factories (make-parameter null))
 
 (define (get-factory i)
-  (send i get-factory))
+  (with-crypto-entry 'get-factory
+    (send i get-factory)))
 
 (define (get-digest di [factory/s (crypto-factories)])
-  (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
-    (send f get-digest di)))
+  (with-crypto-entry 'get-digest
+    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+      (send f get-digest di))))
 
 (define (get-cipher ci [factory/s (crypto-factories)])
-  (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
-    (send f get-cipher ci)))
+  (with-crypto-entry 'get-cipher
+    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+      (send f get-cipher ci))))
 
 (define (get-pk pki [factory/s (crypto-factories)])
-  (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
-    (send f get-pk pki)))
+  (with-crypto-entry 'get-pk
+    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+      (send f get-pk pki))))
 
 (define (get-random [factory/s (crypto-factories)])
-  (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
-    (send f get-random)))
+  (with-crypto-entry 'get-random
+    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+      (send f get-random))))

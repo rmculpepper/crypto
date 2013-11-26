@@ -16,6 +16,7 @@
 #lang racket/base
 (require racket/class
          "../common/interfaces.rkt"
+         "../common/error.rkt"
          "../common/common.rkt")
 (provide rkt-hmac-impl%)
 
@@ -26,7 +27,7 @@
     (init-field digest)
     (super-new)
     (define/public (get-digest) digest)
-    (define/public (new-ctx who key)
+    (define/public (new-ctx key)
       (new rkt-hmac-ctx% (impl digest) (key key)))
     ))
 
@@ -51,19 +52,19 @@
 
     (unless ctx
       (set! ctx (send impl new-ctx))
-      (send ctx update! 'hmac ipad 0 block-size))
+      (send ctx update 'hmac ipad 0 block-size))
 
-    (define/public (update! who buf start end)
-      (send ctx update! who buf start end))
+    (define/public (update buf start end)
+      (send ctx update buf start end))
 
-    (define/public (final! who buf start end)
+    (define/public (final! buf start end)
       (let* ([mdbuf (make-bytes block-size)]
-             [mdlen (send ctx final! who mdbuf 0 block-size)]
+             [mdlen (send ctx final! mdbuf 0 block-size)]
              [ctx2 (send impl new-ctx)])
-        (send ctx2 update! who opad 0 block-size)
-        (send ctx2 update! who mdbuf 0 mdlen)
-        (send ctx2 final! who buf start end)))
+        (send ctx2 update opad 0 block-size)
+        (send ctx2 update mdbuf 0 mdlen)
+        (send ctx2 final! buf start end)))
 
-    (define/public (copy who)
+    (define/public (copy)
       (new rkt-hmac-ctx% (key key) (impl impl) (ctx (send ctx copy))))
     ))

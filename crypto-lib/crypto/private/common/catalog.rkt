@@ -15,7 +15,8 @@
 
 #lang racket/base
 (require racket/string
-         racket/match)
+         racket/match
+         "error.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================
@@ -230,26 +231,26 @@
   (not (bad-key-size cipher-spec key-size)))
 
 ;; check-key-size : symbol CipherSpec Nat -> void or error
-(define (check-key-size who cipher-spec key-size)
+(define (check-key-size cipher-spec key-size)
   (let ([allowed (bad-key-size cipher-spec key-size)])
     (cond [(eq? allowed #f) (void)]
           [(eq? allowed '())
-           (error who "unknown cipher\n  cipher: ~e" cipher-spec)]
+           (crypto-error "unknown cipher\n  cipher: ~e" cipher-spec)]
           [(list? allowed)
-           (error who
-                  "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
-                  cipher-spec
-                  key-size
-                  (string-join (map number->string allowed) ", "))]
+           (crypto-error
+            "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
+            cipher-spec
+            key-size
+            (string-join (map number->string allowed) ", "))]
           [(variable-size? allowed)
-           (error who
-                  "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
-                  cipher-spec
-                  key-size
-                  (format "from ~a to ~a in multiples of ~a"
-                          (variable-size-min allowed)
-                          (variable-size-max allowed)
-                          (variable-size-step allowed)))])))
+           (crypto-error
+            "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed key sizes: ~a"
+            cipher-spec
+            key-size
+            (format "from ~a to ~a in multiples of ~a"
+                    (variable-size-min allowed)
+                    (variable-size-max allowed)
+                    (variable-size-step allowed)))])))
 
 ;; cipher-spec-uses-padding? : CipherSpec -> Boolean
 (define (cipher-spec-uses-padding? spec)

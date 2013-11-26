@@ -19,6 +19,7 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/catalog.rkt"
+         "../common/error.rkt"
          "ffi.rkt")
 (provide gcrypt-cipher-impl%)
 
@@ -36,7 +37,7 @@
     (define/public (get-block-size) block-size)
     (define/public (get-iv-size) iv-size)
 
-    (define/public (new-ctx who key iv enc? pad?)
+    (define/public (new-ctx key iv enc? pad?)
       (let ([ctx (gcry_cipher_open cipher mode 0)]
             [pad? (and pad? (cipher-spec-uses-padding? spec))])
         (gcry_cipher_setkey ctx key (bytes-length key))

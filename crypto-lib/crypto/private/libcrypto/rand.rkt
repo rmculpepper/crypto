@@ -27,8 +27,8 @@
 (define libcrypto-random-impl%
   (class* impl-base% (random-impl<%>)
     (super-new)
-    (define/public (random-bytes! who buf start end _level)
-      (check-output-range who buf start end)
+    (define/public (random-bytes! buf start end _level)
+      (check-output-range buf start end)
       (void (RAND_bytes (ptr-add buf start) (- end start))))
 
     (define/public (ok?)
@@ -36,15 +36,15 @@
 
     (define/public (can-add-entropy?) #t)
 
-    (define/public (add-entropy who buf entropy-in-bytes)
+    (define/public (add-entropy buf entropy-in-bytes)
       (void (RAND_add buf (bytes-length buf) entropy-in-bytes)))
 
     (define/public (load-file file max-bytes)
       (let ([max-bytes (if (= max-bytes +inf.0) -1 max-bytes)])
-        (security-guard-check-file 'rand-load-file file '(read))
+        (security-guard-check-file (crypto-who) file '(read))
         (void (RAND_load_file file max-bytes))))
 
     (define/public (rand-write-file file)
-      (security-guard-check-file 'rand-write-file file '(write))
+      (security-guard-check-file (crypto-who) file '(write))
       (void (RAND_write_file file)))
     ))

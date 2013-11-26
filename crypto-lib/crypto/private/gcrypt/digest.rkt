@@ -18,6 +18,7 @@
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/error.rkt"
          "ffi.rkt")
 (provide gcrypt-digest-impl%)
 
@@ -38,19 +39,19 @@
       (let ([ctx (gcry_md_open md 0)])
         (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 
-    (define/public (get-hmac-impl who)
+    (define/public (get-hmac-impl)
       (unless hmac-impl (set! hmac-impl (new gcrypt-hmac-impl% (digest this))))
       hmac-impl)
 
     ;; ----
 
     (define/public (can-digest-buffer!?) #t)
-    (define/public (digest-buffer! who buf start end outbuf outstart)
+    (define/public (digest-buffer! buf start end outbuf outstart)
       (gcry_md_hash_buffer md (ptr-add outbuf outstart)
                            (ptr-add buf start) (- end start)))
 
     (define/public (can-hmac-buffer!?) #f)
-    (define/public (hmac-buffer! who key buf start end outbuf outstart) (void))
+    (define/public (hmac-buffer! key buf start end outbuf outstart) (void))
     ))
 
 (define gcrypt-digest-ctx%
@@ -59,16 +60,16 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update who buf start end)
+    (define/public (update buf start end)
       (gcry_md_write ctx (ptr-add buf start) (- end start)))
 
-    (define/public (final! who buf start end)
+    (define/public (final! buf start end)
       (gcry_md_read ctx (ptr-add buf start) (- end start))
       (gcry_md_close ctx)
       (set! ctx #f)
       (send impl get-size))
 
-    (define/public (copy who)
+    (define/public (copy)
       (let ([ctx2 (gcry_md_copy ctx)])
         (new gcrypt-digest-ctx% (impl impl) (ctx ctx2))))
     ))
@@ -82,7 +83,7 @@
     (define/public (get-spec) `(hmac ,(send digest get-spec)))
     (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
-    (define/public (new-ctx who key)
+    (define/public (new-ctx key)
       (let ([ctx (gcry_md_open (get-field md digest) GCRY_MD_FLAG_HMAC)])
         (gcry_md_setkey ctx key (bytes-length key))
         (new gcrypt-digest-ctx% (impl digest) (ctx ctx))))

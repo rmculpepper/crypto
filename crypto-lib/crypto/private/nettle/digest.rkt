@@ -41,19 +41,19 @@
         ((nettle_hash-init nh) ctx)
         (new nettle-digest-ctx% (impl this) (nh nh) (ctx ctx))))
 
-    (define/public (get-hmac-impl who)
+    (define/public (get-hmac-impl)
       (unless hmac-impl (set! hmac-impl (new nettle-hmac-impl% (digest this) (nh nh))))
       hmac-impl)
 
     ;; ----
 
     (define/public (can-digest-buffer!?) #f)
-    (define/public (digest-buffer! who buf start end outbuf outstart)
-      (error 'digest-buffer! "unimplemented"))
+    (define/public (digest-buffer! buf start end outbuf outstart)
+      (crypto-error "unimplemented"))
 
     (define/public (can-hmac-buffer!?) #f)
-    (define/public (hmac-buffer! who key buf start end outbuf outstart)
-      (error 'hmac-buffer! "unimplemented"))
+    (define/public (hmac-buffer! key buf start end outbuf outstart)
+      (crypto-error "unimplemented"))
     ))
 
 (define nettle-digest-ctx%
@@ -62,15 +62,15 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update who buf start end)
+    (define/public (update buf start end)
       ((nettle_hash-update nh) ctx (- end start) (ptr-add buf start)))
 
-    (define/public (final! who buf start end)
+    (define/public (final! buf start end)
       ((nettle_hash-digest nh) ctx (- end start) (ptr-add buf start))
       (set! ctx #f)
       (send impl get-size))
 
-    (define/public (copy who)
+    (define/public (copy)
       (let* ([size (nettle_hash-context_size nh)]
              [ctx2 (make-ctx size)])
         (memmove ctx2 ctx size)
@@ -86,7 +86,7 @@
     (define/public (get-spec) `(hmac ,(send digest get-spec)))
     (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
-    (define/public (new-ctx who key)
+    (define/public (new-ctx key)
       (let* ([size (nettle_hash-context_size nh)]
              [outer (make-ctx size)]
              [inner (make-ctx size)]
@@ -101,15 +101,15 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update who buf start end)
-      (unless ctx (error who "HMAC context is closed"))
-      (check-input-range who buf start end)
+    (define/public (update buf start end)
+      (unless ctx (crypto-error "HMAC context is closed"))
+      (check-input-range buf start end)
       (nettle_hmac_update ctx nh (ptr-add buf start) (- end start)))
 
-    (define/public (final! who buf start end)
-      (unless ctx (error who "HMAC context is closed"))
+    (define/public (final! buf start end)
+      (unless ctx (crypto-error "HMAC context is closed"))
       (let ([size (nettle_hash-digest_size nh)])
-        (check-output-range who buf start end size)
+        (check-output-range buf start end size)
         (nettle_hmac_digest outer inner ctx nh (ptr-add buf start) (- end start))
         (set! ctx #f)
         size))

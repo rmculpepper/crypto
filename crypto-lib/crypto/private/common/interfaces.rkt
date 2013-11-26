@@ -81,7 +81,7 @@
     |#
     get-digest  ;; DigestSpec -> digest-impl<%>/#f
     get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
-    get-pk      ;; symbol -> pk-impl<%>/#f
+    get-pk      ;; PKSpec -> pk-impl<%>/#f
     get-random  ;; -> random-impl<%>/#f
     get-pk-reader ;; -> pk-read-key<%>/#f
     ))
@@ -100,28 +100,28 @@
     ;; get-spec      ;; -> DigestSpec
     get-size      ;; -> nat
     get-block-size;; -> nat
-    get-hmac-impl ;; who -> digest-impl<%>
+    get-hmac-impl ;; -> digest-impl<%>
     new-ctx       ;; -> digest-ctx<%>
 
     can-digest-buffer!? ;; -> boolean
-    digest-buffer!      ;; sym bytes nat nat bytes nat -> nat
+    digest-buffer!      ;; bytes nat nat bytes nat -> nat
 
     can-hmac-buffer!?   ;; -> boolean
-    hmac-buffer!        ;; sym bytes bytes nat nat bytes nat -> nat
+    hmac-buffer!        ;; bytes bytes nat nat bytes nat -> nat
     ))
 
 ;; FIXME: add some option to reset instead of close; add to new-ctx or final! (???)
 (define digest-ctx<%>
   (interface (ctx<%>)
-    update   ;; sym bytes nat nat -> void
-    final!   ;; sym bytes nat nat -> nat
-    copy     ;; sym -> digest-ctx<%>/#f
+    update   ;; bytes nat nat -> void
+    final!   ;; bytes nat nat -> nat
+    copy     ;; -> digest-ctx<%>/#f
     ))
 
 (define hmac-impl<%>
   (interface (impl<%>)
     get-digest ;; -> digest-impl<%>
-    new-ctx    ;; sym bytes -> digest-ctx<%>
+    new-ctx    ;; bytes -> digest-ctx<%>
     ))
 
 (define (digest-impl? x) (is-a? x digest-impl<%>))
@@ -141,8 +141,8 @@
     get-block-size ;; -> nat
     get-iv-size    ;; -> nat
 
-    new-ctx         ;; sym bytes bytes/#f boolean PadMode -> cipher-ctx<%>
-                    ;; who key   iv       enc?    pad
+    new-ctx         ;; bytes bytes/#f boolean PadMode -> cipher-ctx<%>
+                    ;; key   iv       enc?    pad
     ))
 
 ;; Some disadvantages to current cipher update! and final! methods:
@@ -153,8 +153,8 @@
 
 (define cipher-ctx<%>
   (interface (ctx<%>)
-    update!  ;; sym bytes nat nat bytes nat nat -> nat
-    final!   ;; sym bytes nat nat -> nat
+    update!  ;; bytes nat nat bytes nat nat -> nat
+    final!   ;; bytes nat nat -> nat
     ))
 
 (define (cipher-impl? x) (is-a? x cipher-impl<%>))
@@ -165,8 +165,8 @@
 
 (define pk-impl<%>
   (interface (impl<%>)
-    generate-key    ;; sym GenKeySpec -> pk-key<%>
-    generate-params ;; sym GenParamSpec -> pk-params<%>
+    generate-key    ;; GenKeySpec -> pk-key<%>
+    generate-params ;; GenParamSpec -> pk-params<%>
     can-key-agree?  ;; -> boolean
     can-sign?       ;; -> boolean
     can-encrypt?    ;; -> boolean
@@ -175,32 +175,32 @@
 
 (define pk-read-key<%>
   (interface (impl<%>)
-    read-key        ;; sym SerializedKey -> pk-key<%>/#f
-    read-params     ;; sym SerializedParams -> pk-params<%>/#f
+    read-key        ;; SerializedKey -> pk-key<%>/#f
+    read-params     ;; SerializedParams -> pk-params<%>/#f
     ))
 
 (define pk-params<%>
   (interface (ctx<%>)
-    generate-key    ;; sym GenKeySpec -> pk-key<%>
-    write-params    ;; sym ParamsFormat -> SerializedParams
+    generate-key    ;; GenKeySpec -> pk-key<%>
+    write-params    ;; ParamsFormat -> SerializedParams
     ))
 
 (define pk-key<%>
   (interface (ctx<%>)
     is-private?             ;; -> boolean
-    get-public-key          ;; sym -> pk-key<%>
-    get-params              ;; sym -> pk-params<%> or #f
+    get-public-key          ;; -> pk-key<%>
+    get-params              ;; -> pk-params<%> or #f
 
-    write-key       ;; sym KeyFormat -> SerializedKey
+    write-key       ;; KeyFormat -> SerializedKey
     equal-to-key?   ;; pk-key<%> -> boolean
 
-    sign            ;; sym bytes DigestSpec Padding -> bytes
-    verify          ;; sym bytes DigestSpec Padding bytes -> boolean
+    sign            ;; bytes DigestSpec Padding -> bytes
+    verify          ;; bytes DigestSpec Padding bytes -> boolean
 
-    encrypt         ;; sym bytes Padding -> bytes
-    decrypt         ;; sym bytes Padding -> bytes
+    encrypt         ;; bytes Padding -> bytes
+    decrypt         ;; bytes Padding -> bytes
 
-    compute-secret  ;; sym bytes -> bytes
+    compute-secret  ;; bytes -> bytes
     ))
 
 ;; KeyFormat
@@ -231,11 +231,11 @@
 (define random-impl<%>
   (interface (impl<%>)
     ;; get-spec          ;; -> 'random
-    random-bytes!        ;; sym bytes nat nat RandomLevel -> void
+    random-bytes!        ;; bytes nat nat RandomLevel -> void
 
     ok?                  ;; -> boolean
     can-add-entropy?     ;; -> boolean
-    add-entropy          ;; sym bytes real -> void
+    add-entropy          ;; bytes real -> void
     ))
 
 ;; RandomLevel is one of 'strong, 'very-strong.

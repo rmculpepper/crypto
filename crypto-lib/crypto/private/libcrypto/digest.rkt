@@ -42,7 +42,7 @@
         (EVP_DigestInit_ex ctx md)
         (new libcrypto-digest-ctx% (impl this) (ctx ctx))))
 
-    (define/public (get-hmac-impl who)
+    (define/public (get-hmac-impl)
       (unless hmac-impl
         (set! hmac-impl (new libcrypto-hmac-impl% (digest this))))
       hmac-impl)
@@ -51,12 +51,12 @@
 
     ;; FIXME: tried to use EVP_Digest but got segfault
     (define/public (can-digest-buffer!?) #f)
-    (define/public (digest-buffer! who buf start end outbuf outstart) (void))
+    (define/public (digest-buffer! buf start end outbuf outstart) (void))
 
     (define/public (can-hmac-buffer!?) #t)
-    (define/public (hmac-buffer! who key buf start end outbuf outstart)
-      (check-input-range who buf start end)
-      (check-output-range who outbuf outstart (+ outstart size))
+    (define/public (hmac-buffer! key buf start end outbuf outstart)
+      (check-input-range buf start end)
+      (check-output-range outbuf outstart (+ outstart size))
       (HMAC md key (bytes-length key) (ptr-add buf start) (- end start)
             (ptr-add outbuf outstart))
       (void))
@@ -68,21 +68,21 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update who buf start end)
-      (unless ctx (error who "digest context is closed"))
-      (check-input-range who buf start end)
+    (define/public (update buf start end)
+      (unless ctx (crypto-error "digest context is closed"))
+      (check-input-range buf start end)
       (EVP_DigestUpdate ctx (ptr-add buf start) (- end start)))
 
-    (define/public (final! who buf start end)
-      (unless ctx (error who "digest context is closed"))
+    (define/public (final! buf start end)
+      (unless ctx (crypto-error "digest context is closed"))
       (let ([size (send impl get-size)])
-        (check-output-range who buf start end size)
+        (check-output-range buf start end size)
         (EVP_DigestFinal_ex ctx (ptr-add buf start))
         (EVP_MD_CTX_destroy ctx)
         (set! ctx #f)
         size))
 
-    (define/public (copy who)
+    (define/public (copy)
       (and ctx
            (let ([other (send impl new-ctx)])
              (EVP_MD_CTX_copy_ex (get-field ctx other) ctx)
@@ -98,7 +98,7 @@
     (define/public (get-spec) `(hmac ,(send digest get-spec)))
     (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
-    (define/public (new-ctx who key)
+    (define/public (new-ctx key)
       (let ([ctx (HMAC_CTX_new)])
         (HMAC_Init_ex ctx key (bytes-length key) (get-field md digest))
         (new libcrypto-hmac-ctx% (impl digest) (ctx ctx))))
@@ -110,14 +110,14 @@
     (inherit-field impl)
     (super-new)
 
-    (define/public (update who buf start end)
-      (check-input-range who buf start end)
+    (define/public (update buf start end)
+      (check-input-range buf start end)
       (HMAC_Update ctx (ptr-add buf start) (- end start)))
 
-    (define/public (final! who buf start end)
-      (unless ctx (error who "HMAC context is closed"))
+    (define/public (final! buf start end)
+      (unless ctx (crypto-error "HMAC context is closed"))
       (let ([size (send impl get-size)])
-        (check-output-range who buf start end size)
+        (check-output-range buf start end size)
         (HMAC_Final ctx (ptr-add buf start))
         (HMAC_CTX_free ctx)
         (set! ctx #f)

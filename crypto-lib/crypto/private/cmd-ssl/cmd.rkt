@@ -24,6 +24,7 @@
          "../common/catalog.rkt"
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/error.rkt"
          (only-in "../libcrypto/util.rkt" hex unhex))
 (provide (all-defined-out))
 
@@ -50,19 +51,19 @@
 
     (abstract get-openssl-args)
 
-    (define/public (write! who buf start end)
+    (define/public (write! buf start end)
       (write-bytes buf spin start end)
       (flush-output spin)
       (void))
 
-    (define/public (close/read who)
+    (define/public (close/read)
       (close-output-port spin)
       (sync sp)
       (unless (zero? (subprocess-status sp))
         (let ([err (port->string sperr)])
           (close-input-port sperr)
           (close-input-port spout)
-          (error who "subprocess failed: ~a" err)))
+          (crypto-error "subprocess failed: ~a" err)))
       (close-input-port sperr)
       (begin0 (port->bytes spout)
         (close-input-port spout)))
@@ -103,20 +104,20 @@
 
     (define/public (new-ctx)
       (new digest-ctx% (impl this)))
-    (define/public (get-hmac-impl who)
+    (define/public (get-hmac-impl)
       (new hmac-impl% (digest this)))
 
     ;; ----
 
     (define/public (can-digest-buffer!?) #t)
-    (define/public (digest-buffer! who buf start end outbuf outstart)
+    (define/public (digest-buffer! buf start end outbuf outstart)
       (let ([md (openssl "dgst" (format "-~a" cmd) "-binary"
                          #:in (subbytes buf start end))])
         (bytes-copy! outbuf outstart md)
         (bytes-length md)))
 
     (define/public (can-hmac-buffer!?) #t)
-    (define/public (hmac-buffer! who key buf start end outbuf outstart)
+    (define/public (hmac-buffer! key buf start end outbuf outstart)
       (let ([md (openssl "dgst" (format "-~a" cmd) "-binary"
                          "-hmac" key #:in (subbytes buf start end))])
         (bytes-copy! outbuf outstart md)
@@ -131,10 +132,10 @@
     (define/public (get-spec) `(hmac ,(send digest get-spec)))
     (define/public (get-factory) (send digest get-factory))
     (define/public (get-digest) digest)
-    (define/public (new-ctx who key)
+    (define/public (new-ctx key)
       ;; There seems to be no way to pass HMAC keys containing embedded NUL bytes :(
       (unless (bytes-no-nuls? key)
-        (error who "key must not contain NUL byte, got: ~e" key))
+        (crypto-error "key must not contain NUL byte, got: ~e" key))
       (new digest-ctx% (impl digest) (hmac-key key)))
     ))
 
@@ -146,25 +147,25 @@
 
     (define stored-content (open-output-bytes))
 
-    (define/public (get-content who reset?)
+    (define/public (get-content reset?)
       (begin0 (get-output-bytes stored-content)
         (when reset? (set! stored-content #f))))
 
-    (define/public (update who buf start end)
+    (define/public (update buf start end)
       (void (write-bytes buf stored-content start end)))
 
-    (define/public (final! who buf start end)
-      (let* ([content (get-content who #t)])
+    (define/public (final! buf start end)
+      (let* ([content (get-content #t)])
         (if hmac-key
-            (send impl hmac-buffer! who hmac-key
+            (send impl hmac-buffer! hmac-key
                   content 0 (bytes-length content) buf start)
-            (send impl digest-buffer! who
+            (send impl digest-buffer!
                   content 0 (bytes-length content) buf start))))
 
-    (define/public (copy who)
-      (let* ([content-so-far (get-content who #f)]
+    (define/public (copy)
+      (let* ([content-so-far (get-content #f)]
              [dg2 (new digest-ctx% (impl impl) (hmac-key hmac-key))])
-        (send dg2 update! who content-so-far 0 (bytes-length content-so-far))
+        (send dg2 update! content-so-far 0 (bytes-length content-so-far))
         dg2))
     ))
 
@@ -180,7 +181,7 @@
     (define/public (get-iv-size) ivlen)
     (define/public (get-cmd) cmd)
 
-    (define/public (new-ctx who key iv enc? pad?)
+    (define/public (new-ctx key iv enc? pad?)
       (let ([pad? (and pad? (cipher-spec-uses-padding? spec))])
         (new cipher-ctx% (impl this) (key key) (iv iv) (enc? enc?) (pad? pad?))))
     ))
@@ -213,13 +214,13 @@
     take an output port arg. Or allow some implementation choice.
     |#
 
-    (define/public (update! who inbuf instart inend outbuf outstart outend)
-      (write! who inbuf instart inend)
+    (define/public (update! inbuf instart inend outbuf outstart outend)
+      (write! inbuf instart inend)
       (let ([n (read-bytes-avail!* outbuf spout outstart outend)])
         n))
 
-    (define/public (final! who buf start end)
-      (let ([tail (close/read who)])
+    (define/public (final! buf start end)
+      (let ([tail (close/read)])
         (bytes-copy! buf start tail)
         (bytes-length tail)))
     ))
@@ -243,12 +244,12 @@ FIXME: check again whether DER available in older versions
 
     (define/public (get-name) sys)
 
-    (define/public (read-key who key pub/priv fmt)
+    (define/public (read-key key pub/priv fmt)
       (new pk-key% (impl this) (key key) (private? (eq? pub/priv 'private))))
-    (define/public (read-params who buf fmt)
-      (error who "unimplemented"))
+    (define/public (read-params buf fmt)
+      (crypto-error "unimplemented"))
 
-    (define/public (generate-key who args)
+    (define/public (generate-key args)
       (let* ([key
               (case sys
                 [(rsa) (openssl "genrsa" (car args))]
@@ -257,8 +258,8 @@ FIXME: check again whether DER available in older versions
                    (with-tmp-files ([paramfile params])
                      (openssl "gendsa" paramfile)))])])
         (new pk-key% (impl this) (key key) (private? #t))))
-    (define/public (generate-params who args)
-      (error who "unimplemented"))
+    (define/public (generate-params args)
+      (crypto-error "unimplemented"))
 
     (define/public (can-sign?) #t)
     (define/public (can-encrypt?) (and (memq sys '(rsa)) #t))
@@ -272,18 +273,18 @@ FIXME: check again whether DER available in older versions
 
     (define/public (is-private?) private?)
 
-    (define/public (get-public-key who)
-      (error who "unimplemented"))
-    (define/public (get-params who)
-      (error who "unimplemented"))
+    (define/public (get-public-key)
+      (crypto-error "unimplemented"))
+    (define/public (get-params)
+      (crypto-error "unimplemented"))
 
-    (define/public (write-key who pub/priv fmt)
+    (define/public (write-key pub/priv fmt)
       (let ([want-private? (eq? pub/priv 'private)])
         (cond [(and private? want-private?) key]
               [(and private? (not want-private?))
                (openssl (send impl get-name) "-pubout" #:in key)]
               [(and (not private?) want-private?)
-               (error who "only public key component is available")]
+               (crypto-error "only public key component is available")]
               [(and (not private?) (not want-private?)) key])))
 
     (define/public (equal-to-key? other)
@@ -300,17 +301,17 @@ FIXME: check again whether DER available in older versions
     |#
 
     #|
-    (define/public (sign who digest di)
-      (unless private? (error who "cannot sign with public key"))
+    (define/public (sign  digest di)
+      (unless private? (crypto-error "cannot sign with public key"))
       (with-tmp-files ([keyfile key])
         (let* ([signature
                 (openssl "pkeyutl" "-sign" "-binary"
                          "-sign" keyfile
-                         #:in (send dg get-content who #f))])
+                         #:in (send dg get-content #f))])
           (bytes-copy! buf start signature)
           (bytes-length signature))))
 
-    (define/public (verify who dg buf start end)
+    (define/public (verify dg buf start end)
       (with-tmp-files ([keyfile key]
                        [sigfile (subbytes buf start end)])
         (let* ([impl (send dg get-impl)]
@@ -318,22 +319,22 @@ FIXME: check again whether DER available in older versions
                 (openssl "dgst" (format "-~a" (send impl get-name))
                          (if private? "-prverify" "-verify") keyfile
                          "-signature" sigfile
-                         #:in (send dg get-content who #f))])
+                         #:in (send dg get-content #f))])
           (cond [(regexp-match? #rx#"OK" result)
                  #t]
                 [(regexp-match #rx#"Fail" result)
                  #f]
                 [else
-                 (error who "internal error; openssl returned unexpected result: ~e"
-                        result)]))))
+                 (crypto-error "internal error; openssl returned unexpected result: ~e"
+                               result)]))))
 
-    (define/public (encrypt/decrypt who encrypt? want-public? inbuf instart inend)
+    (define/public (encrypt/decrypt encrypt? want-public? inbuf instart inend)
       (case (get-field sys impl)
         ((dsa)
-         (error who "operation not supported for DSA"))
+         (crypto-error "operation not supported for DSA"))
         ((rsa)
          (unless (or want-public? private?)
-           (error who "not a private key"))
+           (crypto-error "not a private key"))
          (with-tmp-files ([keyfile key])
            (let ([result
                   (openssl "rsautl"

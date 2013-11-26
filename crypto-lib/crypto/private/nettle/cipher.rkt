@@ -38,12 +38,11 @@
     (define/public (get-block-size) (nettle-cipher-block-size nc))
     (define/public (get-iv-size) iv-size)
 
-    (define/public (new-ctx who key iv enc? pad?)
-      (check-key-size who spec (bytes-length key))
+    (define/public (new-ctx key iv enc? pad?)
+      (check-key-size spec (bytes-length key))
       (unless (= (if (bytes? iv) (bytes-length iv) 0) iv-size)
-        (error who
-               "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
-               spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
+        (crypto-error "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
+                      spec (if (bytes? iv) (bytes-length iv) 0) iv-size))
       (let* ([pad? (and pad? (cipher-spec-uses-padding? spec))]
              [ctx (new nettle-cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
         (send ctx set-key+iv key iv)
@@ -88,7 +87,7 @@
          (let ([crypt (nettle-cipher-encrypt nc)])
            (nettle_ctr_crypt ctx crypt block-size iv (- inend instart)
                              (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
-        [else (error 'cipher::*crypt "internal error: bad mode: ~e\n" mode)]))
+        [else (crypto-error "internal error: bad mode: ~e\n" mode)]))
 
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
       (case mode

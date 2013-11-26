@@ -103,20 +103,26 @@
 
 ;; ----
 
-(define (-get-impl who o)
+(define (-get-impl o)
   (cond [(cipher-spec? o)
          (or (get-cipher o)
-             (error who "could not get cipher implementation\n  cipher: ~e" o))]
+             (crypto-error "could not get cipher implementation\n  cipher: ~e" o))]
         [else (get-impl* o)]))
 
 (define (cipher-default-key-size o)
-  (cipher-spec-default-key-size (get-spec* o)))
+  (with-crypto-entry 'cipher-default-key-size
+    (cipher-spec-default-key-size (get-spec* o))))
 (define (cipher-key-sizes o)
-  (cipher-spec-key-sizes (get-spec* o)))
+  (with-crypto-entry 'cipher-key-sizes
+    (cipher-spec-key-sizes (get-spec* o))))
 (define (cipher-block-size o)
-  (cipher-spec-block-size (get-spec* o)))
+  (with-crypto-entry 'cipher-block-size
+    (cipher-spec-block-size (get-spec* o))))
 (define (cipher-iv-size o)
-  (cipher-spec-iv-size (get-spec* o)))
+  (with-crypto-entry 'cipher-iv-size
+    (cipher-spec-iv-size (get-spec* o))))
+
+
 
 ;; ----
 
@@ -126,108 +132,124 @@
   (and (cipher-ctx? x) (not (send x get-encrypt?))))
 
 (define (make-encrypt-ctx ci key iv #:pad [pad? #t])
-  (-encrypt-ctx 'make-encrypt-ctx ci key iv pad?))
+  (with-crypto-entry 'make-encrypt-ctx
+    (-encrypt-ctx ci key iv pad?)))
 (define (make-decrypt-ctx ci key iv #:pad [pad? #t])
-  (-decrypt-ctx 'make-decrypt-ctx ci key iv pad?))
+  (with-crypto-entry 'make-decrypt-ctx
+    (-decrypt-ctx ci key iv pad?)))
 
-(define (-encrypt-ctx who ci key iv pad)
-  (let ([ci (-get-impl who ci)])
-    (send ci new-ctx who key iv #t pad)))
-(define (-decrypt-ctx who ci key iv pad)
-  (let ([ci (-get-impl who ci)])
-    (send ci new-ctx who key iv #f pad)))
+(define (-encrypt-ctx ci key iv pad)
+  (let ([ci (-get-impl ci)])
+    (send ci new-ctx key iv #t pad)))
+(define (-decrypt-ctx ci key iv pad)
+  (let ([ci (-get-impl ci)])
+    (send ci new-ctx key iv #f pad)))
 
 (define (cipher-update c ibuf [istart 0] [iend (bytes-length ibuf)])
-  (check-input-range 'cipher-update ibuf istart iend)
-  (let* ([ilen (- iend istart)]
-         [obuf (make-bytes (+ ilen (cipher-block-size c)))]
-         [len (send c update! 'cipher-update
-                    ibuf istart iend
-                    obuf 0 (bytes-length obuf))])
-    (shrink-bytes obuf len)))
+  (with-crypto-entry 'cipher-update
+    (check-input-range 'cipher-update ibuf istart iend)
+    (let* ([ilen (- iend istart)]
+           [obuf (make-bytes (+ ilen (cipher-block-size c)))]
+           [len (send c update! 'cipher-update
+                      ibuf istart iend
+                      obuf 0 (bytes-length obuf))])
+      (shrink-bytes obuf len))))
 
 (define (cipher-final c)
-  (let* ([buf (make-bytes (cipher-block-size c))]
-         [len (send c final! 'cipher-final buf 0 (bytes-length buf))])
-    (shrink-bytes buf len)))
+  (with-crypto-entry 'cipher-final
+    (let* ([buf (make-bytes (cipher-block-size c))]
+           [len (send c final! 'cipher-final buf 0 (bytes-length buf))])
+      (shrink-bytes buf len))))
 
 ;; ----
 
 ;; *crypt : cipher-impl key iv (U bytes string input-port) -> bytes
 (define (encrypt ci key iv inp #:pad [pad default-pad])
-  (*crypt 'encrypt (-encrypt-ctx 'encrypt ci key iv pad) inp))
+  (with-crypto-entry 'encrypt
+    (*crypt (-encrypt-ctx ci key iv pad) inp)))
 (define (decrypt ci key iv inp #:pad [pad default-pad])
-  (*crypt 'decrypt (-decrypt-ctx 'decrypt ci key iv pad) inp))
+  (with-crypto-entry 'decrypt
+    (*crypt (-decrypt-ctx ci key iv pad) inp)))
 
 ;; *crypt-bytes : cipher-impl key iv bytes [nat nat] -> bytes
 (define (encrypt-bytes ci key iv buf [start 0] [end (bytes-length buf)] #:pad [pad default-pad])
-  (*crypt-bytes 'encrypt-bytes (-encrypt-ctx 'encrypt-bytes ci key iv pad) buf start end))
+  (with-crypto-entry 'encrypt-bytes
+    (*crypt-bytes (-encrypt-ctx ci key iv pad) buf start end)))
 (define (decrypt-bytes ci key iv buf [start 0] [end (bytes-length buf)] #:pad [pad default-pad])
-  (*crypt-bytes 'decrypt-bytes (-decrypt-ctx 'decrypt-bytes ci key iv pad) buf start end))
+  (with-crypto-entry 'decrypt-bytes
+    (*crypt-bytes (-decrypt-ctx ci key iv pad) buf start end)))
 
 ;; *crypt-write : cipher-impl key iv (U bytes string input-port) output-port -> nat
 (define (encrypt-write ci key iv inp out #:pad [pad default-pad])
-  (*crypt-write 'encrypt-write (-encrypt-ctx 'encrypt-write key iv pad) inp out))
+  (with-crypto-entry 'encrypt-write
+    (*crypt-write (-encrypt-ctx key iv pad) inp out)))
 (define (decrypt-write ci key iv inp out #:pad [pad default-pad])
-  (*crypt-write 'decrypt-write (-decrypt-ctx 'decrypt-write key iv pad) inp out))
+  (with-crypto-entry 'decrypt-write
+    (*crypt-write (-decrypt-ctx key iv pad) inp out)))
 
 ;; FIXME: would like to have way of putting read-exn in pipe so padding error
 ;; shows up on reading side (too?)
 (define (make-encrypt-pipe ci key iv #:pad [pad default-pad])
-  (make-*crypt-pipe 'make-encrypt-pipe (-encrypt-ctx 'make-encrypt-pipe ci key iv pad)))
+  (with-crypto-entry 'make-encrypt-pipe
+    (make-*crypt-pipe (-encrypt-ctx ci key iv pad))))
 (define (make-decrypt-pipe ci key iv #:pad [pad default-pad])
-  (make-*crypt-pipe 'make-decrypt-pipe (-decrypt-ctx 'make-decrypt-pipe ci key iv pad)))
+  (with-crypto-entry 'make-decrypt-pipe
+    (make-*crypt-pipe (-decrypt-ctx ci key iv pad))))
 
 (define (make-encrypt-output-port ci key iv out #:pad [pad default-pad] #:close? [close? #f])
-  (let ([cctx (-encrypt-ctx 'make-encrypt-output-port ci key iv pad)])
-    (make-*crypt-output-port cctx out close?)))
+  (with-crypto-entry 'make-encrypt-output-port
+    (let ([cctx (-encrypt-ctx ci key iv pad)])
+      (make-*crypt-output-port cctx out close?))))
 (define (make-decrypt-output-port ci key iv out #:pad [pad default-pad] #:close? [close? #f])
-  (let ([cctx (-decrypt-ctx 'make-decrypt-output-port ci key iv pad)])
-    (make-*crypt-output-port cctx out close?)))
+  (with-crypto-entry 'make-decrypt-output-port
+    (let ([cctx (-decrypt-ctx ci key iv pad)])
+      (make-*crypt-output-port cctx out close?))))
 
 ;; *crypt-copy-port : ci key iv input-port output-port -> void
 (define (encrypt-copy-port ci key iv in out #:pad [pad default-pad])
-  (let ([cctx (-encrypt-ctx 'encrypt-copy-port ci key iv #:pad pad)])
-    (*crypt-copy-port 'encrypt-copy-port cctx in out)))
+  (with-crypto-entry 'encrypt-copy-port
+    (let ([cctx (-encrypt-ctx ci key iv #:pad pad)])
+      (*crypt-copy-port cctx in out))))
 (define (decrypt-copy-port ci key iv in out #:pad [pad default-pad])
-  (let ([cctx (-decrypt-ctx 'decrypt-copy-port ci key iv #:pad pad)])
-    (*crypt-copy-port 'decrypt-copy-port cctx in out)))
+  (with-crypto-entry 'decrypt-copy-port
+    (let ([cctx (-decrypt-ctx ci key iv #:pad pad)])
+      (*crypt-copy-port cctx in out))))
 
 ;; ----
 
-(define (*crypt who cctx inp)
-  (cond [(bytes? inp) (*crypt-bytes who cctx inp 0 (bytes-length inp))]
-        [(string? inp) (*crypt who cctx (open-input-string inp))]
+(define (*crypt cctx inp)
+  (cond [(bytes? inp) (*crypt-bytes cctx inp 0 (bytes-length inp))]
+        [(string? inp) (*crypt cctx (open-input-string inp))]
         [(input-port? inp)
          (let ([out (open-output-bytes)])
-           (*crypt-copy-port who cctx inp out)
+           (*crypt-copy-port cctx inp out)
            (get-output-bytes out))]))
 
-(define (*crypt-bytes who cctx buf start end)
-  (check-input-range who buf start end)
+(define (*crypt-bytes cctx buf start end)
+  (check-input-range buf start end)
   (define enc-len (+ (cipher-block-size cctx) (- end start)))
   (define enc-buf (make-bytes enc-len))
-  (let* ([len1 (send cctx update! who buf start end enc-buf 0 enc-len)]
-         [len2 (send cctx final! who enc-buf len1 enc-len)])
+  (let* ([len1 (send cctx update! buf start end enc-buf 0 enc-len)]
+         [len2 (send cctx final! enc-buf len1 enc-len)])
     (shrink-bytes enc-buf (+ len1 len2))))
 
-(define (*crypt-write who cctx inp out)
-  (cond [(bytes? inp) (*crypt-copy-port who cctx (open-input-bytes inp) out)]
-        [(string? inp) (*crypt-write who cctx (open-input-string inp) out)]
-        [(input-port? inp) (*crypt-copy-port who cctx inp out)]))
+(define (*crypt-write cctx inp out)
+  (cond [(bytes? inp) (*crypt-copy-port cctx (open-input-bytes inp) out)]
+        [(string? inp) (*crypt-write cctx (open-input-string inp) out)]
+        [(input-port? inp) (*crypt-copy-port cctx inp out)]))
 
-(define (make-*crypt-pipe who cctx)
+(define (make-*crypt-pipe cctx)
   (define-values (pin pout) (make-pipe))
-  (values pin (make-*crypt-output-port who cctx pout #t)))
+  (values pin (make-*crypt-output-port cctx pout #t)))
 
-(define (make-*crypt-input-port who cctx in close?)
+(define (make-*crypt-input-port cctx in close?)
   (define-values (pin pout) (make-pipe))
   (thread (lambda ()
-            (*crypt-copy-port who cctx in pout)
+            (*crypt-copy-port cctx in pout)
             (close-output-port pout)))
   pin)
 
-(define (make-*crypt-output-port who cctx out close?)
+(define (make-*crypt-output-port cctx out close?)
   (define BLOCKS-AT-ONCE 8)
   (define block-size (cipher-block-size cctx))
   ;; Assumes no padding adds more than one extra block
@@ -238,20 +260,20 @@
     (if (= start end)
         (begin (flush-output out) 0)
         (let* ([len* (min (- end start) (* BLOCKS-AT-ONCE block-size))]
-               [enc-len (send cctx update! who buf start (+ start len*)
+               [enc-len (send cctx update! buf start (+ start len*)
                               enc-buf 0 (bytes-length enc-buf))])
           (write-bytes enc-buf out 0 enc-len)
           len*)))
   (define (close)
     ;; FIXME: If final! fails w/ padding error, want to propagate to
     ;; other end of port (if pipe)...
-    (let ([enc-len (send cctx final! who enc-buf 0 (bytes-length enc-buf))])
+    (let ([enc-len (send cctx final! enc-buf 0 (bytes-length enc-buf))])
       (write-bytes enc-buf out 0 enc-len)
       (when close?
         (close-output-port out))))
   (make-output-port name evt write-out close))
 
-(define (*crypt-copy-port who cctx inp outp)
+(define (*crypt-copy-port cctx inp outp)
   (define BLOCKS-AT-ONCE 8)
   (define block-size (cipher-block-size cctx))
   (define ibuf (make-bytes (* block-size BLOCKS-AT-ONCE)))
@@ -260,12 +282,12 @@
     (let ([icount (read-bytes-avail! ibuf inp)])
       (cond [(eof-object? icount)
              ;; FIXME: handle cipher-final! error...
-             (let ([ocount (send cctx final! who obuf 0 (bytes-length obuf))])
+             (let ([ocount (send cctx final! obuf 0 (bytes-length obuf))])
                (write-bytes obuf outp 0 ocount)
                (flush-output outp)
                (void))]
             [else
-             (let ([ocount (send cctx update! who ibuf 0 icount
+             (let ([ocount (send cctx update! ibuf 0 icount
                                  obuf 0 (bytes-length obuf))])
                (write-bytes obuf outp 0 ocount)
                (loop))]))))
@@ -273,13 +295,15 @@
 ;; ----
 
 (define (generate-cipher-key ci [size (cipher-default-key-size ci)] [rand #f])
-  (let* ([ci (-get-impl 'generate-cipher-key ci)]
-         [rand (or rand (get-random* 'generate-cipher-key ci))])
-    ;; FIXME: any way to check for weak keys, avoid???
-    (random-bytes size rand)))
+  (with-crypto-entry 'generate-cipher-key
+    (let* ([ci (-get-impl ci)]
+           [rand (or rand (get-random* ci))])
+      ;; FIXME: any way to check for weak keys, avoid???
+      (random-bytes size rand))))
 
 (define (generate-cipher-iv ci [rand #f])
-  (let* ([ci (-get-impl 'generate-cipher-iv ci)]
-         [rand (or rand (get-random* 'generate-cipher-iv ci))])
-    (let ([size (cipher-iv-size ci)])
-      (and (positive? size) (random-bytes size)))))
+  (with-crypto-entry 'generate-cipher-iv
+    (let* ([ci (-get-impl ci)]
+           [rand (or rand (get-random* ci))])
+      (let ([size (cipher-iv-size ci)])
+        (and (positive? size) (random-bytes size))))))

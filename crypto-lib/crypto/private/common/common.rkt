@@ -20,6 +20,7 @@
          racket/string
          "catalog.rkt"
          "interfaces.rkt"
+         "error.rkt"
          "factory.rkt"
          "../rkt/padding.rkt")
 (provide impl-base%
@@ -119,12 +120,12 @@
     (define/public (get-block-size) (send (car impls) get-block-size))
     (define/public (get-iv-size) (send (car impls) get-iv-size))
 
-    (define/public (new-ctx who key iv enc? pad?)
+    (define/public (new-ctx key iv enc? pad?)
       (cond [(assoc (bytes-length key) impls)
              => (lambda (keylen+impl)
-                  (send (cdr keylen+impl) new-ctx who key iv enc? pad?))]
+                  (send (cdr keylen+impl) new-ctx key iv enc? pad?))]
             [else
-             (check-key-size who spec (bytes-length key))
+             (check-key-size spec (bytes-length key))
              (error 'multikeylen-cipher-impl%
                     (string-append "internal error: no implementation for key length"
                                    "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")
@@ -148,8 +149,8 @@
 
     (define/public (get-encrypt?) encrypt?)
 
-    (define/public (update! who inbuf instart inend outbuf outstart outend)
-      (unless (*open?) (error who "cipher context is closed"))
+    (define/public (update! inbuf instart inend outbuf outstart outend)
+      (unless (*open?) (crypto-error "cipher context is closed"))
       (define len (- inend instart))
       (define total (+ len partlen))
       ;; First complete fill partial to *crypt separately
@@ -189,8 +190,8 @@
         (set! partlen (- inend alignend)))
       (+ pfxoutlen alignlen))
 
-    (define/public (final! who outbuf outstart outend)
-      (unless (*open?) (error who "cipher context is closed"))
+    (define/public (final! outbuf outstart outend)
+      (unless (*open?) (crypto-error "cipher context is closed"))
       (begin0
           (cond [encrypt?
                  (cond [pad?
@@ -201,23 +202,23 @@
                         0]
                        [else
                         (or (*crypt-partial partial 0 partlen outbuf outstart outend)
-                            (err/partial who))])]
+                            (err/partial))])]
                 [else ;; decrypting
                  (cond [pad?
                         (unless (= partlen block-size)
-                          (err/partial who))
+                          (err/partial))
                         (let ([tmp (make-bytes block-size)])
                           (*crypt partial 0 block-size tmp 0 block-size)
                           (let ([pos (unpad-bytes/pkcs7 tmp)])
                             (unless pos
-                              (err/partial who))
+                              (err/partial))
                             (bytes-copy! outbuf outstart tmp 0 pos)
                             pos))]
                        [(zero? partlen)
                         0]
                        [else
                         (or (*crypt-partial partial 0 partlen outbuf outstart outend)
-                            (err/partial who))])])
+                            (err/partial))])])
         (*close)))
 
     ;; *crypt-partial : ... -> nat or #f
@@ -227,8 +228,8 @@
     (define/public (*crypt-partial inbuf instart inend outbuf outstart outend)
       #f)
 
-    (define/private (err/partial who)
-      (error who "partial block (~a)" (if encrypt? "encrypting" "decrypting")))
+    (define/private (err/partial)
+      (crypto-error "partial block (~a)" (if encrypt? "encrypting" "decrypting")))
 
     ;; Methods to implement in subclass:
 
@@ -254,7 +255,7 @@
           [fail-ok?
            #f]
           [else
-           (error 'get-impl* "internal error: cannot get impl\n  from: ~e" src0)])))
+           (crypto-error "internal error: cannot get impl\n  from: ~e" src0)])))
 
 (define (get-spec* src [fail-ok? #f])
   (cond [(or (symbol? src) (list? src))
@@ -264,7 +265,7 @@
         [fail-ok?
          #f]
         [else
-         (error 'get-spec* "internal error: cannot get spec\n  from: ~e" src)]))
+         (crypto-error "internal error: cannot get spec\n  from: ~e" src)]))
 
 (define (get-factory* src [fail-ok? #f])
   (cond [(is-a? src factory<%>)
@@ -274,18 +275,18 @@
         [fail-ok?
          #f]
         [else
-         (error 'get-factory* "internal error: cannot get factory\n  from: ~e" src)]))
+         (crypto-error "internal error: cannot get factory\n  from: ~e" src)]))
 
-(define (get-random* who src)
+(define (get-random* src)
   (let ([random-impl
          (if src
              (send (get-factory* src) get-random)
              (get-random))])
     (or random-impl
-        (error who "no source of randomness available~a"
-               (if src
-                   (format "\n  from: ~e" src)
-                   "")))))
+        (crypto-error "no source of randomness available~a"
+                      (if src
+                          (format "\n  from: ~e" src)
+                          "")))))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))
@@ -295,21 +296,20 @@
 (define keygen-spec/c
   (listof (list/c symbol? any/c)))
 
-(define (check-keygen-spec who spec allowed)
+(define (check-keygen-spec spec allowed)
   ;; Assume already checked keygen-spec/c
   ;; Check entries
   (for ([entry (in-list spec)])
     (cond [(assq (car entry) allowed)
            => (lambda (allowed-entry)
                 (unless ((cadr allowed-entry) (cadr entry))
-                  (error who
-                         "bad key-generation option value\n  key: ~e\n  expected: ~a\n  got: ~e"
-                         (car entry)
-                         (caddr allowed-entry)
-                         (cadr entry))))]
+                  (crypto-error "bad key-generation option value\n  key: ~e\n  expected: ~a\n  got: ~e"
+                                (car entry)
+                                (caddr allowed-entry)
+                                (cadr entry))))]
           [else
-           (error who "bad key-generation option\n  key: ~e\n  value: ~e"
-                  (car entry) (cadr entry))]))
+           (crypto-error "bad key-generation option\n  key: ~e\n  value: ~e"
+                         (car entry) (cadr entry))]))
   ;; FIXME: check duplicates?
   (void))
 

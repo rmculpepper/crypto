@@ -59,53 +59,62 @@
 ;; ----
 
 (define (make-digest-ctx di)
-  (send (-get-impl 'make-digest-ctx di) new-ctx))
+  (with-crypto-entry 'make-digest-ctx
+    (send (-get-impl di) new-ctx)))
 
-(define (-get-impl who o)
+(define (-get-impl o)
   (cond [(digest-spec? o)
          (or (get-digest o)
-             (error who "could not get digest implementation\n  digest: ~e" o))]
+             (crypto-error "could not get digest implementation\n  digest: ~e" o))]
         [else (get-impl* o)]))
 
 (define (digest-size o)
-  (digest-spec-size (get-spec* o)))
+  (with-crypto-entry 'digest-size
+    (digest-spec-size (get-spec* o))))
 (define (digest-block-size o)
-  (digest-spec-block-size (get-spec* o)))
+  (with-crypto-entry 'digest-block-size
+    (digest-spec-block-size (get-spec* o))))
 
 ;; ----
 
 (define (digest-update x buf [start 0] [end (bytes-length buf)])
-  (send x update 'digest-update buf start end))
+  (with-crypto-entry 'digest-update
+    (send x update buf start end)))
 
 (define (digest-final dg)
-  (let* ([len (digest-size dg)]
-         [buf (make-bytes len)])
-    (send dg final! 'digest-final buf 0 len)
-    buf))
+  (with-crypto-entry 'digest-final
+    (let* ([len (digest-size dg)]
+           [buf (make-bytes len)])
+      (send dg final! buf 0 len)
+      buf)))
 
 (define (digest-copy dg)
-  (send dg copy 'digest-copy))
+  (with-crypto-entry 'digest-copy
+    (send dg copy)))
 
 (define (digest-peek-final dg)
-  (let* ([dg (send dg copy 'digest-peek-final)])
-    (and dg
-         (let* ([len (digest-size dg)]
-                [buf (make-bytes len)])
-           (send (digest-copy dg) final! 'digest-peek-final buf 0 len)
-           buf))))
+  (with-crypto-entry 'digest-peek-final
+    (let* ([dg (send dg copy)])
+      (and dg
+           (let* ([len (digest-size dg)]
+                  [buf (make-bytes len)])
+             (send (digest-copy dg) final! buf 0 len)
+             buf)))))
 
 ;; ----
 
 (define (digest di inp)
-  (let ([di (-get-impl 'digest di)])
-    (cond [(bytes? inp) (-digest-bytes 'digest di inp 0 (bytes-length inp))]
-          [(string? inp)
-           (-digest-port di (open-input-string inp))]
-          [(input-port? inp) (-digest-port di inp)])))
+  (with-crypto-entry 'digest
+    (let ([di (-get-impl di)])
+      (cond [(bytes? inp) (-digest-bytes di inp 0 (bytes-length inp))]
+            [(string? inp)
+             (-digest-port di (open-input-string inp))]
+            [(input-port? inp) (-digest-port di inp)]))))
 
 (define (digest-bytes di buf [start 0] [end (bytes-length buf)])
-  (let ([di (-get-impl 'digest-bytes di)])
-    (-digest-bytes 'digest-bytes di buf start end)))
+  (with-crypto-entry 'digest-bytes
+    (let ([di (-get-impl di)])
+      (-digest-bytes di buf start end))))
 
 (define (-digest-port type inp)
   (digest-final (-digest-port* type inp)))
@@ -121,8 +130,8 @@
                (digest-update dg buf 0 count)
                (lp)])))))
 
-(define (-digest-bytes who di bs start end)
-  (check-input-range who bs start end)
+(define (-digest-bytes di bs start end)
+  (check-input-range bs start end)
   (cond [(send di can-digest-buffer!?)
          (let ([outbuf (make-bytes (send di get-size))])
            (send di digest-buffer! 'digest bs start end outbuf 0)
@@ -135,46 +144,50 @@
 ;; ----
 
 (define (make-hmac-ctx di key)
-  (let* ([di (-get-impl 'make-hmac-ctx di)]
-         [himpl (send di get-hmac-impl 'make-hmac-ctx)])
-    (send himpl new-ctx 'make-hmac-ctx key)))
+  (with-crypto-entry 'make-hmac-ctx
+    (let* ([di (-get-impl di)]
+           [himpl (send di get-hmac-impl)])
+      (send himpl new-ctx key))))
 
 (define (hmac di key inp)
-  (let ([di (-get-impl 'hmac di)])
-    (cond [(bytes? inp) (-hmac-bytes 'hmac di key inp 0 (bytes-length inp))]
-          [(string? inp) (-hmac-port di key (open-input-string inp))]
-          [(input-port? inp) (-hmac-port di key inp)])))
+  (with-crypto-entry 'hmac
+    (let ([di (-get-impl di)])
+      (cond [(bytes? inp) (-hmac-bytes di key inp 0 (bytes-length inp))]
+            [(string? inp) (-hmac-port di key (open-input-string inp))]
+            [(input-port? inp) (-hmac-port di key inp)]))))
 
 (define (hmac-bytes di key bs [start 0] [end (bytes-length bs)])
-  (let ([di (-get-impl 'hmac-bytes di)])
-    (-hmac-bytes 'hmac-bytes di key bs start end)))
+  (with-crypto-entry 'hmac-bytes
+    (let ([di (-get-impl di)])
+      (-hmac-bytes di key bs start end))))
 
-(define (-hmac-bytes who di key buf start end)
-  (check-input-range who buf start end)
+(define (-hmac-bytes di key buf start end)
+  (check-input-range buf start end)
   (let ([outbuf (make-bytes (send di get-size))])
     (cond [(send di can-hmac-buffer!?)
-           (send di hmac-buffer! 'hmac key buf 0 (bytes-length buf) outbuf 0)]
+           (send di hmac-buffer! key buf 0 (bytes-length buf) outbuf 0)]
           [else
-           (let* ([himpl (send di get-hmac-impl 'hmac)]
-                  [hctx (send himpl new-ctx 'hmac key)])
-             (send hctx update 'hmac buf start end)
-             (send hctx final! 'hmac outbuf 0 (bytes-length outbuf)))])
+           (let* ([himpl (send di get-hmac-impl)]
+                  [hctx (send himpl new-ctx key)])
+             (send hctx update buf start end)
+             (send hctx final! outbuf 0 (bytes-length outbuf)))])
     outbuf))
 
 (define (-hmac-port di key inp)
   (let* ([buf (make-bytes 4000)]
          [size (send di get-size)]
-         [himpl (send di get-hmac-impl 'hmac)]
-         [hctx (send himpl new-ctx 'hmac key)])
+         [himpl (send di get-hmac-impl)]
+         [hctx (send himpl new-ctx key)])
     (let loop ()
       (let ([count (read-bytes-avail! buf inp)])
         (cond [(eof-object? count)
-               (send hctx final! 'hmac buf 0 size)
+               (send hctx final! buf 0 size)
                (shrink-bytes buf size)]
               [else
-               (send hctx update 'hmac buf 0 count)
+               (send hctx update buf 0 count)
                (loop)])))))
 
 (define (generate-hmac-key di [rand #f])
-  (let ([rand (or rand (get-random* 'generate-hmac-key di))])
-    (random-bytes (digest-size di) rand)))
+  (with-crypto-entry 'generate-hmac-key
+    (let ([rand (or rand (get-random* di))])
+      (random-bytes (digest-size di) rand))))

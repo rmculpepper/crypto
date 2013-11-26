@@ -17,6 +17,7 @@
 (require racket/class
          racket/contract
          "interfaces.rkt"
+         "error.rkt"
          "factory.rkt")
 (provide
  (contract-out
@@ -34,10 +35,11 @@
   ))
 
 (define (random-bytes size [impl (get-random)] #:level [level 'strong])
-  (unless impl (error 'random-bytes "no source of randomness given"))
-  (let ([buf (make-bytes size)])
-    (send impl random-bytes! 'random-bytes buf 0 size level)
-    buf))
+  (with-crypto-entry 'random-bytes
+    (unless impl (crypto-error "no source of randomness given"))
+    (let ([buf (make-bytes size)])
+      (send impl random-bytes! buf 0 size level)
+      buf)))
 
 (define (random-ready? ri)
   (send ri ok?))
@@ -47,10 +49,9 @@
 
 (define (random-add-entropy ri buf [entropy-in-bytes (bytes-length buf)])
   (unless (send ri can-add-entropy?)
-    (error 'random-add-entropy "adding entropy not supported"))
+    (crypto-error "adding entropy not supported"))
   (unless (<= 0 entropy-in-bytes (bytes-length buf))
-    (error 'random-add-entropy
-           "entropy estimate out of range\n  range: [0,~s]\n  estimate: ~e"
-           (bytes-length buf)
-           entropy-in-bytes))
-  (send ri add-entropy 'random-add-entropy buf entropy-in-bytes))
+    (crypto-error "entropy estimate out of range\n  range: [0,~s]\n  estimate: ~e"
+                  (bytes-length buf)
+                  entropy-in-bytes))
+  (send ri add-entropy buf entropy-in-bytes))

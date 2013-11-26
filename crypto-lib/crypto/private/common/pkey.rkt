@@ -21,7 +21,7 @@
          "catalog.rkt"
          "common.rkt"
          "digest.rkt"
-         ;; "cipher.rkt"
+         "error.rkt"
          "factory.rkt")
 (provide
  private-key?
@@ -120,77 +120,94 @@
   (and (is-a? x pk-key<%>) (not (send x is-private?))))
 
 (define (pk-can-sign? pki)
-  (cond [(pk-spec? pki)
-         (pk-spec-can-sign? pki)]
-        [else (send (get-impl* pki) can-sign?)]))
+  (with-crypto-entry 'pk-can-sign?
+    (cond [(pk-spec? pki)
+           (pk-spec-can-sign? pki)]
+          [else (send (get-impl* pki) can-sign?)])))
 (define (pk-can-encrypt? pki)
-  (cond [(pk-spec? pki)
-         (pk-spec-can-encrypt? pki)]
-        [else (send (get-impl* pki) can-encrypt?)]))
+  (with-crypto-entry 'pk-can-encrypt?
+    (cond [(pk-spec? pki)
+           (pk-spec-can-encrypt? pki)]
+          [else (send (get-impl* pki) can-encrypt?)])))
 (define (pk-can-key-agree? pki)
-  (cond [(pk-spec? pki)
-         (pk-spec-can-key-agree? pki)]
-        [else (send (get-impl* pki) can-key-agree?)]))
+  (with-crypto-entry 'pk-can-key-agree?
+    (cond [(pk-spec? pki)
+           (pk-spec-can-key-agree? pki)]
+          [else (send (get-impl* pki) can-key-agree?)])))
 (define (pk-has-parameters? pki)
-  (cond [(pk-spec? pki)
-         (pk-spec-has-parameters? pki)]
-        [else (send (get-impl* pki) has-parameters?)]))
+  (with-crypto-entry 'pk-has-parameters?
+    (cond [(pk-spec? pki)
+           (pk-spec-has-parameters? pki)]
+          [else (send (get-impl* pki) has-parameters?)])))
 
 (define (pk-key->parameters pk)
-  (and (pk-has-parameters? pk)
-       (send pk get-params 'pk-key->parameters)))
+  (with-crypto-entry 'pk-key->parameters
+    (and (pk-has-parameters? pk)
+         (send pk get-params))))
 
 ;; Are the *public parts* of the given keys equal?
 (define (public-key=? k1 . ks)
-  (for/and ([k (in-list ks)])
-    (send k1 equal-to-key? k)))
+  (with-crypto-entry 'public-key=?
+    (for/and ([k (in-list ks)])
+      (send k1 equal-to-key? k))))
 
 (define (pk-key->sexpr pk)
-  (send pk write-key 'pk-key->sexpr #f))
+  (with-crypto-entry 'pk-key->sexpr
+    (send pk write-key #f)))
 (define (sexpr->pk-key sexpr [factory/s (crypto-factories)])
-  (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
-        (let ([reader (send factory get-key-reader)])
-          (and reader (send reader read-key 'sexpr->pk-key sexpr)))) 
-      (error 'sexpr->pk-key "unable to read key\n  key: ~e" sexpr)))
+  (with-crypto-entry 'sexpr->pk-key
+    (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
+          (let ([reader (send factory get-key-reader)])
+            (and reader (send reader read-key sexpr)))) 
+        (crypto-error "unable to read key\n  key: ~e" sexpr))))
 
 (define (pk-parameters->sexpr pkp)
-  (send pkp write-params 'pk-parameters->sexpr #f))
+  (with-crypto-entry 'pk-parameters->sexpr
+    (send pkp write-params #f)))
 (define (sexpr->pk-parameters sexpr [factory/s (crypto-factories)])
-  (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
-        (let ([reader (send factory get-key-reader)])
-          (and reader (send reader read-params 'sexpr->pk-parameters sexpr)))) 
-      (error 'sexpr->pk-parameters "unable to read parameters\n  key: ~e" sexpr)))
+  (with-crypto-entry 'sexpr->pk-parameters
+    (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
+          (let ([reader (send factory get-key-reader)])
+            (and reader (send reader read-params sexpr)))) 
+        (crypto-error "unable to read parameters\n  key: ~e" sexpr))))
 
 (define (pk-key->public-only-key pk)
-  (send pk get-public-key 'pk-key->public-only-key))
+  (with-crypto-entry 'pk-key->public-only-key
+    (send pk get-public-key)))
 
 ;; ============================================================
 
 (define (pk-sign-digest pk di dbuf #:pad [pad #f])
-  (let ([di (get-spec* di)])
-    (send pk sign 'pk-sign-digest dbuf di pad)))
+  (with-crypto-entry 'pk-sign-digest
+    (let ([di (get-spec* di)])
+      (send pk sign dbuf di pad))))
 
 (define (pk-verify-digest pk di dbuf sig #:pad [pad #f])
-  (let ([di (get-spec* di)])
-    (send pk verify 'pk-verify-digest dbuf di pad sig)))
+  (with-crypto-entry 'pk-verify-digest
+    (let ([di (get-spec* di)])
+      (send pk verify dbuf di pad sig))))
 
 ;; ============================================================
 
 (define (digest/sign pk di inp #:pad [pad #f])
-  (let ([di (get-spec* di)])
-    (send pk sign 'digest/sign (digest di inp) di pad)))
+  (with-crypto-entry 'digest/sign
+    (let ([di (get-spec* di)])
+      (send pk sign (digest di inp) di pad))))
 
 (define (digest/verify pk di inp sig #:pad [pad #f])
-  (let ([di (get-spec* di)])
-    (send pk verify 'digest/verify (digest di inp) di pad sig)))
+  (with-crypto-entry 'digest/verify
+    (let ([di (get-spec* di)])
+      (send pk verify (digest di inp) di pad sig))))
 
 ;; ============================================================
 
 (define (pk-encrypt pk buf #:pad [pad #f])
-  (send pk encrypt 'pk-encrypt buf pad))
+  (with-crypto-entry 'pk-encrypt
+    (send pk encrypt buf pad)))
 
 (define (pk-decrypt pk buf #:pad [pad #f])
-  (send pk decrypt 'pk-decrypt buf pad))
+  (with-crypto-entry 'pk-decrypt
+    (send pk decrypt buf pad)))
 
 ;; ============================================================
 
@@ -207,21 +224,23 @@
 ;; ============================================================
 
 (define (pk-derive-secret pk peer-key)
-  (send pk compute-secret 'pk-derive-secret peer-key))
+  (with-crypto-entry 'pk-derive-secret
+    (send pk compute-secret peer-key)))
 
 ;; ============================================================
 
-(define (-get-impl who pki)
+(define (-get-impl pki)
   (cond [(pk-spec? pki)
          (or (get-pk pki)
-             (error 'generate-private-key
-                    "could not get pk implementation\n  PK algorithm: ~e" pki))]
+             (crypto-error "could not get pk implementation\n  PK algorithm: ~e" pki))]
         [else pki]))
 
 (define (generate-private-key pki [config '()])
-  (let ([pki (-get-impl 'generate-private-key pki)])
-    (send pki generate-key 'generate-private-key config)))
+  (with-crypto-entry 'generate-private-key
+    (let ([pki (-get-impl pki)])
+      (send pki generate-key config))))
 
 (define (generate-pk-parameters pki [config '()])
-  (let ([pki (-get-impl 'generate-pk-parameters pki)])
-    (send pki generate-params 'generate-pk-parameters config)))
+  (with-crypto-entry 'generate-pk-parameters
+    (let ([pki (-get-impl pki)])
+      (send pki generate-params config))))
