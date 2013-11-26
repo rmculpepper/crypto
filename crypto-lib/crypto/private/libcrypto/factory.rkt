@@ -24,8 +24,7 @@
          "cipher.rkt"
          "pkey.rkt"
          "ffi.rkt"
-         "rand.rkt"
-         "macros.rkt")
+         "rand.rkt")
 (provide libcrypto-factory)
 
 #|

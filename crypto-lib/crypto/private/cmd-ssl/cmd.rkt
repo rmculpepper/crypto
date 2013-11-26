@@ -25,7 +25,7 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
-         (only-in "../libcrypto/util.rkt" hex unhex))
+         "../common/util.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================
@@ -198,9 +198,9 @@
              (format "-~a" (send impl get-cmd))
              (if enc? "-e" "-d")
              "-bufsize" "1"
-             "-K" (bytes->string/latin-1 (hex key))
+             "-K" (bytes->string/latin-1 (bytes->hex-string key))
              (append (if pad? '() '("-nopad"))
-                     (if iv (list "-iv" (bytes->string/latin-1 (hex iv))) '()))))
+                     (if iv (list "-iv" (bytes->string/latin-1 (bytes->hex-string iv))) '()))))
 
     #|
     The openssl enc command doesn't write *any* data until it's been sent
