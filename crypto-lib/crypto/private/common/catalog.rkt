@@ -118,21 +118,21 @@
            ))
 
 ;; Mode effects:
-;;   ecb: iv=none,    block same, 0 added
-;;   cbc: iv=1 block, block same, 0 added
-;;   ofb: iv=1 block, stream cipher, 0 added
-;;   cfb: iv=1 block, stream cipher, 0 added
-;;   ctr: iv=1 block, stream cipher, 0 added
-;;   gcm: iv=???, ???                                -- FIXME
+;;   ecb: iv=none,    block same
+;;   cbc: iv=1 block, block same
+;;   ofb: iv=1 block, stream cipher
+;;   cfb: iv=1 block, stream cipher
+;;   ctr: iv=1 block, stream cipher
+;;   gcm: iv=variable, 12 bytes (3/4 block) typical, stream cipher
 ;;   ccm: NOTE: offline/nonincremental: needs length before starting; don't support
 (define known-block-modes
-  '(;; Mode IVblocks IVbytes Type Added
-    [ecb 0 0 block 0]
-    [cbc 1 0 block 0]
-    [ofb 1 0 stream 0]
-    [cfb 1 0 stream 0]
-    [ctr 1 0 stream 0]
-    [gcm 0 12 stream 0]
+  '(;; Mode IVblocks IVbytes Type
+    [ecb 0 0 block]
+    [cbc 1 0 block]
+    [ofb 1 0 stream]
+    [cfb 1 0 stream]
+    [ctr 1 0 stream]
+    [gcm 0 12 stream]
     ))
 
 (define (block-mode? x) (and (symbol? x) (assq x known-block-modes) #t))
@@ -194,8 +194,8 @@
        (match entry
          [(list block-size allowed-keys)
           (match (assq mode known-block-modes)
-            [(list _ _ _ 'stream _) 1]
-            [(list _ _ _ 'block _) block-size])]
+            [(list _ _ _ 'stream) 1]
+            [(list _ _ _ 'block) block-size])]
          [_ #f]))]))
 
 (define (cipher-spec-iv-size cipher-spec)
@@ -208,7 +208,7 @@
      (match (hash-ref known-block-ciphers cipher-name #f)
        [(list block-size allowed-keys)
         (match (assq mode known-block-modes)
-          [(list _ iv-blocks iv-bytes _ _)
+          [(list _ iv-blocks iv-bytes _)
            (+ iv-bytes (* iv-blocks block-size))])]
        [_ #f])]))
 
@@ -262,7 +262,7 @@
   (if (eq? mode 'stream)
       #f
       (match (assq mode known-block-modes)
-        [(list _ _ _ effective-mode _)
+        [(list _ _ _ effective-mode)
          (eq? effective-mode 'block)])))
 
 ;; ============================================================
