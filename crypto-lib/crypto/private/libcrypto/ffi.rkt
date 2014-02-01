@@ -878,7 +878,7 @@
 
 (define-crypto i2o_ECPublicKey
   (_fun _EC_KEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_ECPublicKey positive?))
+  #:wrap (err-wrap 'i2o_ECPublicKey positive?))
 
 
 

@@ -325,9 +325,9 @@ DSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
 
 DSA private key.}
 
-@item{@racket[(list 'sec1 'ec 'public _ecpoint-bytes)]
+@item{@racket[(list 'pkix 'ec 'public _der-bytes)]
 
-EC public-only key as octet-string-encoded ECPoint @cite{SEC1}.}
+EC public-only key as DER-encoded SubjectPublicKeyInfo @cite{SEC1}.}
 
 @item{@racket[(list 'sec1 'ec 'private _der-bytes)]
 

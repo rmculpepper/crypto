@@ -138,7 +138,7 @@
   (with-crypto-entry 'pk-has-parameters?
     (cond [(pk-spec? pki)
            (pk-spec-has-parameters? pki)]
-          [else (send (get-impl* pki) has-parameters?)])))
+          [else (send (get-impl* pki) has-params?)])))
 
 (define (pk-key->parameters pk)
   (with-crypto-entry 'pk-key->parameters
@@ -157,7 +157,7 @@
 (define (sexpr->pk-key sexpr [factory/s (crypto-factories)])
   (with-crypto-entry 'sexpr->pk-key
     (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
-          (let ([reader (send factory get-key-reader)])
+          (let ([reader (send factory get-pk-reader)])
             (and reader (send reader read-key sexpr)))) 
         (crypto-error "unable to read key\n  key: ~e" sexpr))))
 

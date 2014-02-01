@@ -71,7 +71,6 @@ To print all ciphers:
     [des-ede3 (cbc cfb ofb) #f "des-ede3"] ;; ECB mode???
     [rc4 (stream) #f "rc4"]))
 
-
 #|
 ;; As of openssl-0.9.8 pkeys can only be used with certain types of digests.
 ;; openssl-0.9.9 is supposed to remove the restriction for digest types
@@ -123,6 +122,11 @@ To print all ciphers:
         [(dh)  (new libcrypto-dh-impl%  (factory this))]
         [(ec)  (new libcrypto-ec-impl%  (factory this))]
         [else #f]))
+
+
+    (define libcrypto-read-key (new libcrypto-read-key% (factory this)))
+    (define/override (get-pk-reader)
+      libcrypto-read-key)
 
     (define random-impl #f)
     (define/override (get-random)

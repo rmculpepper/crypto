@@ -128,7 +128,7 @@ The 'libcrypto params format:
 (define libcrypto-read-key%
   (class* impl-base% (pk-read-key<%>)
     (inherit-field factory)
-    (super-new)
+    (super-new (spec 'libcrypto-read-key))
 
     (define/public (read-key sk)
       (define-values (evp private?)
@@ -143,17 +143,15 @@ The 'libcrypto params format:
              (begin0 (EVP_PKCS82PKEY pkcs8info)
                (values (PKCS8_PRIV_KEY_INFO_free pkcs8info) #t)))]
           ;; RSA, DSA public keys (and maybe others too?)
-          [(list 'pkix (or 'rsa 'dsa) 'public (? bytes? buf)) ;; SubjectPublicKeyInfo
+          [(list 'pkix (or 'rsa 'dsa 'ec) 'public (? bytes? buf)) ;; SubjectPublicKeyInfo
            (values (d2i_PUBKEY buf (bytes-length buf)) #f)]
           [(list 'sec1 'ec 'private (? bytes? buf)) ;; ECPrivateKey
-           (values (read-ec-key #t buf) #t)]
-          [(list 'sec1 'ec 'public (? bytes? buf)) ;; ECPoint OCTET STRING
-           (values (read-ec-key #f buf) #f)]
+           (values (read-private-ec-key buf) #t)]
           [(list 'libcrypto 'dh 'public (? bytes? params) (? bytes? pub))
            (values (read-dh-key params pub #f) #f)]
           [(list 'libcrypto 'dh 'private (? bytes? params) (? bytes? pub) (? bytes? priv))
            (values (read-dh-key params pub priv) #t)]
-          [_ #f]))
+          [_ (values #f #f)]))
       (define impl (and evp (evp->impl evp)))
       (and evp impl (new libcrypto-pk-key% (impl impl) (evp evp) (private? private?))))
 
@@ -181,10 +179,8 @@ The 'libcrypto params format:
       (DH_free dh)
       evp)
 
-    (define/private (read-ec-key private? buf)
-      (define ec
-        (cond [private? (d2i_ECPrivateKey buf (bytes-length buf))]
-              [else     (o2i_ECPublicKey buf (bytes-length buf))]))
+    (define/private (read-private-ec-key buf)
+      (define ec (d2i_ECPrivateKey buf (bytes-length buf)))
       (define evp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY evp ec)
       (EC_KEY_free ec)
@@ -517,11 +513,14 @@ The 'libcrypto params format:
              (EC_KEY_free ec)
              `(sec1 ec private ,(shrink-bytes outbuf outlen2))]
             [else ;; public
+             (super *write-key private? fmt evp)
+             #|
              (define outlen (i2o_ECPublicKey ec #f))
              (define outbuf (make-bytes outlen))
              (define outlen2 (i2o_ECPublicKey ec outbuf))
              (EC_KEY_free ec)
-             `(sec1 ec public ,(shrink-bytes outbuf outlen2))]))
+             `(sec1 ec public ,(shrink-bytes outbuf outlen2))
+             |#]))
 
     (define/public (*generate-key config evp)
       (define kec
