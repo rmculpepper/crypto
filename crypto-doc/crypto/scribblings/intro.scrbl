@@ -190,3 +190,6 @@ shared-secret
 (equal? shared-secret
         (pk-derive-secret priv1 (pk-key->public-only-key priv2)))
 ]
+
+
+@(close-eval the-eval)
