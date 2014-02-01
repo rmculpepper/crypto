@@ -309,36 +309,36 @@ Returns an S-expression representation of the key @racket[pk]. The
 result has one of the following forms:
 
 @itemlist[
-@item{@racket[(list 'pkix 'rsa 'public _der-bytes)]
+@item{@racket[(list 'rsa 'public 'pkix _der-bytes)]
 
 RSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
 
-@item{@racket[(list 'pkcs1 'rsa 'private _der-bytes)]
+@item{@racket[(list 'rsa 'private 'pkcs1 _der-bytes)]
 
-RSA private key as DER-encoded (unencrypted) RSAPrivateKey @cite{PKCS1}.}
+RSA private key as DER-encoded RSAPrivateKey @cite{PKCS1}.}
 
-@item{@racket[(list 'pkix 'dsa 'public _der-bytes)]
+@item{@racket[(list 'dsa 'public 'pkix _der-bytes)]
 
 DSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
 
-@item{@racket[(list 'libcrypto 'dsa 'private _der-bytes)]
+@item{@racket[(list 'dsa 'private 'libcrypto _der-bytes)]
 
 DSA private key.}
 
-@item{@racket[(list 'pkix 'ec 'public _der-bytes)]
+@item{@racket[(list 'ec 'public 'pkix _der-bytes)]
 
 EC public-only key as DER-encoded SubjectPublicKeyInfo @cite{SEC1}.}
 
-@item{@racket[(list 'sec1 'ec 'private _der-bytes)]
+@item{@racket[(list 'ec 'private 'sec1 _der-bytes)]
 
 EC private key as DER-encoded ECPrivateKey @cite{SEC1}.}
 
-@item{@racket[(list 'libcrypto 'dh 'public _param-bytes _pub-bytes)]
+@item{@racket[(list 'dh 'public 'libcrypto _param-bytes _pub-bytes)]
 
 DH public-only key as separate DER-encoded DHParameter @cite{PKCS3} and unsigned
 base-256 encoding of the public integer.}
 
-@item{@racket[(list 'libcrypto 'dh 'private _param-bytes _pub-bytes _priv-bytes)]
+@item{@racket[(list 'dh 'private 'libcrypto _param-bytes _pub-bytes _priv-bytes)]
 
 DH private key, like public-only key but with additional unsigned
 base-256 encoding of the private integer.}
@@ -348,7 +348,9 @@ More formats may be added in future versions of this library, as
 well as options to select a preferred format.
 }
 
-@defproc[(sexpr->pk-key [pki pk-impl?] [sexpr printable/c])
+@defproc[(sexpr->pk-key [sexpr any/c]
+                        [factories (or/c crypto-factory? (listof crypto-factory?))
+                                   (crypto-factories)])
          pk-key?]{
 
 Parses @racket[sexpr] and returns a PK key associated with the
@@ -363,24 +365,26 @@ Returns an S-expression representation of the key parameters
 @racket[pkp]. The result has one of the following forms:
 
 @itemlist[
-@item{@racket[(list 'pkix 'dsa _der-bytes)]
+@item{@racket[(list 'dsa 'parameters 'pkix _der-bytes)]
 
 DSA key parameters encoded as DSS-Parms @cite{RFC2459} (DER).}
 
-@item{@racket[(list 'sec1 'ec _der-bytes)]
-
-EC key parameters encoded as ECDomainParameters @cite{SEC1} (DER).}
-
-@item{@racket[(list 'pkcs3 'dh _der-bytes)]
+@item{@racket[(list 'dh 'parameters 'pkcs3 _der-bytes)]
 
 DH key parameters encoded as DHParameter @cite{PKCS3} (DER).}
+
+@item{@racket[(list 'ec 'parameters 'sec1 _der-bytes)]
+
+EC key parameters encoded as ECDomainParameters @cite{SEC1} (DER).}
 ]
 
 More formats may be added in future versions of this library, as well
 as options to select a preferred format.
 }
 
-@defproc[(sexpr->pk-parameters [pki pk-impl?] [sexpr printable/c])
+@defproc[(sexpr->pk-parameters [sexpr any/c]
+                               [factories (or/c crypto-factory? (listof crypto-factory?)) 
+                                          (crypto-factories)])
          pk-parameters?]{
 
 Parses @racket[sexpr] and returns a key-parameters value associated

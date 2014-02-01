@@ -714,6 +714,10 @@
   (_fun _int -> _int)
   #:wrap (err-wrap 'EVP_PKEY_type positive?))
 
+(define-crypto EVP_PKEY_set_type
+  (_fun _EVP_PKEY _int -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_set_type positive?))
+
 (define-crypto EVP_PKEY_size
   (_fun _EVP_PKEY -> _int)
   #:wrap (err-wrap 'EVP_PKEY_size positive?))

@@ -83,31 +83,12 @@ TODO: support predefined DH params
 |#
 
 #|
-Key Format
-
 The 'libcrypto key format:
-
- - (list 'libcrypto (U 'rsa 'dsa 'ec) 'private key-bytes)
-   for 'rsa: key-bytes is PKCS#1 RSAPrivateKey
-   for 'dsa: key-bytes is ???
-   for 'ec:  key-bytes is SEC1 ECPrivateKey
- - (list 'libcrypto (U 'rsa 'dsa 'ec) 'public key-bytes)
-   for 'rsa and 'dsa: key-bytes is SubjectPublicKeyInfo (citation???)
-   for 'ec: key-bytes is an octet string representation of an EC_POINT (citation???)
-
- - (list 'libcrypto 'dh 'private param-bytes pubkey-bytes privkey-bytes)
- - (list 'libcrypto 'dh 'public  param-bytes pubkey-bytes)
+ - (list 'dh 'private 'libcrypto param-bytes pubkey-bytes privkey-bytes)
+ - (list 'dh 'public  'libcrypto param-bytes pubkey-bytes)
    param-bytes is PKCS#3 DHParameter
    pubkey-bytes is unsigned binary rep of public key bignum
    privkey-bytes is unsigned binary rep of private key bignum
-
-The 'libcrypto params format:
-
- - (list 'libcrypto (U 'dsa 'dh 'ec) params-bytes)
-   for 'dsa: key-bytes is ???
-   for 'dh:  params-bytes is PKCS#3 DHParameter
-   for 'ec:  param-bytes is ECPKParameters (RFC 3279)
-
 |#
 
 #|
@@ -134,22 +115,22 @@ The 'libcrypto params format:
       (define-values (evp private?)
         (match sk
           ;; RSA, DSA private keys
-          [(list 'pkcs1 'rsa 'private (? bytes? buf))
+          [(list 'rsa 'private 'pkcs1 (? bytes? buf))
            (d2i_PrivateKey EVP_PKEY_RSA buf (bytes-length buf))]
-          [(list 'libcrypto 'dsa 'private (? bytes? buf))
+          [(list 'dsa 'private 'libcrypto (? bytes? buf))
            (d2i_PrivateKey EVP_PKEY_DSA buf (bytes-length buf))]
-          [(list 'pkcs8 (or 'rsa 'dsa) 'private (? bytes? buf)) ;; PrivateKeyInfo
+          [(list (or 'rsa 'dsa) 'private 'pkcs8 (? bytes? buf)) ;; PrivateKeyInfo
            (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
              (begin0 (EVP_PKCS82PKEY pkcs8info)
                (values (PKCS8_PRIV_KEY_INFO_free pkcs8info) #t)))]
           ;; RSA, DSA public keys (and maybe others too?)
-          [(list 'pkix (or 'rsa 'dsa 'ec) 'public (? bytes? buf)) ;; SubjectPublicKeyInfo
+          [(list (or 'rsa 'dsa 'ec) 'public 'pkix (? bytes? buf)) ;; SubjectPublicKeyInfo
            (values (d2i_PUBKEY buf (bytes-length buf)) #f)]
-          [(list 'sec1 'ec 'private (? bytes? buf)) ;; ECPrivateKey
+          [(list 'ec 'private 'sec1 (? bytes? buf)) ;; ECPrivateKey
            (values (read-private-ec-key buf) #t)]
-          [(list 'libcrypto 'dh 'public (? bytes? params) (? bytes? pub))
+          [(list 'dh 'public 'libcrypto (? bytes? params) (? bytes? pub))
            (values (read-dh-key params pub #f) #f)]
-          [(list 'libcrypto 'dh 'private (? bytes? params) (? bytes? pub) (? bytes? priv))
+          [(list 'dh 'private 'libcrypto (? bytes? params) (? bytes? pub) (? bytes? priv))
            (values (read-dh-key params pub priv) #t)]
           [_ (values #f #f)]))
       (define impl (and evp (evp->impl evp)))
@@ -189,20 +170,20 @@ The 'libcrypto params format:
     (define/public (read-params sp)
       (define evp
         (match sp
-          [(list 'libcrypto 'dsa (? bytes? buf))
+          [(list 'dsa 'parameters 'pkix (? bytes? buf))
            (define dsa (d2i_DSAparams buf (bytes-length buf)))
            (define evp (EVP_PKEY_new))
            (EVP_PKEY_set1_DSA evp dsa)
            (DSA_free dsa)
            evp]
-          [(list 'libcrypto 'dh (? bytes? buf))
+          [(list 'dh 'parameters 'pkcs3 (? bytes? buf))
            (define dh (d2i_DHparams buf (bytes-length buf)))
            ;; FIXME: DH_check
            (define evp (EVP_PKEY_new))
            (EVP_PKEY_set1_DH evp dh)
            (DH_free dh)
            evp]
-          [(list 'libcrypto 'ec (? bytes? buf))
+          [(list 'ec 'parameters 'sec1 (? bytes? buf))
            (define group (d2i_ECPKParameters buf (bytes-length buf)))
            ;; FIXME: check?
            (define ec (EC_KEY_new))
@@ -211,9 +192,10 @@ The 'libcrypto params format:
            (define evp (EVP_PKEY_new))
            (EVP_PKEY_set1_EC_KEY evp ec)
            (EC_KEY_free ec)
-           evp]))
+           evp]
+          [_ #f]))
       (define impl (and evp (evp->impl evp)))
-      (new libcrypto-pk-params% (impl impl) (evp evp)))
+      (and impl (new libcrypto-pk-params% (impl impl) (evp evp))))
     ))
 
 ;; ============================================================
@@ -232,12 +214,12 @@ The 'libcrypto params format:
                 ;; FIXME: doesn't seem to work!
                 ;; Writing RSA key gives only 3 non-NUL bytes at beginning.
                 (define pkcs8info (EVP_PKEY2PKCS8 evp))
-                `(pkcs8 ,spec private ,(i2d i2d_PKCS8_PRIV_KEY_INFO pkcs8info))]
+                `(,spec private pkcs8 ,(i2d i2d_PKCS8_PRIV_KEY_INFO pkcs8info))]
                [else (err/key-format fmt)])]
             [else ;; public
              (case fmt
                [(#f) ;; PUBKEY
-                `(pkix ,spec public ,(i2d i2d_PUBKEY evp))]
+                `(,spec public pkix ,(i2d i2d_PUBKEY evp))]
                [else (err/key-format fmt)])]))
 
     (define/public (generate-key config)
@@ -267,7 +249,7 @@ The 'libcrypto params format:
 
     (define/override (*write-key private? fmt evp)
       (cond [(and private? (memq fmt '(pkcs1 #f)))
-             `(pkcs1 rsa private ,(i2d i2d_PrivateKey evp))]
+             `(rsa private pkcs1 ,(i2d i2d_PrivateKey evp))]
             [else (super *write-key private? fmt evp)]))
 
     #|
@@ -339,7 +321,7 @@ The 'libcrypto params format:
 
     (define/override (*write-key private? fmt evp)
       (cond [(and private? (memq fmt '(#f)))
-             `(libcrypto dsa private ,(i2d i2d_PrivateKey evp))]
+             `(dsa private libcrypto ,(i2d i2d_PrivateKey evp))]
             [else (super *write-key private? fmt evp)]))
 
     (define/public (*write-params fmt evp)
@@ -349,7 +331,7 @@ The 'libcrypto params format:
       (define buf (make-bytes (i2d_DSAparams dsa #f)))
       (i2d_DSAparams dsa buf)
       (DSA_free dsa)
-      `(libcrypto dsa ,buf))
+      `(dsa parameters libcrypto ,buf))
 
     #|
     ;; Similarly, this version of generate-params crashes.
@@ -424,7 +406,7 @@ The 'libcrypto params format:
       (define buf (make-bytes (i2d_DHparams dh #f)))
       (i2d_DHparams dh buf)
       (DH_free dh)
-      `(libcrypto dh ,buf))
+      `(dh parameters pkcs3 ,buf))
 
     (define/override (*write-key private? fmt evp)
       (unless (eq? fmt #f)
@@ -433,7 +415,7 @@ The 'libcrypto params format:
       (define pubkey-buf (BN->bytes/bin (DH_st_prefix-pubkey dh)))
       (define privkey-buf (and private? (BN->bytes/bin (DH_st_prefix-privkey dh))))
       (DH_free dh)
-      (list* 'libcrypto 'dh (if private? 'private 'public)
+      (list* 'dh (if private? 'private 'public) 'libcrypto
              (caddr (*write-params fmt evp))
              pubkey-buf
              (if private? (list privkey-buf) null)))
@@ -500,7 +482,7 @@ The 'libcrypto params format:
       (define buf (make-bytes len))
       (define len2 (i2d_ECPKParameters group buf))
       (EC_KEY_free ec)
-      `(libcrypto ec ,(shrink-bytes buf len2)))
+      `(ec parameters sec1 ,(shrink-bytes buf len2)))
 
     (define/override (*write-key private? fmt evp)
       (unless (memq fmt '(#f libcrypto))
@@ -511,7 +493,7 @@ The 'libcrypto params format:
              (define outbuf (make-bytes outlen))
              (define outlen2 (i2d_ECPrivateKey ec outbuf))
              (EC_KEY_free ec)
-             `(sec1 ec private ,(shrink-bytes outbuf outlen2))]
+             `(ec private sec1 ,(shrink-bytes outbuf outlen2))]
             [else ;; public
              (super *write-key private? fmt evp)
              #|
@@ -593,9 +575,9 @@ The 'libcrypto params format:
       (new libcrypto-pk-key% (impl impl) (evp pub-evp) (private? #f)))
 
     (define/public (get-params)
-      (let ([pevp (EVP_PKEY_new)])
-        (EVP_PKEY_copy_parameters pevp evp)
-        (new libcrypto-pk-params% (impl impl) (evp pevp))))
+      ;; Note: EVP_PKEY_copy_parameters doesn't work!
+      ;; We treat keys as read-only once created, so safe to share evp.
+      (new libcrypto-pk-params% (impl impl) (evp evp)))
 
     (define/public (write-key fmt)
       (send impl *write-key private? fmt evp))
