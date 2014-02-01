@@ -1,11 +1,16 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
+          scribble/eval
           racket/list
           crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
                      crypto))
+
+@(define the-eval (make-base-eval))
+@(the-eval '(require crypto crypto/provider/libcrypto))
+@(the-eval '(crypto-factories (list libcrypto-factory)))
 
 @title[#:tag "digest"]{Message Digests}
 
@@ -63,6 +68,11 @@ Returns an implementation of digest @racket[di] from the given
 
 Returns the size in bytes of the digest computed by the algorithm
 represented by @racket[di].
+
+@examples[#:eval the-eval
+(digest-size 'sha1)
+(digest-size 'sha256)
+]
 }
 
 @defproc[(digest-block-size [di (or/c digest-spec? digest-impl? digest-ctx?)])
@@ -95,6 +105,11 @@ If @racket[input] is a string, it is converted by bytes by calling
 @racket[string->bytes/utf-8].  If @racket[input] is an input port, its
 contents are read until until it produces @racket[eof], but the port
 is not closed.
+
+@examples[#:eval the-eval
+(digest 'sha1 "Hello world!")
+(digest 'sha256 "Hello world!")
+]
 }
 
 @defproc[(hmac [di (or/c digest-spec? digest-impl?)]
@@ -177,3 +192,5 @@ parameterized over the digest @racket[di] and using the secret key
            #:url "http://www.ietf.org/rfc/rfc2104.txt"]
 
 ]
+
+@(close-eval the-eval)

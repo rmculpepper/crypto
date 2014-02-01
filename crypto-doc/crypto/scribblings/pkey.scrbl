@@ -28,13 +28,12 @@ Returns @racket[#t] if @racket[v] is a PK cryptosystem specifier,
 @racket[#f] otherwise.
 
 A PK cryptosystem specifier is one of the following: @racket['rsa],
-@racket['dsa], @racket['dh], @racket['ec], or
-@racket['elgamal]. Strictly speaking, it specifies the information
-represented by the public and private keys and the algorithms that
-operate on that information. For example, @racket['rsa] specifies RSA
-keys with RSAES-* encryption algorithms and the RSASSA-* signature
-algorithms, and @racket['ec] specifies EC keys with ECDSA signing and
-ECDH key agreement.
+@racket['dsa], @racket['dh], or @racket['ec]. Strictly speaking, it
+specifies the information represented by the public and private keys
+and the algorithms that operate on that information. For example,
+@racket['rsa] specifies RSA keys with RSAES-* encryption algorithms
+and the RSASSA-* signature algorithms, and @racket['ec] specifies EC
+keys with ECDSA signing and ECDH key agreement.
 }
 
 @defproc[(pk-impl? [v any/c]) boolean?]{
@@ -69,7 +68,7 @@ cryptosystem implementation, regardless of the limitations of
 RSA public-only key, even though signing requires a private key.
 }
 
-@defproc[(pk-has-parameters? [pk (or/c pk-impl? pk-pkey?)]) boolean?]{
+@defproc[(pk-has-parameters? [pk (or/c pk-impl? pk-key?)]) boolean?]{
 
 Returns @racket[#f] if the PK cryptosystem represented by @racket[pk]
 uses key parameters, @racket[#f] otherwise. See @secref["pk-keys"] for
@@ -176,17 +175,18 @@ PK cryptosystems (limits are generally proportional to the size of the
 PK keys), so a typical process is to compute a digest of the message
 and sign the digest. The message and digest signature are sent
 together, possibly with additional data. PK signing and verification
-is supported by the RSA, DSA, ECDSA, and ElGamal cryptosystems.
+is supported by the RSA, DSA, and EC (ECDSA) cryptosystems.
 
 @defproc[(pk-sign-digest [pk private-key?]
-                         [dgst bytes?] 
                          [di (or/c digest-spec? digest-impl?)]
+                         [dgst bytes?]
                          [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
          bytes?]{
 
 Returns the signature using the private key @racket[pk] of
 @racket[dgst] and metadata indicating that @racket[dgst] was computed
-using digest function @racket[di].
+using digest function @racket[di]. The @racket[dgst] argument should
+be the @racket[di] digest of some message.
 
 If @racket[pk] is an RSA private key, then @racket[padding] selects
 between PKCS#1-v1.5 and PSS @cite{PKCS1}. If @racket[padding] is
@@ -199,8 +199,8 @@ digest size is too large for @racket[pk], then an exception is raised.
 }
 
 @defproc[(pk-verify-digest [pk pk-key?]
-                           [dgst bytes?] 
-                           [di (or/c digest-spec? digest-impl?)]
+                           [di (or/c digest-spec? digest-impl?)] 
+                           [dgst bytes?]
                            [sig bytes?]
                            [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
          boolean?]{
@@ -241,8 +241,7 @@ message using a symmetric cipher with a randomly-generated key
 (sometimes called the bulk encryption key) and encrypt that key using
 PK cryptography. The symmetric-key-encrypted message and PK-encrypted
 symmetric key are sent together, perhaps with additional data such as
-a MAC. PK encryption is supported by the RSA and ElGamal
-cryptosystems.
+a MAC. PK encryption is supported by the RSA cryptosystem.
 
 @deftogether[[
 @defproc[(pk-encrypt [pk pk-key?]
@@ -268,6 +267,9 @@ exception is raised.
 
 @;{FIXME: what if decryption fails???!!!}
 }
+
+@;{Why no envelope functions? Because difficult to include
+authenticity, and attractive nuisance if it doesn't.}
 
 @section[#:tag "pk-keyagree"]{PK Key Agreement}
 
