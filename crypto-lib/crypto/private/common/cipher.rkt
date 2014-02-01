@@ -200,18 +200,23 @@
   (with-crypto-entry 'decrypt
     (*crypt (-decrypt-ctx ci key iv pad) inp)))
 
-(define (encrypt/auth ci key iv inp #:pad [pad default-pad] #:AAD [aad #f])
+(define (encrypt/auth ci key iv inp
+                      #:pad [pad default-pad]
+                      #:AAD [aad #f]
+                      #:auth-length [auth-length #f]) ;; FIXME
   (with-crypto-entry 'encrypt/auth
-    (let ([ctx (-encrypt-ctx ctx ci key iv pad)])
+    (let ([ctx (-encrypt-ctx ci key iv pad)])
       (when aad (send ctx update-AAD aad 0 (bytes-length aad)))
       (let* ([out (*crypt ctx inp)]
              [tag (send ctx get-auth-tag)])
         (send ctx close)
         (values out tag)))))
-(define (decrypt/auth ci key iv inp #:pad [pad default-pad] #:AAD [aad #f]
+(define (decrypt/auth ci key iv inp
+                      #:pad [pad default-pad]
+                      #:AAD [aad #f]
                       #:auth-tag [auth-tag #f])
   (with-crypto-entry 'decrypt/auth
-    (let ([ctx (-decrypt-ctx ctx ci key iv pad)])
+    (let ([ctx (-decrypt-ctx ci key iv pad)])
       (when auth-tag (send ctx set-auth-tag auth-tag))
       (when aad (send ctx update-AAD aad 0 (bytes-length aad)))
       (*crypt ctx inp))))
@@ -227,10 +232,10 @@
 ;; *crypt-write : cipher-impl key iv (U bytes string input-port) output-port -> nat
 (define (encrypt-write ci key iv inp out #:pad [pad default-pad])
   (with-crypto-entry 'encrypt-write
-    (*crypt-write (-encrypt-ctx key iv pad) inp out)))
+    (*crypt-write (-encrypt-ctx ci key iv pad) inp out)))
 (define (decrypt-write ci key iv inp out #:pad [pad default-pad])
   (with-crypto-entry 'decrypt-write
-    (*crypt-write (-decrypt-ctx key iv pad) inp out)))
+    (*crypt-write (-decrypt-ctx ci key iv pad) inp out)))
 
 ;; FIXME: would like to have way of putting read-exn in pipe so padding error
 ;; shows up on reading side (too?)
