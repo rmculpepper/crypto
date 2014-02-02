@@ -9,6 +9,9 @@ To Do
 - check error reporting
 - GCM support
 - gcrypt initialization
+- add cipher-tag-length operation, catalog ???
+  - NIST SP 800-38D says GCM tag lengths include: 128 downto 96 by 8s (bits)
+    or 64 or 32 (bits) if you really must
 
 - info functions on impls should use impl methods, not catalog info
   to allow extension with unknown algs
