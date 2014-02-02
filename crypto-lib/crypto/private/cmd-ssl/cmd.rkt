@@ -78,8 +78,8 @@
 (define (openssl #:in [send-to-in #f] . args)
   (let ([p (new process/args% (impl #f) (args args))])
     (when send-to-in
-      (send p write! 'openssl send-to-in 0 (bytes-length send-to-in)))
-    (send p close/read 'openssl)))
+      (send p write! send-to-in 0 (bytes-length send-to-in)))
+    (send p close/read)))
 
 (define-syntax-rule (with-tmp-files ([id contents] ...) . body)
   (let ([id (make-temporary-file)] ...)
@@ -236,13 +236,10 @@ Since most openssl commands take keys as filenames, we write keys to temp files.
 FIXME: check again whether DER available in older versions
 |#
 
-
 (define pk-impl%
   (class* impl-base% (pk-impl<%>)
-    (init-field sys)
+    (inherit-field spec)
     (super-new)
-
-    (define/public (get-name) sys)
 
     (define/public (read-key key pub/priv fmt)
       (new pk-key% (impl this) (key key) (private? (eq? pub/priv 'private))))
@@ -251,7 +248,7 @@ FIXME: check again whether DER available in older versions
 
     (define/public (generate-key args)
       (let* ([key
-              (case sys
+              (case spec
                 [(rsa) (openssl "genrsa" (car args))]
                 [(dsa)
                  (let ([params (openssl "dsaparam" (car args))])
@@ -262,7 +259,9 @@ FIXME: check again whether DER available in older versions
       (crypto-error "unimplemented"))
 
     (define/public (can-sign?) #t)
-    (define/public (can-encrypt?) (and (memq sys '(rsa)) #t))
+    (define/public (can-encrypt?) (and (memq spec '(rsa)) #t))
+    (define/public (can-key-agree?) #f)
+    (define/public (has-params?) #f)
     ))
 
 (define pk-key%
@@ -278,18 +277,22 @@ FIXME: check again whether DER available in older versions
     (define/public (get-params)
       (crypto-error "unimplemented"))
 
-    (define/public (write-key pub/priv fmt)
-      (let ([want-private? (eq? pub/priv 'private)])
-        (cond [(and private? want-private?) key]
-              [(and private? (not want-private?))
-               (openssl (send impl get-name) "-pubout" #:in key)]
-              [(and (not private?) want-private?)
-               (crypto-error "only public key component is available")]
-              [(and (not private?) (not want-private?)) key])))
+    (define/public (write-key fmt)
+      `(,(send impl get-spec) ,(if private? 'private 'public) ssl ,key))
 
     (define/public (equal-to-key? other)
-      (equal? (write-key 'equal-to-key? #t)
-              (send other write-key 'equal-to-key? #t)))
+      (equal? (write-key #f) (send other write-key #f)))
+
+    (define/public (sign . args)
+      (crypto-error "unimplemented"))
+    (define/public (verify . args)
+      (crypto-error "unimplemented"))
+    (define/public (encrypt . args)
+      (crypto-error "unimplemented"))
+    (define/public (decrypt . args)
+      (crypto-error "unimplemented"))
+    (define/public (compute-secret . args)
+      (crypto-error "unimplemented"))
 
     #|
     ;; New:
@@ -348,20 +351,6 @@ FIXME: check again whether DER available in older versions
 
 ;; ============================================================
 
-#|
-(require "../common/digest.rkt"
-         "../common/cipher.rkt"
-         "../common/pkey.rkt")
-(provide (all-from-out "../common/digest.rkt")
-         (all-from-out "../common/cipher.rkt")
-         (all-from-out "../common/pkey.rkt"))
-
-(define key16 #"keyAkeyBkeyCkeyD")
-(define key00 #"keyAkey\0keyCkeyD")
-(define iv16  #"ivIVivIVivIVivIV")
-(define data  #"hello goodbye")
-|#
-
 (define (di spec cmd)
   (match (hash-ref known-digests spec #f)
     [(list size block-size)
@@ -399,8 +388,8 @@ FIXME: check again whether DER available in older versions
 (define ciphers
   '([aes (ecb cbc) (128 192 256)]))
 
-(define pkey:rsa 'fixme-rsa)
-(define pkey:dsa 'fixme-dsa)
+(define pkey:rsa #f)
+(define pkey:dsa #f)
 
 #|
 (define pkey:rsa (new pkey-impl% (sys 'rsa)))
@@ -433,7 +422,7 @@ FIXME: check again whether DER available in older versions
                        [_ #f]))]
                [else #f])]))
 
-    (define/override (get-pkey name)
+    (define/public (get-pkey name)
       (case name
         ((rsa) pkey:rsa)
         ((dsa) pkey:dsa)

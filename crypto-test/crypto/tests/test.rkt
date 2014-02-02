@@ -19,6 +19,9 @@
          rackunit
          rackunit/text-ui
          crypto
+         crypto/libcrypto
+         crypto/gcrypt
+         crypto/nettle
          crypto/private/cmd-ssl/cmd
          "digest.rkt"
          "cipher.rkt"
@@ -38,7 +41,7 @@
   (test-suite name
     ;; Test ssl impl against cmd-ssl impl
     (test-suite "digests" (test-digests factory cmdssl-factory))
-    (test-suite "cipers" (test-ciphers factory cmdssl-factory))
+    (test-suite "ciphers" (test-ciphers factory cmdssl-factory))
     #| (test-suite "pkey" (test-pkeys factory cmdssl-factory)) |#))
 
 (module+ main

@@ -23,6 +23,17 @@
          "cipher.rkt")
 (provide test-pkeys)
 
+;; Sign/verify
+;;  - privkey signs, privkey verifies, pubkey verifies, privkey2 doesn't verify
+
+;; Encrypt/decrypt
+;;  - privkey encrypts, privkey decrypts
+;;  - pubkey encrypts, privkey decrypts
+;;  - privkey encrypts, privkey2 doesn't decrypt
+
+;; Key agreement
+;;  - privkey1+pubkey2 derives same key as privkey2+pubkey11
+
 ;; digest-names, digest-inputs
 (define (test-pubkey pki di)
   (test-case (format "~a with ~a" (send pki get-name) (send di get-name))

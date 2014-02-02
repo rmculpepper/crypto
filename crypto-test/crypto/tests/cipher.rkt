@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -27,6 +27,11 @@
          test-ciphers-agree)
 
 (define (test-cipher ci msg)
+  (case (cadr (send ci get-spec))
+    [(gcm) (test-cipher/ae ci msg)]
+    [else (test-cipher/non-ae ci msg)]))
+
+(define (test-cipher/non-ae ci msg)
   (test-case (format "~a roundtrip (~s)" (send ci get-spec) (bytes-length msg))
     (define key (semirandom-bytes (cipher-default-key-size ci)))
     (define iv (semirandom-bytes (cipher-iv-size ci)))
@@ -47,26 +52,28 @@
       (check-not-equal? (encrypt ci key iv2 msg) ciphertext)
       (check-not-equal? (with-handlers ([values values]) (decrypt ci key iv2 ciphertext))
                         msg))
+    ))
 
-    ;; (let* ([cin (encrypt ci key iv (open-input-bytes msg))]
-    ;;        [pin (decrypt ci key iv cin)])
-    ;;   (check-equal? (port->bytes pin) msg))
+(define (test-cipher/ae ci msg)
+  (test-case (format "~a roundtrip (AE, ~s)" (send ci get-spec) (bytes-length msg))
+    (define key (semirandom-bytes (cipher-default-key-size ci)))
+    (define iv (semirandom-bytes (cipher-iv-size ci)))
 
-    ;; (let-values ([(pin) (open-input-bytes msg)]
-    ;;              [(cin cout) (make-pipe)]
-    ;;              [(pout) (open-output-bytes)])
-    ;;   (encrypt ci key iv pin cout)
-    ;;   (close-output-port cout)
-    ;;   (decrypt ci key iv cin pout)
-    ;;   (check-equal? (get-output-bytes pout) msg))
+    (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg))
+    (check-equal? (decrypt/auth ci key iv ciphertext #:auth-tag auth-tag) msg)
 
-    ;; (let-values ([(cin pout) (encrypt ci key iv)]
-    ;;              [(pin cout) (decrypt ci key iv)])
-    ;;   (write-bytes msg pout)
-    ;;   (close-output-port pout)
-    ;;   (write-bytes (port->bytes cin) cout)
-    ;;   (close-output-port cout)
-    ;;   (check-equal? (port->bytes pin) msg))
+    (for ([aad (in-list '(#f #"" #"abc" #"abcdef123456"))])
+      (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg #:AAD aad))
+      (check-equal? (decrypt/auth ci key iv ciphertext #:AAD aad #:auth-tag auth-tag) msg))
+
+    (when (positive? (bytes-length ciphertext))
+      (define key2 (semirandom-bytes (cipher-default-key-size ci)))
+      (define iv2 (semirandom-bytes (cipher-iv-size ci)))
+      (define auth-tag2 (semirandom-bytes (bytes-length auth-tag)))
+      ;; Other key/iv/auth-tag fails to authenticate
+      (check-exn exn:fail? (lambda () (decrypt/auth ci key2 iv ciphertext #:auth-tag auth-tag)))
+      (check-exn exn:fail? (lambda () (decrypt/auth ci key iv2 ciphertext #:auth-tag auth-tag)))
+      (check-exn exn:fail? (lambda () (decrypt/auth ci key iv ciphertext #:auth-tag auth-tag2))))
     ))
 
 ;; ----
