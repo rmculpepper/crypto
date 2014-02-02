@@ -153,9 +153,10 @@
 
 (define cipher-ctx<%>
   (interface (ctx<%>)
+    get-encrypt? ;; -> boolean
     update!  ;; bytes nat nat bytes nat nat -> nat
     final!   ;; bytes nat nat -> nat
-
+    close    ;; -> void
     ;; update-AAD ;; bytes nat nat -> void
     ;; get-auth-tag ;; -> bytes/#f
     ))

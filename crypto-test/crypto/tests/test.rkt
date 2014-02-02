@@ -29,31 +29,28 @@
 (provide make-factory-tests)
 
 (define (make-factory-tests name factory)
-  #|
-  (define (test-dh dhi)
-    (test-case (format "DH ~a" (dh-bits dhi))
-      (define-values (priv1 pub1) (generate-dhkey dhi))
-      (define-values (priv2 pub2) (generate-dhkey dhi))
-      (check-equal? (compute-key priv1 pub2)
-                    (compute-key priv2 pub1))))
-  |#
   (when #f (eprintf ">>> Testing ~a\n" name))
   (test-suite name
-    ;; Test ssl impl against cmd-ssl impl
-    (test-suite "digests" (test-digests factory cmdssl-factory))
-    (test-suite "ciphers" (test-ciphers factory cmdssl-factory))
-    #| (test-suite "pkey" (test-pkeys factory cmdssl-factory)) |#))
+    ;; (test-suite "digests" (test-digests factory))
+    (test-suite "ciphers" (test-ciphers factory))
+    ;; (test-suite "pkey" (test-pkeys factory cmdssl-factory))
+    ))
 
 (module+ main
+
+  (define all-factories (list libcrypto-factory gcrypt-factory nettle-factory cmdssl-factory))
+
   (run-tests
    (test-suite "crypto tests"
      (make-factory-tests "libcrypto" libcrypto-factory)
      (make-factory-tests "gcrypt" gcrypt-factory)
      (make-factory-tests "nettle" nettle-factory)
+     #|
      (when #f (eprintf ">>> Digest agreement\n"))
      (test-suite "digest agreement"
-       (test-digests-agree (list libcrypto-factory gcrypt-factory nettle-factory)))
+       (test-digests-agree all-factories))
      (when #f (eprintf ">>> Cipher agreement\n"))
      (test-suite "cipher agreement"
-       (test-ciphers-agree (list libcrypto-factory gcrypt-factory nettle-factory)))
+       (test-ciphers-agree all-factories))
+     |#
      )))

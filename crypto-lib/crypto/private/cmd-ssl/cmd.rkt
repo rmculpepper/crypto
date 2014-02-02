@@ -193,6 +193,8 @@
     (inherit write! close/read)
     (super-new)
 
+    (define/public (get-encrypt?) enc?)
+
     (define/override (get-openssl-args)
       (list* "enc"
              (format "-~a" (send impl get-cmd))
@@ -223,6 +225,9 @@
       (let ([tail (close/read)])
         (bytes-copy! buf start tail)
         (bytes-length tail)))
+
+    (define/public (close)
+      (void))
     ))
 
 ;; ============================================================

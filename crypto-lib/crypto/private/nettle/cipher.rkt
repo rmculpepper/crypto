@@ -35,6 +35,8 @@
     (super-new)
 
     (define iv-size (cipher-spec-iv-size spec))
+
+    ;; (nettle-cipher-block-size nc) disregards mode; eg, AES-CTR => 16, ...?
     (define/public (get-block-size) (nettle-cipher-block-size nc))
     (define/public (get-iv-size) iv-size)
 

@@ -117,8 +117,8 @@
     (inherit-field spec)
     (super-new)
 
-    (define/public (get-block-size) (send (car impls) get-block-size))
-    (define/public (get-iv-size) (send (car impls) get-iv-size))
+    (define/public (get-block-size) (send (cdar impls) get-block-size))
+    (define/public (get-iv-size) (send (cdar impls) get-iv-size))
 
     (define/public (new-ctx key iv enc? pad?)
       (cond [(assoc (bytes-length key) impls)
@@ -239,6 +239,9 @@
 
     (define/private (err/partial)
       (crypto-error "partial block (~a)" (if encrypt? "encrypting" "decrypting")))
+
+    (define/public (close)
+      (*close))
 
     ;; Methods to implement in subclass:
 

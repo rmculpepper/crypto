@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -26,6 +26,60 @@
          test-digests-agree
          digest-inputs)
 
+(define (test-digests factory)
+  (for ([name (hash-keys known-digests)])
+    (let ([di (send factory get-digest name)])
+      (when di
+        (test-case (format "~s" name)
+          (for ([in+out (dict-ref digest-test-vectors name null)])
+            (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out))))
+          (for ([in digest-inputs])
+            (test-digest/solo di in)))))))
+
+(define (test-digest/solo di in)
+  ;; All-at-once digest agrees with incremental
+  (define md (digest di in))
+  (let ([dctx (make-digest-ctx di)])
+    (for ([inb (in-bytes in)])
+      (digest-update dctx (bytes inb)))
+    (cond [(digest-peek-final dctx)
+           => (lambda (md*) (check-equal? md* md))])
+    (check-equal? (digest-final dctx) md))
+  ;; All-at-once HMAC agrees with incremental
+  (for ([key digest-keys])
+    (define h (hmac di key in))
+    (let ([hctx (make-hmac-ctx di key)])
+      (for ([inb (in-bytes in)])
+        (digest-update hctx (bytes inb)))
+      (cond [(digest-peek-final hctx)
+             => (lambda (h*) (check-equal? h* h))])
+      (check-equal? (digest-final hctx) h))))
+
+;; ----
+
+(define (test-digests-agree factories)
+  (for ([name (hash-keys known-digests)])
+    (let ([impls
+           (filter values
+                   (for/list ([factory factories])
+                     (send factory get-digest name)))])
+      (when (zero? (length impls))
+        (eprintf "** no impl for digest ~e\n" name))
+      (when (= (length impls) 1)
+        (eprintf "** only one impl for digest ~e\n" name))
+      (when (> (length impls) 1)
+        (when #f
+          (eprintf "+ testing agreement ~e\n" name))
+        (for ([impl impls])
+          (for ([in digest-inputs])
+            (test-digest-impls-agree impl (car impls) in))
+          (for* ([key digest-keys]
+                 [in digest-inputs])
+            (test-hmac-impls-agree impl (car impls) key in)))))))
+
+(define (test-digest-impls-agree di di-base in)
+  (test-digest/in+out di in (digest di-base in)))
+
 (define (test-digest/in+out di in out)
   (when #f
     (eprintf "testing ~a (~s)\n" (send di get-spec) (bytes-length in)))
@@ -49,8 +103,8 @@
               (check-equal? so-far (digest-bytes di in* r (+ i 1))))))
         (check-equal? (digest-final ctx) out)))))
 
-(define (test-digest-impls-agree di di-base in)
-  (test-digest/in+out di in (digest di-base in)))
+(define (test-hmac-impls-agree di di-base key in)
+  (test-hmac/in+out di key in (hmac di-base key in)))
 
 (define (test-hmac/in+out di key in out)
   (test-case (format "HMAC ~a: ~e" (send di get-spec) in)
@@ -69,10 +123,7 @@
           (digest-update ctx in* i (add1 i)))
         (check-equal? (digest-final ctx) out)))))
 
-(define (test-hmac-impls-agree di di-base key in)
-  (test-hmac/in+out di key in (hmac di-base key in)))
-
-;; ----
+;; ----------------------------------------
 
 (define digest-test-vectors
   '([md5
@@ -112,37 +163,3 @@
     ,(semirandom-bytes/alpha 10)
     ,(semirandom-bytes/alpha 20)
     ,(semirandom-bytes/alpha 40)))
-
-(define (test-digests factory base-factory)
-  (for ([name (hash-keys known-digests)])
-    (let ([di (send factory get-digest name)]
-          [di-base (send base-factory get-digest name)])
-      (when di
-        (for ([in+out (dict-ref digest-test-vectors name null)])
-          (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out))))
-        (when di-base
-          (for ([in digest-inputs])
-            (test-digest-impls-agree di di-base in))
-          (for* ([key digest-keys]
-                 [in digest-inputs])
-                (test-hmac-impls-agree di di-base key in)))))))
-
-(define (test-digests-agree factories)
-  (for ([name (hash-keys known-digests)])
-    (let ([impls
-           (filter values
-                   (for/list ([factory factories])
-                     (send factory get-digest name)))])
-      (when (zero? (length impls))
-        (eprintf "** no impl for digest ~e\n" name))
-      (when (= (length impls) 1)
-        (eprintf "** only one impl for digest ~e\n" name))
-      (when (> (length impls) 1)
-        (when #f
-          (eprintf "+ testing agreement ~e\n" name))
-        (for ([impl impls])
-          (for ([in digest-inputs])
-            (test-digest-impls-agree impl (car impls) in))
-          (for* ([key digest-keys]
-                 [in digest-inputs])
-            (test-hmac-impls-agree impl (car impls) key in)))))))

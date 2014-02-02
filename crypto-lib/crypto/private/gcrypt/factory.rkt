@@ -70,10 +70,13 @@
 (define modes
   `(;[Mode ModeId]
     [ecb    ,GCRY_CIPHER_MODE_ECB]
-    [cfb    ,GCRY_CIPHER_MODE_CFB]
     [cbc    ,GCRY_CIPHER_MODE_CBC]
+    #|
+    FIXME: re-enable
+    [cfb    ,GCRY_CIPHER_MODE_CFB]
     [ofb    ,GCRY_CIPHER_MODE_OFB]
     [ctr    ,GCRY_CIPHER_MODE_CTR]
+    |#
     [stream ,GCRY_CIPHER_MODE_STREAM]))
 
 ;; ----------------------------------------

@@ -1,6 +1,8 @@
 To Do
 =====
 
+* gcrypt, nettle block ciphers in stream mode still need block-at-a-time :(
+
 - implement other key formats: pkcs1 pkcs3 pkcs8 ...
 - keygen/paramgen support: add required flag, auto-check
 - libcrypto: add yield callbacks for interactivity

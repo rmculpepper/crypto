@@ -97,7 +97,7 @@
       (and dg
            (let* ([len (digest-size dg)]
                   [buf (make-bytes len)])
-             (send (digest-copy dg) final! buf 0 len)
+             (send dg final! buf 0 len)
              buf)))))
 
 ;; ----
