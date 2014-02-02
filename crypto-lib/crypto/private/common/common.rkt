@@ -178,7 +178,9 @@
       (define outstart* (+ outstart pfxoutlen))
       (define alignlen (- alignend alignstart))
       ;; Total output space needed:
-      (check-output-range outbuf outstart outend (+ pfxoutlen alignlen))
+      (check-output-range outbuf outstart outend (+ pfxoutlen alignlen)
+                          #:msg (format "[~a, ~a), [~a, ~a); partlen=~a, pad=~a, fp?=~a"
+                                        instart inend outstart outend partlen pad? flush-partial?))
       (when (< instart alignstart)
         (bytes-copy! partial partlen inbuf instart alignstart))
       (cond [flush-partial?

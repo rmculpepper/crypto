@@ -131,10 +131,12 @@
     (cipher-spec-key-sizes (get-spec* o))))
 (define (cipher-block-size o)
   (with-crypto-entry 'cipher-block-size
-    (cipher-spec-block-size (get-spec* o))))
+    (cond [(list? o) (cipher-spec-block-size o)]
+          [else (send (get-impl* o) get-block-size)])))
 (define (cipher-iv-size o)
   (with-crypto-entry 'cipher-iv-size
-    (cipher-spec-iv-size (get-spec* o))))
+    (cond [(list? o) (cipher-spec-iv-size o)]
+          [else (send (get-impl* o) get-iv-size)])))
 
 ;; ----
 

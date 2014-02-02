@@ -127,14 +127,17 @@
          (format " of length at most ~a" maxlen)
          ""))))
 
-(define (check-output-range buf start end [minlen #f])
+(define (check-output-range buf start end [minlen #f] #:msg [msg #f])
   (when (immutable? buf)
     (crypto-error "expected mutable output buffer"))
   (unless (and (<= 0 start end (bytes-length buf))
                (or (not minlen) (>= (- end start) minlen)))
     (crypto-error
-     "bad range for output buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a"
+     "bad range for output buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a~a"
      start end (bytes-length buf)
      (if minlen
          (format " of length at least ~a" minlen)
+         "")
+     (if msg
+         (format "\n  ~a" msg)
          ""))))
