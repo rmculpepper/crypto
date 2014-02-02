@@ -172,7 +172,7 @@ cipher @racket[ci]. If @racket[ci] does not use an IV, returns
 @defproc[(decrypt [ci (or/c cipher-spec? cipher-impl?)]
                   [key bytes?]
                   [iv (or/c bytes? #f)]
-                  [input (or/c bytes? string? input-port?)]
+                  [input (or/c bytes? input-port?)]
                   [#:pad pad-mode boolean? #t])
          bytes?]
 ]]{
@@ -209,6 +209,43 @@ ciphertext
 }
 
 @deftogether[[
+@defproc[(encrypt/auth [ci (or/c cipher-spec? cipher-impl?)]
+                       [key bytes?]
+                       [iv (or/c bytes? #f)]
+                       [input (or/c bytes? string? input-port?)]
+                       [#:pad pad-mode boolean? #t]
+                       [#:AAD additional-auth-data (or/c bytes? #f) #f]
+                       [#:auth-length auth-length exact-nonnegative-integer? (cipher-block-size ci)])
+         (values bytes? bytes?)]
+@defproc[(decrypt/auth [ci (or/c cipher-spec? cipher-impl?)]
+                       [key bytes?]
+                       [iv (or/c bytes? #f)]
+                       [input (or/c bytes? input-port?)]
+                       [#:pad pad-mode boolean? #t]
+                       [#:AAD additional-auth-data (or/c bytes? #f) #f]
+                       [#:auth-tag auth-tag bytes? #f])
+         bytes?]
+]]{
+
+Like @racket[encrypt] and @racket[decrypt], respectively, except for
+@deftech{authenticated encryption} modes such as GCM. The
+@racket[encrypt/auth] function produces an @deftech{authentication tag}
+of length @racket[auth-length] for the @racket[additional-auth-data]
+and the @racket[input]. The @racket[decrypt/auth] function raises an
+exception if the given @racket[auth-tag] does not match the
+@racket[additional-auth-data] and the @racket[input].
+
+@examples[#:eval the-eval
+(define key (generate-cipher-key '(aes gcm)))
+(define iv (generate-cipher-iv '(aes gcm)))
+(define-values (ciphertext auth-tag)
+  (encrypt/auth '(aes gcm) key iv "Hello world!" #:AAD #"greeting"))
+(decrypt/auth '(aes gcm) key iv ciphertext #:AAD #"greeting" #:auth-tag auth-tag)
+(decrypt/auth '(aes gcm) key iv ciphertext #:AAD #"BlahBlah" #:auth-tag auth-tag)
+]
+}
+
+@deftogether[[
 @defproc[(encrypt-write [ci (or/c cipher-spec? cipher-impl?)]
                         [key bytes?]
                         [iv (or/c bytes? #f)]
@@ -219,7 +256,7 @@ ciphertext
 @defproc[(decrypt-write [ci (or/c cipher-spec? cipher-impl?)]
                         [key bytes?]
                         [iv (or/c bytes? #f)]
-                        [input (or/c bytes? string? input-port?)]
+                        [input (or/c bytes? input-port?)]
                         [out output-port?]
                         [#:pad pad-mode boolean? #t])
          exact-nonnegative-integer?]
@@ -242,13 +279,18 @@ number of bytes written is returned.
 @defproc[(make-decrypt-ctx [ci (or/c cipher-spec? cipher-impl?)]
                            [key bytes?]
                            [iv (or/c bytes? #f)]
-                           [#:pad pad-mode boolean? #t])
+                           [#:pad pad-mode boolean? #t]
+                           [#:auth-tag auth-tag (or/c bytes? #f) #f])
          decrypt-ctx?]
 ]]{
 
 Returns a new cipher context for encryption or decryption,
 respectively, using the given secret @racket[key], initialization
 vector @racket[iv], and padding mode @racket[pad-mode].
+
+The @racket[auth-tag] is used for
+@tech[#:key "authenticated encryption"]{authenticated decryption}; 
+see @racket[decrypt/auth].
 }
 
 @defproc[(cipher-ctx? [v any/c]) boolean?]{
@@ -280,12 +322,44 @@ output. The output may be larger or smaller than the input, because
 incomplete blocks are internally buffered by @racket[cctx].
 }
 
+@defproc[(cipher-update-AAD [cctx cipher-ctx?]
+                            [input bytes?]
+                            [start exact-nonnegative-integer? 0]
+                            [end exact-nonnegative-integer? (bytes-length input)])
+         void?]{
+
+Processes @racket[(subbytes input start end)] as additional
+authenticated data to the cipher context @racket[cctx]. Must be called
+before any calls to @racket[cipher-update].
+
+If @racket[cctx] is not a context for @tech[#:key "authenticated encryption"]{
+authenticated encryption or decryption}, an exception is raised.
+}
+
 @defproc[(cipher-final [cctx cipher-ctx?])
          bytes?]{
 
 Processes any remaining input buffered by @racket[cctx], applies or
 checks and removes padding if appropriate, and returns the newly
 available output.
+
+If @racket[cctx] is an @tech[#:key "authenticated encryption"]{
+authenticated decryption} context, then the function
+raises an exception if the @tech{authentication tag} does not match. See also
+@racket[decrypt/auth].
+
+If @racket[cctx] is an @tech{authenticated encryption} context, use
+@racket[cipher-final/tag] instead.
+}
+
+@defproc[(cipher-final/tag [cctx encrypt-ctx?]
+                           [#:auth-length auth-length exact-nonnegative-integer?
+                                          (cipher-block-size cctx)])
+         (values bytes? bytes?)]{
+
+Like @racket[cipher-final], but also return an @tech{authentication tag}. The
+@racket[cctx] argument must be an @tech{authenticated encryption}
+context. See also @racket[encrypt/auth].
 }
 
 

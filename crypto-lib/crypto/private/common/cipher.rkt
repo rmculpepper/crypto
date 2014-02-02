@@ -53,15 +53,15 @@
   [cipher-final
    (-> cipher-ctx? bytes?)]
   [cipher-final/tag
-   (-> cipher-ctx? nat?
-       (values bytes? bytes?))]
+   (->* [cipher-ctx?] [#:auth-length nat?]
+        (values bytes? bytes?))]
 
   [encrypt
    (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?)]
         [#:pad pad-mode/c]
         bytes?)]
   [decrypt
-   (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?)]
+   (->* [cipher/c key/c iv/c (or/c bytes? input-port?)]
         [#:pad pad-mode/c]
         bytes?)]
 
@@ -70,7 +70,7 @@
         [#:pad pad-mode/c #:AAD (or/c bytes? #f) #:auth-length nat?]
         (values bytes? bytes?))]
   [decrypt/auth
-   (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?)]
+   (->* [cipher/c key/c iv/c (or/c bytes? input-port?)]
         [#:pad pad-mode/c #:AAD (or/c bytes? #f) #:auth-tag bytes?]
         bytes?)]
 
@@ -79,7 +79,7 @@
         [#:pad pad-mode/c]
         nat?)]
   [decrypt-write
-   (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?) output-port?]
+   (->* [cipher/c key/c iv/c (or/c bytes? input-port?) output-port?]
         [#:pad pad-mode/c]
         nat?)]
 
@@ -182,7 +182,7 @@
       (send c close)
       (shrink-bytes buf len))))
 
-(define (cipher-final/tag c taglen)
+(define (cipher-final/tag c #:auth-length [taglen (cipher-block-size c)])
   (with-crypto-entry 'cipher-final
     (let* ([buf (make-bytes (cipher-block-size c))]
            [len (send c final! buf 0 (bytes-length buf))]
@@ -203,12 +203,12 @@
 (define (encrypt/auth ci key iv inp
                       #:pad [pad default-pad]
                       #:AAD [aad #f]
-                      #:auth-length [auth-length #f]) ;; FIXME
+                      #:auth-length [taglen (cipher-block-size ci)])
   (with-crypto-entry 'encrypt/auth
     (let ([ctx (-encrypt-ctx ci key iv pad)])
       (when aad (send ctx update-AAD aad 0 (bytes-length aad)))
       (let* ([out (*crypt ctx inp)]
-             [tag (send ctx get-auth-tag)])
+             [tag (send ctx get-auth-tag taglen)])
         (send ctx close)
         (values out tag)))))
 (define (decrypt/auth ci key iv inp

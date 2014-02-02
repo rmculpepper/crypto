@@ -155,6 +155,9 @@
   (interface (ctx<%>)
     update!  ;; bytes nat nat bytes nat nat -> nat
     final!   ;; bytes nat nat -> nat
+
+    ;; update-AAD ;; bytes nat nat -> void
+    ;; get-auth-tag ;; -> bytes/#f
     ))
 
 (define (cipher-impl? x) (is-a? x cipher-impl<%>))
