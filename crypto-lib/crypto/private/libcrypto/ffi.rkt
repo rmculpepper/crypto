@@ -61,27 +61,42 @@
 
 ;; Use atomic wrapper around ffi calls to avoid race retrieving error info.
 
-(define (err-wrap who ok? [convert values])
+(define (err-wrap who [ok? positive?] #:convert [convert values] #:drain? [drain? #f])
   (lambda (proc)
     (lambda args
       (call-as-atomic
        (lambda ()
          (let ([result (apply proc args)])
-           (if (ok? result)
-               (convert result)
-               (raise-crypto-error who))))))))
+           (cond [(ok? result)
+                  (let ([errors (drain-errors)])
+                    (unless drain?
+                      (report-errors who errors)))
+                  (convert result)]
+                 [else (raise-crypto-error who)])))))))
 
-(define (err-wrap/check who)
-  (err-wrap who positive? void))
+(define (drain-errors)
+  (let ([e (ERR_get_error)])
+    (cond [(zero? e) null]
+          [else (cons e (drain-errors))])))
+
+(define (report-errors who errors)
+  (when (pair? errors)
+    (call-as-nonatomic
+     (lambda ()
+       (for ([e (in-list errors)])
+         (eprintf "~a: internal error: unhandled error\n ~a [~a:~a:~a]\n"
+                  who
+                  (or (ERR_reason_error_string e) "?")
+                  (or (ERR_lib_error_string e) "?")
+                  (or (ERR_func_error_string e) "?")
+                  e))))))
 
 (define (err-wrap/pointer who)
   (err-wrap who values))
 
 (define (raise-crypto-error where)
-  (let* ([e (ERR_get_error)]
-         [le (ERR_lib_error_string e)]
-         [fe (and le (ERR_func_error_string e))]
-         [re (and fe (ERR_reason_error_string e))])
+  (let ([e (ERR_get_error)])
+    (drain-errors)
     (error where "~a [~a:~a:~a]"
            (or (ERR_reason_error_string e) "?")
            (or (ERR_lib_error_string e) "?")
@@ -127,7 +142,7 @@
   (_fun _BIGNUM
         _ulong
         -> _int)
-  #:wrap (err-wrap/check 'BN_add_word))
+  #:wrap (err-wrap 'BN_add_word))
 
 (define-crypto BN_num_bits
   (_fun _BIGNUM -> _int))
@@ -197,27 +212,27 @@
         _EVP_MD
         (_pointer = #f)
         -> _int)
-  #:wrap (err-wrap/check 'EVP_DigestInit_ex))
+  #:wrap (err-wrap 'EVP_DigestInit_ex))
 
 (define-crypto EVP_DigestUpdate
   (_fun _EVP_MD_CTX
         (d : _pointer)
         (cnt : _size)
         -> _int)
-  #:wrap (err-wrap/check 'EVP_DigestUpdate))
+  #:wrap (err-wrap 'EVP_DigestUpdate))
 
 (define-crypto EVP_DigestFinal_ex
   (_fun _EVP_MD_CTX
         (out : _pointer)
         (_pointer = #f)
         -> _int)
-  #:wrap (err-wrap/check 'EVP_DigestFinal_ex))
+  #:wrap (err-wrap 'EVP_DigestFinal_ex))
 
 (define-crypto EVP_MD_CTX_copy_ex
   (_fun _EVP_MD_CTX
         _EVP_MD_CTX
         -> _int)
-  #:wrap (err-wrap/check 'EVP_MD_CTX_copy_ex))
+  #:wrap (err-wrap 'EVP_MD_CTX_copy_ex))
 
 (define-crypto HMAC
   (_fun _EVP_MD
@@ -258,14 +273,14 @@
         _EVP_MD
         (_pointer = #f)
         -> _void) ;; _int since OpenSSL 1.0.0
-  #| #:wrap (err-wrap/check 'HMAC_Init_ex) |#)
+  #| #:wrap (err-wrap 'HMAC_Init_ex) |#)
 
 (define-crypto HMAC_Update
   (_fun _HMAC_CTX
         (data : _pointer)
         (len : _uint)
         -> _void) ;; _int since OpenSSL 1.0.0
-  #| #:wrap (err-wrap/check 'HMAC_Update) |#)
+  #| #:wrap (err-wrap 'HMAC_Update) |#)
 
 (define-crypto HMAC_Final
   (_fun _HMAC_CTX
@@ -273,7 +288,7 @@
         (r : (_ptr o _int))
         -> _void ;; _int since OpenSSL 1.0.0
         -> r)
-  #| #:wrap (err-wrap 'HMAC_Final values) |#)
+  #| #:wrap (err-wrap 'HMAC_Final) |#)
 
 (define-crypto PKCS5_PBKDF2_HMAC
   (_fun (input digest salt iter outlen) ::
@@ -312,7 +327,7 @@
 
 (define-crypto EVP_CIPHER_CTX_cleanup
   (_fun _EVP_CIPHER_CTX -> _void)
-  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_cleanup))
+  #:wrap (err-wrap 'EVP_CIPHER_CTX_cleanup))
 
 (define-crypto EVP_CipherInit_ex
   (_fun _EVP_CIPHER_CTX
@@ -322,7 +337,7 @@
         (iv : _pointer)
         (enc? : _bool)
         -> _int)
-  #:wrap (err-wrap/check 'EVP_CipherInit_ex))
+  #:wrap (err-wrap 'EVP_CipherInit_ex))
 
 (define-crypto EVP_CipherUpdate
   (_fun _EVP_CIPHER_CTX
@@ -350,15 +365,15 @@
 
 (define-crypto EVP_CIPHER_CTX_set_key_length
   (_fun _EVP_CIPHER_CTX _int -> _int)
-  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_key_length))
+  #:wrap (err-wrap 'EVP_CIPHER_CTX_set_key_length))
 
 (define-crypto EVP_CIPHER_CTX_ctrl
   (_fun _EVP_CIPHER_CTX _int _int _pointer -> _int)
-  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_ctrl))
+  #:wrap (err-wrap 'EVP_CIPHER_CTX_ctrl))
 
 (define-crypto EVP_CIPHER_CTX_set_padding
   (_fun _EVP_CIPHER_CTX _bool -> _int)
-  #:wrap (err-wrap/check 'EVP_CIPHER_CTX_set_padding))
+  #:wrap (err-wrap 'EVP_CIPHER_CTX_set_padding))
 
 (define         EVP_CTRL_GCM_SET_IVLEN          #x9)
 (define         EVP_CTRL_GCM_GET_TAG            #x10)
@@ -404,12 +419,12 @@
 
 (define-crypto DH_generate_parameters_ex
   (_fun _DH _int _int (_fpointer = #f) -> _int)
-  #:wrap (err-wrap/check 'DH_generate_parameters_ex))
+  #:wrap (err-wrap 'DH_generate_parameters_ex))
 
 ;; PKCS#3 DH params
 (define-crypto i2d_DHparams
   (_fun _DH (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_DHparams positive?))
+  #:wrap (err-wrap 'i2d_DHparams))
 (define-crypto d2i_DHparams
   (_fun (_pointer = #f) (_ptr i _pointer) _long -> _DH/null)
   #:wrap (compose (allocator DH_free) (err-wrap/pointer 'd2i_DHparams)))
@@ -422,7 +437,7 @@
 
 (define-crypto DH_generate_key
   (_fun _DH -> _int)
-  #:wrap (err-wrap/check 'DH_generate_key))
+  #:wrap (err-wrap 'DH_generate_key))
 
 (define-crypto DH_compute_key
   (_fun (dh pub) ::
@@ -449,7 +464,7 @@
 
 (define-crypto RSA_generate_key_ex
   (_fun _RSA _int _BIGNUM/null _fpointer -> _int)
-  #:wrap (err-wrap 'RSA_generate_key_ex positive?))
+  #:wrap (err-wrap 'RSA_generate_key_ex))
 
 (define-crypto DSA_free
   (_fun _DSA -> _void)
@@ -462,7 +477,7 @@
 (define-crypto DSA_generate_parameters_ex
   (_fun _DSA _int (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) (_fpointer = #f)
         -> _int)
-  #:wrap (err-wrap 'DSA_generate_parameters_ex positive?))
+  #:wrap (err-wrap 'DSA_generate_parameters_ex))
 
 ;; ============================================================
 ;; EC
@@ -480,7 +495,7 @@
 
 (define-crypto EC_GROUP_get_degree
   (_fun _EC_GROUP -> _int)
-  #:wrap (err-wrap 'EC_GROUP_get_degree positive?))
+  #:wrap (err-wrap 'EC_GROUP_get_degree))
 
 (define-crypto EC_GROUP_new_by_curve_name
   (_fun _int -> _EC_GROUP/null)
@@ -488,7 +503,7 @@
 
 (define-crypto i2d_ECPKParameters
   (_fun _EC_GROUP (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_ECPKParameters positive?))
+  #:wrap (err-wrap 'i2d_ECPKParameters))
 
 (define-crypto d2i_ECPKParameters
   (_fun (_pointer = #f) (_ptr i _pointer) _long
@@ -512,7 +527,7 @@
 
 (define-crypto EC_KEY_set_group
   (_fun _EC_KEY _EC_GROUP -> _int)
-  #:wrap (err-wrap 'EC_KEY_set_group positive?))
+  #:wrap (err-wrap 'EC_KEY_set_group))
 
 (define-crypto EC_KEY_get0_group
   (_fun _EC_KEY -> _EC_GROUP/null)
@@ -520,12 +535,12 @@
 
 (define-crypto EC_KEY_generate_key
   (_fun _EC_KEY -> _int)
-  #:wrap (err-wrap 'EC_KEY_generate_key positive?))
+  #:wrap (err-wrap 'EC_KEY_generate_key))
 
 (define-crypto ECDH_compute_key
   (_fun _pointer _size _EC_POINT _EC_KEY (_fpointer = #f)
         -> _int)
-  #:wrap (err-wrap 'ECDH_compute_key positive?))
+  #:wrap (err-wrap 'ECDH_compute_key))
 
 (define-crypto EC_POINT_free
   (_fun _EC_POINT -> _void)
@@ -538,7 +553,7 @@
 (define-crypto EC_POINT_oct2point
   (_fun _EC_GROUP _EC_POINT _pointer _size (_pointer = #f)
         -> _int)
-  #:wrap (err-wrap 'EC_POINT_oct2point positive?))
+  #:wrap (err-wrap 'EC_POINT_oct2point))
 
 (define _point_conversion_form _int)
 (define POINT_CONVERSION_COMPRESSED 2)
@@ -548,7 +563,7 @@
 (define-crypto EC_POINT_point2oct
   (_fun _EC_GROUP _EC_POINT _point_conversion_form _pointer _size (_pointer = #f)
         -> _size)
-  #:wrap (err-wrap 'EC_POINT_point2oct positive?))
+  #:wrap (err-wrap 'EC_POINT_point2oct))
 
 (define-crypto EC_KEY_get0_public_key
   (_fun _EC_KEY -> _EC_POINT/null)
@@ -556,7 +571,7 @@
 
 (define-crypto EC_KEY_set_public_key
   (_fun _EC_KEY _EC_POINT -> _int)
-  #:wrap (err-wrap 'EC_KEY_set_public_key positive?))
+  #:wrap (err-wrap 'EC_KEY_set_public_key))
 
 (define-crypto EC_KEY_get0_private_key
   (_fun _EC_KEY -> _BIGNUM/null)
@@ -564,7 +579,7 @@
 
 (define-crypto EC_KEY_set_private_key
   (_fun _EC_KEY _BIGNUM -> _int)
-  #:wrap (err-wrap 'EC_KEY_set_private_key positive?))
+  #:wrap (err-wrap 'EC_KEY_set_private_key))
 
 (define-cstruct _EC_builtin_curve
   ([nid     _int]
@@ -619,11 +634,11 @@
 
 (define-crypto EVP_PKEY_keygen_init
   (_fun _EVP_PKEY_CTX -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_keygen_init positive?))
+  #:wrap (err-wrap 'EVP_PKEY_keygen_init))
 
 (define-crypto EVP_PKEY_paramgen_init
   (_fun _EVP_PKEY_CTX -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_paramgen_init positive?))
+  #:wrap (err-wrap 'EVP_PKEY_paramgen_init))
 
 (define-crypto EVP_PKEY_CTX_ctrl
   (_fun _EVP_PKEY_CTX
@@ -633,7 +648,7 @@
         (p1 : _int)
         (p2 : _pointer)
         -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_CTX_ctrl positive?))
+  #:wrap (err-wrap 'EVP_PKEY_CTX_ctrl))
 
 (define (EVP_PKEY_CTX_set_signature_md ctx md)
   (EVP_PKEY_CTX_ctrl ctx  -1 EVP_PKEY_OP_TYPE_SIG
@@ -709,45 +724,45 @@
 
 (define-crypto EVP_PKEY_copy_parameters
   (_fun _EVP_PKEY _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_copy_parameters positive?))
+  #:wrap (err-wrap 'EVP_PKEY_copy_parameters))
 
 (define-crypto EVP_PKEY_cmp_parameters
   (_fun _EVP_PKEY _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_cmp
+  #:wrap (err-wrap 'EVP_PKEY_cmp_parameters
                    (lambda (r) (member r '(0 1)))
-                   (lambda (r) (case r ((0) #f) ((1) #t)))))
+                   #:convert (lambda (r) (case r ((0) #f) ((1) #t)))))
 
 (define-crypto EVP_PKEY_type
   (_fun _int -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_type positive?))
+  #:wrap (err-wrap 'EVP_PKEY_type))
 
 (define-crypto EVP_PKEY_set_type
   (_fun _EVP_PKEY _int -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_set_type positive?))
+  #:wrap (err-wrap 'EVP_PKEY_set_type))
 
 (define-crypto EVP_PKEY_size
   (_fun _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_size positive?))
+  #:wrap (err-wrap 'EVP_PKEY_size))
 
 (define-crypto EVP_PKEY_bits
   (_fun _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_bits positive?))
+  #:wrap (err-wrap 'EVP_PKEY_bits))
 
 (define-crypto EVP_PKEY_set1_RSA
   (_fun _EVP_PKEY _RSA -> _int)
-  #:wrap (err-wrap/check 'EVP_PKEY_set1_RSA))
+  #:wrap (err-wrap 'EVP_PKEY_set1_RSA))
 
 (define-crypto EVP_PKEY_set1_DSA
   (_fun _EVP_PKEY _DSA -> _int)
-  #:wrap (err-wrap/check 'EVP_PKEY_set1_DSA))
+  #:wrap (err-wrap 'EVP_PKEY_set1_DSA))
 
 (define-crypto EVP_PKEY_set1_DH
   (_fun _EVP_PKEY _DH -> _int)
-  #:wrap (err-wrap/check 'EVP_PKEY_set1_DH))
+  #:wrap (err-wrap 'EVP_PKEY_set1_DH))
 
 (define-crypto EVP_PKEY_set1_EC_KEY
   (_fun _EVP_PKEY _EC_KEY -> _int)
-  #:wrap (err-wrap/check 'EVP_PKEY_set1_EC))
+  #:wrap (err-wrap 'EVP_PKEY_set1_EC))
 
 (define-crypto EVP_PKEY_get1_RSA
   (_fun _EVP_PKEY -> _RSA/null)
@@ -767,63 +782,64 @@
 
 (define-crypto EVP_PKEY_sign_init
   (_fun _EVP_PKEY_CTX -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_sign_init positive?))
+  #:wrap (err-wrap 'EVP_PKEY_sign_init))
 
 (define-crypto EVP_PKEY_sign
   (_fun _EVP_PKEY_CTX _pointer (siglen : (_ptr io _size)) _pointer _size
         -> (status : _int)
         -> (if (positive? status) siglen status))
-  #:wrap (err-wrap 'EVP_PKEY_sign positive?))
+  #:wrap (err-wrap 'EVP_PKEY_sign))
 
 (define-crypto EVP_PKEY_verify_init
   (_fun _EVP_PKEY_CTX -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_verify_init positive?))
+  #:wrap (err-wrap 'EVP_PKEY_verify_init))
 
 (define-crypto EVP_PKEY_verify
   (_fun _EVP_PKEY_CTX _pointer _size _pointer _size -> _int)
   #:wrap (err-wrap 'EVP_PKEY_verify
                    (lambda (r) (member r '(0 1)))
-                   (lambda (r) (case r ((0) #f) ((1) #t)))))
+                   #:convert (lambda (r) (case r ((0) #f) ((1) #t)))
+                   #:drain? #t))
 
 (define-crypto EVP_PKEY_encrypt_init
   (_fun _EVP_PKEY_CTX -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_encrypt_init positive?))
+  #:wrap (err-wrap 'EVP_PKEY_encrypt_init))
 
 (define-crypto EVP_PKEY_encrypt
   (_fun _EVP_PKEY_CTX _pointer (outlen : (_ptr io _size)) _pointer _size
         -> (status : _int)
         -> (if (positive? status) outlen status))
-  #:wrap (err-wrap 'EVP_PKEY_encrypt positive?))
+  #:wrap (err-wrap 'EVP_PKEY_encrypt))
 
 (define-crypto EVP_PKEY_decrypt_init
   (_fun _EVP_PKEY_CTX -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_decrypt_init positive?))
+  #:wrap (err-wrap 'EVP_PKEY_decrypt_init))
 
 (define-crypto EVP_PKEY_decrypt
   (_fun _EVP_PKEY_CTX _pointer (outlen : (_ptr io _size)) _pointer _size
         -> (status : _int)
         -> (if (positive? status) outlen status))
-  #:wrap (err-wrap 'EVP_PKEY_decrypt positive?))
+  #:wrap (err-wrap 'EVP_PKEY_decrypt))
 
 (define-crypto EVP_PKEY_derive_init
   (_fun _EVP_PKEY_CTX -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_derive_init positive?))
+  #:wrap (err-wrap 'EVP_PKEY_derive_init))
 
 (define-crypto EVP_PKEY_derive_set_peer
   (_fun _EVP_PKEY_CTX _EVP_PKEY -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_derive_set_peer positive?))
+  #:wrap (err-wrap 'EVP_PKEY_derive_set_peer))
 
 (define-crypto EVP_PKEY_derive
   (_fun _EVP_PKEY_CTX _pointer (outlen : (_ptr io _size))
         -> (status : _int)
         -> (if (positive? status) outlen status))
-  #:wrap (err-wrap 'EVP_PKEY_derive positive?))
+  #:wrap (err-wrap 'EVP_PKEY_derive))
 
 (define-crypto EVP_PKEY_cmp
   (_fun _EVP_PKEY _EVP_PKEY -> _int)
   #:wrap (err-wrap 'EVP_PKEY_cmp
                    (lambda (r) (member r '(0 1)))
-                   (lambda (r) (case r ((0) #f) ((1) #t)))))
+                   #:convert (lambda (r) (case r ((0) #f) ((1) #t)))))
 
 (define-crypto d2i_PublicKey
   (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
@@ -835,18 +851,18 @@
 
 (define-crypto i2d_PublicKey
   (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_PublicKey positive?))
+  #:wrap (err-wrap 'i2d_PublicKey))
 
 (define-crypto i2d_PrivateKey
   (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_PrivateKey positive?))
+  #:wrap (err-wrap 'i2d_PrivateKey))
 
 (define-crypto d2i_PUBKEY
   (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
   #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PUBKEY)))
 (define-crypto i2d_PUBKEY
   (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_PUBKEY positive?))
+  #:wrap (err-wrap 'i2d_PUBKEY))
 
 (define-cpointer-type _PKCS8_PRIV_KEY_INFO)
 (define-crypto PKCS8_PRIV_KEY_INFO_free
@@ -865,7 +881,7 @@
                   (err-wrap/pointer 'd2i_PKCS8_PRIV_KEY_INFO)))
 (define-crypto i2d_PKCS8_PRIV_KEY_INFO
   (_fun _PKCS8_PRIV_KEY_INFO _pointer -> _int)
-  #:wrap (err-wrap 'i2d_PKCS8_PRIV_KEY_INFO positive?))
+  #:wrap (err-wrap 'i2d_PKCS8_PRIV_KEY_INFO))
 
 (define-crypto d2i_DSAparams
   (_fun (_pointer = #f) (_ptr i _pointer) _long -> _DSA/null)
@@ -873,7 +889,7 @@
 
 (define-crypto i2d_DSAparams
   (_fun _DSA (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_DSAparams positive?))
+  #:wrap (err-wrap 'i2d_DSAparams))
 
 (define-crypto d2i_ECPrivateKey
   (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EC_KEY/null)
@@ -881,7 +897,7 @@
 
 (define-crypto i2d_ECPrivateKey
   (_fun _EC_KEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2d_ECPrivateKey positive?))
+  #:wrap (err-wrap 'i2d_ECPrivateKey))
 
 (define-crypto o2i_ECPublicKey
   (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EC_KEY/null)
@@ -889,7 +905,7 @@
 
 (define-crypto i2o_ECPublicKey
   (_fun _EC_KEY (_ptr i _pointer) -> _int)
-  #:wrap (err-wrap 'i2o_ECPublicKey positive?))
+  #:wrap (err-wrap 'i2o_ECPublicKey))
 
 
 
@@ -898,7 +914,7 @@
 
 (define-crypto RAND_bytes
   (_fun _pointer _int -> _int)
-  #:wrap (err-wrap/check 'RAND_bytes))
+  #:wrap (err-wrap 'RAND_bytes))
 
 (define-crypto RAND_status
   (_fun -> _int))

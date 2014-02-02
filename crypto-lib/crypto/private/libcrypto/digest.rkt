@@ -71,7 +71,7 @@
     (define/public (update buf start end)
       (unless ctx (err/digest-closed))
       (check-input-range buf start end)
-      (EVP_DigestUpdate ctx (ptr-add buf start) (- end start)))
+      (void (EVP_DigestUpdate ctx (ptr-add buf start) (- end start))))
 
     (define/public (final! buf start end)
       (unless ctx (err/digest-closed))
@@ -113,7 +113,7 @@
     (define/public (update buf start end)
       (unless ctx (err/digest-closed))
       (check-input-range buf start end)
-      (HMAC_Update ctx (ptr-add buf start) (- end start)))
+      (void (HMAC_Update ctx (ptr-add buf start) (- end start))))
 
     (define/public (final! buf start end)
       (unless ctx (err/digest-closed))
