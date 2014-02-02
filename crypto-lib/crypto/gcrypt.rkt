@@ -14,5 +14,5 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require "../private/libcrypto/factory.rkt")
-(provide libcrypto-factory)
+(require "private/gcrypt/factory.rkt")
+(provide gcrypt-factory)

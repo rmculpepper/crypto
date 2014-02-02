@@ -4,9 +4,9 @@
           (for-label racket/base
                      racket/contract
                      crypto
-                     crypto/provider/libcrypto
-                     crypto/provider/nettle
-                     crypto/provider/gcrypt))
+                     crypto/libcrypto
+                     crypto/nettle
+                     crypto/gcrypt))
 
 @title[#:tag "factory"]{Cryptography Providers}
 
@@ -55,7 +55,7 @@ implementation.
 
 @section{Libcrypto (OpenSSL)}
 
-@defmodule[crypto/provider/libcrypto]
+@defmodule[crypto/libcrypto]
 
 @hyperlink["http://www.openssl.org/docs/crypto/crypto.html"]{Libcrypto}
 is the cryptography library of OpenSSL. The necessary foreign library
@@ -68,7 +68,7 @@ Factory for libcrypto.
 
 @section{GCrypt}
 
-@defmodule[crypto/provider/gcrypt]
+@defmodule[crypto/gcrypt]
 
 @hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt} is a
 cryptography library from the GNU project, originally part of GnuPG.
@@ -82,7 +82,7 @@ Factory for GCrypt.
 
 @section{Nettle}
 
-@defmodule[crypto/provider/nettle]
+@defmodule[crypto/nettle]
 
 @hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle} is a
 cryptography library.

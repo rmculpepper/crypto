@@ -9,7 +9,7 @@
                      crypto))
 
 @(define the-eval (make-base-eval))
-@(the-eval '(require crypto crypto/provider/libcrypto))
+@(the-eval '(require crypto crypto/libcrypto))
 @(the-eval '(crypto-factories (list libcrypto-factory)))
 
 @title[#:tag "cipher"]{Symmetric Encryption}

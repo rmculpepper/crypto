@@ -14,5 +14,5 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require "../private/nettle/factory.rkt")
-(provide nettle-factory)
+(require "private/libcrypto/factory.rkt")
+(provide libcrypto-factory)

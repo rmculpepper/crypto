@@ -6,10 +6,10 @@
                      racket/contract
                      racket/match
                      crypto
-                     crypto/provider/libcrypto))
+                     crypto/libcrypto))
 
 @(define the-eval (make-base-eval))
-@(the-eval '(require crypto crypto/provider/libcrypto racket/match))
+@(the-eval '(require crypto crypto/libcrypto racket/match))
 
 @title[#:tag "intro"]{Introduction to the Crypto Library}
 
@@ -40,7 +40,7 @@ providers.
 
 @interaction[#:eval the-eval
 (require crypto)
-(require crypto/provider/libcrypto)
+(require crypto/libcrypto)
 ]
 
 You can configure this library with a ``search path'' of crypto
