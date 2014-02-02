@@ -80,6 +80,9 @@ TODO: support predefined DH params
  - http://tools.ietf.org/html/rfc3526
  - http://tools.ietf.org/html/rfc5114
 
+KNOWN BUG: Curve prime256v1 (NID=415) doesn't work with key derivation
+in OpenSSL 1.0.1c (Ubuntu 12.10), fixed in 1.0.1e (Fedora 20) (but
+NIST P-192 disappeared!).
 |#
 
 #|
@@ -89,19 +92,6 @@ The 'libcrypto key format:
    param-bytes is PKCS#3 DHParameter
    pubkey-bytes is unsigned binary rep of public key bignum
    privkey-bytes is unsigned binary rep of private key bignum
-|#
-
-#|
-;; Enumerate and describe all builtin elliptic curves.
-;; Is there a standard, canonical name for curves?
-;; Maybe NID => SN (short name) using OBJ_??? ?
-(define curve-count (EC_get_builtin_curves #f 0))
-(define ci0 (malloc curve-count _EC_builtin_curve 'atomic))
-(set! ci0 (cast ci0 _pointer _EC_builtin_curve-pointer))
-(EC_get_builtin_curves ci0 curve-count)
-(for/list ([i curve-count])
-  (define ci (ptr-add ci0 i _EC_builtin_curve))
-  (list (EC_builtin_curve-nid ci) (EC_builtin_curve-comment ci)))
 |#
 
 ;; ============================================================
@@ -348,7 +338,7 @@ The 'libcrypto key format:
     |#
     (define/override (generate-params config)
       (check-keygen-spec config allowed-dsa-paramgen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 1024)])
+      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)])
         (define dsa (DSA_new))
         (DSA_generate_parameters_ex dsa nbits)
         (define evp (EVP_PKEY_new))
@@ -448,7 +438,7 @@ The 'libcrypto key format:
 ;; ----
 
 (define allowed-ec-paramgen
-  `((curve-nid ,exact-nonnegative-integer? "exact-nonnegative-integer?")))
+  `((curve ,string? "string?")))
 
 (define libcrypto-ec-impl%
   (class libcrypto-pk-impl%
@@ -462,16 +452,16 @@ The 'libcrypto key format:
 
     (define/override (generate-params config)
       (check-keygen-spec config allowed-ec-paramgen)
-      (let ([curve-nid (keygen-spec-ref config 'curve-nid)])
-        (unless curve-nid
-          (crypto-error "missing required configuration key\n  key: ~s" 'curve-nid))
-        (define ec (EC_KEY_new_by_curve_name curve-nid))
-        (unless ec
-          (crypto-error "named curve not found\n  curve NID: ~e" curve-nid))
-        (define evp (EVP_PKEY_new))
-        (EVP_PKEY_set1_EC_KEY evp ec)
-        (EC_KEY_free ec)
-        (new libcrypto-pk-params% (impl this) (evp evp))))
+      (define curve-name (keygen-spec-ref config 'curve))
+      (unless curve-name (crypto-error "missing required configuration key\n  key: ~s" 'curve))
+      (define curve-nid (find-curve-nid-by-name curve-name))
+      (unless curve-nid (crypto-error "named curve not found\n  curve: ~e" curve-name))
+      (define ec (EC_KEY_new_by_curve_name curve-nid))
+      (unless ec (crypto-error "named curve not found\n  curve: ~e" curve-name))
+      (define evp (EVP_PKEY_new))
+      (EVP_PKEY_set1_EC_KEY evp ec)
+      (EC_KEY_free ec)
+      (new libcrypto-pk-params% (impl this) (evp evp)))
 
     (define/public (*write-params fmt evp)
       (unless (memq fmt '(#f libcrypto))
@@ -516,6 +506,7 @@ The 'libcrypto key format:
       (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))
 
     (define/public (*convert-peer-pubkey evp peer-pubkey0)
+      (eprintf "convert-peer-pubkey\n")
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (define group (EC_KEY_get0_group ec))
       (define group-degree (EC_GROUP_get_degree group))
@@ -646,3 +637,72 @@ The 'libcrypto key format:
       (define outlen2 (EVP_PKEY_derive ctx buf (bytes-length buf)))
       (shrink-bytes buf outlen2))
     ))
+
+;; ============================================================
+
+;; get-builtin-curve-nids : -> (listof Nat)
+(define builtin-curve-nids #f)
+(define (get-builtin-curve-nids)
+  (unless builtin-curve-nids
+    (set! builtin-curve-nids (map car (enumerate-builtin-curves))))
+  builtin-curve-nids)
+
+;; Enumerate and describe all builtin elliptic curves.
+(define (enumerate-builtin-curves)
+  (define curve-count (EC_get_builtin_curves #f 0))
+  (define ci0 (malloc curve-count _EC_builtin_curve 'atomic))
+  (set! ci0 (cast ci0 _pointer _EC_builtin_curve-pointer))
+  (EC_get_builtin_curves ci0 curve-count)
+  (for/list ([i curve-count])
+    (define ci (ptr-add ci0 i _EC_builtin_curve))
+    (define nid (EC_builtin_curve-nid ci))
+    (list nid
+          (EC_builtin_curve-comment ci)
+          (OBJ_nid2sn nid))))
+
+;; find-curve-nid-by-sn : String -> Nat/#f
+(define (find-curve-nid-by-sn sn)
+  (define nid (OBJ_sn2nid sn))
+  (and (member nid (get-builtin-curve-nids)) nid))
+
+;; Note about curve names and aliases:
+;;   http://tools.ietf.org/html/rfc4492#section-5.1.1
+;;   http://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf
+;;   https://bugs.launchpad.net/pyopenssl/+bug/1233810
+
+;; find-curve-nid-by-name : String -> Nat/#f
+(define (find-curve-nid-by-name name)
+  (or (find-curve-nid-by-sn name)
+      (for/or ([alias-set (in-list curve-aliases)]
+               #:when (member name alias-set))
+        (for/or ([alias (in-list alias-set)])
+          (find-curve-nid-by-sn alias)))))
+
+(define curve-aliases
+  ;; Source: RFC4492
+  ;; [ SEC2/RFC4492 | NIST FIPS 186-4 | ANSI X9.62 ]
+  '(["sect163k1" "NIST K-163"]
+    ["sect163r1"]
+    ["sect163r2" "NIST B-163"]
+    ["sect193r1"]
+    ["sect193r2"]
+    ["sect233k1" "NIST K-233"]
+    ["sect233r1" "NIST B-233"]
+    ["sect239k1"]
+    ["sect283k1" "NIST K-283"]
+    ["sect283r1" "NIST B-283"]
+    ["sect409k1" "NIST K-409"]
+    ["sect409r1" "NIST B-409"]
+    ["sect571k1" "NIST K-571"]
+    ["sect571r1" "NIST B-571"]
+    ["secp160k1"]
+    ["secp160r1"]
+    ["secp160r2"]
+    ["secp192k1"]
+    ["secp192r1" "NIST P-192" "prime192v1"]
+    ["secp224k1"]
+    ["secp224r1" "NIST P-224"]
+    ["secp256k1"]
+    ["secp256r1" "NIST P-256" "prime256v1"]
+    ["secp384r1" "NIST P-384"]
+    ["secp521r1" "NIST P-521"]))

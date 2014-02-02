@@ -96,6 +96,13 @@
       (subbytes outbuf 0 outlen2)
       outbuf))
 
+(define-crypto OBJ_nid2sn
+  (_fun _int -> _string/utf-8))
+(define-crypto OBJ_nid2ln
+  (_fun _int -> _string/utf-8))
+(define-crypto OBJ_sn2nid
+  (_fun _string/utf-8 -> _int))
+
 ;; ============================================================
 ;; Bignum
 
@@ -601,11 +608,11 @@
 
 (define-crypto EVP_PKEY_CTX_new
   (_fun _EVP_PKEY (_pointer = #f) -> _EVP_PKEY_CTX)
-  #:wrap (compose (allocator EVP_PKEY_CTX_free) (err-wrap/pointer 'EVP_Pkey_CTX_new)))
+  #:wrap (compose (allocator EVP_PKEY_CTX_free) (err-wrap/pointer 'EVP_PKEY_CTX_new)))
 
 (define-crypto EVP_PKEY_CTX_new_id
   (_fun _int (_pointer = #f) -> _EVP_PKEY_CTX)
-  #:wrap (compose (allocator EVP_PKEY_CTX_free) (err-wrap/pointer 'EVP_Pkey_CTX_new_id)))
+  #:wrap (compose (allocator EVP_PKEY_CTX_free) (err-wrap/pointer 'EVP_PKEY_CTX_new_id)))
 
 (define-crypto EVP_PKEY_CTX_set_cb
   (_fun _EVP_PKEY_CTX _fpointer -> _void))

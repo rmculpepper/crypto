@@ -13,9 +13,7 @@
 
 @title[#:tag "intro"]{Introduction to the Crypto Library}
 
-Cryptography is not security.
-
-Cryptography is a difficult, fragile tool that may be used in some
+Cryptography is not security. It is a tool that may be used in some
 cases to achieve security goals.
 
 This library is not a turn-key solution to security. It is a library
@@ -27,9 +25,8 @@ operations properly. Every operation has conditions that must be
 satisfied for the operation's security properties to hold; they are
 not always well-advertised in documentation or literature, and they
 are sometimes revised as new weaknesses or attacks are
-discovered. Aside from the occasional off-hand comment, such as the
-one about CTR mode below, @emph{this manual does not discuss them at
-all}. You are on your own.
+discovered. Aside from the occasional off-hand comment, this manual
+does not discuss them at all. You are on your own.
 
 
 @section[#:tag "intro-crypto"]{Cryptography Examples}
@@ -171,10 +168,12 @@ derivation. Two parties exchange public keys, and each party uses
 their own private key together with their peer's public key to derive
 a shared secret.
 
+Here's traditional Diffie-Hellman key agreement:
+
 @interaction[#:eval the-eval
-(define ecparams (generate-pk-parameters 'ec '((curve-nid 415))))
-(define priv1 (generate-private-key ecparams))
-(define priv2 (generate-private-key ecparams))
+(define dhparams (generate-pk-parameters 'dh '((nbits 128))))
+(define priv1 (generate-private-key dhparams))
+(define priv2 (generate-private-key dhparams))
 (define pub1 (pk-key->public-only-key priv1))
 (define pub2 (pk-key->public-only-key priv2))
 (define shared-secret (pk-derive-secret priv1 pub2))
@@ -182,13 +181,17 @@ a shared secret.
         (pk-derive-secret priv2 pub1))
 ]
 
-Keys can be converted to S-expressions for storage...
+And here's ECDH (Diffie-Hellman on elliptic curves):
 
 @interaction[#:eval the-eval
-(define shared-secret (pk-derive-secret priv2 pub1))
-shared-secret
+(define ecparams (generate-pk-parameters 'ec '((curve "NIST P-192")))) ;;  714 #|415|#
+(define priv1 (generate-private-key ecparams))
+(define priv2 (generate-private-key ecparams))
+(define pub1 (pk-key->public-only-key priv1))
+(define pub2 (pk-key->public-only-key priv2))
+(define shared-secret (pk-derive-secret priv1 pub2))
 (equal? shared-secret
-        (pk-derive-secret priv1 (pk-key->public-only-key priv2)))
+        (pk-derive-secret priv2 pub1))
 ]
 
 

@@ -147,22 +147,66 @@ public-only key, the function may simply return @racket[pk].
 }
 
 
-@defproc[(generate-pk-parameters [pki pk-impl?]
-                                 [paramgen-config (listof (list/c symbol? any/c)) '()])
+@defproc[(generate-pk-parameters [pki (or/c pk-spec? pk-impl?)]
+                                 [paramgen-config (listof (list/c symbol? any/c)) 
+                                                  '()])
          pk-parameters?]{
 
-Generate PK parameter values for the cryptosystem of @racket[pki].
+Generate PK parameter values for the cryptosystem of @racket[pki]
+using the given configuration options. Unless otherwise specified, the
+configuration values are optional, and the default values are
+implementation-dependent.
 
-@;{FIXME: document paramgen-config}
+The following configuration values are recognized for DSA
+(@racket['dsa]):
+@itemlist[
+
+@item{@racket[(list 'nbits _nbits)] --- Generate a prime modulus of
+size @racket[_nbits]. Examples include @racket[1024] and
+@racket[2048].}
+
+]
+
+The following configuration values are recognized for DH
+(@racket['dh]): 
+@itemlist[
+
+@item{@racket[(list 'nbits _nbits)] --- Generate a prime modulus of
+size @racket[_nbits]. Examples include @racket[1024] and
+@racket[2048].}
+
+@item{@racket[(list 'generator _generator)] --- Use the given
+@racket[_generator]; must be either @racket[2] or @racket[5].}
+
+]
+
+The following configuration values are recognized for EC
+(@racket['ec]):
+@itemlist[
+
+@item{@racket[(list 'curve _curve-name)] --- Required. Use the
+standard curve named @racket[_curve-name]. Examples include
+@racket["NIST P-256"] and @racket["secp192r1"].}
+
+]
 }
 
-@defproc[(generate-private-key [pki (or/c pk-impl? pk-parameters?)]
+@defproc[(generate-private-key [pki (or/c pk-spec? pk-impl? pk-parameters?)]
                                [keygen-config (listof (list/c symbol? any/c)) '()])
          private-key?]{
 
-Generate a private key from the given PK implementation or PK parameters.
+Generate a private key from the given PK implementation or PK
+parameters. Unless otherwise specified, configuration values are
+optional, and the default values are implementation dependent.
 
-@;{FIXME: document keygen-config}
+The following configuration values are recognized for RSA
+(@racket['rsa]):
+@itemlist[
+
+@item{@racket[(list 'nbits _nbits)] --- Generate a modulus of size
+@racket[_nbits]. Examples include @racket[1024] and @racket[2048].}
+
+]
 }
 
 
