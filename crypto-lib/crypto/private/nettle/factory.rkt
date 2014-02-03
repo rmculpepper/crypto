@@ -65,7 +65,7 @@
     ;; "arctwo40", "arctwo64", "arctwo128"
     ))
 
-(define modes '(ecb cbc ctr stream)) ;; FIXME: restore CTR, support GCM
+(define modes '(ecb cbc ctr gcm stream)) ;; FIXME: restore CTR, support GCM
 
 ;; ----------------------------------------
 

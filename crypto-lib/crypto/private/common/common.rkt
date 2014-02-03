@@ -31,6 +31,7 @@
          get-output-size*
          cipher-segment-input
          whole-chunk-cipher-ctx%
+         AE-whole-chunk-cipher-ctx%
          get-impl*
          get-spec*
          get-factory*
@@ -170,8 +171,8 @@
     ;; First partlen bytes of partial is waiting for rest of chunk.
     (field [block-size (send impl get-block-size)]
            [chunk-size (send impl get-chunk-size)]
-           [partlen 0])
-    (define partial (make-bytes chunk-size))
+           [partlen 0]
+           [partial (make-bytes chunk-size)])
 
     (define/public (get-encrypt?) encrypt?)
 
@@ -206,7 +207,7 @@
       (when (< aligninstart aligninend)
         (*crypt inbuf aligninstart aligninend outbuf alignoutstart (+ alignoutstart alignlen)))
       ;; Save leftovers
-      (when (< aligninend inend) ;; implies flush-partial? is true
+      (when (< aligninend inend)
         (bytes-copy! partial 0 inbuf aligninend inend)
         (set! partlen (- inend aligninend)))
       ;; Return total *written*
@@ -245,7 +246,7 @@
                        [else
                         (or (*crypt-partial partial 0 partlen outbuf outstart outend)
                             (err/partial))])])
-        (*close)))
+        (*after-final)))
 
     ;; *crypt-partial : ... -> nat or #f
     ;; encrypt partial final chunk (eg for CTR mode)
@@ -257,6 +258,9 @@
 
     (define/private (err/partial)
       (crypto-error "partial chunk (~a)" (if encrypt? "encrypting" "decrypting")))
+
+    (define/public (*after-final)
+      (*close))
 
     (define/public (close)
       (*close))
@@ -273,6 +277,104 @@
     ;; *close : -> void
     (abstract *close)
     ))
+
+(define AE-whole-chunk-cipher-ctx%
+  (class whole-chunk-cipher-ctx%
+    (inherit-field encrypt? pad? impl block-size chunk-size partlen partial)
+    (super-new)
+
+    (define AE? (memq (cadr (send impl get-spec)) '(gcm ccm)))
+
+    ;; State is nat
+    ;;  0 - needs tag set (decrypting)
+    ;;  1 - ready for AAD
+    ;;  2 - AAD done, ready for plaintext
+    ;;  3 - finalized but tag available (encrypting)
+    ;;  4 - closed
+    (field [state (if (and (not encrypt?) AE?) 0 1)])
+
+    (define/private (state-error state-desc)
+      (crypto-error "cipher context sequence error\n  state: ~a" state-desc))
+
+    (define/private (check-state ok-states #:next [new-state #f])
+      (if (memq state ok-states)
+          (when new-state (unless (= state new-state) (set! state new-state)))
+          (case state
+            [(0) (state-error "AE decryption context needs authentication tag")]
+            [(1) (void)]
+            [(2) (state-error "cannot add additionally authenticated data after plaintext")]
+            [(3 4) (err/cipher-closed)])))
+
+    ;; ----
+
+    (define/override (update! inbuf instart inend outbuf outstart outend)
+      (check-flush-AAD)
+      (check-state '(1 2) #:next 2)
+      (super update! inbuf instart inend outbuf outstart outend))
+
+    (define/public (update-AAD inbuf instart inend)
+      (check-state '(1))
+      (define-values (prefixlen flush-partial? alignlen)
+        (cipher-segment-input (- inend instart) partlen chunk-size #t #f))
+      (define aligninstart (+ instart prefixlen))
+      (define aligninend (+ aligninstart alignlen))
+      (define pfxoutlen (if flush-partial? chunk-size 0))
+      ;; Process partial
+      (when (< instart aligninstart)
+        (bytes-copy! partial partlen inbuf instart aligninstart))
+      (cond [flush-partial?
+             (*aad partial 0 chunk-size)
+             (bytes-fill! partial 0)
+             (set! partlen 0)]
+            [else
+             (set! partlen (+ partlen prefixlen))])
+      ;; Process aligned
+      (when (< aligninstart aligninend)
+        (*aad inbuf aligninstart aligninend))
+      ;; Save leftovers
+      (when (< aligninend inend)
+        (bytes-copy! partial 0 inbuf aligninend inend)
+        (set! partlen (- inend aligninend)))
+      (void))
+
+    (define/override (final! outbuf outstart outend)
+      (check-flush-AAD)
+      (check-state '(1 2) #:next 3)
+      (super final! outbuf outstart outend))
+
+    (define/public (set-auth-tag tag)
+      (check-state '(0) #:next 1)
+      (*set-auth-tag tag))
+
+    (define/public (get-auth-tag taglen)
+      (unless encrypt?
+        (crypto-error "cannot get authentication tag for decryption context"))
+      (check-state '(3))
+      (*get-auth-tag taglen))
+
+    (define/override (*after-final)
+      (unless AE? (*close)))
+
+    (define/override (*close)
+      (begin0 (super *close)
+        (set! state 4)))
+
+    (define/private (check-flush-AAD)
+      (when (= state 1)
+        ;; flush AAD from partial
+        (*aad partial 0 partlen)
+        (set! partlen 0)))
+
+    ;; *aad : bytes nat nat -> void
+    (abstract *aad)
+
+    ;; *set-auth-tag : bytes -> void
+    (abstract *set-auth-tag)
+
+    ;; *get-auth-tag : nat -> bytes
+    (abstract *get-auth-tag)
+    ))
+
 
 ;; get-output-size* : ... -> nat
 (define (get-output-size* inlen final? partlen block-size chunk-size encrypt? pad?)

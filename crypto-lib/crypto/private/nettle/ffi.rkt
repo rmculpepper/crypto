@@ -233,23 +233,23 @@
 (define-cpointer-type _gcm_key)
 (define-cpointer-type _gcm_ctx)
 
-(define-nettle gcm_set_key
+(define-nettle nettle_gcm_set_key
   (_fun _gcm_key _CIPHER_CTX _nettle_crypt_func -> _void))
-(define-nettle gcm_set_iv
+(define-nettle nettle_gcm_set_iv
   (_fun _gcm_ctx _gcm_key _uint _pointer -> _void))
 
-(define-nettle gcm_update
+(define-nettle nettle_gcm_update
   ;; add AAD, all but last must be block-size multiple
   (_fun _gcm_ctx _gcm_key _uint _pointer -> _void))
 
-(define-nettle gcm_encrypt
+(define-nettle nettle_gcm_encrypt
   ;; add plaintext, all but last must be block-size multiple
   (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer _pointer -> _void))
-(define-nettle gcm_decrypt
+(define-nettle nettle_gcm_decrypt
   ;; add ciphertext, all but last must be block-size multiple
   ;; use cipher's *encrypt* func for _nettle_crypt_func argument
   (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer _pointer -> _void))
 
-(define-nettle gcm_digest
+(define-nettle nettle_gcm_digest
   ;; get auth tag; length usually GCM_BLOCK_SIZE, but can be shorter
   (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer -> _void))

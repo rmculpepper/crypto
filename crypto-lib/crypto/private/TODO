@@ -1,6 +1,7 @@
 To Do
 =====
 
+- make generate* opt args kw args
 - need predicate: whether pk works with digest (eg, can't use md5 with ECDSA)
 - need ctx->impl operation?
 - still crashes in paramgen/keygen
@@ -13,12 +14,6 @@ To Do
 - check error reporting
 - GCM support
 - gcrypt initialization
-- add cipher-tag-length operation, catalog ???
-  - NIST SP 800-38D says GCM tag lengths include: 128 downto 96 by 8s (bits)
-    or 64 or 32 (bits) if you really must
-
-- info functions on impls should use impl methods, not catalog info
-  to allow extension with unknown algs
 
 - securing key storage memory
   - "zero memory when done with" (memset, variants of memset that don't get optimized away)
@@ -51,9 +46,6 @@ To Do
     - libcrypto, gcrypt (gcry_kdf_derive)
   - bcrypt, scrypt (from elsewhere)
 
-- ciphers: track bytes encrypted, better space checking
-
-- update tests
 - update docs
 - offer multiple padding options?
 
