@@ -31,26 +31,24 @@
 (define (make-factory-tests name factory)
   (when #f (eprintf ">>> Testing ~a\n" name))
   (test-suite name
-    ;; (test-suite "digests" (test-digests factory))
+    (test-suite "digests" (test-digests factory))
     (test-suite "ciphers" (test-ciphers factory))
     ;; (test-suite "pkey" (test-pkeys factory cmdssl-factory))
     ))
 
 (module+ main
 
-  (define all-factories (list libcrypto-factory gcrypt-factory nettle-factory cmdssl-factory))
+  (define all-factories (list libcrypto-factory gcrypt-factory nettle-factory #|cmdssl-factory|#))
 
   (run-tests
    (test-suite "crypto tests"
      (make-factory-tests "libcrypto" libcrypto-factory)
      (make-factory-tests "gcrypt" gcrypt-factory)
-     ;; (make-factory-tests "nettle" nettle-factory)
-     #|
-     (when #f (eprintf ">>> Digest agreement\n"))
+     (make-factory-tests "nettle" nettle-factory)
+     (when #t (eprintf ">>> Digest agreement\n"))
      (test-suite "digest agreement"
        (test-digests-agree all-factories))
      (when #f (eprintf ">>> Cipher agreement\n"))
      (test-suite "cipher agreement"
        (test-ciphers-agree all-factories))
-     |#
      )))

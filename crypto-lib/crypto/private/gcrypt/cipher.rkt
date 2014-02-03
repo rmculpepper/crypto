@@ -55,8 +55,6 @@
     (init-field ctx)
     (super-new)
 
-    ;; FIXME: reconcile padding and stream ciphers (raise error?)
-
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
       (let ([op (if encrypt? gcry_cipher_encrypt gcry_cipher_decrypt)])
         (op ctx
@@ -70,11 +68,6 @@
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]
         [else #f]))
-
-    (define/override (*get-partial-output-size partlen)
-      (case (cadr (send impl get-spec))
-        [(ctr obf cfb stream) partlen]
-        [else (super *get-partial-output-size partlen)]))
 
     (define/override (*open?)
       (and ctx #t))

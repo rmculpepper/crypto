@@ -165,7 +165,7 @@
     (define/public (copy)
       (let* ([content-so-far (get-content #f)]
              [dg2 (new digest-ctx% (impl impl) (hmac-key hmac-key))])
-        (send dg2 update! content-so-far 0 (bytes-length content-so-far))
+        (send dg2 update content-so-far 0 (bytes-length content-so-far))
         dg2))
     ))
 

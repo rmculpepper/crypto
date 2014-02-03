@@ -28,6 +28,7 @@
          factory-base%
          cipher-impl-base%
          multikeylen-cipher-impl%
+         get-output-size*
          cipher-segment-input
          whole-chunk-cipher-ctx%
          get-impl*
@@ -118,7 +119,10 @@
     (inherit-field spec)
     (super-new)
 
-    (define/public (get-block-size) (cipher-spec-block-size spec))
+    ;; cache block-size; used often to calculate space needed
+    (define block-size (cipher-spec-block-size spec))
+    (define/public (get-block-size) block-size)
+
     (define/public (get-iv-size) (cipher-spec-iv-size spec))
     (define/public (get-default-key-size) (cipher-spec-default-key-size spec))
     (define/public (get-key-sizes) (cipher-spec-key-sizes spec))
@@ -164,29 +168,15 @@
 
     ;; Underlying impl only accepts whole chunks.
     ;; First partlen bytes of partial is waiting for rest of chunk.
-    (field [chunk-size (send impl get-chunk-size)])
+    (field [block-size (send impl get-block-size)]
+           [chunk-size (send impl get-chunk-size)]
+           [partlen 0])
     (define partial (make-bytes chunk-size))
-    (define partlen 0)
 
     (define/public (get-encrypt?) encrypt?)
 
-    (define/public (get-output-size len)
-      (cond [(eq? len 'final)
-             (cond [pad?
-                    ;; If pad?, assume chunk-size = block-size.
-                    (cond [encrypt?
-                           chunk-size]
-                          [else ;; decrypt
-                           ;; If have a full chunk, then could output [0,chunk-size) if
-                           ;; input is well-padded. If not full chunk, incomplete input.
-                           (cond [(= partlen chunk-size) chunk-size]
-                                 [else #f])])]
-                   [else (*get-partial-output-size partlen)])]
-            [else
-             (define-values (prefixlen flush-partial? alignlen)
-               (cipher-segment-input len partlen chunk-size encrypt? pad?))
-             (define pfxoutlen (if flush-partial? chunk-size 0))
-             (+ pfxoutlen alignlen)]))
+    (define/public (get-output-size len final?)
+      (get-output-size* len final? partlen block-size chunk-size encrypt? pad?))
 
     (define/public (update! inbuf instart inend outbuf outstart outend)
       (unless (*open?) (err/cipher-closed))
@@ -199,6 +189,7 @@
       (define alignoutstart (+ outstart pfxoutlen))
       ;; Check output space
       (check-output-range outbuf outstart outend (+ pfxoutlen alignlen)
+                          ;; FIXME: remove, like eprintf
                           #:msg (format "  ~s" (list instart inend
                                                      '/ partlen
                                                      '/ prefixlen flush-partial? alignlen)))
@@ -264,14 +255,6 @@
     (define/public (*crypt-partial inbuf instart inend outbuf outstart outend)
       #f)
 
-    ;; *get-partial-output-size : nat -> nat or #f
-    ;; Returns output size for final if no padding.
-    ;; Override if *crypt-partial is overridden.
-    (define/public (*get-partial-output-size partlen)
-      (cond [(= partlen 0) 0]
-            [(= partlen chunk-size) chunk-size]
-            [else #f]))
-
     (define/private (err/partial)
       (crypto-error "partial chunk (~a)" (if encrypt? "encrypting" "decrypting")))
 
@@ -290,6 +273,40 @@
     ;; *close : -> void
     (abstract *close)
     ))
+
+;; get-output-size* : ... -> nat
+(define (get-output-size* inlen final? partlen block-size chunk-size encrypt? pad?)
+  (define-values (prefixlen flush-partial? alignlen)
+    (cipher-segment-input inlen partlen chunk-size encrypt? pad?))
+  (define pfxoutlen (if flush-partial? chunk-size 0))
+  (define new-partlen
+    (cond [(or flush-partial? (< (+ prefixlen alignlen) inlen))
+           ;; flushed or skipped because empty
+           (- inlen prefixlen alignlen)]
+          [else (+ partlen prefixlen)]))
+  (define for-update (+ pfxoutlen alignlen))
+  (define for-final
+    (cond [(not final?)
+           0]
+          [pad?
+           ;; If pad?, assume chunk-size = block-size.
+           ;; If encrypting:
+           ;;   - new-partlen < chunk-size; no reason to buffer whole chunk when encrypting
+           ;;   - result is new-partlen padded up to chunk-size, so chunk-size
+           ;; If decrypting:
+           ;;   - if new-partlen is full block, might de-pad to up to full block (chunk-size)
+           ;;   - if partial, will fail to de-pad anyway
+           chunk-size]
+          [else ;; not pad?
+           ;; If block cipher:
+           ;;   - needs 0 bytes if new-partlen is 0
+           ;;   - fails to de-pad otherwise, but block-size to be safe
+           ;; If stream cipher:
+           ;;   - needs new-partlen bytes
+           (if (= new-partlen 0)
+               0
+               (max new-partlen block-size))]))
+  (+ for-update for-final))
 
 ;; Divide an input buffer of length inlen into segments:
 ;;  - a prefix to fill a partial-buffer

@@ -68,7 +68,7 @@
       (when (= (length impls) 1)
         (eprintf "** only one impl for digest ~e\n" name))
       (when (> (length impls) 1)
-        (when #f
+        (when #t
           (eprintf "+ testing agreement ~e\n" name))
         (for ([impl impls])
           (for ([in digest-inputs])

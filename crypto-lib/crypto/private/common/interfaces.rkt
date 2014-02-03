@@ -163,7 +163,7 @@
     close    ;; -> void
     ;; update-AAD ;; bytes nat nat -> void
     ;; get-auth-tag ;; -> bytes/#f
-    get-output-size ;; (U nat 'final) -> (U nat #f)
+    get-output-size ;; nat boolean -> nat
     ))
 
 (define (cipher-impl? x) (is-a? x cipher-impl<%>))

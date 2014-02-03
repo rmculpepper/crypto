@@ -181,7 +181,7 @@
     #"I am the walrus."
     ,(semirandom-bytes 10)
     ,(semirandom-bytes 100)
-    ;; ,(semirandom-bytes #e1e3)
-    ;; ,(semirandom-bytes #e1e4)
+    ,(semirandom-bytes #e1e3)
+    ,(semirandom-bytes #e1e4)
     ;; ,(semirandom-bytes #e1e5)
     ))

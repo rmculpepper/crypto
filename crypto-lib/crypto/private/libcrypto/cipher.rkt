@@ -99,27 +99,12 @@
             [(2) (state-error "cannot add additionally authenticated data after plaintext")]
             [(3 4) (err/cipher-closed)])))
 
+    (define block-size (send impl get-block-size))
     (define chunk-size (send impl get-chunk-size))
     (define partlen 0)
 
-    (define/public (get-output-size len)
-      (cond [(eq? len 'final)
-             (cond [pad?
-                    (cond [encrypt? chunk-size]
-                          [else ;; decrypt
-                           ;; If have a full chunk, then could output [0,chunk-size) if
-                           ;; input is well-padded. If not full chunk, incomplete input.
-                           (cond [(= partlen chunk-size) chunk-size]
-                                 [else #f])])]
-                   [else
-                    (cond [(= partlen 0) 0]
-                          [(= partlen chunk-size) chunk-size]
-                          [else #f])])]
-            [else
-             (define-values (prefixlen flush-partial? alignlen)
-               (cipher-segment-input len partlen chunk-size encrypt? pad?))
-             (define pfxoutlen (if flush-partial? chunk-size 0))
-             (+ pfxoutlen alignlen)]))
+    (define/public (get-output-size len final?)
+      (get-output-size* len final? partlen block-size chunk-size encrypt? pad?))
 
     (define/public (get-encrypt?) encrypt?)
 
@@ -128,7 +113,7 @@
       (unless ctx (err/cipher-closed))
       (check-input-range inbuf instart inend)
       (check-output-range outbuf outstart outend
-                          (get-output-size (- inend instart)))
+                          (get-output-size (- inend instart) #f))
       (let ([n (update* inbuf instart inend outbuf outstart outend)])
         (set! partlen (+ (- partlen n) (- inend instart)))
         n))
@@ -147,7 +132,7 @@
     (define/public (final! outbuf outstart outend)
       (check-state '(1 2) #:next 3)
       (unless ctx (err/cipher-closed))
-      (check-output-range outbuf outstart outend (get-output-size 'final))
+      (check-output-range outbuf outstart outend (get-output-size 0 #t))
       (begin0 (or (EVP_CipherFinal_ex ctx (ptr-add outbuf outstart))
                   (if (send impl is-ae?)
                       (crypto-error "authenticated decryption failed")

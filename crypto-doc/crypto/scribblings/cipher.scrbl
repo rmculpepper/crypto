@@ -363,16 +363,23 @@ context. See also @racket[encrypt/auth].
 }
 
 @defproc[(cipher-get-output-size [cctx cipher-ctx?]
-                                 [len (or/c exact-nonnegative-integer? 'final)])
-         (or/c exact-nonnegative-integer? #f)]{
+                                 [len exact-nonnegative-integer?]
+                                 [final? boolean? #t])
+         exact-nonnegative-integer?]{
 
-Returns the number of bytes to be produced by calling
-@racket[cipher-update] with @racket[len] bytes of input if
-@racket[len] is an integer, or the maximum number of bytes to be
-produced by @racket[cipher-final] if @racket[len] is @racket['final].
+Returns the maximum number of bytes to be produced by calling
+@racket[cipher-update] with @racket[len] bytes of input followed by a
+call to @racket[cipher-final] if @racket[final?] is true. The result
+depends on the number of bytes internally buffered by @racket[cctx] as
+a result of previous calls to @racket[cipher-update].
 
-If @racket[len] is @racket['final] and @racket[cipher-final] would
-fail due to a padding error, produces @racket[#f].
+In general, the result is bounded by @racket[len] plus up to one chunk
+size for the internal buffer, plus up to another block size for
+padding if @racket[final?] is true and @racket[cctx] uses padding.
+
+@;{The number returned may be inexact only when decrypting in block
+mode with padding. Encryption or decryption may still fail with a
+padding error or padding length error.}
 }
 
 @(close-eval the-eval)

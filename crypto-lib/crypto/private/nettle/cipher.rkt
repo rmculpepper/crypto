@@ -95,11 +95,6 @@
          (- inend instart)]
         [else #f]))
 
-    (define/override (*get-partial-output-size partlen)
-      (case mode
-        [(ctr stream) partlen]
-        [else (super *get-partial-output-size partlen)]))
-
     (define/override (*open?)
       (and ctx #t))
 
