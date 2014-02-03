@@ -43,7 +43,10 @@ specifier.
 The initial value is @racket['()].
 }
 
-@defproc[(get-factory [i (or/c digest-impl? cipher-impl? pk-impl? random-impl?)])
+@defproc[(get-factory [i (or/c digest-impl? digest-ctx?
+                               cipher-impl? cipher-ctx?
+                               pk-impl? pk-parameters? pk-key?
+                               random-impl?)])
          crypto-factory?]{
 
 Gets the factory associated with a particular cryptographic algorithm

@@ -142,15 +142,21 @@
     (define/public (set-auth-tag tag)
       (check-state '(0) #:next 1)
       (unless ctx (err/cipher-closed))
-      (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_SET_TAG (bytes-length tag) tag))
+      (case (cadr (send impl get-spec))
+        [(gcm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_SET_TAG (bytes-length tag) tag)]
+        [else (crypto-error "cannot set authentication tag\n  spec: ~s" (send impl get-spec))]))
 
     (define/public (get-auth-tag taglen)
       (unless encrypt? (crypto-error "cannot get authentication tag for decryption context"))
       (check-state '(3))
       (unless ctx (err/cipher-closed))
-      (define tagbuf (make-bytes taglen))
-      (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_GET_TAG taglen tagbuf)
-      tagbuf)
+      (case (cadr (send impl get-spec))
+        [(gcm)
+         (define tagbuf (make-bytes taglen))
+         (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_GET_TAG taglen tagbuf)
+         tagbuf]
+        [else
+         (crypto-error "cannot get authentication tag\n  spec: ~s" (send impl get-spec))]))
 
     (define/public (close)
       (when ctx

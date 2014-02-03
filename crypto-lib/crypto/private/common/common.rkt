@@ -126,7 +126,7 @@
     (define/public (get-iv-size) (cipher-spec-iv-size spec))
     (define/public (get-default-key-size) (cipher-spec-default-key-size spec))
     (define/public (get-key-sizes) (cipher-spec-key-sizes spec))
-    (define/public (get-auth-size) (cipher-spec-auth-size spec))
+    (define/public (get-auth-size) (cipher-spec-default-auth-size spec))
 
     (abstract get-chunk-size)
     (abstract new-ctx)

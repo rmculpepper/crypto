@@ -142,6 +142,15 @@ returns the size of the counter.
 ]
 }
 
+@defproc[(cipher-default-auth-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
+         (or/c exact-nonnegative-integer? #f)]{
+
+Returns the default size in bytes of the @tech{authentication tag}
+produced by @racket[ci] if it represents an @tech[#:key "authenticated
+encryption"]{authenticated encryption or decryption} algorithm;
+@racket[#f] otherwise.
+}
+
 @defproc[(generate-cipher-key [ci (or/c cipher-spec? cipher-impl?)])
          bytes?]{
 
@@ -215,8 +224,9 @@ ciphertext
                        [input (or/c bytes? string? input-port?)]
                        [#:pad pad-mode boolean? #t]
                        [#:AAD additional-auth-data (or/c bytes? #f) #f]
-                       [#:auth-size auth-size exact-nonnegative-integer? (cipher-block-size ci)])
-         (values bytes? bytes?)]
+                       [#:auth-size auth-size (or/c exact-nonnegative-integer? #f)
+                                    (cipher-default-auth-size ci)])
+         (values bytes? (or/c bytes? #f))]
 @defproc[(decrypt/auth [ci (or/c cipher-spec? cipher-impl?)]
                        [key bytes?]
                        [iv (or/c bytes? #f)]
@@ -229,10 +239,12 @@ ciphertext
 
 Like @racket[encrypt] and @racket[decrypt], respectively, except for
 @deftech{authenticated encryption} modes such as GCM. The
-@racket[encrypt/auth] function produces an @deftech{authentication tag}
-of length @racket[auth-size] for the @racket[additional-auth-data]
-and the @racket[input]. The @racket[decrypt/auth] function raises an
-exception if the given @racket[auth-tag] does not match the
+@racket[encrypt/auth] function produces an @deftech{authentication
+tag} of length @racket[auth-size] for the
+@racket[additional-auth-data] and the @racket[input]. If
+@racket[auth-size] is @racket[#f], the authentication tag is not
+retrieved. The @racket[decrypt/auth] function raises an exception if
+the given @racket[auth-tag] does not match the
 @racket[additional-auth-data] and the @racket[input].
 
 @examples[#:eval the-eval
@@ -250,14 +262,14 @@ exception if the given @racket[auth-tag] does not match the
                         [key bytes?]
                         [iv (or/c bytes? #f)]
                         [input (or/c bytes? string? input-port?)]
-                        [out output-port?]
+                        [out output-port? (current-output-port)]
                         [#:pad pad-mode boolean? #t])
          exact-nonnegative-integer?]
 @defproc[(decrypt-write [ci (or/c cipher-spec? cipher-impl?)]
                         [key bytes?]
                         [iv (or/c bytes? #f)]
                         [input (or/c bytes? input-port?)]
-                        [out output-port?]
+                        [out output-port? (current-output-port)]
                         [#:pad pad-mode boolean? #t])
          exact-nonnegative-integer?]
 ]]{
@@ -354,7 +366,7 @@ If @racket[cctx] is an @tech{authenticated encryption} context, use
 
 @defproc[(cipher-final/tag [cctx encrypt-ctx?]
                            [#:auth-size auth-size exact-nonnegative-integer?
-                                        (cipher-auth-size cctx)])
+                                        (cipher-default-auth-size cctx)])
          (values bytes? bytes?)]{
 
 Like @racket[cipher-final], but also return an @tech{authentication tag}. The

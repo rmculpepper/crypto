@@ -24,7 +24,10 @@
   [crypto-factories
    (parameter/c (listof crypto-factory?))]
   [get-factory
-   (-> (or/c digest-impl? cipher-impl? random-impl?)
+   (-> (or/c digest-impl? digest-ctx?
+             cipher-impl? cipher-ctx?
+             random-impl?
+             pk-impl? pk-parameters? pk-key?)
        crypto-factory?)]
   [get-digest
    (->* [digest-spec?] [factories/c] (or/c digest-impl? #f))]
@@ -43,7 +46,9 @@
 
 (define (get-factory i)
   (with-crypto-entry 'get-factory
-    (send i get-factory)))
+    (let loop ([i i])
+      (cond [(is-a? i impl<%>) (send i get-factory)]
+            [(is-a? i ctx<%>) (loop (send i get-impl))]))))
 
 (define (get-digest di [factory/s (crypto-factories)])
   (with-crypto-entry 'get-digest

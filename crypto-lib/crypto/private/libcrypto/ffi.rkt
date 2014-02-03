@@ -19,7 +19,8 @@
          ffi/unsafe/define
          ffi/unsafe/alloc
          ffi/unsafe/atomic
-         openssl/libcrypto)
+         openssl/libcrypto
+         "../common/error.rkt")
 (provide (protect-out (all-defined-out)))
 
 (define-ffi-definer define-racket #f)
@@ -97,11 +98,12 @@
 (define (raise-crypto-error where)
   (let ([e (ERR_get_error)])
     (drain-errors)
-    (error where "~a [~a:~a:~a]"
-           (or (ERR_reason_error_string e) "?")
-           (or (ERR_lib_error_string e) "?")
-           (or (ERR_func_error_string e) "?")
-           e)))
+    (crypto-error "~a: ~a [~a:~a:~a]"
+                  where
+                  (or (ERR_reason_error_string e) "?")
+                  (or (ERR_lib_error_string e) "?")
+                  (or (ERR_func_error_string e) "?")
+                  e)))
 
 (define (i2d i2d_Type x)
   (define outlen (i2d_Type x #f))

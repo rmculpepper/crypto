@@ -1,15 +1,9 @@
 To Do
 =====
 
-* gcrypt, nettle block ciphers in stream mode still need block-at-a-time :(
-  - distinguish between
-    - underlying block size (maybe not relevant?)
-    - "block size": message-length constraints, interaction with padding
-    - "chunk size" (update granularity): output comes in multiples of this
-       - property of impl only
-  - cipher-get-output-size operation
-    - for update: 
-    - flag for final:
+- need predicate: whether pk works with digest (eg, can't use md5 with ECDSA)
+- need ctx->impl operation?
+- still crashes in paramgen/keygen
 
 - implement other key formats: pkcs1 pkcs3 pkcs8 ...
 - keygen/paramgen support: add required flag, auto-check

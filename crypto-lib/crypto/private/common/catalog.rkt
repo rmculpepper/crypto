@@ -127,12 +127,12 @@
 ;;   ccm: NOTE: offline/nonincremental: needs length before starting; don't support
 (define known-block-modes
   '(;; Mode IVblocks IVbytes Type ATblocks
-    [ecb 0 0 block   0]
-    [cbc 1 0 block   0]
-    [ofb 1 0 stream  0]
-    [cfb 1 0 stream  0]
-    [ctr 1 0 stream  0]
-    [gcm 0 12 stream 1]
+    [ecb 0 0 block   #f]
+    [cbc 1 0 block   #f]
+    [ofb 1 0 stream  #f]
+    [cfb 1 0 stream  #f]
+    [ctr 1 0 stream  #f]
+    [gcm 0 12 stream  1]
     ))
 
 (define (block-mode? x) (and (symbol? x) (assq x known-block-modes) #t))
@@ -186,7 +186,7 @@
                  [else maxks]))]
         [else #f]))
 
-(define (cipher-spec-auth-size cipher-spec)
+(define (cipher-spec-default-auth-size cipher-spec)
   (match cipher-spec
     [(list cipher-name 'stream)
      0]
@@ -194,7 +194,8 @@
      (match (hash-ref known-block-ciphers cipher-name #f)
        [(list block-size allowed-keys)
         (match (assq mode known-block-modes)
-          [(list _ _ _ _ ATblocks) (* ATblocks block-size)])]
+          [(list _ _ _ _ ATblocks)
+           (and ATblocks (* ATblocks block-size))])]
        [_ #f])]))
 
 (define (cipher-spec-block-size cipher-spec)

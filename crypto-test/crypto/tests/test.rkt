@@ -25,7 +25,7 @@
          crypto/private/cmd-ssl/cmd
          "digest.rkt"
          "cipher.rkt"
-         #| "pkey.rkt" |#)
+         "pkey.rkt")
 (provide make-factory-tests)
 
 (define (make-factory-tests name factory)
@@ -33,7 +33,7 @@
   (test-suite name
     (test-suite "digests" (test-digests factory))
     (test-suite "ciphers" (test-ciphers factory))
-    ;; (test-suite "pkey" (test-pkeys factory cmdssl-factory))
+    (test-suite "pkey"    (test-pk factory))
     ))
 
 (module+ main

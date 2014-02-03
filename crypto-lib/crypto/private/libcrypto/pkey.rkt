@@ -106,9 +106,9 @@ The 'libcrypto key format:
         (match sk
           ;; RSA, DSA private keys
           [(list 'rsa 'private 'pkcs1 (? bytes? buf))
-           (d2i_PrivateKey EVP_PKEY_RSA buf (bytes-length buf))]
+           (values (d2i_PrivateKey EVP_PKEY_RSA buf (bytes-length buf)) #t)]
           [(list 'dsa 'private 'libcrypto (? bytes? buf))
-           (d2i_PrivateKey EVP_PKEY_DSA buf (bytes-length buf))]
+           (values (d2i_PrivateKey EVP_PKEY_DSA buf (bytes-length buf)) #t)]
           [(list (or 'rsa 'dsa) 'private 'pkcs8 (? bytes? buf)) ;; PrivateKeyInfo
            (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
              (begin0 (EVP_PKCS82PKEY pkcs8info)
@@ -406,7 +406,7 @@ The 'libcrypto key format:
       (define privkey-buf (and private? (BN->bytes/bin (DH_st_prefix-privkey dh))))
       (DH_free dh)
       (list* 'dh (if private? 'private 'public) 'libcrypto
-             (caddr (*write-params fmt evp))
+             (cadddr (*write-params fmt evp))
              pubkey-buf
              (if private? (list privkey-buf) null)))
 

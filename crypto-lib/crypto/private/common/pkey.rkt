@@ -191,13 +191,15 @@
 
 (define (digest/sign pk di inp #:pad [pad #f])
   (with-crypto-entry 'digest/sign
-    (let ([di (get-spec* di)])
-      (send pk sign (digest di inp) di pad))))
+    (let* ([di (get-spec* di)]
+           [di* (get-digest di (get-factory pk))])
+      (send pk sign (digest di* inp) di pad))))
 
 (define (digest/verify pk di inp sig #:pad [pad #f])
   (with-crypto-entry 'digest/verify
-    (let ([di (get-spec* di)])
-      (send pk verify (digest di inp) di pad sig))))
+    (let* ([di (get-spec* di)]
+           [di* (get-digest di (get-factory pk))])
+      (send pk verify (digest di* inp) di pad sig))))
 
 ;; ============================================================
 
