@@ -34,6 +34,11 @@
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-iv-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
+  [cipher-auth-size
+   (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
+  [cipher-chunk-size
+   (-> (or/c cipher-impl? cipher-ctx?) nat?)]
+
   [make-encrypt-ctx
    (->* [cipher/c key/c iv/c] [#:pad pad-mode/c]
         encrypt-ctx?)]
@@ -53,8 +58,11 @@
   [cipher-final
    (-> cipher-ctx? bytes?)]
   [cipher-final/tag
-   (->* [cipher-ctx?] [#:auth-length nat?]
+   (->* [cipher-ctx?] [#:auth-size nat?]
         (values bytes? bytes?))]
+  [cipher-get-output-size
+   (-> cipher-ctx? (or/c nat? 'final)
+       (or/c nat? #f))]
 
   [encrypt
    (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?)]
@@ -67,7 +75,7 @@
 
   [encrypt/auth
    (->* [cipher/c key/c iv/c (or/c bytes? string? input-port?)]
-        [#:pad pad-mode/c #:AAD (or/c bytes? #f) #:auth-length nat?]
+        [#:pad pad-mode/c #:AAD (or/c bytes? #f) #:auth-size nat?]
         (values bytes? bytes?))]
   [decrypt/auth
    (->* [cipher/c key/c iv/c (or/c bytes? input-port?)]
@@ -123,12 +131,17 @@
          (or (get-cipher o) (err/missing-cipher o))]
         [else (get-impl* o)]))
 
+;; Defer to impl when avail to support unknown ciphers
+;; or impl-dependent limits.
+
 (define (cipher-default-key-size o)
   (with-crypto-entry 'cipher-default-key-size
-    (cipher-spec-default-key-size (get-spec* o))))
+    (cond [(list? o) (cipher-spec-default-key-size o)]
+          [else (send (get-impl* o) get-default-key-size)])))
 (define (cipher-key-sizes o)
   (with-crypto-entry 'cipher-key-sizes
-    (cipher-spec-key-sizes (get-spec* o))))
+    (cond [(list? o) (cipher-spec-key-sizes o)]
+          [else (send (get-impl* o) get-key-sizes)])))
 (define (cipher-block-size o)
   (with-crypto-entry 'cipher-block-size
     (cond [(list? o) (cipher-spec-block-size o)]
@@ -137,6 +150,15 @@
   (with-crypto-entry 'cipher-iv-size
     (cond [(list? o) (cipher-spec-iv-size o)]
           [else (send (get-impl* o) get-iv-size)])))
+
+(define (cipher-auth-size o)
+  (with-crypto-entry 'cipher-auth-size
+    (cond [(list? o) (cipher-spec-auth-size o)]
+          [else (send (get-impl* o) get-auth-size)])))
+
+(define (cipher-chunk-size o)
+  (with-crypto-entry 'cipher-chunk-size
+    (send (get-impl* o) get-chunk-size)))
 
 ;; ----
 
@@ -171,7 +193,7 @@
   (with-crypto-entry 'cipher-update
     (check-input-range ibuf istart iend)
     (let* ([ilen (- iend istart)]
-           [obuf (make-bytes (+ ilen (cipher-block-size c)))]
+           [obuf (make-bytes (cipher-get-output-size c ilen))]
            [len (send c update!
                       ibuf istart iend
                       obuf 0 (bytes-length obuf))])
@@ -179,18 +201,22 @@
 
 (define (cipher-final c)
   (with-crypto-entry 'cipher-final
-    (let* ([buf (make-bytes (cipher-block-size c))]
+    (let* ([buf (make-bytes (or (cipher-get-output-size c 'final) 0))]
            [len (send c final! buf 0 (bytes-length buf))])
       (send c close)
       (shrink-bytes buf len))))
 
-(define (cipher-final/tag c #:auth-length [taglen (cipher-block-size c)])
+(define (cipher-final/tag c #:auth-size [taglen (cipher-auth-size c)])
   (with-crypto-entry 'cipher-final
-    (let* ([buf (make-bytes (cipher-block-size c))]
+    (let* ([buf (make-bytes (or (cipher-get-output-size c 'final) 0))]
            [len (send c final! buf 0 (bytes-length buf))]
            [tag (send c get-auth-tag taglen)])
       (send c close)
       (values (shrink-bytes buf len) tag))))
+
+(define (cipher-get-output-size cctx len)
+  (with-crypto-entry 'cipher-get-output-size
+    (send cctx get-output-size len)))
 
 ;; ----
 
@@ -205,7 +231,7 @@
 (define (encrypt/auth ci key iv inp
                       #:pad [pad default-pad]
                       #:AAD [aad #f]
-                      #:auth-length [taglen (cipher-block-size ci)])
+                      #:auth-size [taglen (cipher-auth-size ci)])
   (with-crypto-entry 'encrypt/auth
     (let ([ctx (-encrypt-ctx ci key iv pad)])
       (when aad (send ctx update-AAD aad 0 (bytes-length aad)))
@@ -279,7 +305,7 @@
 
 (define (*crypt-bytes cctx buf start end)
   (check-input-range buf start end)
-  (define enc-len (+ (cipher-block-size cctx) (- end start)))
+  (define enc-len (cipher-get-output-size (- end start)))
   (define enc-buf (make-bytes enc-len))
   (let* ([len1 (send cctx update! buf start end enc-buf 0 enc-len)]
          [len2 (send cctx final! enc-buf len1 enc-len)])

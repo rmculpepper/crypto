@@ -113,7 +113,7 @@ Returns the size in bytes of the blocks manipulated by the cipher. If
 @racket[ci] is a stream cipher (including block ciphers using a stream
 mode such as CTR), returns @racket[1].
 
-A cipher always produces a ciphertext that is a multiple of its block
+A cipher produces a ciphertext that is a multiple of its block
 size. If a cipher is used without padding, the plaintext must be a
 multiple of the block size.
 
@@ -215,7 +215,7 @@ ciphertext
                        [input (or/c bytes? string? input-port?)]
                        [#:pad pad-mode boolean? #t]
                        [#:AAD additional-auth-data (or/c bytes? #f) #f]
-                       [#:auth-length auth-length exact-nonnegative-integer? (cipher-block-size ci)])
+                       [#:auth-size auth-size exact-nonnegative-integer? (cipher-block-size ci)])
          (values bytes? bytes?)]
 @defproc[(decrypt/auth [ci (or/c cipher-spec? cipher-impl?)]
                        [key bytes?]
@@ -230,7 +230,7 @@ ciphertext
 Like @racket[encrypt] and @racket[decrypt], respectively, except for
 @deftech{authenticated encryption} modes such as GCM. The
 @racket[encrypt/auth] function produces an @deftech{authentication tag}
-of length @racket[auth-length] for the @racket[additional-auth-data]
+of length @racket[auth-size] for the @racket[additional-auth-data]
 and the @racket[input]. The @racket[decrypt/auth] function raises an
 exception if the given @racket[auth-tag] does not match the
 @racket[additional-auth-data] and the @racket[input].
@@ -353,8 +353,8 @@ If @racket[cctx] is an @tech{authenticated encryption} context, use
 }
 
 @defproc[(cipher-final/tag [cctx encrypt-ctx?]
-                           [#:auth-length auth-length exact-nonnegative-integer?
-                                          (cipher-block-size cctx)])
+                           [#:auth-size auth-size exact-nonnegative-integer?
+                                        (cipher-auth-size cctx)])
          (values bytes? bytes?)]{
 
 Like @racket[cipher-final], but also return an @tech{authentication tag}. The
@@ -362,5 +362,17 @@ Like @racket[cipher-final], but also return an @tech{authentication tag}. The
 context. See also @racket[encrypt/auth].
 }
 
+@defproc[(cipher-get-output-size [cctx cipher-ctx?]
+                                 [len (or/c exact-nonnegative-integer? 'final)])
+         (or/c exact-nonnegative-integer? #f)]{
+
+Returns the number of bytes to be produced by calling
+@racket[cipher-update] with @racket[len] bytes of input if
+@racket[len] is an integer, or the maximum number of bytes to be
+produced by @racket[cipher-final] if @racket[len] is @racket['final].
+
+If @racket[len] is @racket['final] and @racket[cipher-final] would
+fail due to a padding error, produces @racket[#f].
+}
 
 @(close-eval the-eval)

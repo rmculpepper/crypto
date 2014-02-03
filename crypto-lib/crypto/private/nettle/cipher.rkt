@@ -29,20 +29,18 @@
     ctx))
 
 (define nettle-cipher-impl%
-  (class* impl-base% (cipher-impl<%>)
+  (class* cipher-impl-base% (cipher-impl<%>)
     (init-field nc)
     (inherit-field spec)
+    (inherit get-iv-size)
     (super-new)
 
-    (define iv-size (cipher-spec-iv-size spec))
+    (define chunk-size (nettle-cipher-block-size nc))
+    (define/override (get-chunk-size) chunk-size)
 
-    ;; (nettle-cipher-block-size nc) disregards mode; eg, AES-CTR => 16, ...?
-    (define/public (get-block-size) (nettle-cipher-block-size nc))
-    (define/public (get-iv-size) iv-size)
-
-    (define/public (new-ctx key iv enc? pad?)
+    (define/override (new-ctx key iv enc? pad?)
       (check-key-size spec (bytes-length key))
-      (check-iv-size spec iv-size iv)
+      (check-iv-size spec (get-iv-size) iv)
       (let* ([pad? (and pad? (cipher-spec-uses-padding? spec))]
              [ctx (new nettle-cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?))])
         (send ctx set-key+iv key iv)
@@ -50,9 +48,9 @@
     ))
 
 (define nettle-cipher-ctx%
-  (class* whole-block-cipher-ctx% (cipher-ctx<%>)
+  (class* whole-chunk-cipher-ctx% (cipher-ctx<%>)
     (init-field nc)
-    (inherit-field impl block-size encrypt? pad?)
+    (inherit-field impl chunk-size encrypt? pad?)
     (super-new)
 
     ;; FIXME: reconcile padding and stream ciphers (raise error?)
@@ -80,12 +78,12 @@
          (crypt ctx (- inend instart) (ptr-add outbuf outstart) (ptr-add inbuf instart))]
         [(cbc)
          (let ([cbc_*crypt (if encrypt? nettle_cbc_encrypt nettle_cbc_decrypt)])
-           (cbc_*crypt ctx crypt block-size iv (- inend instart)
+           (cbc_*crypt ctx crypt chunk-size iv (- inend instart)
                        (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
         [(ctr)
          ;; Note: must use *encrypt* function in CTR mode, even when decrypting
          (let ([crypt (nettle-cipher-encrypt nc)])
-           (nettle_ctr_crypt ctx crypt block-size iv (- inend instart)
+           (nettle_ctr_crypt ctx crypt chunk-size iv (- inend instart)
                              (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
         [else (crypto-error "internal error: bad mode: ~e\n" mode)]))
 
@@ -96,6 +94,11 @@
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]
         [else #f]))
+
+    (define/override (*get-partial-output-size partlen)
+      (case mode
+        [(ctr stream) partlen]
+        [else (super *get-partial-output-size partlen)]))
 
     (define/override (*open?)
       (and ctx #t))

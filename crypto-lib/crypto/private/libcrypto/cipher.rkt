@@ -26,7 +26,7 @@
 (provide (all-defined-out))
 
 (define libcrypto-cipher-impl%
-  (class* impl-base% (cipher-impl<%>)
+  (class* cipher-impl-base% (cipher-impl<%>)
     (init-field cipher) ;; EVP_CIPHER
     (inherit-field spec)
     (super-new)
@@ -35,32 +35,34 @@
         [(list _ size keylen ivlen)
          (values size keylen ivlen)]))
     (let ()
-      (define (check what value expected)
-        (unless (= value expected)
+      (define (check what got expected)
+        (unless (= got expected)
           (error 'cipher-impl%
                  "internal error: inconsistent ~a\n  cipher: ~e\n  expected: ~e\n  got: ~e"
-                 what spec value expected)))
+                 what spec expected got)))
       (check "block size" block-size (cipher-spec-block-size spec))
       (check "IV size" iv-size (cipher-spec-iv-size spec)))
 
-    (define/public (get-block-size) block-size)
-    (define/public (get-iv-size) iv-size)
+    (define/override (get-block-size) block-size)
+    (define/override (get-iv-size) iv-size)
+    (define/override (get-chunk-size) block-size)
     (define/public (is-ae?) (and (memq (cadr spec) '(gcm ccm))))
 
-    (define/public (new-ctx key iv enc? pad?)
+    (define/override (new-ctx key iv enc? pad?)
       (check-key-size spec (bytes-length key))
       (check-iv-size spec iv-size iv)
-      (let ([ctx (EVP_CIPHER_CTX_new)])
+      (let ([ctx (EVP_CIPHER_CTX_new)]
+            [pad? (and pad? (cipher-spec-uses-padding? spec))])
         (EVP_CipherInit_ex ctx cipher #f #f enc?)
         (EVP_CIPHER_CTX_set_key_length ctx (bytes-length key))
-        (EVP_CIPHER_CTX_set_padding ctx (and pad? (cipher-spec-uses-padding? spec)))
+        (EVP_CIPHER_CTX_set_padding ctx pad?)
         (define ivlen (if iv (bytes-length iv) 0))
         (case (cadr spec)
           [(gcm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_SET_IVLEN ivlen #f)]
           [(ccm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_CCM_SET_IVLEN ivlen #f)]
           [else (void)])
         (EVP_CipherInit_ex ctx cipher key iv enc?)
-        (new libcrypto-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?))))
+        (new libcrypto-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?))))
     ))
 
 ;; Conflicting notes about GCM mode:
@@ -69,10 +71,9 @@
 ;; - No, don't, if using EVP_CipherInit_ex
 ;;   See http://stackoverflow.com/questions/12153009/
 
-
 (define libcrypto-cipher-ctx%
   (class* ctx-base% (cipher-ctx<%>)
-    (init-field ctx encrypt?)
+    (init-field ctx encrypt? pad?)
     (inherit-field impl)
     (super-new)
 
@@ -98,14 +99,39 @@
             [(2) (state-error "cannot add additionally authenticated data after plaintext")]
             [(3 4) (err/cipher-closed)])))
 
+    (define chunk-size (send impl get-chunk-size))
+    (define partlen 0)
+
+    (define/public (get-output-size len)
+      (cond [(eq? len 'final)
+             (cond [pad?
+                    (cond [encrypt? chunk-size]
+                          [else ;; decrypt
+                           ;; If have a full chunk, then could output [0,chunk-size) if
+                           ;; input is well-padded. If not full chunk, incomplete input.
+                           (cond [(= partlen chunk-size) chunk-size]
+                                 [else #f])])]
+                   [else
+                    (cond [(= partlen 0) 0]
+                          [(= partlen chunk-size) chunk-size]
+                          [else #f])])]
+            [else
+             (define-values (prefixlen flush-partial? alignlen)
+               (cipher-segment-input len partlen chunk-size encrypt? pad?))
+             (define pfxoutlen (if flush-partial? chunk-size 0))
+             (+ pfxoutlen alignlen)]))
+
     (define/public (get-encrypt?) encrypt?)
 
     (define/public (update! inbuf instart inend outbuf outstart outend)
       (check-state '(1 2) #:next 2)
       (unless ctx (err/cipher-closed))
       (check-input-range inbuf instart inend)
-      (check-output-range outbuf outstart outend (maxlen (- inend instart)))
-      (update* inbuf instart inend outbuf outstart outend))
+      (check-output-range outbuf outstart outend
+                          (get-output-size (- inend instart)))
+      (let ([n (update* inbuf instart inend outbuf outstart outend)])
+        (set! partlen (+ (- partlen n) (- inend instart)))
+        n))
 
     (define/public (update-AAD inbuf instart inend)
       (check-state '(1))
@@ -121,7 +147,7 @@
     (define/public (final! outbuf outstart outend)
       (check-state '(1 2) #:next 3)
       (unless ctx (err/cipher-closed))
-      (check-output-range outbuf outstart outend (maxlen 0))
+      (check-output-range outbuf outstart outend (get-output-size 'final))
       (begin0 (or (EVP_CipherFinal_ex ctx (ptr-add outbuf outstart))
                   (if (send impl is-ae?)
                       (crypto-error "authenticated decryption failed")
@@ -146,7 +172,4 @@
         (EVP_CIPHER_CTX_free ctx)
         (set! state 4)
         (set! ctx #f)))
-
-    (define/private (maxlen inlen)
-      (+ inlen (send impl get-block-size)))
     ))

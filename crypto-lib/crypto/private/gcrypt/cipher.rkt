@@ -24,20 +24,19 @@
 (provide gcrypt-cipher-impl%)
 
 (define gcrypt-cipher-impl%
-  (class* impl-base% (cipher-impl<%>)
+  (class* cipher-impl-base% (cipher-impl<%>)
     (init-field cipher mode)
     (inherit-field spec)
+    (inherit get-iv-size)
     (super-new)
 
-    (define key-size (gcry_cipher_get_algo_keylen cipher))
-    (define block-size (gcry_cipher_get_algo_blklen cipher))
-    (define iv-size (cipher-spec-iv-size spec))
+    (define/override (get-default-key-size) (gcry_cipher_get_algo_keylen cipher))
 
-    (define/public (get-key-size) key-size)
-    (define/public (get-block-size) block-size)
-    (define/public (get-iv-size) iv-size)
+    (define chunk-size (gcry_cipher_get_algo_blklen cipher))
+    (define/override (get-chunk-size) chunk-size)
 
-    (define/public (new-ctx key iv enc? pad?)
+    (define/override (new-ctx key iv enc? pad?)
+      (define iv-size (get-iv-size))
       (check-key-size spec (bytes-length key))
       (check-iv-size spec iv-size iv)
       (let ([ctx (gcry_cipher_open cipher mode 0)]
@@ -51,7 +50,7 @@
     ))
 
 (define gcrypt-cipher-ctx%
-  (class* whole-block-cipher-ctx% (cipher-ctx<%>)
+  (class* whole-chunk-cipher-ctx% (cipher-ctx<%>)
     (inherit-field impl encrypt? pad?)
     (init-field ctx)
     (super-new)
@@ -71,6 +70,11 @@
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]
         [else #f]))
+
+    (define/override (*get-partial-output-size partlen)
+      (case (cadr (send impl get-spec))
+        [(ctr obf cfb stream) partlen]
+        [else (super *get-partial-output-size partlen)]))
 
     (define/override (*open?)
       (and ctx #t))

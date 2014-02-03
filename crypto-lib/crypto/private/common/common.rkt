@@ -26,8 +26,10 @@
 (provide impl-base%
          ctx-base%
          factory-base%
+         cipher-impl-base%
          multikeylen-cipher-impl%
-         whole-block-cipher-ctx%
+         cipher-segment-input
+         whole-chunk-cipher-ctx%
          get-impl*
          get-spec*
          get-factory*
@@ -111,6 +113,21 @@
 
 ;; ----
 
+(define cipher-impl-base%
+  (class* impl-base% (cipher-impl<%>)
+    (inherit-field spec)
+    (super-new)
+
+    (define/public (get-block-size) (cipher-spec-block-size spec))
+    (define/public (get-iv-size) (cipher-spec-iv-size spec))
+    (define/public (get-default-key-size) (cipher-spec-default-key-size spec))
+    (define/public (get-key-sizes) (cipher-spec-key-sizes spec))
+    (define/public (get-auth-size) (cipher-spec-auth-size spec))
+
+    (abstract get-chunk-size)
+    (abstract new-ctx)
+    ))
+
 (define multikeylen-cipher-impl%
   (class* impl-base% (cipher-impl<%>)
     (init-field impls) ;; (nonempty-listof (cons nat cipher-impl%))
@@ -119,6 +136,10 @@
 
     (define/public (get-block-size) (send (cdar impls) get-block-size))
     (define/public (get-iv-size) (send (cdar impls) get-iv-size))
+    (define/public (get-default-key-size) (caar impls))
+    (define/public (get-key-sizes) (map car impls))
+    (define/public (get-auth-size) (send (cdar impls) get-auth-size))
+    (define/public (get-chunk-size) (send (cdar impls) get-chunk-size))
 
     (define/public (new-ctx key iv enc? pad?)
       (cond [(assoc (bytes-length key) impls)
@@ -135,65 +156,69 @@
 
 ;; ----
 
-(define whole-block-cipher-ctx%
+(define whole-chunk-cipher-ctx%
   (class* ctx-base% (cipher-ctx<%>)
     (init-field encrypt? pad?)
     (inherit-field impl)
     (super-new)
 
-    ;; Underlying impl only accepts whole blocks.
-    ;; First partlen bytes of partial is waiting for rest of block.
-    (field [block-size (send impl get-block-size)])
-    (define partial (make-bytes block-size))
+    ;; Underlying impl only accepts whole chunks.
+    ;; First partlen bytes of partial is waiting for rest of chunk.
+    (field [chunk-size (send impl get-chunk-size)])
+    (define partial (make-bytes chunk-size))
     (define partlen 0)
 
     (define/public (get-encrypt?) encrypt?)
 
+    (define/public (get-output-size len)
+      (cond [(eq? len 'final)
+             (cond [pad?
+                    ;; If pad?, assume chunk-size = block-size.
+                    (cond [encrypt?
+                           chunk-size]
+                          [else ;; decrypt
+                           ;; If have a full chunk, then could output [0,chunk-size) if
+                           ;; input is well-padded. If not full chunk, incomplete input.
+                           (cond [(= partlen chunk-size) chunk-size]
+                                 [else #f])])]
+                   [else (*get-partial-output-size partlen)])]
+            [else
+             (define-values (prefixlen flush-partial? alignlen)
+               (cipher-segment-input len partlen chunk-size encrypt? pad?))
+             (define pfxoutlen (if flush-partial? chunk-size 0))
+             (+ pfxoutlen alignlen)]))
+
     (define/public (update! inbuf instart inend outbuf outstart outend)
       (unless (*open?) (err/cipher-closed))
       (check-input-range inbuf instart inend)
-      (define len (- inend instart))
-      (define total (+ len partlen))
-      ;; First complete fill partial to *crypt separately
-      ;; ... except if was empty, skip and go straight to aligned
-      (define prefixlen (remainder (min len (- block-size partlen)) block-size))
-      ;; Complication: when decrypting with padding, can't output decrypted block until
-      ;; first byte of next block is seen, else might miss ill-padded data.
-      (define flush-partial?
-        (and (positive? partlen)
-             (if (or encrypt? (not pad?))
-                 (>= total block-size)
-                 (> total block-size))))
-      ;; Then do aligned blocks: [alignstart,alignend)
-      (define alignstart (+ instart prefixlen))
-      (define alignend0 (- inend (remainder (- inend alignstart) block-size)))
-      (define alignend1
-        (if (or encrypt? (not pad?))
-            alignend0
-            (if (zero? (remainder (- alignend0 alignstart) block-size))
-                (- alignend0 block-size)
-                alignend0)))
-      (define alignend (max alignstart alignend1))
-      (define pfxoutlen (if flush-partial? block-size 0))
-      (define outstart* (+ outstart pfxoutlen))
-      (define alignlen (- alignend alignstart))
-      ;; Total output space needed:
+      (define-values (prefixlen flush-partial? alignlen)
+        (cipher-segment-input (- inend instart) partlen chunk-size encrypt? pad?))
+      (define aligninstart (+ instart prefixlen))
+      (define aligninend (+ aligninstart alignlen))
+      (define pfxoutlen (if flush-partial? chunk-size 0))
+      (define alignoutstart (+ outstart pfxoutlen))
+      ;; Check output space
       (check-output-range outbuf outstart outend (+ pfxoutlen alignlen)
-                          #:msg (format "[~a, ~a), [~a, ~a); partlen=~a, pad=~a, fp?=~a"
-                                        instart inend outstart outend partlen pad? flush-partial?))
-      (when (< instart alignstart)
-        (bytes-copy! partial partlen inbuf instart alignstart))
+                          #:msg (format "  ~s" (list instart inend
+                                                     '/ partlen
+                                                     '/ prefixlen flush-partial? alignlen)))
+      ;; Process partial
+      (when (< instart aligninstart)
+        (bytes-copy! partial partlen inbuf instart aligninstart))
       (cond [flush-partial?
-             (*crypt partial 0 block-size outbuf outstart (+ outstart block-size)) ;; outend
+             (*crypt partial 0 chunk-size outbuf outstart (+ outstart chunk-size))
              (bytes-fill! partial 0)
              (set! partlen 0)]
             [else
              (set! partlen (+ partlen prefixlen))])
-      (when (< alignstart alignend)
-        (*crypt inbuf alignstart alignend outbuf outstart* (+ outstart* alignlen))) ;; outend
-      (when (< alignend inend) ;; implies flush-partial?
-        (bytes-copy! partial 0 inbuf alignend inend)
-        (set! partlen (- inend alignend)))
+      ;; Process aligned
+      (when (< aligninstart aligninend)
+        (*crypt inbuf aligninstart aligninend outbuf alignoutstart (+ alignoutstart alignlen)))
+      ;; Save leftovers
+      (when (< aligninend inend) ;; implies flush-partial? is true
+        (bytes-copy! partial 0 inbuf aligninend inend)
+        (set! partlen (- inend aligninend)))
+      ;; Return total *written*
       (+ pfxoutlen alignlen))
 
     (define/public (final! outbuf outstart outend)
@@ -202,9 +227,9 @@
           (cond [encrypt?
                  (cond [pad?
                         (pad-bytes!/pkcs7 partial partlen)
-                        (check-output-range outbuf outstart outend block-size)
-                        (*crypt partial 0 block-size outbuf outstart outend)
-                        block-size]
+                        (check-output-range outbuf outstart outend chunk-size)
+                        (*crypt partial 0 chunk-size outbuf outstart outend)
+                        chunk-size]
                        [(zero? partlen)
                         0]
                        [else
@@ -213,12 +238,12 @@
                 [else ;; decrypting
                  (cond [pad?
                         ;; Don't know actual output size until after decypted &
-                        ;; de-padded, so require whole block of room.
-                        (check-output-range outbuf outstart outend block-size)
-                        (unless (= partlen block-size)
+                        ;; de-padded, so require whole chunk of room.
+                        (check-output-range outbuf outstart outend chunk-size)
+                        (unless (= partlen chunk-size)
                           (err/partial))
-                        (let ([tmp (make-bytes block-size)])
-                          (*crypt partial 0 block-size tmp 0 block-size)
+                        (let ([tmp (make-bytes chunk-size)])
+                          (*crypt partial 0 chunk-size tmp 0 chunk-size)
                           (let ([pos (unpad-bytes/pkcs7 tmp)])
                             (unless pos
                               (err/partial))
@@ -232,15 +257,23 @@
         (*close)))
 
     ;; *crypt-partial : ... -> nat or #f
-    ;; encrypt partial final block (eg for CTR mode)
-    ;; returns number of bytes or #f to indicate refusal to handle partial block
-    ;; only called if pad? is #f, (- inend instart) < block-size
+    ;; encrypt partial final chunk (eg for CTR mode)
+    ;; returns number of bytes or #f to indicate refusal to handle partial chunk
+    ;; only called if pad? is #f, (- inend instart) < chunk-size
     ;; Must do own check-output-range!
     (define/public (*crypt-partial inbuf instart inend outbuf outstart outend)
       #f)
 
+    ;; *get-partial-output-size : nat -> nat or #f
+    ;; Returns output size for final if no padding.
+    ;; Override if *crypt-partial is overridden.
+    (define/public (*get-partial-output-size partlen)
+      (cond [(= partlen 0) 0]
+            [(= partlen chunk-size) chunk-size]
+            [else #f]))
+
     (define/private (err/partial)
-      (crypto-error "partial block (~a)" (if encrypt? "encrypting" "decrypting")))
+      (crypto-error "partial chunk (~a)" (if encrypt? "encrypting" "decrypting")))
 
     (define/public (close)
       (*close))
@@ -248,7 +281,7 @@
     ;; Methods to implement in subclass:
 
     ;; *crypt : inbuf instart inend outbuf outstart outend -> void
-    ;; encrypt/decrypt whole number of blocks
+    ;; encrypt/decrypt whole number of chunks
     (abstract *crypt)
 
     ;; *open? : -> boolean
@@ -257,6 +290,43 @@
     ;; *close : -> void
     (abstract *close)
     ))
+
+;; Divide an input buffer of length inlen into segments:
+;;  - a prefix to fill a partial-buffer
+;;    with a flag to indicate whether the partial-buffer can be emptied,
+;;  - a chunk-multiple segment to process
+;;  - (implicit) a leftover segment to put in the partial-buffer (overwriting start)
+(define (cipher-segment-input inlen partlen chunk-size encrypt? pad?)
+  ;; total = total material available
+  (define total (+ partlen inlen))
+  ;; First try to fill partial... except if was empty or full,
+  ;; skip and go straight to aligned.
+  ;; prefixlen = part of inlen to fill partial
+  (define prefixlen
+    (cond [(= partlen 0) 0]
+          [else (min inlen (- chunk-size partlen))]))
+  ;; Complication: when decrypting with padding, can't output
+  ;; decrypted block until first byte of next block is seen, else
+  ;; might miss ill-padded data.
+  (define flush-partial?
+    (and (positive? partlen)
+         (if (or encrypt? (not pad?))
+             (>= total chunk-size)
+             (> total chunk-size))))
+  ;; Then do aligned chunks: [alignstart, alignend) from in buffer
+  ;; alignstart = start of inlen to process aligned
+  (define alignstart prefixlen)
+  (define alignend0 (- inlen (remainder (- inlen alignstart) chunk-size)))
+  ;; Complication: like above
+  (define alignend1
+    (if (or encrypt? (not pad?))
+        alignend0
+        (if (> inlen alignend0)
+            alignend0
+            (- alignend0 chunk-size))))
+  ;; alignend = end of inlen to process aligned
+  (define alignend (max alignstart alignend1))
+  (values prefixlen flush-partial? (- alignend alignstart)))
 
 ;; ----
 

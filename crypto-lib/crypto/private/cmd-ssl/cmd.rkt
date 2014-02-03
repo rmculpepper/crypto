@@ -172,16 +172,16 @@
 ;; ============================================================
 
 (define cipher-impl%
-  (class* impl-base% (cipher-impl<%>)
+  (class* cipher-impl-base% (cipher-impl<%>)
     (init-field blocklen ivlen cmd)
     (inherit-field spec)
+    (inherit get-block-size)
     (super-new)
 
-    (define/public (get-block-size) blocklen)
-    (define/public (get-iv-size) ivlen)
+    (define/override (get-chunk-size) (get-block-size))
     (define/public (get-cmd) cmd)
 
-    (define/public (new-ctx key iv enc? pad?)
+    (define/override (new-ctx key iv enc? pad?)
       (let ([pad? (and pad? (cipher-spec-uses-padding? spec))])
         (new cipher-ctx% (impl this) (key key) (iv iv) (enc? enc?) (pad? pad?))))
     ))
@@ -192,6 +192,11 @@
     (inherit-field impl spout)
     (inherit write! close/read)
     (super-new)
+
+    (define/public (get-output-size len)
+      (if (eq? len 'final)
+          (send impl get-block-size)
+          (+ len (send impl get-block-size))))
 
     (define/public (get-encrypt?) enc?)
 

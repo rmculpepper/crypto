@@ -44,7 +44,7 @@
    (test-suite "crypto tests"
      (make-factory-tests "libcrypto" libcrypto-factory)
      (make-factory-tests "gcrypt" gcrypt-factory)
-     (make-factory-tests "nettle" nettle-factory)
+     ;; (make-factory-tests "nettle" nettle-factory)
      #|
      (when #f (eprintf ">>> Digest agreement\n"))
      (test-suite "digest agreement"

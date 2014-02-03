@@ -137,9 +137,13 @@
 
 (define cipher-impl<%>
   (interface (impl<%>)
-    ;; get-spec       ;; -> CipherSpec
+    ;; get-spec    ;; -> CipherSpec
     get-block-size ;; -> nat
     get-iv-size    ;; -> nat
+    get-default-key-size ;; -> nat
+    get-key-sizes  ;; -> (U (listof nat) variable?)
+    get-auth-size  ;; -> nat
+    get-chunk-size ;; -> nat
 
     new-ctx         ;; bytes bytes/#f boolean PadMode -> cipher-ctx<%>
                     ;; key   iv       enc?    pad
@@ -159,6 +163,7 @@
     close    ;; -> void
     ;; update-AAD ;; bytes nat nat -> void
     ;; get-auth-tag ;; -> bytes/#f
+    get-output-size ;; (U nat 'final) -> (U nat #f)
     ))
 
 (define (cipher-impl? x) (is-a? x cipher-impl<%>))
