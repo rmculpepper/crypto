@@ -5,6 +5,8 @@ To Do
 - need predicate: whether pk works with digest (eg, can't use md5 with ECDSA)
 - need ctx->impl operation?
 - still crashes in paramgen/keygen
+- create internal {digest,cipher,etc}-info structs for catalog information ??
+- stress test (to find elusive crashes)
 
 - implement other key formats: pkcs1 pkcs3 pkcs8 ...
 - keygen/paramgen support: add required flag, auto-check
