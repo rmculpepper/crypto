@@ -151,21 +151,25 @@ encryption"]{authenticated encryption or decryption} algorithm;
 @racket[#f] otherwise.
 }
 
-@defproc[(generate-cipher-key [ci (or/c cipher-spec? cipher-impl?)])
-         bytes?]{
+@deftogether[[
+@defproc[(generate-cipher-key [ci (or/c cipher-spec? cipher-impl?)]
+                              [#:random rand (or/c random-impl? #f) #f])
+         bytes?]
+@defproc[(generate-cipher-iv [ci (or/c cipher-spec? cipher-impl?)]
+                             [#:random rand (or/c random-impl? #f) #f])
+         bytes?]
+]]{
 
-Generates a random secret key appropriate for use with the cipher
-@racket[ci]. Note: some ciphers have a set of weak keys;
-@racket[generate-cipher-key] currently does not detect or avoid weak
-keys.
-}
+Generates a random secret key or initialization vector, respectively,
+appropriate for use with the cipher @racket[ci]. Some ciphers have a
+set of weak keys; @racket[generate-cipher-key] currently does
+@emph{not} detect or avoid weak keys. If @racket[ci] does not use an
+IV, @racket[generate-cipher-iv] returns @racket[#f].
 
-@defproc[(generate-cipher-iv [ci (or/c cipher-spec? cipher-impl?)])
-         (or/c bytes? #f)]{
-
-Generates a random initialization vector appropriate for use with the
-cipher @racket[ci]. If @racket[ci] does not use an IV, returns
-@racket[#f].
+If @racket[rand] is given, then it is used as the source of
+randomness; otherwise, if @racket[ci] is an implementation, its
+associated random source is used; if none is found, then
+@racket[(crypto-factories)] is searched.
 }
 
 

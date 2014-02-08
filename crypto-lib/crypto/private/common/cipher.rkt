@@ -111,9 +111,9 @@
   ;;       output-port?)]
 
   [generate-cipher-key
-   (->* [cipher/c] [nat? random-impl?] key/c)]
+   (->* [cipher/c] [#:size nat? #:random (or/c random-impl? #f)] key/c)]
   [generate-cipher-iv
-   (->* [cipher/c] [random-impl?] iv/c)]))
+   (->* [cipher/c] [#:random (or/c random-impl? #f)] iv/c)]))
 
 (define cipher/c (or/c cipher-spec? cipher-impl?))
 
@@ -388,16 +388,18 @@
 
 ;; ----
 
-(define (generate-cipher-key ci [size (cipher-default-key-size ci)] [rand #f])
+(define (generate-cipher-key ci
+                             #:size [size (cipher-default-key-size ci)]
+                             #:random [rand #f])
   (with-crypto-entry 'generate-cipher-key
-    (let* ([ci (-get-impl ci)]
-           [rand (or rand (get-random* ci))])
+    (let ([rand (or rand (get-random* ci))])
       ;; FIXME: any way to check for weak keys, avoid???
       (random-bytes size rand))))
 
-(define (generate-cipher-iv ci [rand #f])
+(define (generate-cipher-iv ci
+                            #:random [rand #f])
   (with-crypto-entry 'generate-cipher-iv
-    (let* ([ci (-get-impl ci)]
-           [rand (or rand (get-random* ci))])
-      (let ([size (cipher-iv-size ci)])
-        (and (positive? size) (random-bytes size))))))
+    (let ([size (cipher-iv-size ci)])
+      (and (positive? size)
+           (let* ([rand (or rand (get-random* ci))])
+             (random-bytes size rand))))))

@@ -84,11 +84,17 @@ constructions (such as HMAC) are defined in terms of a digest
 function's block size.
 }
 
-@defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
+@defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)]
+                            [#:random rand (or/c random-impl? #f) #f])
          bytes?]{
 
 Generate a random secret key appropriate for HMAC using digest
 @racket[di]. The length of the key is @racket[(digest-size di)].
+
+If @racket[rand] is given, then it is used as the source of
+randomness; otherwise, if @racket[di] is an implementation, its
+associated random source is used; if none is found, then
+@racket[(crypto-factories)] is searched.
 }
 
 

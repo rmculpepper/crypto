@@ -50,7 +50,8 @@
   [make-hmac-ctx
    (-> digest/c bytes? digest-ctx?)]
   [generate-hmac-key
-   (-> digest/c bytes?)]))
+   (->* [digest/c] [#:random (or/c random-impl? #f)]
+        bytes?)]))
 (provide -digest-port*) ;; for pkey.rkt
 
 (define digest/c (or/c digest-spec? digest-impl?))
@@ -186,7 +187,7 @@
                (send hctx update buf 0 count)
                (loop)])))))
 
-(define (generate-hmac-key di [rand #f])
+(define (generate-hmac-key di #:random [rand #f])
   (with-crypto-entry 'generate-hmac-key
     (let ([rand (or rand (get-random* di))])
       (random-bytes (digest-size di) rand))))

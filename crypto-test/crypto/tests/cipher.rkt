@@ -53,8 +53,8 @@
 
 (define (test-cipher/non-ae ci msg)
   (test-case (format "~a roundtrip (~s)" (send ci get-spec) (bytes-length msg))
-    (define key (semirandom-bytes (cipher-default-key-size ci)))
-    (define iv (semirandom-bytes (cipher-iv-size ci)))
+    (define key (generate-cipher-key ci #:random semirandom))
+    (define iv (generate-cipher-iv ci #:random semirandom))
     (define ciphertext (encrypt ci key iv msg))
     (check-equal? (decrypt ci key iv ciphertext) msg)
 
@@ -80,7 +80,7 @@
 
     ;; Other keys produce different output, can't decrypt
     (when (positive? (bytes-length ciphertext))
-      (define key2 (semirandom-bytes (cipher-default-key-size ci)))
+      (define key2 (generate-cipher-key ci #:random semirandom))
       (check-not-equal? (encrypt ci key2 iv msg) ciphertext)
       (check-not-equal? (with-handlers ([values values]) (decrypt ci key2 iv ciphertext))
                         msg))
@@ -88,7 +88,7 @@
     ;; If IV, different IV produces different output, can't decrypt
     (when (and (positive? (bytes-length ciphertext))
                (positive? (cipher-iv-size ci)))
-      (define iv2 (semirandom-bytes (cipher-iv-size ci)))
+      (define iv2 (generate-cipher-iv ci #:random semirandom))
       (check-not-equal? (encrypt ci key iv2 msg) ciphertext)
       (check-not-equal? (with-handlers ([values values]) (decrypt ci key iv2 ciphertext))
                         msg))
@@ -96,8 +96,8 @@
 
 (define (test-cipher/ae ci msg)
   (test-case (format "~a roundtrip (AE, ~s)" (send ci get-spec) (bytes-length msg))
-    (define key (semirandom-bytes (cipher-default-key-size ci)))
-    (define iv (semirandom-bytes (cipher-iv-size ci)))
+    (define key (generate-cipher-key ci #:random semirandom))
+    (define iv (generate-cipher-iv ci #:random semirandom))
     (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg))
     (check-equal? (decrypt/auth ci key iv ciphertext #:auth-tag auth-tag) msg)
 
@@ -127,8 +127,8 @@
       (check-equal? (decrypt/auth ci key iv ciphertext #:AAD aad #:auth-tag auth-tag) msg))
 
     (when (positive? (bytes-length ciphertext))
-      (define key2 (semirandom-bytes (cipher-default-key-size ci)))
-      (define iv2 (semirandom-bytes (cipher-iv-size ci)))
+      (define key2 (generate-cipher-key ci #:random semirandom))
+      (define iv2 (generate-cipher-iv ci #:random semirandom))
       (define auth-tag2 (semirandom-bytes (bytes-length auth-tag)))
       ;; Other key/iv/auth-tag fails to authenticate
       (check-exn exn:fail? (lambda () (decrypt/auth ci key2 iv ciphertext #:auth-tag auth-tag)))
@@ -162,8 +162,8 @@
       (define names (map car names+impls))
       (define impls (map cdr names+impls))
       (test-case (format "cipher agreement for ~e\n" spec)
-        (define key (semirandom-bytes (cipher-default-key-size (car impls))))
-        (define iv (semirandom-bytes (cipher-iv-size (car impls))))
+        (define key (generate-cipher-key spec #:random semirandom))
+        (define iv (generate-cipher-iv spec #:random semirandom))
         (for ([plaintext plaintexts]
               #:when (<= (bytes-length plaintext) 100))
           (define ciphertexts

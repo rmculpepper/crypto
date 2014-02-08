@@ -480,11 +480,12 @@
         [else
          (crypto-error "internal error: cannot get factory\n  from: ~e" src)]))
 
+;; search src (if impl or ctx), then usual search factories
 (define (get-random* src)
-  (let ([random-impl
-         (if src
-             (send (get-factory* src) get-random)
-             (get-random))])
+  (let* ([src (get-factory* src #t)]
+         [random-impl
+          (or (and src (send src get-random))
+              (get-random))])
     (or random-impl
         (crypto-error "no source of randomness available~a"
                       (if src
