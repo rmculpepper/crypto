@@ -86,7 +86,7 @@ Returns an implementation of cipher @racket[ci] from the given
 @defproc[(cipher-default-key-size [ci (or/c cipher-spec? cipher-impl?)])
          exact-nonnegative-integer?]{
 
-Returns the default size in bytes of the secret keys used by the cipher.
+Returns a default size in bytes of the secret keys used by the cipher.
 
 @examples[#:eval the-eval
 (cipher-default-key-size '(aes cbc))
@@ -95,14 +95,13 @@ Returns the default size in bytes of the secret keys used by the cipher.
 }
 
 @defproc[(cipher-key-sizes [ci (or/c cipher-spec? cipher-impl?)])
-         (or/c (listof exact-nonnegative-integer?) variable-size?)]{
+         (listof exact-nonnegative-integer?)]{
 
 Returns the possible sizes in bytes of the secret keys used by the
 cipher.
 
 @examples[#:eval the-eval
 (cipher-key-sizes '(aes cbc))
-(cipher-key-sizes '(blowfish cbc))
 ]
 }
 
@@ -137,6 +136,7 @@ returns the size of the counter.
 @examples[#:eval the-eval
 (cipher-iv-size '(aes cbc))
 (cipher-iv-size '(aes ctr))
+(cipher-iv-size '(aes gcm))
 (cipher-iv-size '(aes ecb))
 (cipher-iv-size '(salsa20 stream))
 ]
@@ -149,6 +149,11 @@ Returns the default size in bytes of the @tech{authentication tag}
 produced by @racket[ci] if it represents an @tech[#:key "authenticated
 encryption"]{authenticated encryption or decryption} algorithm;
 @racket[#f] otherwise.
+
+@examples[#:eval the-eval
+(cipher-default-auth-size '(aes gcm))
+(cipher-default-auth-size '(aes cbc))
+]
 }
 
 @deftogether[[
@@ -257,7 +262,7 @@ the given @racket[auth-tag] does not match the
 (define-values (ciphertext auth-tag)
   (encrypt/auth '(aes gcm) key iv "Hello world!" #:AAD #"greeting"))
 (decrypt/auth '(aes gcm) key iv ciphertext #:AAD #"greeting" #:auth-tag auth-tag)
-(decrypt/auth '(aes gcm) key iv ciphertext #:AAD #"BlahBlah" #:auth-tag auth-tag)
+(decrypt/auth '(aes gcm) key iv ciphertext #:AAD #"INVALID" #:auth-tag auth-tag)
 ]
 }
 

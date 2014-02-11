@@ -29,7 +29,7 @@
   [cipher-default-key-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-key-sizes
-   (-> (or/c cipher-spec? cipher-impl?) (or/c (listof nat?) variable-size?))]
+   (-> (or/c cipher-spec? cipher-impl?) (listof nat?))]
   [cipher-block-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-iv-size
@@ -140,8 +140,14 @@
           [else (send (get-impl* o) get-default-key-size)])))
 (define (cipher-key-sizes o)
   (with-crypto-entry 'cipher-key-sizes
-    (cond [(list? o) (cipher-spec-key-sizes o)]
-          [else (send (get-impl* o) get-key-sizes)])))
+    (let ([sizes (cond [(list? o) (cipher-spec-key-sizes o)]
+                       [else (send (get-impl* o) get-key-sizes)])])
+      (cond [(variable-size? sizes)
+             (for/list ([n (in-range (variable-size-min sizes)
+                                     (add1 (variable-size-max sizes))
+                                     (variable-size-step sizes))])
+               n)]
+            [else sizes]))))
 (define (cipher-block-size o)
   (with-crypto-entry 'cipher-block-size
     (cond [(list? o) (cipher-spec-block-size o)]
