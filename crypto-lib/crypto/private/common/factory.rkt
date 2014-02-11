@@ -37,6 +37,8 @@
    (->* [symbol?] [factories/c] (or/c pk-impl? #f))]
   [get-random
    (->* [] [factories/c] (or/c random-impl? #f))]
+  [get-kdf
+   (->* [kdf-spec?] [factories/c] (or/c kdf-impl? #f))]
   ))
 
 (define factories/c (or/c crypto-factory? (listof crypto-factory?)))
@@ -69,3 +71,8 @@
   (with-crypto-entry 'get-random
     (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
       (send f get-random))))
+
+(define (get-kdf k [factory/s (crypto-factories)])
+  (with-crypto-entry 'get-kdf
+    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+      (send f get-kdf k))))

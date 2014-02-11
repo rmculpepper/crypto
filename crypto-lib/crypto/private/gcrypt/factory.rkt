@@ -21,7 +21,8 @@
          "../common/common.rkt"
          "ffi.rkt"
          "digest.rkt"
-         "cipher.rkt")
+         "cipher.rkt"
+         "kdf.rkt")
 (provide gcrypt-factory)
 
 ;; ----------------------------------------
@@ -100,6 +101,7 @@
 
 (define gcrypt-factory%
   (class* factory-base% (factory<%>)
+    (inherit get-digest)
     (super-new)
 
     (define/override (get-digest* spec)
@@ -135,6 +137,13 @@
 
     (define/override (get-random)
       gcrypt-random-impl)
+
+    (define/override (get-kdf spec)
+      (match spec
+        [(list 'pbkdf2 'hmac di-spec)
+         (let ([di (get-digest di-spec)])
+           (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+        [_ #f]))
     ))
 
 (define gcrypt-factory (new gcrypt-factory%))

@@ -40,7 +40,8 @@
          err/decrypt-requires-private
          err/missing-digest
          err/missing-cipher
-         err/missing-pk)
+         err/missing-pk
+         err/missing-kdf)
 
 (define crypto-entry-point (gensym))
 
@@ -114,6 +115,8 @@
   (crypto-error "could not get cipher implementation\n  cipher spec: ~e" spec))
 (define (err/missing-pk spec)
   (crypto-error "could not get PK implementation\n  algorithm: ~e" spec))
+(define (err/missing-kdf spec)
+  (crypto-error "could not get KDF implementation\n  KDF spec: ~e" spec))
 
 ;; ----
 

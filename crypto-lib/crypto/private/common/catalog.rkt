@@ -297,3 +297,14 @@
   (and (memq 'key-agree (hash-ref known-pk pk '())) #t))
 (define (pk-spec-has-parameters? pk)
   (and (memq 'params (hash-ref known-pk pk '())) #t))
+
+;; ============================================================
+;; KDF
+
+(define (kdf-spec? x)
+  (match x
+    ['bcrypt #t]
+    ['scrypt #t]
+    [(list 'pbkdf2 'hmac di)
+     (digest-spec? di)]
+    [_ #f]))

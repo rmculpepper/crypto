@@ -144,10 +144,10 @@
 (define GCRY_KDF_PBKDF2 34) ;; really PBKDF2-HMAC-<digest>
 
 (define-gcrypt gcry_kdf_derive
-  (_fun (input subalgo salt iters outlen) ::
+  (_fun (input algo subalgo salt iters outlen) ::
         (input   : _bytes)
         (inlen   : _size = (bytes-length input))
-        (algo    : _int = GCRY_KDF_PBKDF2)
+        (algo    : _int)
         (subalgo : _int)
         (salt    : _bytes)
         (saltlen : _size = (bytes-length salt))

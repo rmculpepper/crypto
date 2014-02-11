@@ -293,17 +293,17 @@
   #| #:wrap (err-wrap 'HMAC_Final) |#)
 
 (define-crypto PKCS5_PBKDF2_HMAC
-  (_fun (input digest salt iter outlen) ::
-        (input    : _bytes)
-        (inlen    : _int = (bytes-length input))
+  (_fun (pass salt iter digest out) ::
+        (pass    : _bytes)
+        (plen    : _int = (bytes-length pass))
         (salt     : _bytes)
         (saltlen  : _int = (bytes-length salt))
         (iter     : _int)
         (digest   : _EVP_MD)
-        (outlen   : _int)
-        (out      : (_bytes o outlen))
-        -> (r : _int)
-        -> (values r out)))
+        (outlen   : _int = (bytes-length out))
+        (out      : _bytes)
+        -> _int)
+  #:wrap (err-wrap 'PKCS5_PBKDF2_HMAC))
 
 ;; ============================================================
 ;; Cipher

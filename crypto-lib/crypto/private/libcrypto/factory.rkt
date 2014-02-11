@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
+         "kdf.rkt"
          "ffi.rkt"
          "rand.rkt")
 (provide libcrypto-factory)
@@ -82,6 +83,7 @@ To print all ciphers:
 
 (define libcrypto-factory%
   (class* factory-base% (factory<%>)
+    (inherit get-digest)
     (super-new)
 
     (define/override (get-digest* spec)
@@ -133,6 +135,13 @@ To print all ciphers:
       (unless random-impl
         (set! random-impl (new libcrypto-random-impl% (spec 'random) (factory this))))
       random-impl)
+
+    (define/override (get-kdf spec)
+      (match spec
+        [(list 'pbkdf2 'hmac di-spec)
+         (let ([di (get-digest di-spec)])
+           (and di (new libcrypto-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+        [_ #f]))
     ))
 
 (define libcrypto-factory (new libcrypto-factory%))

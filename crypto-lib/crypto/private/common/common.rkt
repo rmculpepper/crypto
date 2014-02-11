@@ -111,6 +111,8 @@
     (define/public (get-digest* spec) #f) ;; -> (U #f DigestImpl)
     (define/public (get-cipher* spec) #f) ;; -> (U #f CipherImpl (listof (cons nat CipherImpl)))
     (define/public (get-pk* spec) #f)   ;; -> (U #f DigestIpl
+
+    (define/public (get-kdf spec) #f)
     ))
 
 ;; ----

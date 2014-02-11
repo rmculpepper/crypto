@@ -29,6 +29,7 @@
          pk-params<%>
          pk-key<%>
          random-impl<%>
+         kdf-impl<%>
 
          crypto-factory?
          digest-impl?
@@ -38,7 +39,8 @@
          pk-impl?
          pk-parameters?
          pk-key?
-         random-impl?)
+         random-impl?
+         kdf-impl?)
 
 ;; ============================================================
 ;; General Notes
@@ -84,6 +86,7 @@
     get-pk      ;; PKSpec -> pk-impl<%>/#f
     get-random  ;; -> random-impl<%>/#f
     get-pk-reader ;; -> pk-read-key<%>/#f
+    get-kdf     ;; KDFSpec -> kdf-impl<%>/#f
     ))
 
 (define (crypto-factory? x) (is-a? x factory<%>))
@@ -250,3 +253,18 @@
 ;; RandomLevel is one of 'strong, 'very-strong.
 
 (define (random-impl? x) (is-a? x random-impl<%>))
+
+;; ============================================================
+;; KDFs
+
+;; A KDFSpec is one of
+;;  - (list 'pbkdf2 'hmac DigestSpec)
+;;  - 'bcrypt
+;;  - 'scrypt
+
+(define kdf-impl<%>
+  (interface (impl<%>)
+    kdf ;; KDFParams bytes bytes -> bytes
+    ))
+
+(define (kdf-impl? x) (is-a? x kdf-impl<%>))

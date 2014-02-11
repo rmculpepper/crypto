@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -14,19 +14,27 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
+(require racket/class
+         "../common/digest.rkt"
+         "../common/common.rkt")
+(provide pbkdf2*-hmac
+         pbkdf2*)
 
-;; Reference: http://tools.ietf.org/html/rfc2898
-;; and http://csrc.nist.gov/publications/nistpubs/800-132/nist-sp800-132.pdf
+;; References:
+;; - http://tools.ietf.org/html/rfc2898
+;; - http://csrc.nist.gov/publications/nistpubs/800-132/nist-sp800-132.pdf
 
-(define (make-pbkdf2/hmac di)
-  (define hlen (digest-size di))
+;; Performance tests: slower than libcrypto pbkdf2-hmac by about a factor of 2
+;;  - tested up to 1e6 iterations w/ sha256: about 7 sec for 2 blocks of output
+;;  - could be faster w/ reusable hmac ctxs?
+
+(define (pbkdf2*-hmac dimpl pass salt iterations key-size)
+  (define hlen (digest-size dimpl))
   (define (PRF key text textlen outbuf outstart)
-    ....)
-  (lambda (password salt iterations wantlen)
-    (pbkdf2* PRF hlen password salt iterations wantlen)))
+    (send dimpl hmac-buffer! key text 0 textlen outbuf outstart))
+  (pbkdf2* PRF hlen pass salt iterations key-size))
 
-
-(define (pbkdf2* prf hlen password salt iterations wantlen)
+(define (pbkdf2* PRF hlen password salt iterations wantlen)
   ;; wantlen = desired length of key to generate
   (define wantblocks
     (let-values ([(q r) (quotient/remainder wantlen hlen)])
@@ -47,10 +55,10 @@
     (integer->integer-bytes i 4 #f #t PRFin saltlen)
     (let Uloop ([j 1] [PRFinlen (+ passlen saltlen 4)])
       (unless (> j iterations)
-        (PRF password PRFin PRFinlen PRFout)
+        (PRF password PRFin (if (= j 1) (+ saltlen 4) hlen) PRFout 0)
         (bytes-xor! resultbuf Fstart PRFout 0 hlen)
         ;; set up PRFin for next iter
-        (bytes-copy! PRFin passlen PRFout 0 hlen)
+        (bytes-copy! PRFin 0 PRFout 0 hlen)
         (Uloop (add1 j) hlen))))
 
   (for ([i (in-range 1 (add1 wantblocks))])
@@ -61,4 +69,4 @@
 (define (bytes-xor! dest deststart src srcstart srcend)
   (for ([si (in-range srcstart srcend)]
         [di (in-naturals deststart)])
-    (bytes-set! di (bitwise-xor (bytes-ref dest di) (bytes-ref src si)))))
+    (bytes-set! dest di (bitwise-xor (bytes-ref dest di) (bytes-ref src si)))))
