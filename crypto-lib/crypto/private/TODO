@@ -1,7 +1,6 @@
 To Do
 =====
 
-- make generate* opt args kw args
 - need predicate: whether pk works with digest (eg, can't use md5 with ECDSA)
 - need ctx->impl operation?
 - still crashes in paramgen/keygen
