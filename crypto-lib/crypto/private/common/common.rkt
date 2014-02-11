@@ -360,7 +360,7 @@
         (set! state 4)))
 
     (define/private (check-flush-AAD)
-      (when (= state 1)
+      (when (and (= state 1) (not (zero? partlen)))
         ;; flush AAD from partial
         (*aad partial 0 partlen)
         (set! partlen 0)))

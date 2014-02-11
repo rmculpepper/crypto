@@ -98,6 +98,7 @@
   (test-case (format "~a roundtrip (AE, ~s)" (send ci get-spec) (bytes-length msg))
     (define key (generate-cipher-key ci #:random semirandom))
     (define iv (generate-cipher-iv ci #:random semirandom))
+
     (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg))
     (check-equal? (decrypt/auth ci key iv ciphertext #:auth-tag auth-tag) msg)
 
