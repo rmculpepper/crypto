@@ -20,7 +20,8 @@
          "../common/common.rkt"
          "ffi.rkt"
          "digest.rkt"
-         "cipher.rkt")
+         "cipher.rkt"
+         "kdf.rkt")
 (provide nettle-factory)
 
 ;; ----------------------------------------
@@ -74,6 +75,7 @@
 
 (define nettle-factory%
   (class* factory-base% (factory<%>)
+    (inherit get-digest)
     (super-new)
 
     (define/override (get-digest* spec)
@@ -113,6 +115,13 @@
       (match (assoc algid nettle-all-ciphers)
         [(list _ nc)
          (new nettle-cipher-impl% (spec spec) (factory this) (nc nc))]
+        [_ #f]))
+
+    (define/override (get-kdf spec)
+      (match spec
+        [(list 'pbkdf2 'hmac di-spec)
+         (let ([di (get-digest di-spec)])
+           (and di (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
         [_ #f]))
     ))
 

@@ -63,20 +63,17 @@
     (super-new)
 
     (define/public (update buf start end)
-      (unless ctx (err/digest-closed))
       (check-input-range buf start end)
       ((nettle_hash-update nh) ctx (- end start) (ptr-add buf start)))
 
     (define/public (final! buf start end)
       (define size (send impl get-size))
-      (unless ctx (err/digest-closed))
       (check-output-range buf start end size)
       ((nettle_hash-digest nh) ctx (- end start) (ptr-add buf start))
-      (set! ctx #f)
+      ((nettle_hash-init nh) ctx)
       size)
 
     (define/public (copy)
-      (unless ctx (err/digest-closed))
       (let* ([size (nettle_hash-context_size nh)]
              [ctx2 (make-ctx size)])
         (memmove ctx2 ctx size)
@@ -108,16 +105,13 @@
     (super-new)
 
     (define/public (update buf start end)
-      (unless ctx (err/digest-closed))
       (check-input-range buf start end)
       (nettle_hmac_update ctx nh (ptr-add buf start) (- end start)))
 
     (define/public (final! buf start end)
-      (unless ctx (err/digest-closed))
       (let ([size (nettle_hash-digest_size nh)])
         (check-output-range buf start end size)
         (nettle_hmac_digest outer inner ctx nh (ptr-add buf start) (- end start))
-        (set! ctx #f)
         size))
 
     (define/public (copy)

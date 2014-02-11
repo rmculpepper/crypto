@@ -30,8 +30,16 @@
 
 (define (pbkdf2*-hmac dimpl pass salt iterations key-size)
   (define hlen (digest-size dimpl))
-  (define (PRF key text textlen outbuf outstart)
-    (send dimpl hmac-buffer! key text 0 textlen outbuf outstart))
+  (define PRF
+    (cond [(send dimpl can-hmac-buffer!?)
+           (lambda (key text textlen outbuf outstart)
+             (send dimpl hmac-buffer! key text 0 textlen outbuf outstart))]
+          [else ;; can reuse hmac-ctx?
+           (define himpl (send dimpl get-hmac-impl))
+           (define hctx (send himpl new-ctx pass))
+           (lambda (key text textlen outbuf outstart)
+             (send hctx update text 0 textlen)
+             (send hctx final! outbuf outstart (bytes-length outbuf)))]))
   (pbkdf2* PRF hlen pass salt iterations key-size))
 
 (define (pbkdf2* PRF hlen password salt iterations wantlen)

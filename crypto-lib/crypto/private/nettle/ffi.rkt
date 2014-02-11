@@ -1,4 +1,4 @@
-;; Copyright 2013 Ryan Culpepper
+;; Copyright 2013-2014 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -253,3 +253,18 @@
 (define-nettle nettle_gcm_digest
   ;; get auth tag; length usually GCM_BLOCK_SIZE, but can be shorter
   (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer -> _void))
+
+;; ----
+
+(define-nettle nettle_pbkdf2
+  (_fun (mac_ctx update_func digest_func digest_size iterations salt out) ::
+        (mac_ctx : _HASH_CTX) ;; 3 * digest_size !
+        (update_func : _fpointer)
+        (digest_func : _fpointer)
+        (digest_size : _uint)
+        (iterations : _uint)
+        (salt_length : _uint = (bytes-length salt))
+        (salt : _bytes)
+        (outlen : _uint = (bytes-length out))
+        (out : _bytes)
+        -> _void))
