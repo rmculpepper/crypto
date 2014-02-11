@@ -179,7 +179,7 @@
                       nettle_salsa20r12_crypt nettle_salsa20r12_crypt
                       `((set-iv ,nettle_salsa20_set_iv)))))
 
-(define nettle-more-ciphers
+(define nettle-all-ciphers
   (let* ([more-ciphers
           (append nettle-regular-ciphers
                   (filter values

@@ -106,7 +106,7 @@
 
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
       (case mode
-        [(ctr stream)
+        [(ctr gcm stream)
          (check-output-range outbuf outstart outend (- inend instart))
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]

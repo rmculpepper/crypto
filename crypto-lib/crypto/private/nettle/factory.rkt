@@ -1,4 +1,4 @@
-;; Copyright 2013 Ryan Culpepper
+;; Copyright 2013-2014 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -43,29 +43,32 @@
 ;; "aes128" cipher can probably actually support all legal keylens,
 ;; it just *advertises* 128-bit keys.
 
-(define ciphers
-  `(;;[Name   String/([KeySize String] ...)]
-    [aes ([128 "aes128"]
-          [192 "aes192"]
-          [256 "aes256"])]
-    [blowfish "blowfish"]
-    [camellia ([128 "camellia128"]
-               [192 "camellia192"]
-               [256 "camellia256"])]
-    [cast128 ([128 "cast128"])]
+(define block-ciphers
+  `(;;[Name GCMok? String/([KeySize String] ...)]
+    [aes #t ([128 "aes128"]
+             [192 "aes192"]
+             [256 "aes256"])]
+    [blowfish #f "blowfish"]
+    [camellia #t ([128 "camellia128"]
+                  [192 "camellia192"]
+                  [256 "camellia256"])]
+    [cast128 #f ([128 "cast128"])]
+    [serpent #t ([128 "serpent128"]
+                 [192 "serpent192"]
+                 [256 "serpent256"])]
+    [twofish #t ([128 "twofish128"]
+                 [192 "twofish192"]
+                 [256 "twofish256"])]))
+
+(define block-modes '(ecb cbc ctr gcm))
+
+(define stream-ciphers
+  `(;;[Name String/([KeySize String] ...)]
     [salsa20 "salsa20"]
     [salsa20r12 "salsa20r12"]
-    [serpent ([128 "serpent128"]
-              [192 "serpent192"]
-              [256 "serpent256"])]
-    [twofish ([128 "twofish128"]
-              [192 "twofish192"]
-              [256 "twofish256"])]
     [rc4 "arcfour128"]
     ;; "arctwo40", "arctwo64", "arctwo128"
     ))
-
-(define modes '(ecb cbc ctr gcm stream)) ;; FIXME: restore CTR, support GCM
 
 ;; ----------------------------------------
 
@@ -88,19 +91,26 @@
             [else #f]))
 
     (define/override (get-cipher* spec)
-      (and (memq (cadr spec) modes)
-           (let ([entry (assq (car spec) ciphers)])
-             (match entry
-               [(list _ (? string? algid))
-                (get-nc spec algid)]
-               [(list _ keylens+algids)
-                (for/list ([keylen+algid (in-list keylens+algids)])
-                  (cons (quotient (car keylen+algid) 8)
-                        (get-nc spec (cadr keylen+algid))))]
-               [_ #f]))))
+      (define (alg->cipher alg)
+        (cond [(string? alg)
+               (get-nc spec alg)]
+              [else
+               (for/list ([keylen+algid (in-list alg)])
+                 (cons (quotient (car keylen+algid) 8)
+                       (get-nc spec (cadr keylen+algid))))]))
+      (or (match (assq (car spec) block-ciphers)
+            [(list _ gcm-ok? alg)
+             (and (memq (cadr spec) block-modes)
+                  (if (eq? (cadr spec) 'gcm) gcm-ok? #t)
+                  (alg->cipher alg))]
+            [_ #f])
+          (match (assq (car spec) stream-ciphers)
+            [(list _ alg)
+             (alg->cipher alg)]
+            [_ #f])))
 
     (define/private (get-nc spec algid)
-      (match (assoc algid nettle-more-ciphers)
+      (match (assoc algid nettle-all-ciphers)
         [(list _ nc)
          (new nettle-cipher-impl% (spec spec) (factory this) (nc nc))]
         [_ #f]))
