@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -20,13 +20,13 @@
          ffi/unsafe/atomic)
 (provide (protect-out (all-defined-out)))
 
-(define libgcrypt (ffi-lib "libgcrypt" '("11" #f)))
+(define libgcrypt (ffi-lib "libgcrypt" '(#f "20" "11")))
 
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)
 
 (define-gcrypt gcry_check_version
-  (_fun _bytes -> _void)
+  (_fun _bytes -> _string/utf-8)
   #:fail (lambda () void))
 
 ;; Initializes library
@@ -142,6 +142,7 @@
   (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f)))
 
 (define GCRY_KDF_PBKDF2 34) ;; really PBKDF2-HMAC-<digest>
+(define GCRY_KDF_SCRYPT 48) ;; since v1.6
 
 (define-gcrypt gcry_kdf_derive
   (_fun (input algo subalgo salt iters outlen) ::

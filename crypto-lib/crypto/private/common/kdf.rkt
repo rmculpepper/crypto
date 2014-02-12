@@ -47,10 +47,9 @@
   [scrypt
    (->* [bytes?
          bytes?
-         #:cost exact-positive-integer?
-         #:parallel-??? exact-positive-integer?
+         #:N exact-positive-integer?]
+        [#:p exact-positive-integer?
          #:key-size exact-positive-integer?]
-        []
         bytes?)]
   ))
 
@@ -79,12 +78,13 @@
       (send k kdf `((cost ,cost)) pass salt))))
 
 (define (scrypt pass salt
-                #:cost cost
-                #:parallel-??? parallel-???
-                #:key-size key-size)
+                #:N N
+                #:p [p 1]
+                #:r [r 8]
+                #:key-size [key-size 32])
   (with-crypto-entry 'scrypt
     (let ([k (-get-impl 'scrypt)])
-      (send k kdf `((cost ,cost) (parallel-??? ,parallel-???) (key-size ,key-size))
+      (send k kdf `((N ,N) (p ,p) (r ,r) (key-size ,key-size))
             pass salt))))
 
 #|

@@ -143,6 +143,8 @@
         [(list 'pbkdf2 'hmac di-spec)
          (let ([di (get-digest di-spec)])
            (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+        ['scrypt
+         (new gcrypt-scrypt-impl% (spec spec) (factory this))]
         [_ #f]))
     ))
 

@@ -13,7 +13,6 @@
 ;; You should have received a copy of the GNU Lesser General Public License
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
-
 #lang racket/base
 (require racket/class
          ffi/unsafe
@@ -21,7 +20,8 @@
          "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide gcrypt-pbkdf2-impl%)
+(provide gcrypt-pbkdf2-impl%
+         gcrypt-scrypt-impl%)
 
 (define gcrypt-pbkdf2-impl%
   (class* impl-base% (kdf-impl<%>)
@@ -34,4 +34,19 @@
       (define key-size (cadr (assq 'key-size params)))
       (define md (get-field md di))
       (gcry_kdf_derive pass GCRY_KDF_PBKDF2 md salt iterations key-size))
+    ))
+
+(define gcrypt-scrypt-impl%
+  (class* impl-base% (kdf-impl<%>)
+    (super-new)
+
+    (define/public (kdf params pass salt)
+      (define N (cadr (assq 'N params)))
+      (define p (cadr (assq 'p params)))
+      (define r (cadr (assq 'r params)))
+      (define key-size (cadr (assq 'key-size params)))
+      ;; FIXME: assert r = 8
+      (unless (equal? r 8)
+        (crypto-error "bad value for scrypt r parameter\n  r: ~e" r))
+      (gcry_kdf_derive pass GCRY_KDF_SCRYPT N salt p key-size))
     ))
