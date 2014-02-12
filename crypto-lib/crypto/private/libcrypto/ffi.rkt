@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -268,29 +268,33 @@
 (define-crypto HMAC_CTX_cleanup
   (_fun _HMAC_CTX -> _void))
 
+(define-crypto HMAC_CTX_copy
+  (_fun _HMAC_CTX _HMAC_CTX -> _int)
+  #:wrap (err-wrap 'HMAC_CTX_copy))
+
 (define-crypto HMAC_Init_ex
   (_fun _HMAC_CTX
         (key : _pointer)
         (keylen : _uint)
         _EVP_MD
         (_pointer = #f)
-        -> _void) ;; _int since OpenSSL 1.0.0
-  #| #:wrap (err-wrap 'HMAC_Init_ex) |#)
+        -> _int) ;; _int since OpenSSL 1.0.0
+  #:wrap (err-wrap 'HMAC_Init_ex))
 
 (define-crypto HMAC_Update
   (_fun _HMAC_CTX
         (data : _pointer)
         (len : _uint)
-        -> _void) ;; _int since OpenSSL 1.0.0
-  #| #:wrap (err-wrap 'HMAC_Update) |#)
+        -> _int) ;; _int since OpenSSL 1.0.0
+  #:wrap (err-wrap 'HMAC_Update))
 
 (define-crypto HMAC_Final
   (_fun _HMAC_CTX
         (md : _pointer)
         (r : (_ptr o _int))
-        -> _void ;; _int since OpenSSL 1.0.0
-        -> r)
-  #| #:wrap (err-wrap 'HMAC_Final) |#)
+        -> (result : _int) ;; _int since OpenSSL 1.0.0
+        -> (if (positive? result) r result))
+  #:wrap (err-wrap 'HMAC_Final))
 
 (define-crypto PKCS5_PBKDF2_HMAC
   (_fun (pass salt iter digest out) ::

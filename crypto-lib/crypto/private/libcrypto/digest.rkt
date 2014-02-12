@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -22,8 +22,6 @@
          "../common/error.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
-
-;; FIXME: potential races all over the place
 
 ;; ============================================================
 
@@ -69,21 +67,17 @@
     (super-new)
 
     (define/public (update buf start end)
-      (unless ctx (err/digest-closed))
       (check-input-range buf start end)
       (void (EVP_DigestUpdate ctx (ptr-add buf start) (- end start))))
 
     (define/public (final! buf start end)
-      (unless ctx (err/digest-closed))
       (let ([size (send impl get-size)])
         (check-output-range buf start end size)
         (EVP_DigestFinal_ex ctx (ptr-add buf start))
-        (EVP_MD_CTX_destroy ctx)
-        (set! ctx #f)
+        (EVP_DigestInit_ex ctx (get-field md impl))
         size))
 
     (define/public (copy)
-      (unless ctx (err/digest-closed))
       (let ([other (send impl new-ctx)])
         (EVP_MD_CTX_copy_ex (get-field ctx other) ctx)
         other))
@@ -111,20 +105,18 @@
     (super-new)
 
     (define/public (update buf start end)
-      (unless ctx (err/digest-closed))
       (check-input-range buf start end)
       (void (HMAC_Update ctx (ptr-add buf start) (- end start))))
 
     (define/public (final! buf start end)
-      (unless ctx (err/digest-closed))
       (let ([size (send impl get-size)])
         (check-output-range buf start end size)
         (HMAC_Final ctx (ptr-add buf start))
-        (HMAC_CTX_free ctx)
-        (set! ctx #f)
+        (HMAC_Init_ex ctx #f 0 (get-field md impl))
         size))
 
     (define/public (copy)
-      (unless ctx (err/digest-closed))
-      #f) ;; FIXME (?)
+      (let ([ctx2 (HMAC_CTX_new)])
+        (HMAC_CTX_copy ctx2 ctx)
+        (new libcrypto-hmac-ctx% (impl impl) (ctx ctx2))))
     ))
