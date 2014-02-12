@@ -1,10 +1,14 @@
 To Do
 =====
 
+- better version awareness
+  - eg, scrypt added to gcrypt 1.6
+  - find and add common library versions
 - need predicate: whether pk works with digest (eg, can't use md5 with ECDSA)
 - need ctx->impl operation?
 - still crashes in paramgen/keygen
 - create internal {digest,cipher,etc}-info structs for catalog information ??
+  - then impl contains info struct, can extend w/o changing catalog
 - stress test (to find elusive crashes)
 
 - implement other key formats: pkcs1 pkcs3 pkcs8 ...
@@ -13,7 +17,6 @@ To Do
 - check safety
 - check synchronization & race conditions
 - check error reporting
-- GCM support
 - gcrypt initialization
 
 - securing key storage memory
