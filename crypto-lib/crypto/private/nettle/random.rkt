@@ -21,8 +21,11 @@
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
+         "../rkt/os-random.rkt"
          "ffi.rkt")
 (provide nettle-yarrow-impl%)
+
+;; Automatically seeded; see ../rkt/os-random.rkt
 
 (define (make-yarrow256-ctx)
   (define ctx (malloc YARROW256_CTX_SIZE 'atomic-interior))
@@ -38,11 +41,11 @@
     (define/private (check-ctx [need-seeded? #t])
       (unless ctx
         (set! ctx (make-yarrow256-ctx))
-        ;; FIXME: support sources?
+        ;; FIXME: support sources for update?
         (nettle_yarrow256_init ctx 0 #f))
       (when need-seeded?
         (unless (nettle_yarrow256_is_seeded ctx)
-          (crypto-error "nettle yarrow context not seeded"))))
+          (nettle_yarrow256_seed ctx (os-random-bytes YARROW256_SEED_FILE_SIZE)))))
 
     (define/public (can-add-entropy?) #t)
 
