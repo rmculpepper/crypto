@@ -456,3 +456,96 @@
         (ciphertext : _mpz_t)
         -> (result : _bool)
         -> (and result len)))
+
+;; ----
+
+
+(define-cstruct _dsa_public_key_struct
+  ([p    _mpz_struct]
+   [q    _mpz_struct]
+   [g    _mpz_struct]
+   [y    _mpz_struct]))
+
+(define-cstruct _dsa_private_key_struct
+  ([x    _mpz_struct]))
+
+(define-cstruct _dsa_signature_struct
+  ([r    _mpz_struct]
+   [s    _mpz_struct]))
+
+(define _dsa_public_key _dsa_public_key_struct-pointer)
+(define _dsa_private_key _dsa_private_key_struct-pointer)
+(define _dsa_signature _dsa_signature_struct-pointer)
+
+(define-nettleHW nettle_dsa_public_key_init
+  (_fun _dsa_public_key -> _void))
+(define-nettleHW nettle_dsa_private_key_init
+  (_fun _dsa_private_key -> _void))
+(define-nettleHW nettle_dsa_signature_init
+  (_fun _dsa_signature -> _void))
+
+(define-nettleHW nettle_rsa_public_key_clear
+  (_fun _rsa_public_key -> _void)
+  #:wrap (deallocator))
+(define-nettleHW nettle_rsa_private_key_clear
+  (_fun _rsa_private_key -> _void)
+  #:wrap (deallocator))
+(define-nettleHW nettle_rsa_signature_clear
+  (_fun _rsa_signature -> _void)
+  #:wrap (deallocator))
+
+(define new-dsa_public_key
+  ((allocator nettle_dsa_public_key_clear)
+   (lambda ()
+     (define k (malloc _dsa_public_key_struct 'atomic-interior))
+     (cpointer-push-tag! k dsa_public_key_struct-tag)
+     (nettle_dsa_public_key_init k)
+     k)))
+
+(define new-dsa_private_key
+  ((allocator nettle_rsa_private_key_clear)
+   (lambda ()
+     (define k (malloc _dsa_private_key_struct 'atomic-interior))
+     (cpointer-push-tag! k dsa_private_key_struct-tag)
+     (nettle_dsa_private_key_init k)
+     k)))
+
+(define new-dsa_signature
+  ((allocator nettle_dsa_signature_clear)
+   (lambda ()
+     (define k (malloc _dsa_signature_struct 'atomic-interior))
+     (cpointer-push-tag! k dsa_signature_struct-tag)
+     (nettle_dsa_signature_init k)
+     k)))
+
+(define _dsa_sign_digest
+  (_fun (pub : _dsa_public_key)
+        (priv : _dsa_private_key)
+        (random-ctx : _pointer)
+        (_fpointer = yarrow_random)
+        (dgst : _bytes)
+        (sig : _dsa_signature)
+        -> _bool))
+
+(define _dsa_verify_digest
+  (_fun (pub : _dsa_public_key)
+        (dgst : _bytes)
+        (sig : _dsa_signature)
+        -> _bool))
+
+(define-nettleHW nettle_dsa_sha1_sign_digest _dsa_sign_digest)
+(define-nettleHW nettle_dsa_sha256_sign_digest _dsa_sign_digest)
+
+(define-nettleHW nettle_dsa_sha1_verify_digest _dsa_verify_digest)
+(define-nettleHW nettle_dsa_sha256_verify_digest _dsa_verify_digest)
+
+(define-nettleHW nettle_dsa_generate_keypair
+  (_fun _dsa_public_key
+        _dsa_private_key
+        (random-ctx : _pointer)
+        (_fpointer = yarrow_random)
+        (_pointer = #f)
+        (_fpointer = #f)
+        (p-bits : _uint) ;; eg, 2048
+        (q-bits : _uint) ;; 256
+        -> _bool))
