@@ -47,6 +47,10 @@
         (unless (nettle_yarrow256_is_seeded ctx)
           (nettle_yarrow256_seed ctx (os-random-bytes YARROW256_SEED_FILE_SIZE)))))
 
+    (define/public (get-context)
+      (check-ctx #t)
+      ctx)
+
     (define/public (can-add-entropy?) #t)
 
     (define/public (add-entropy buf entropy-in-bytes)

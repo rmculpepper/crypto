@@ -17,7 +17,8 @@
 (require ffi/unsafe
          ffi/unsafe/alloc
          (only-in '#%foreign ffi-obj)
-         ffi/unsafe/define)
+         ffi/unsafe/define
+         "../gmp/ffi.rkt")
 (provide (protect-out (all-defined-out)))
 
 (define libnettle (ffi-lib "libnettle" '("4" #f)))
@@ -316,52 +317,6 @@
 
 ;; ----
 
-(define-ffi-definer define-gmp (ffi-lib "libgmp"))
-
-(define-cstruct _mpz_struct
-  ([alloc _int]
-   [size  _int]
-   [limbs _pointer]))
-
-;; Bleh: typedef struct mpz_struct mpz_t[1]
-(define _mpz_t _mpz_struct-pointer)
-
-(define-gmp __gmpz_init (_fun _mpz_t -> _void))
-(define-gmp __gmpz_clear (_fun _mpz_t -> _void) #:wrap (deallocator))
-
-(define new-mpz
-  ((allocator __gmpz_clear)
-   (lambda ()
-     (define z (make-mpz_struct 0 0 #f))
-     (__gmpz_init z)
-     z)))
-
-(define-gmp __gmp_snprintf
-  (_fun (buf : _bytes)
-        (len : _size = (bytes-length buf))
-        (fmt : _bytes)
-        (arg : _pointer)
-        -> _int))
-
-(define-gmp __gmp_sscanf
-  (_fun (buf : _bytes)
-        (fmt : _bytes)
-        (arg : _pointer)
-        -> _int))
-
-(define (mpz->hex z)
-  (define size (__gmp_snprintf #"" #"%Zx" z))
-  (define buf (make-bytes (add1 size)))
-  (define size2 (__gmp_snprintf buf #"%Zx" z))
-  (subbytes buf 0 size2))
-
-(define (hex->mpz buf)
-  (define z (new-mpz))
-  (__gmp_sscanf buf #"%Zx" z)
-  z)
-
-;; ----
-
 (define-ffi-definer define-nettleHW (ffi-lib "libhogweed"))
 
 (define-cstruct _rsa_public_key_struct
@@ -459,7 +414,6 @@
 
 ;; ----
 
-
 (define-cstruct _dsa_public_key_struct
   ([p    _mpz_struct]
    [q    _mpz_struct]
@@ -484,14 +438,14 @@
 (define-nettleHW nettle_dsa_signature_init
   (_fun _dsa_signature -> _void))
 
-(define-nettleHW nettle_rsa_public_key_clear
-  (_fun _rsa_public_key -> _void)
+(define-nettleHW nettle_dsa_public_key_clear
+  (_fun _dsa_public_key -> _void)
   #:wrap (deallocator))
-(define-nettleHW nettle_rsa_private_key_clear
-  (_fun _rsa_private_key -> _void)
+(define-nettleHW nettle_dsa_private_key_clear
+  (_fun _dsa_private_key -> _void)
   #:wrap (deallocator))
-(define-nettleHW nettle_rsa_signature_clear
-  (_fun _rsa_signature -> _void)
+(define-nettleHW nettle_dsa_signature_clear
+  (_fun _dsa_signature -> _void)
   #:wrap (deallocator))
 
 (define new-dsa_public_key

@@ -22,6 +22,7 @@
          "digest.rkt"
          "cipher.rkt"
          "random.rkt"
+         "pkey.rkt"
          "kdf.rkt")
 (provide nettle-factory)
 
@@ -123,6 +124,11 @@
       (unless random-impl
         (set! random-impl (new nettle-yarrow-impl% (spec 'random) (factory this))))
       random-impl)
+
+    (define/override (get-pk* spec)
+      (case spec
+        [(rsa) (new nettle-rsa-impl% (factory this))]
+        [else #f]))
 
     (define/override (get-kdf spec)
       (match spec
