@@ -268,3 +268,47 @@
         (outlen : _uint = (bytes-length out))
         (out : _bytes)
         -> _void))
+
+;; ----
+
+(define YARROW256_CTX_SIZE 496)
+(define YARROW_SOURCE_SIZE 12)
+(define YARROW256_SEED_FILE_SIZE 32)   ;; = 2 * AES_BLOCK_SIZE
+
+(define-cpointer-type _yarrow256_ctx)
+(define-cpointer-type _yarrow_source)
+
+(define-nettle nettle_yarrow256_init
+  (_fun _yarrow256_ctx _uint _yarrow_source/null
+        -> _void))
+
+(define-nettle nettle_yarrow256_seed
+  (_fun (ctx buf) ::
+        (ctx : _yarrow256_ctx)
+        (len : _uint = (bytes-length buf))
+        (buf : _bytes)
+        -> _void))
+
+(define-nettle nettle_yarrow256_update
+  (_fun (ctx src entropy buf) ::
+        (ctx : _yarrow256_ctx)
+        (src : _uint)
+        (entropy : _uint)
+        (len : _uint = (bytes-length buf))
+        (buf : _bytes)
+        -> _int))
+
+(define-nettle nettle_yarrow256_random
+  (_fun _yarrow256_ctx _uint _pointer
+        -> _void))
+
+(define-nettle nettle_yarrow256_is_seeded
+  (_fun _yarrow256_ctx -> _bool))
+
+(define-nettle nettle_yarrow256_needed_sources
+  (_fun _yarrow256_ctx -> _uint))
+
+(define-nettle nettle_yarrow256_fast_reseed
+  (_fun _yarrow256_ctx -> _void))
+(define-nettle nettle_yarrow256_slow_reseed
+  (_fun _yarrow256_ctx -> _void))

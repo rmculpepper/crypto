@@ -21,6 +21,7 @@
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"
+         "random.rkt"
          "kdf.rkt")
 (provide nettle-factory)
 
@@ -116,6 +117,12 @@
         [(list _ nc)
          (new nettle-cipher-impl% (spec spec) (factory this) (nc nc))]
         [_ #f]))
+
+    (define random-impl #f)
+    (define/override (get-random)
+      (unless random-impl
+        (set! random-impl (new nettle-yarrow-impl% (spec 'random) (factory this))))
+      random-impl)
 
     (define/override (get-kdf spec)
       (match spec
