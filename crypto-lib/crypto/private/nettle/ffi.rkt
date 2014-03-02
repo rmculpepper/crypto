@@ -15,6 +15,7 @@
 
 #lang racket/base
 (require ffi/unsafe
+         ffi/unsafe/alloc
          (only-in '#%foreign ffi-obj)
          ffi/unsafe/define)
 (provide (protect-out (all-defined-out)))
@@ -312,3 +313,146 @@
   (_fun _yarrow256_ctx -> _void))
 (define-nettle nettle_yarrow256_slow_reseed
   (_fun _yarrow256_ctx -> _void))
+
+;; ----
+
+(define-ffi-definer define-gmp (ffi-lib "libgmp"))
+
+(define-cstruct _mpz_struct
+  ([alloc _int]
+   [size  _int]
+   [limbs _pointer]))
+
+;; Bleh: typedef struct mpz_struct mpz_t[1]
+(define _mpz_t _mpz_struct-pointer)
+
+(define-gmp __gmpz_init (_fun _mpz_t -> _void))
+(define-gmp __gmpz_clear (_fun _mpz_t -> _void) #:wrap (deallocator))
+
+(define new-mpz
+  ((allocator __gmpz_clear)
+   (lambda ()
+     (define z (make-mpz_struct 0 0 #f))
+     (__gmpz_init z)
+     z)))
+
+(define-gmp __gmp_snprintf
+  (_fun (buf : _bytes)
+        (len : _size = (bytes-length buf))
+        (fmt : _bytes)
+        (arg : _pointer)
+        -> _int))
+
+(define-gmp __gmp_sscanf
+  (_fun (buf : _bytes)
+        (fmt : _bytes)
+        (arg : _pointer)
+        -> _int))
+
+(define (mpz->hex z)
+  (define size (__gmp_snprintf #"" #"%Zx" z))
+  (define buf (make-bytes (add1 size)))
+  (define size2 (__gmp_snprintf buf #"%Zx" z))
+  (subbytes buf 0 size2))
+
+(define (hex->mpz buf)
+  (define z (new-mpz))
+  (__gmp_sscanf buf #"%Zx" z)
+  z)
+
+;; ----
+
+(define-ffi-definer define-nettleHW (ffi-lib "libhogweed"))
+
+(define-cstruct _rsa_public_key_struct
+  ([size _uint]  ;; size of modulo in octets, also size in sigs
+   [n    _mpz_struct]
+   [e    _mpz_struct]))
+
+(define-cstruct _rsa_private_key_struct
+  ([size _uint]
+   [d    _mpz_struct]
+   [p    _mpz_struct]
+   [q    _mpz_struct]
+   [a    _mpz_struct]
+   [b    _mpz_struct]
+   [c    _mpz_struct]))
+
+(define _rsa_public_key _rsa_public_key_struct-pointer)
+(define _rsa_private_key _rsa_private_key_struct-pointer)
+
+(define-nettleHW nettle_rsa_public_key_init
+  (_fun _rsa_public_key -> _void))
+(define-nettleHW nettle_rsa_private_key_init
+  (_fun _rsa_private_key -> _void))
+
+(define-nettleHW nettle_rsa_public_key_clear
+  (_fun _rsa_public_key -> _void)
+  #:wrap (deallocator))
+(define-nettleHW nettle_rsa_private_key_clear
+  (_fun _rsa_private_key -> _void)
+  #:wrap (deallocator))
+
+(define new-rsa_public_key
+  ((allocator nettle_rsa_public_key_clear)
+   (lambda ()
+     (define k (malloc _rsa_public_key_struct 'atomic-interior))
+     (cpointer-push-tag! k rsa_public_key_struct-tag)
+     (nettle_rsa_public_key_init k)
+     k)))
+
+(define new-rsa_private_key
+  ((allocator nettle_rsa_private_key_clear)
+   (lambda ()
+     (define k (malloc _rsa_private_key_struct 'atomic-interior))
+     (cpointer-push-tag! k rsa_private_key_struct-tag)
+     (nettle_rsa_private_key_init k)
+     k)))
+
+(define-nettleHW nettle_rsa_public_key_prepare
+  (_fun _rsa_public_key -> _void))
+(define-nettleHW nettle_rsa_private_key_prepare
+  (_fun _rsa_private_key -> _void))
+
+(define-nettleHW nettle_rsa_md5_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha1_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha256_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha512_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
+
+(define-nettleHW nettle_rsa_md5_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha1_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha256_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha512_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+
+(define-nettle yarrow_random _fpointer
+  #:c-id nettle_yarrow256_random)
+
+(define-nettleHW nettle_rsa_generate_keypair
+  (_fun _rsa_public_key
+        _rsa_private_key
+        (random-ctx : _pointer)
+        (_fpointer = yarrow_random)
+        (_pointer = #f)
+        (_fpointer = #f)
+        (n_size : _uint)
+        (e_size : _uint)
+        -> _int))
+
+(define-nettleHW nettle_rsa_encrypt  ;; PKCS1 v1.5 padding
+  (_fun (pub random-ctx cleartext ciphertext) ::
+        (pub : _rsa_public_key)
+        (random-ctx : _pointer)
+        (_fpointer = yarrow_random)
+        (_uint = (bytes-length cleartext))
+        (cleartext : _bytes)
+        (ciphertext : _mpz_t)
+        -> _bool))
+
+(define-nettleHW nettle_rsa_decrypt ;; PKCS1 v1.5 padding
+  (_fun (priv cleartext ciphertext) ::
+        (priv : _rsa_private_key)
+        (len : (_ptr io _uint) = (bytes-length cleartext))
+        (cleartext : _bytes)
+        (ciphertext : _mpz_t)
+        -> (result : _bool)
+        -> (and result len)))
