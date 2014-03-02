@@ -19,7 +19,8 @@ Note that ordinary pseudo-random number generators like Racket's
 @racket[random] function are @bold{not} cryptographically secure. A
 CSPRNG that is improperly seeded (initialized), such as from a
 low-entropy source such as the current timestamp, is @bold{not}
-cryptographically secure.
+cryptographically secure. See the notes on CSPRNG initialization in
+@seclink["factory"] for more information.
 
 
 @defproc[(random-impl? [v any/c]) boolean?]{

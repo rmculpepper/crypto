@@ -60,40 +60,49 @@ implementation.
 
 @defmodule[crypto/libcrypto]
 
-@hyperlink["http://www.openssl.org/docs/crypto/crypto.html"]{Libcrypto}
-is the cryptography library of OpenSSL. The necessary foreign library
-is typically part of the operating system or distributed with Racket.
-
 @defthing[libcrypto-factory crypto-factory?]{
 
-Factory for libcrypto.
+Factory for
+@hyperlink["http://www.openssl.org/docs/crypto/crypto.html"]{libcrypto},
+the cryptography library of OpenSSL. The necessary foreign library is
+typically part of the operating system or distributed with Racket.
+
+@bold{CSPRNG Initialization} The libcrypto library automatically seeds
+its CSPRNG using entropy obtained from the operating system
+(@hyperlink["http://wiki.openssl.org/index.php/Random_Numbers"]{as
+described here}).
 }
 
 @section{GCrypt}
 
 @defmodule[crypto/gcrypt]
 
-@hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt} is a
-cryptography library from the GNU project, originally part of GnuPG.
-
-The @tt{libgcrypt.so.11} foreign library is required.
-
 @defthing[gcrypt-factory crypto-factory?]{
 
-Factory for GCrypt.
+Factory for
+@hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt}, a
+cryptography library from the GNU project, originally part of GnuPG.
+The @tt{libgcrypt.so.11} foreign library is required.
+
+@bold{CSPRNG Initialization} The libgrypt library seems to perform
+some default CSPRNG initialization, but I don't know the details.
 }
 
 @section{Nettle}
 
 @defmodule[crypto/nettle]
 
-@hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle} is a
-cryptography library.
-
-The @tt{libnettle.so.4} foreign library is required.
-
 @defthing[nettle-factory crypto-factory?]{
 
-Factory for Nettle.
-}
+Factory for
+@hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle}, a
+lightweight cryptography library. The @tt{libnettle.so.4} foreign
+library is required.
 
+@bold{CSPRNG Initialization} This library creates a Yarrow-256
+instance and seeds it with entropy obtained from the operating system
+via @tt{/dev/urandom} on Unix-like systems or the @tt{RtlGenRandom}
+system call on Windows. The instance does not automatically update its
+entropy pool, so it does @bold{not} enjoy Yarrow's key-compromise
+recovery properties.
+}
