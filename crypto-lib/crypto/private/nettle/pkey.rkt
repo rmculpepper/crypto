@@ -26,6 +26,130 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
+#|
+;; Reference: http://www.ietf.org/rfc/rfc2459.txt
+
+SubjectPublicKeyInfo  ::=  SEQUENCE  {
+    algorithm            AlgorithmIdentifier,
+    subjectPublicKey     BIT STRING  }
+
+AlgorithmIdentifier  ::=  SEQUENCE  {
+    algorithm               OBJECT IDENTIFIER,
+    parameters              ANY DEFINED BY algorithm OPTIONAL  }
+                            -- contains a value of the type
+                            -- registered for use with the
+                            -- algorithm object identifier value
+
+|#
+
+#|
+;; Reference: http://www.ietf.org/rfc/rfc3447.txt
+
+RSAPrivateKey ::= SEQUENCE {
+    version           Version,
+    modulus           INTEGER,  -- n
+    publicExponent    INTEGER,  -- e
+    privateExponent   INTEGER,  -- d
+    prime1            INTEGER,  -- p
+    prime2            INTEGER,  -- q
+    exponent1         INTEGER,  -- d mod (p-1)
+    exponent2         INTEGER,  -- d mod (q-1)
+    coefficient       INTEGER,  -- (inverse of q) mod p
+    otherPrimeInfos   OtherPrimeInfos OPTIONAL
+    }
+
+Version ::= INTEGER { two-prime(0), multi(1) }
+    (CONSTRAINED BY {-- version must be multi if otherPrimeInfos present --})
+
+|#
+
+#|
+;; Reference: https://www.ietf.org/rfc/rfc3279.txt
+
+;; Section 2.3.1 - RSA keys
+
+pkcs-1 OBJECT IDENTIFIER ::= { iso(1) member-body(2) us(840)
+    rsadsi(113549) pkcs(1) 1 }
+
+rsaEncryption OBJECT IDENTIFIER ::=  { pkcs-1 1}
+
+RSAPublicKey ::= SEQUENCE {
+    modulus            INTEGER,    -- n
+    publicExponent     INTEGER  }  -- e
+
+
+;; Section 2.3.2 - DSA keys
+
+id-dsa OBJECT IDENTIFIER ::= {
+    iso(1) member-body(2) us(840) x9-57(10040) x9cm(4) 1 }
+
+Dss-Parms  ::=  SEQUENCE  {
+    p             INTEGER,
+    q             INTEGER,
+    g             INTEGER  }
+
+DSAPublicKey ::= INTEGER -- public key, Y
+
+
+;; Section 2.3.3 - DH
+
+dhpublicnumber OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+    us(840) ansi-x942(10046) number-type(2) 1 }
+
+DomainParameters ::= SEQUENCE {
+    p       INTEGER, -- odd prime, p=jq +1
+    g       INTEGER, -- generator, g
+    q       INTEGER, -- factor of p-1
+    j       INTEGER OPTIONAL, -- subgroup factor
+    validationParms  ValidationParms OPTIONAL }
+
+ValidationParms ::= SEQUENCE {
+    seed             BIT STRING,
+    pgenCounter      INTEGER }
+
+DHPublicKey ::= INTEGER -- public key, y = g^x mod p
+
+
+;; Section 2.3.5 - EC keys
+
+ansi-X9-62 OBJECT IDENTIFIER ::=
+    { iso(1) member-body(2) us(840) 10045 }
+
+id-public-key-type OBJECT IDENTIFIER  ::= { ansi-X9.62 2 }
+
+id-ecPublicKey OBJECT IDENTIFIER ::= { id-publicKeyType 1 }
+
+EcpkParameters ::= CHOICE {
+    ecParameters  ECParameters,
+    namedCurve    OBJECT IDENTIFIER,
+    implicitlyCA  NULL }
+
+ECParameters ::= SEQUENCE {
+    version   ECPVer,          -- version is always 1
+    fieldID   FieldID,         -- identifies the finite field over
+                               -- which the curve is defined
+    curve     Curve,           -- coefficients a and b of the
+                               -- elliptic curve
+    base      ECPoint,         -- specifies the base point P
+                               -- on the elliptic curve
+    order     INTEGER,         -- the order n of the base point
+    cofactor  INTEGER OPTIONAL -- The integer h = #E(Fq)/n
+    }
+
+ECPVer ::= INTEGER {ecpVer1(1)}
+
+Curve ::= SEQUENCE {
+    a         FieldElement,
+    b         FieldElement,
+    seed      BIT STRING OPTIONAL }
+
+FieldElement ::= OCTET STRING
+
+ECPoint ::= OCTET STRING
+
+
+|#
+
 ;; ============================================================
 
 (define nettle-read-key%
