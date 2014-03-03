@@ -24,6 +24,7 @@
          null->der
          wrap-object-identifier
          object-identifier->der
+         OID
          wrap-octet-string
          octet-string->der
          wrap-sequence
@@ -197,15 +198,17 @@
 (define (wrap-object-identifier c)
   (wrap 'OBJECT-IDENTIFIER 'primitive c))
 
-;; object-identifier->der : sequence-of-integer -> bytes
+;; object-identifier->der : (listof (U nat (list symbol nat))) -> bytes
 (define (object-identifier->der cs)
-  (wrap-object-identifier
-   (let ([c1 (car cs)]
-         [c2 (cadr cs)]
-         [cs* (cddr cs)])
-     (apply bytes-append
-            (bytes (+ (* 40 c1) c2))
-            (map encode-component cs*)))))
+  (let ([cs (for/list ([c (in-list cs)])
+              (if (list? c) (cadr c) c))])
+    (wrap-object-identifier
+     (let ([c1 (car cs)]
+           [c2 (cadr cs)]
+           [cs* (cddr cs)])
+       (apply bytes-append
+              (bytes (+ (* 40 c1) c2))
+              (map encode-component cs*))))))
 
 (define (encode-component c)
   (define (loop c acc)
@@ -216,6 +219,9 @@
   (apply bytes
          (let-values ([(q r) (quotient/remainder c 128)])
            (loop q (list r)))))
+
+(define-syntax-rule (OID c ...)
+  (object-identifier->der (quote (c ...))))
 
 ;; === Octet String ===
 
