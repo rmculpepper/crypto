@@ -18,17 +18,26 @@
          signed->base256
          base256->unsigned
 
+         wrap-bit-string
+         bit-string->der
+         decode-bit-string
+
          wrap-integer
          integer->der
+
          wrap-null
          null->der
+
          wrap-object-identifier
          object-identifier->der
          OID
+
          wrap-octet-string
          octet-string->der
+
          wrap-sequence
          sequence->der
+
          wrap-set
          set->der
 
@@ -154,7 +163,27 @@
 
 ;; === Bit string ===
 
-;; Not needed yet.
+;; wrap-bit-string : bytes -> bytes
+(define (wrap-bit-string c)
+  (wrap 'BIT-STRING 'primitive c))
+
+;; bit-string->der : bytes nat -> bytes
+;; Given bytes and number of trailing bits not significant (0-7)
+(define (bit-string->der bits [trailing-unused 0])
+  (wrap-bit-string
+   (bytes-append (bytes trailing-unused)
+                 bits)))
+
+;; decode-bit-string : bytes -> bytes
+;; Given encoded content, returns raw bit string
+;; NOTE: trailing-unused bits must be zero!
+(define (decode-bit-string c)
+  (when (zero? (bytes-length c))
+    (error 'decode-bit-string "ill-formed bit-string encoding: empty"))
+  (let ([trailing-unused (bytes-ref c 0)])
+    (unless (zero? trailing-unused)
+      (error 'decode-bit-string "partial-octet bit strings not supported"))
+    (subbytes c 1 (bytes-length c))))
 
 ;; === Choice ===
 
