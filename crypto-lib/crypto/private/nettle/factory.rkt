@@ -128,7 +128,12 @@
     (define/override (get-pk* spec)
       (case spec
         [(rsa) (new nettle-rsa-impl% (factory this))]
+        [(dsa) (new nettle-dsa-impl% (factory this))]
         [else #f]))
+
+    (define nettle-read-key (new nettle-read-key% (factory this)))
+    (define/override (get-pk-reader)
+      nettle-read-key)
 
     (define/override (get-kdf spec)
       (match spec

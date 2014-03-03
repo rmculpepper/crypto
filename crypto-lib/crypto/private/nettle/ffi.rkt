@@ -452,6 +452,7 @@
   ((allocator nettle_dsa_public_key_clear)
    (lambda ()
      (define k (malloc _dsa_public_key_struct 'atomic-interior))
+     (cpointer-push-tag! k mpz_struct-tag) ;; FIXME: why necessary???
      (cpointer-push-tag! k dsa_public_key_struct-tag)
      (nettle_dsa_public_key_init k)
      k)))
@@ -460,6 +461,7 @@
   ((allocator nettle_rsa_private_key_clear)
    (lambda ()
      (define k (malloc _dsa_private_key_struct 'atomic-interior))
+     (cpointer-push-tag! k mpz_struct-tag) ;; FIXME: why necessary???
      (cpointer-push-tag! k dsa_private_key_struct-tag)
      (nettle_dsa_private_key_init k)
      k)))
@@ -468,6 +470,7 @@
   ((allocator nettle_dsa_signature_clear)
    (lambda ()
      (define k (malloc _dsa_signature_struct 'atomic-interior))
+     (cpointer-push-tag! k mpz_struct-tag) ;; FIXME: why necessary???
      (cpointer-push-tag! k dsa_signature_struct-tag)
      (nettle_dsa_signature_init k)
      k)))
