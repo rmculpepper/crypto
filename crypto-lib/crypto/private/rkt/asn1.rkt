@@ -14,6 +14,11 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
+(require (for-syntax racket/base syntax/parse)
+         racket/promise)
+
+(provide (all-defined-out))
+#;
 (provide unsigned->base256
          signed->base256
          base256->unsigned
@@ -425,18 +430,25 @@
 ;; ============================================================
 
 ;; Asn1-Type is one of
-;; - any
-;; - Base-Type
-;; - (sequence Asn1-Element-Type ...)
-;; - (sequence-of Asn1-Type ...)
-;; - (set Asn1-Element-Type ...)
-;; - (set-of Asn1-Type ...)
-;; - (choice Asn1-Element-Type ...)
-;; - (named symbol Asn1-Type)
-;; - (lazy (PromiseOf Asn1-Type))
+;; - (type:base symbol)
+;; - (type:sequence (list Asn1-Element-Type ...))
+;; - (type:sequence-of Asn1-Type)
+;; - (type:set (list Asn1-Element-Type ...))
+;; - (type:set-of Asn1-Type)
+;; - (type:choice (list Asn1-Element-Type ...))
+;; - (type:ref symbol Asn1-Type)
+(struct asn1-type ())
+(struct asn1-type:base asn1-type (name))
+(struct asn1-type:sequence asn1-type (elts))
+(struct asn1-type:sequence-of asn1-type (elt))
+(struct asn1-type:set asn1-type (elts))
+(struct asn1-type:set-of asn1-type (elt))
+(struct asn1-type:choice asn1-type (elts))
+(struct asn1-type:defined asn1-type (name promise))
 
 ;; Asn1-Element-Type is one of
 ;; - (element MaybeName MaybeTag Asn1-Type MaybeOptionalDefault)
+(struct element-type (name tag type option))
 
 ;; MaybeName is one of
 ;; - Symbol
@@ -451,6 +463,81 @@
 ;; - (optional)
 ;; - (default Value)
 ;; - #f
+
+(define-syntax define-asn1-type
+  (syntax-parser
+   [(define-asn1-type name:id type)
+    #:declare type (expr/c #'asn1-type?)
+    #'(define name
+        (asn1-type:defined 'name (delay type.c)))]))
+
+(begin-for-syntax
+ (define-splicing-syntax-class name-clause
+   (pattern (~seq name:id))
+   (pattern (~seq) #:with name #'#f))
+ (define-splicing-syntax-class tag-class
+   (pattern (~seq #:universal) #:with tclass #''universal)
+   (pattern (~seq #:private)   #:with tclass #''private)
+   (pattern (~seq #:application) #:with tclass #''application)
+   (pattern (~seq) #:with tclass #''context-specific))
+ (define-splicing-syntax-class tag-clause
+   (pattern (~seq :tag-class #:explicit etag:nat)
+            #:with tag #''(explicit tclass etag))
+   (pattern (~seq :tag-class #:implicit itag:nat)
+            #:with tag #''(implicit tclass itag))
+   (pattern (~seq)
+            #:with tag #''#f))
+ (define-splicing-syntax-class option-clause
+   (pattern (~seq #:optional)
+            #:with option #''(optional))
+   (pattern (~seq #:default v:expr)
+            #:with option #'(list 'default v))
+   (pattern (~seq)
+            #:with option #''#f))
+
+ (define-syntax-class element
+   (pattern [:name-clause :tag-clause type :option-clause]
+            #:declare type (expr/c #'asn1-type?)
+            #:with et #'(element-type 'name tag type.c option))))
+
+(define-syntax Sequence
+  (syntax-parser
+   [(Sequence e:element ...)
+    #'(check-type (asn1-type:sequence (list e.et ...)))]))
+
+(define-syntax SequenceOf
+  (syntax-parser
+   [(SequenceOf type)
+    #:declare type (expr/c #'asn1-type?)
+    #'(asn1-type:sequence-of type.c)]))
+
+(define-syntax Set
+  (syntax-parser
+   [(Set e:element ...)
+    #'(check-type (asn1-type:set (list e.et ...)))]))
+
+(define-syntax SetOf
+  (syntax-parser
+   [(SetOf type)
+    #:declare type (expr/c #'asn1-type?)
+    #'(asn1-type:set-of type.c)]))
+
+(define-syntax Choice
+  (syntax-parser
+   [(Choice e:element ...)
+    #'(check-type (asn1-type:choice (list e.et ...)))]))
+
+(define (check-type t)
+  ;; FIXME: check to make sure well-tagged!
+  ;; FIXME: references to defined types may cause force-cycle problems
+  t)
+
+;; ----
+
+(define INTEGER (asn1-type:base 'INTEGER))
+(define OctetString (asn1-type:base 'OctetString))
+
+
 
 ;; ----
 
