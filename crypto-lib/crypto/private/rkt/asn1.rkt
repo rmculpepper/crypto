@@ -17,23 +17,36 @@
 (provide unsigned->base256
          signed->base256
          base256->unsigned
+         base256->signed
 
          wrap-bit-string
          bit-string->der
          decode-bit-string
 
+         ia5string?
+         wrap-ia5string
+         ia5string->der
+         decode-ia5string
+
          wrap-integer
          integer->der
+         decode-integer
 
          wrap-null
          null->der
 
          wrap-object-identifier
          object-identifier->der
+         decode-object-identifier
          OID
 
          wrap-octet-string
          octet-string->der
+
+         printable-string?
+         wrap-printable-string
+         printable-string->der
+         decode-printable-string
 
          wrap-sequence
          sequence->der
@@ -126,31 +139,53 @@
                 nc))])))
 
 (define (unsigned->base256 n)
-  (integer->base256 n #f))
+  (unless (exact-nonnegative-integer? n)
+    (raise-argument-error 'unsigned->base256 "exact-nonnegative-integer?" n))
+  (nonnegative-integer->base256 n #f))
 
 (define (signed->base256 n)
+  (unless (exact-integer? n)
+    (raise-argument-error 'signed->base256 "exact-integer?" n))
   (if (negative? n)
-      (error 'signed->base256 "not yet implemented")
-      (integer->base256 n #t)))
+      (negative-integer->base256 n)
+      (nonnegative-integer->base256 n #t)))
 
-(define (integer->base256 n as-signed?)
+(define (nonnegative-integer->base256 n as-signed?)
   (if (zero? n)
       #"0"
       (apply bytes
              (let loop ([n n] [acc null])
                (if (zero? n)
-                   acc
+                   (if (and as-signed? (> (car acc) 127))
+                       (cons 0 acc)
+                       acc)
                    (let-values ([(q r) (quotient/remainder n 8)])
                      (loop q (cons r acc))))))))
+
+(define (negative-integer->base256 n)
+  (apply bytes
+         (let loop ([n n] [acc null])
+           (cond [(<= -128 n -1)
+                  (cons (+ 256 n) acc)]
+                 [else
+                  (let* ([b (bitwise-bit-field n 0 8)]
+                         [q (arithmetic-shift n -8)])
+                    (loop q (cons b acc)))]))))
 
 (define (ubyte->sbyte u)
   (if (< u 128) u (- u 256)))
 (define (sbyte->ubyte s)
   (if (>= s 0) s (+ s 256)))
 
-(define (base256->unsigned lbs)
-  (for/fold ([n 0]) ([b (in-bytes lbs)])
+(define (base256->unsigned bs)
+  (for/fold ([n 0]) ([b (in-bytes bs)])
     (+ (arithmetic-shift n 8) b)))
+
+(define (base256->signed bs)
+  (if (and (positive? (bytes-length bs)) (> (bytes-ref bs 0) 127))
+      (- (base256->unsigned bs)
+         (arithmetic-shift 1 (* 8 (bytes-length bs))))
+      (base256->unsigned bs)))
 
 ;; ============================================================
 
@@ -189,10 +224,30 @@
 
 ;; Not needed yet.
 
-;; === IA5String ===
+;; === IA5String (ie, ASCII string) ===
 
-;; IA5 = ASCII
-;; Not needed yet.
+;; ia5string? : any -> boolean
+(define (ia5string? s)
+  (and (string? s)
+       (for/and ([c (in-string s)])
+         (< (char->integer c) 256))))
+
+;; wrap-ia5string : bytes -> bytes
+(define (wrap-ia5string c)
+  (wrap 'IA5String 'primitive c))
+
+;; ia5string->der : ia5string -> bytes
+(define (ia5string->der s)
+  (unless (ia5string? s)
+    (raise-argument-error 'ia5string->der "ia5string?" s))
+  (wrap-ia5string (string->bytes/latin-1 s)))
+
+;; decode-ia5string : bytes -> string
+(define (decode-ia5string bs)
+  (define s (bytes->string/latin-1 bs))
+  (unless (ia5string? s)
+    (error 'decode-ia5string "not an ia5string: ~e" s))
+  s)
 
 ;; === Integer ===
 
@@ -206,6 +261,11 @@
 ;; integer->der : exact-integer -> bytes
 (define (integer->der n)
   (wrap-integer (signed->base256 n)))
+
+;; decode-integer : bytes -> integer
+;; Given encoded integer, returns raw integer
+(define (decode-integer bs)
+  (base256->signed bs))
 
 ;; === Null ===
 
@@ -237,9 +297,9 @@
            [cs* (cddr cs)])
        (apply bytes-append
               (bytes (+ (* 40 c1) c2))
-              (map encode-component cs*))))))
+              (map encode-oid-component cs*))))))
 
-(define (encode-component c)
+(define (encode-oid-component c)
   (define (loop c acc)
     (if (zero? c)
         acc
@@ -252,6 +312,28 @@
 (define-syntax-rule (OID c ...)
   (object-identifier->der (quote (c ...))))
 
+(define (decode-object-identifier bs)
+  (when (zero? (bytes-length bs))
+    (error 'decode-object-identifier "empty" bs))
+  (define in (open-input-bytes bs))
+  (define b1 (read-byte in))
+  (list* (quotient b1 40) (remainder b1 40)
+         (let loop ()
+           (if (eof-object? (peek-byte in))
+               null
+               (let ([c (decode-oid-component in)])
+                 (cons c (loop)))))))
+
+(define (decode-oid-component in)
+  (let loop ([c 0])
+    (let ([next (read-byte in)])
+      (cond [(eof-object? next)
+             (error 'decode-object-identifier "incomplete component")]
+            [(< next 128)
+             (+ next (arithmetic-shift c 7))]
+            [else
+             (loop (+ (- next 128) (arithmetic-shift c 7)))]))))
+
 ;; === Octet String ===
 
 ;; wrap-octet-string : bytes -> bytes
@@ -263,6 +345,26 @@
   (wrap-octet-string bs))
 
 ;; === Printable string ===
+
+(define (printable-string? s)
+  (and (string? s) (regexp-match? #rx"^[-a-zA-Z0-9 '()+,./:=?]*$" s)))
+
+;; wrap-printable-string : bytes -> bytes
+(define (wrap-printable-string c)
+  (wrap 'PrintableString 'primitive c))
+
+;; printable-string : printable-string -> bytes
+(define (printable-string->der s)
+  (unless (printable-string? s)
+    (raise-argument-error 'printable-string->der "printable-string?"))
+  (wrap-printable-string (string->bytes/latin-1 s)))
+
+;; decode-printable-string : bytes -> printable-string
+(define (decode-printable-string bs)
+  (let ([s (bytes->string/latin-1 bs)])
+    (if (printable-string? s)
+        s
+        (error 'decode-printable-string "not a printable string: ~e" s))))
 
 ;; Not needed yet.
 
@@ -322,6 +424,43 @@
 
 ;; ============================================================
 
+;; Asn1-Type is one of
+;; - any
+;; - Base-Type
+;; - (sequence Asn1-Element-Type ...)
+;; - (sequence-of Asn1-Type ...)
+;; - (set Asn1-Element-Type ...)
+;; - (set-of Asn1-Type ...)
+;; - (choice Asn1-Element-Type ...)
+;; - (named symbol Asn1-Type)
+;; - (lazy (PromiseOf Asn1-Type))
+
+;; Asn1-Element-Type is one of
+;; - (element MaybeName MaybeTag Asn1-Type MaybeOptionalDefault)
+
+;; MaybeName is one of
+;; - Symbol
+;; - #f
+
+;; MaybeTag is one of
+;; - (explicit-tag class tag)
+;; - (implicit-tag class tag)
+;; - #f
+
+;; MaybeOptionalDefault is one of
+;; - (optional)
+;; - (default Value)
+;; - #f
+
+;; ----
+
+;; ASN1 decoder is one of
+;; - 'decode -- decode known types
+;; - 'stop   -- leave encoded (asn1-encoded struct)
+;; - something like an ASN1-Type with other decoders at leaves???
+
+;; ----
+
 ;; FIXME: add checking for premature EOF, etc
 
 ;; UnwrappedDER is one of
@@ -341,11 +480,17 @@
   (let* ([tag (read-tag in)]
          [len (read-length-code in)]
          [c (read-bytes len in)])
-    (case (caddr tag)
-      [(primitive)
-       (list (car tag) c)]
-      [(constructed)
-       (cons (car tag) (read-ders (open-input-bytes c)))])))
+    (case (car tag)
+      [(OBJECT-IDENTIFIER)
+       (list 'OBJECT-IDENTIFIER (decode-object-identifier c))]
+      [(NULL)
+       '(NULL)]
+      [else
+       (case (caddr tag)
+         [(primitive)
+          (list (car tag) c)]
+         [(constructed)
+          (cons (car tag) (read-ders (open-input-bytes c)))])])))
 
 (define (read-ders in)
   (if (eof-object? (peek-char in))
