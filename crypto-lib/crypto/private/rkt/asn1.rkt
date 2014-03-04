@@ -459,6 +459,19 @@
 ;; - 'stop   -- leave encoded (asn1-encoded struct)
 ;; - something like an ASN1-Type with other decoders at leaves???
 
+;; Control decoder by mapping of names (type names and element names?)
+;; to decoder-control-function.
+
+;; A DecoderControlFun is one of
+;; - 'decode
+;; - 'stop
+;; - ((U Asn1-Type Asn1-Element-Type) Asn1-Tag Bytes -> Any)
+
+
+
+;; TODO:
+;; decompose-der : bytes -> (values Asn1-Tag Bytes)
+
 ;; ----
 
 ;; FIXME: add checking for premature EOF, etc
