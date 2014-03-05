@@ -14,15 +14,14 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require (for-syntax racket/base syntax/parse)
-         racket/promise)
-
 (provide (all-defined-out))
 #;
 (provide unsigned->base256
          signed->base256
          base256->unsigned
          base256->signed
+
+         wrap
 
          wrap-bit-string
          bit-string->der
@@ -43,7 +42,6 @@
          wrap-object-identifier
          object-identifier->der
          decode-object-identifier
-         OID
 
          wrap-octet-string
          octet-string->der
@@ -80,6 +78,19 @@
     [IA5String         22   primitive]
     [UTCTime           23   primitive]))
 
+(define (type->tag-entry type)
+  (for/or ([entry (in-list type-tags)])
+    (and (eq? type (car entry)) entry)))
+
+(define (tagn->tag-entry tagn)
+  (for/or ([entry (in-list type-tags)])
+    (and (equal? tagn (cadr entry)) entry)))
+
+(define (tag-entry-type te) (car te))
+(define (tag-entry-tagn te) (cadr te))
+(define (tag-entry-p/c te) (caddr te))
+(define (tag-entry-tag te) (list 'universal (tag-entry-tagn te)))
+
 ;; ----
 
 ;; BER (restricted to definite-length) encoding has 3:
@@ -114,20 +125,33 @@
 
 ;; ----------------------------------------
 
-;; wrap : symbol (U 'primitive 'constructd) bytes -> bytes
-(define (wrap type p/c c)
-  (bytes-append (get-tag type p/c) (length-code c) c))
+;; A Tag is (list TagClass TagNumber)
 
-;; get-tag : symbol (U 'primitive 'constructed) -> bytes
-(define (get-tag type p/c)
+;; wrap : symbol bytes [Tag] -> bytes
+(define (wrap type c [alt-tag #f])
+  (define tag-entry
+    (or (type->tag-entry type)
+        (error 'wrap "unknown type: ~e" type)))
+  (bytes-append (tag-entry->tag-bytes tag-entry alt-tag) (length-code c) c))
+
+;; tag-entry->tag-bytes : TagEntry [Tag] -> bytes
+(define (tag-entry->tag-bytes te [alt-tag #f])
+  (if alt-tag
+      (get-tag-bytes (car alt-tag) (tag-entry-p/c te) (cadr alt-tag))
+      (get-tag-bytes 'universal (tag-entry-p/c te) (tag-entry-tagn te))))
+
+;; get-tag-bytes : ... -> bytes
+(define (get-tag-bytes class p/c tagn)
   (bytes
-   (+ (cond [(assq type type-tags)
-             => cadr]
-            [else (error 'get-tag "unknown type: ~e" type)])
+   (+ (case class
+        [(universal)        0]
+        [(application)      #b01000000]
+        [(context-specific) #b10000000]
+        [(private)          #b11000000])
       (case p/c
-        [(primitive) 0]
-        [(constructed) (expt 2 (sub1 6))]
-        [else (error 'get-tag "expected (or/c 'primitive 'constructed), got: ~e" p/c)]))))
+        [(primitive)   0]
+        [(constructed) #b00100000])
+      tagn)))
 
 ;; length-code : (U nat bytes) -> bytes
 (define (length-code n)
@@ -177,11 +201,6 @@
                          [q (arithmetic-shift n -8)])
                     (loop q (cons b acc)))]))))
 
-(define (ubyte->sbyte u)
-  (if (< u 128) u (- u 256)))
-(define (sbyte->ubyte s)
-  (if (>= s 0) s (+ s 256)))
-
 (define (base256->unsigned bs)
   (for/fold ([n 0]) ([b (in-bytes bs)])
     (+ (arithmetic-shift n 8) b)))
@@ -203,16 +222,15 @@
 
 ;; === Bit string ===
 
-;; wrap-bit-string : bytes -> bytes
-(define (wrap-bit-string c)
-  (wrap 'BIT-STRING 'primitive c))
+;; wrap-bit-string : bytes [Tag] -> bytes
+(define (wrap-bit-string c [alt-tag #f])
+  (wrap 'BIT-STRING c alt-tag))
 
-;; bit-string->der : bytes nat -> bytes
+;; bit-string->der : bytes [Tag] -> bytes
 ;; Given bytes and number of trailing bits not significant (0-7)
-(define (bit-string->der bits [trailing-unused 0])
-  (wrap-bit-string
-   (bytes-append (bytes trailing-unused)
-                 bits)))
+(define (bit-string->der bits [alt-tag #f])
+  (define trailing-unused 0) ;; FIXME: accept trailing unused ...
+  (wrap-bit-string (bytes-append (bytes trailing-unused) bits) alt-tag))
 
 ;; decode-bit-string : bytes -> bytes
 ;; Given encoded content, returns raw bit string
@@ -225,10 +243,6 @@
       (error 'decode-bit-string "partial-octet bit strings not supported"))
     (subbytes c 1 (bytes-length c))))
 
-;; === Choice ===
-
-;; Not needed yet.
-
 ;; === IA5String (ie, ASCII string) ===
 
 ;; ia5string? : any -> boolean
@@ -237,15 +251,15 @@
        (for/and ([c (in-string s)])
          (< (char->integer c) 256))))
 
-;; wrap-ia5string : bytes -> bytes
-(define (wrap-ia5string c)
-  (wrap 'IA5String 'primitive c))
+;; wrap-ia5string : bytes [Tag] -> bytes
+(define (wrap-ia5string c [alt-tag #f])
+  (wrap 'IA5String c alt-tag))
 
-;; ia5string->der : ia5string -> bytes
-(define (ia5string->der s)
+;; ia5string->der : ia5string [Tag] -> bytes
+(define (ia5string->der s [alt-tag #f])
   (unless (ia5string? s)
     (raise-argument-error 'ia5string->der "ia5string?" s))
-  (wrap-ia5string (string->bytes/latin-1 s)))
+  (wrap-ia5string (string->bytes/latin-1 s) alt-tag))
 
 ;; decode-ia5string : bytes -> string
 (define (decode-ia5string bs)
@@ -259,13 +273,13 @@
 ;; base-256, two's-complement (!!), most significant octet first
 ;; zero encoded as 1 octet
 
-;; wrap-integer : bytes -> bytes
-(define (wrap-integer c)
-  (wrap 'INTEGER 'primitive c))
+;; wrap-integer : bytes [Tag] -> bytes
+(define (wrap-integer c [alt-tag #f])
+  (wrap 'INTEGER c alt-tag))
 
-;; integer->der : exact-integer -> bytes
-(define (integer->der n)
-  (wrap-integer (signed->base256 n)))
+;; integer->der : exact-integer [Tag] -> bytes
+(define (integer->der n [alt-tag #f])
+  (wrap-integer (signed->base256 n) alt-tag))
 
 ;; decode-integer : bytes -> integer
 ;; Given encoded integer, returns raw integer
@@ -274,12 +288,13 @@
 
 ;; === Null ===
 
-;; wrap-null : bytes -> bytes
-(define (wrap-null c)
-  (wrap 'NULL 'primitive c))
+;; wrap-null : bytes [Tag] -> bytes
+(define (wrap-null _ignored [alt-tag #f])
+  (wrap 'NULL #"" alt-tag))
 
-(define (null->der)
-  (wrap-null #""))
+;; null->der : [Tag] -> bytes
+(define (null->der _ignored [alt-tag #f])
+  (wrap-null #"" alt-tag))
 
 ;; === Object Identifier ==
 
@@ -288,12 +303,12 @@
 ;; following octets are c3, ... cN encoded as follows:
 ;;   base-128, most-significant first, high bit set on all but last octet of encoding
 
-;; wrap-object-identifier : bytes -> bytes
-(define (wrap-object-identifier c)
-  (wrap 'OBJECT-IDENTIFIER 'primitive c))
+;; wrap-object-identifier : bytes [Tag] -> bytes
+(define (wrap-object-identifier c [alt-tag #f])
+  (wrap 'OBJECT-IDENTIFIER c alt-tag))
 
-;; object-identifier->der : (listof (U nat (list symbol nat))) -> bytes
-(define (object-identifier->der cs)
+;; object-identifier->der : (listof (U nat (list symbol nat))) [Tag] -> bytes
+(define (object-identifier->der cs [alt-tag #f])
   (let ([cs (for/list ([c (in-list cs)])
               (if (list? c) (cadr c) c))])
     (wrap-object-identifier
@@ -302,7 +317,8 @@
            [cs* (cddr cs)])
        (apply bytes-append
               (bytes (+ (* 40 c1) c2))
-              (map encode-oid-component cs*))))))
+              (map encode-oid-component cs*)))
+     alt-tag)))
 
 (define (encode-oid-component c)
   (define (loop c acc)
@@ -313,9 +329,6 @@
   (apply bytes
          (let-values ([(q r) (quotient/remainder c 128)])
            (loop q (list r)))))
-
-(define-syntax-rule (OID c ...)
-  (object-identifier->der (quote (c ...))))
 
 (define (decode-object-identifier bs)
   (when (zero? (bytes-length bs))
@@ -341,28 +354,28 @@
 
 ;; === Octet String ===
 
-;; wrap-octet-string : bytes -> bytes
-(define (wrap-octet-string c)
-  (wrap 'OCTET-STRING 'primitive c))
+;; wrap-octet-string : bytes [Tag] -> bytes
+(define (wrap-octet-string c [alt-tag #f])
+  (wrap 'OCTET-STRING c alt-tag))
 
-;; octet-string->der : bytes -> bytes
-(define (octet-string->der bs)
-  (wrap-octet-string bs))
+;; octet-string->der : bytes [Tag] -> bytes
+(define (octet-string->der bs [alt-tag #f])
+  (wrap-octet-string bs alt-tag))
 
 ;; === Printable string ===
 
 (define (printable-string? s)
   (and (string? s) (regexp-match? #rx"^[-a-zA-Z0-9 '()+,./:=?]*$" s)))
 
-;; wrap-printable-string : bytes -> bytes
-(define (wrap-printable-string c)
-  (wrap 'PrintableString 'primitive c))
+;; wrap-printable-string : bytes [Tag] -> bytes
+(define (wrap-printable-string c [alt-tag #f])
+  (wrap 'PrintableString c alt-tag))
 
-;; printable-string : printable-string -> bytes
-(define (printable-string->der s)
+;; printable-string->der : printable-string [Tag] -> bytes
+(define (printable-string->der s [alt-tag #f])
   (unless (printable-string? s)
     (raise-argument-error 'printable-string->der "printable-string?"))
-  (wrap-printable-string (string->bytes/latin-1 s)))
+  (wrap-printable-string (string->bytes/latin-1 s) alt-tag))
 
 ;; decode-printable-string : bytes -> printable-string
 (define (decode-printable-string bs)
@@ -375,48 +388,26 @@
 
 ;; === Sequence ===
 
-;; wrap-sequence : bytes -> bytes
-(define (wrap-sequence c)
-  (wrap 'SEQUENCE 'constructed c))
+;; wrap-sequence : bytes [Tag] -> bytes
+(define (wrap-sequence c [alt-tag #f])
+  (wrap 'SEQUENCE c alt-tag))
 
-;; sequence->der : (listof bytes) -> bytes
+;; sequence->der : (listof bytes) [Tag] -> bytes
 ;; Argument is a list of DER-encoded values.
 ;; Assumes DEFAULT and OPTIONAL parts have already been stripped from list.
-(define (sequence->der lst)
-  (wrap-sequence (apply bytes-append lst)))
-
-;; === Sequence Of ===
-
-;; wrap-sequence-of : bytes -> bytes
-(define (wrap-sequence-of c)
-  (wrap 'SEQUENCE 'constructed c))
-
-;; sequence-of->der : (listof bytes) -> bytes
-;; Argument is a list of DER-encoded values.
-(define (sequence-of->der lst)
-  (wrap-sequence-of (apply bytes-append lst)))
+(define (sequence->der lst [alt-tag #f])
+  (wrap-sequence (apply bytes-append lst) alt-tag))
 
 ;; ===  Set ===
 
-;; wrap-set : bytes -> bytes
-(define (wrap-set c)
-  (wrap 'SET 'constructed c))
+;; wrap-set : bytes [Tag] -> bytes
+(define (wrap-set c [alt-tag #f])
+  (wrap 'SET c alt-tag))
 
-;; set->der : (listof bytes) -> bytes
+;; set->der : (listof bytes) [Tag] -> bytes
 ;; Argument is a list of DER-encoded values
-(define (set->der lst)
-  (wrap-set (apply bytes-append (sort lst bytes<?))))
-
-;; === Set Of ===
-
-;; wrap-set-of : bytes -> bytes
-(define (wrap-set-of c)
-  (wrap 'SET 'constructed c))
-
-;; set-of->der : (listof bytes) -> bytes
-;; Argument is a list of DER-encoded values
-(define (set-of->der lst)
-  (wrap-set-of (apply bytes-append (sort lst bytes<?))))
+(define (set->der lst [alt-tag #f])
+  (wrap-set (apply bytes-append (sort lst bytes<?)) alt-tag))
 
 ;; === T61String ===
 
@@ -425,118 +416,6 @@
 ;; === UTCTime ===
 
 ;; Not needed yet.
-
-
-;; ============================================================
-
-;; Asn1-Type is one of
-;; - (type:base symbol)
-;; - (type:sequence (list Asn1-Element-Type ...))
-;; - (type:sequence-of Asn1-Type)
-;; - (type:set (list Asn1-Element-Type ...))
-;; - (type:set-of Asn1-Type)
-;; - (type:choice (list Asn1-Element-Type ...))
-;; - (type:ref symbol Asn1-Type)
-(struct asn1-type ())
-(struct asn1-type:base asn1-type (name))
-(struct asn1-type:sequence asn1-type (elts))
-(struct asn1-type:sequence-of asn1-type (elt))
-(struct asn1-type:set asn1-type (elts))
-(struct asn1-type:set-of asn1-type (elt))
-(struct asn1-type:choice asn1-type (elts))
-(struct asn1-type:defined asn1-type (name promise))
-
-;; Asn1-Element-Type is one of
-;; - (element MaybeName MaybeTag Asn1-Type MaybeOptionalDefault)
-(struct element-type (name tag type option))
-
-;; MaybeName is one of
-;; - Symbol
-;; - #f
-
-;; MaybeTag is one of
-;; - (explicit-tag class tag)
-;; - (implicit-tag class tag)
-;; - #f
-
-;; MaybeOptionalDefault is one of
-;; - (optional)
-;; - (default Value)
-;; - #f
-
-(define-syntax define-asn1-type
-  (syntax-parser
-   [(define-asn1-type name:id type)
-    #:declare type (expr/c #'asn1-type?)
-    #'(define name
-        (asn1-type:defined 'name (delay type.c)))]))
-
-(begin-for-syntax
- (define-splicing-syntax-class name-clause
-   (pattern (~seq name:id))
-   (pattern (~seq) #:with name #'#f))
- (define-splicing-syntax-class tag-class
-   (pattern (~seq #:universal) #:with tclass #''universal)
-   (pattern (~seq #:private)   #:with tclass #''private)
-   (pattern (~seq #:application) #:with tclass #''application)
-   (pattern (~seq) #:with tclass #''context-specific))
- (define-splicing-syntax-class tag-clause
-   (pattern (~seq :tag-class #:explicit etag:nat)
-            #:with tag #''(explicit tclass etag))
-   (pattern (~seq :tag-class #:implicit itag:nat)
-            #:with tag #''(implicit tclass itag))
-   (pattern (~seq)
-            #:with tag #''#f))
- (define-splicing-syntax-class option-clause
-   (pattern (~seq #:optional)
-            #:with option #''(optional))
-   (pattern (~seq #:default v:expr)
-            #:with option #'(list 'default v))
-   (pattern (~seq)
-            #:with option #''#f))
-
- (define-syntax-class element
-   (pattern [:name-clause :tag-clause type :option-clause]
-            #:declare type (expr/c #'asn1-type?)
-            #:with et #'(element-type 'name tag type.c option))))
-
-(define-syntax Sequence
-  (syntax-parser
-   [(Sequence e:element ...)
-    #'(check-type (asn1-type:sequence (list e.et ...)))]))
-
-(define-syntax SequenceOf
-  (syntax-parser
-   [(SequenceOf type)
-    #:declare type (expr/c #'asn1-type?)
-    #'(asn1-type:sequence-of type.c)]))
-
-(define-syntax Set
-  (syntax-parser
-   [(Set e:element ...)
-    #'(check-type (asn1-type:set (list e.et ...)))]))
-
-(define-syntax SetOf
-  (syntax-parser
-   [(SetOf type)
-    #:declare type (expr/c #'asn1-type?)
-    #'(asn1-type:set-of type.c)]))
-
-(define-syntax Choice
-  (syntax-parser
-   [(Choice e:element ...)
-    #'(check-type (asn1-type:choice (list e.et ...)))]))
-
-(define (check-type t)
-  ;; FIXME: check to make sure well-tagged!
-  ;; FIXME: references to defined types may cause force-cycle problems
-  t)
-
-;; ----
-
-(define INTEGER (asn1-type:base 'INTEGER))
-(define OctetString (asn1-type:base 'OctetString))
-
 
 
 ;; ----
@@ -563,61 +442,46 @@
 
 ;; FIXME: add checking for premature EOF, etc
 
-;; UnwrappedDER is one of
-;; - (list symbol bytes)                ;; primitive type
-;; - (list 'SEQUENCE UnwrappedDER ...)
-;; - (list 'SET UnwrappedDER ...)
+;; DER-Frame is (der-frame TagClass P/C TagNum bytes)
+(struct der-frame (tagclass p/c tagn content) #:transparent)
 
-;; unwrap-der : bytes -> UnwrappedDER
+;; unwrap-der : bytes -> DER-Frame
 (define (unwrap-der der)
   (define in (open-input-bytes der))
   (begin0 (read-der in)
     (unless (eof-object? (peek-char in))
       (error 'unwrap-der "bytes left over"))))
 
-;; read-der : input-port -> UnwrappedDER
+;; read-der : input-port -> DER-Frame
 (define (read-der in)
   (let* ([tag (read-tag in)]
          [len (read-length-code in)]
          [c (read-bytes len in)])
-    (case (car tag)
-      [(OBJECT-IDENTIFIER)
-       (list 'OBJECT-IDENTIFIER (decode-object-identifier c))]
-      [(NULL)
-       '(NULL)]
-      [else
-       (case (caddr tag)
-         [(primitive)
-          (list (car tag) c)]
-         [(constructed)
-          (cons (car tag) (read-ders (open-input-bytes c)))])])))
+    (der-frame (car tag) (cadr tag) (caddr tag) c)))
 
+;; read-der : input-port -> (listof DER-Frame)
 (define (read-ders in)
   (if (eof-object? (peek-char in))
       null
       (cons (read-der in) (read-ders in))))
 
+;; read-tag : input-port -> (list TagClass P/C TagNum)
 (define (read-tag in)
-  (let* ([t (read-byte in)]
-         [c? (bitwise-bit-set? t (sub1 6))]
-         [tn (bitwise-and t 31)])
-    (when (or (bitwise-bit-set? t (sub1 8))
-              (bitwise-bit-set? t (sub1 7)))
-      (error 'unwrap-der "only universal tags implemented"))
-    (unless (<= 0 tn 30)
+  (let* ([tag (read-byte in)]
+         [c? (bitwise-bit-set? tag (sub1 6))]
+         [tagclass (bitwise-bit-field tag 6 8)]
+         [tagnum (bitwise-and tag 31)])
+    (unless (<= 0 tagnum 30)
       (error 'unwrap-der "only low tags implemented"))
-    (define entry
-      (let loop ([alist type-tags])
-        (cond [(null? alist)
-               (error 'unwrap-der "unknown tag: ~e" tn)]
-              [(= (cadr (car alist)) tn)
-               (car alist)]
-              [else (loop (cdr alist))])))
-    (unless (eq? (caddr entry)
-                 (if c? 'constructed 'primitive))
-      (error 'unwrap-der "primitive/constructed mismatch"))
-    entry))
+    (list (case tagclass
+            [(#b00) 'universal]
+            [(#b01) 'application]
+            [(#b10) 'context-specific]
+            [(#b11) 'private])
+          (if c? 'constructed 'primitive)
+          tagnum)))
 
+;; read-length-code : input-port -> nat
 (define (read-length-code in)
   (let ([l (read-byte in)])
     (cond [(<= 0 l 127)
