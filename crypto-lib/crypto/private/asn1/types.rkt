@@ -14,6 +14,7 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
+(require racket/match)
 (provide (all-defined-out))
 #;
 (provide unsigned->base256
@@ -464,6 +465,14 @@
   (begin0 (read-der in)
     (unless (eof-object? (peek-char in))
       (error 'unwrap-der "bytes left over"))))
+
+;; frame->bytes : DER-Frame -> Bytes
+(define (frame->bytes frame)
+  (match frame
+    [(der-frame tagclass p/c tagn content)
+     (bytes-append (get-tag-bytes tagclass p/c tagn)
+                   (length-code content)
+                   content)]))
 
 ;; unwrap-ders : bytes -> (listof DER-Frame)
 (define (unwrap-ders der)

@@ -25,14 +25,17 @@
 ;; ============================================================
 
 ;; Asn1-Type is one of
-;; - (type:base symbol)
-;; - (type:sequence (list Asn1-Element-Type ...))
-;; - (type:sequence-of Asn1-Type)
-;; - (type:set (list Asn1-Element-Type ...))
-;; - (type:set-of Asn1-Type)
-;; - (type:choice (list Asn1-Element-Type ...))
-;; - (type:ref symbol Asn1-Type)
+;; - (asn1-type:base symbol)
+;; - (asn1-type:any)
+;; - (asn1-type:sequence (list Asn1-Element-Type ...))
+;; - (asn1-type:sequence-of Asn1-Type)
+;; - (asn1-type:set (list Asn1-Element-Type ...))
+;; - (asn1-type:set-of Asn1-Type)
+;; - (asn1-type:choice (list Asn1-Element-Type ...))
+;; - (asn1-type:ref symbol Asn1-Type)
+;; - (asn1-type:explicit-tag Asn1-Type)
 (struct asn1-type () #:transparent)
+(struct asn1-type:any asn1-type () #:transparent)
 (struct asn1-type:base asn1-type (name) #:transparent)
 (struct asn1-type:sequence asn1-type (elts) #:transparent)
 (struct asn1-type:sequence-of asn1-type (elt) #:transparent)
@@ -40,12 +43,12 @@
 (struct asn1-type:set-of asn1-type (elt) #:transparent)
 (struct asn1-type:choice asn1-type (elts) #:transparent)
 (struct asn1-type:defined asn1-type (name promise) #:transparent)
+(struct asn1-type:explicit-tag asn1-type (type) #:transparent)
 
 ;; Asn1-Element-Type is one of
 ;; - (element Symbol MaybeTag Asn1-Type MaybeOptionalDefault)
-;; Desugars explicit tagging into asn1-type:explicit-tag-sequence.
+;; Desugars explicit tagging into asn1-type:explicit-tag.
 (struct element-type (name tag type option) #:transparent)
-(struct asn1-type:explicit-tag-sequence asn1-type:sequence () #:transparent)
 
 ;; MaybeTag is one of
 ;; - (list class nat)    -- implicit or desugared explicit
@@ -81,7 +84,7 @@
    (pattern [name:id #:explicit etag:nat type :option-clause]
             #:declare type (expr/c #'asn1-type?)
             #:with et #'(element-type 'name '(implicit etag)
-                                      (asn1-type:explicit-tag-sequence (list type.c))
+                                      (asn1-type:explicit-tag type.c)
                                       option))
    (pattern [name:id #:implicit itag:nat type :option-clause]
             #:declare type (expr/c #'asn1-type?)
@@ -150,6 +153,7 @@
 ;; #f means all possible tags; collides with everything
 (define (type->tags t)
   (match t
+    [(asn1-type:any) (list #f)]
     [(asn1-type:base base-type)
      (cond [(type->tag-entry base-type)
             => (lambda (te)
@@ -168,6 +172,9 @@
      (apply append (map (type->tags elts)))]
     [(asn1-type:defined name promise)
      (type->tags (force promise))]
+    [(asn1-type:explicit-tag type)
+     ;; should always be guarded by element-type w/ tag
+     (error 'type->tags "internal error")]
     [(element-type name tag type option)
      (if tag
          (list tag)
@@ -175,6 +182,7 @@
 
 ;; ============================================================
 
+(define ANY (asn1-type:any))
 (define INTEGER (asn1-type:base 'INTEGER))
 (define BIT-STRING (asn1-type:base 'BIT-STRING))
 (define OCTET-STRING (asn1-type:base 'OCTET-STRING))
@@ -184,24 +192,6 @@
 ;; T61String
 (define IA5String (asn1-type:base 'IA5String))
 ;; UTCTime
-
-;; ============================================================
-
-;; ASN1 decoder is one of
-;; - 'decode -- decode known types
-;; - 'stop   -- leave encoded (asn1-encoded struct)
-;; - something like an ASN1-Type with other decoders at leaves???
-
-;; Control decoder by mapping of names (type names and element names?)
-;; to decoder-control-function.
-
-;; A DecoderControlFun is one of
-;; - 'decode
-;; - 'stop
-;; - ((U Asn1-Type Asn1-Element-Type) Asn1-Tag Bytes -> Any)
-
-;; TODO:
-;; decompose-der : bytes -> (values Asn1-Tag Bytes)
 
 ;; ============================================================
 
@@ -248,15 +238,19 @@
 (define (DER-encode type v [alt-tag #f])
   (let loop ([type type] [alt-types null])
     (match type
+      [(asn1-type:any)
+       ;; Note: no wrapping; encoder must produce whole TLV triple
+       ;; alt-tag must be #f; can't implicitly tag an ANY value
+       (DER-encode-value type v alt-types)]
       [(asn1-type:base base-type)
        (wrap base-type (DER-encode-value type v alt-types) alt-tag)]
-      [(asn1-type:sequence elts)
+      [(asn1-type:sequence _)
        (wrap 'SEQUENCE (DER-encode-value type v alt-types) alt-tag)]
-      [(asn1-type:sequence-of type*)
+      [(asn1-type:sequence-of _)
        (wrap 'SEQUENCE (DER-encode-value type v alt-types) alt-tag)]
-      [(asn1-type:set elts)
+      [(asn1-type:set _)
        (wrap 'SET (DER-encode-value type v alt-types) alt-tag)]
-      [(asn1-type:set-of type*)
+      [(asn1-type:set-of _)
        (wrap 'SET (DER-encode-value type v alt-types) alt-tag)]
       [(asn1-type:choice elts)
        (match v
@@ -266,6 +260,8 @@
               (and (eq? (element-type-name elt) sym) elt)))
           (DER-encode type* v* tag*)]
          [_ (error 'asn1-encode "bad value for Choice type\n  value: ~e" v)])]
+      [(asn1-type:explicit-tag _)
+       (wrap 'SEQUENCE (DER-encode-value type v alt-types) alt-tag)]
       [(asn1-type:defined name promise)
        (loop (force promise) (cons type alt-types))])))
 
@@ -287,6 +283,10 @@
 
 (define (DER-encode-value* type v)
   (match type
+    [(asn1-type:any)
+     ;; To make ANY work, need to use encode hook
+     (error 'DER-encode-value
+            "no default encoding rule for ANY\n  value: ~e" v)]
     [(asn1-type:base base-type)
      (DER-encode-base* base-type v)]
     [(asn1-type:sequence elts)
@@ -305,9 +305,11 @@
      (encode-set-value
       (for/list ([v* (in-list v)])
         (DER-encode type* v* #f)))]
-    [(asn1-type:choice elts)
+    [(asn1-type:explicit-tag type*)
+     (encode-sequence-value (list (DER-encode type* v)))]
+    [(asn1-type:choice _)
      (error 'DER-encode-value "internal error: bad type\n  type: ~e" type)]
-    [(asn1-type:defined name promise)
+    [(asn1-type:defined _ _)
      (error 'DER-encode-value "internal error: bad type\n  type: ~e" type)]))
 
 (define (DER-encode-base* base-type v)
@@ -319,9 +321,7 @@
   (case base-type
     [(INTEGER)
      (unless (exact-integer? v) (bad-value 'exact-integer?))
-     (let ([b (signed->base256 v)])
-       (eprintf "b = ~s\n" b)
-       b)]
+     (signed->base256 v)]
     [(BIT-STRING)
      (unless (bytes? v) (bad-value 'bytes?))
      (encode-bit-string v)]
@@ -419,7 +419,6 @@
   (DER-decode-frame type (unwrap-der b)))
 
 (define (DER-decode-frame type frame)
-  (eprintf "** decoding ~e\n" type)
   (match-define (der-frame tagclass p/c tagn c) frame)
   (let loop ([type type] [alt-types null] [check-whole-tag? #t])
     ;; check-type : Base-Type -> Void
@@ -441,6 +440,8 @@
       (DER-decode-value type c alt-types))
 
     (match type
+      [(asn1-type:any)
+       (DER-decode-value type (frame->bytes frame))]
       [(asn1-type:base base-type)
        (check-type base-type)
        (decode-value)]
@@ -464,6 +465,12 @@
                 (loop et-type (cons type alt-types) #f)
                 (choice-loop rest-elts))]
            [_ (error 'DER-decode "tag does not match any alternative in Choice")]))]
+      [(asn1-type:explicit-tag type*)
+       ;; Tag has already been checked by enclosing CHOICE, SEQUENCE, or SET
+       (unless (equal? p/c 'constructed)
+         (error 'DER-decode "primitive vs constructed mismatch\n  expected: ~s\n  decoded: ~s"
+                'constructed p/c))
+       (decode-value)]
       [(asn1-type:defined name promise)
        (loop (force promise) (cons type alt-types) check-whole-tag?)])))
 
@@ -475,9 +482,12 @@
   (define et-tags (type->tags elt))
   (for/or ([et-tag (in-list et-tags)])
     ;; FIXME: need to consider p/c !!!
-    (and (equal? f-tagclass (car et-tag))
-         (equal? f-tagn (cadr et-tag)))))
+    (or (eq? et-tag #f) ;; #f=ANY matches all tags
+        (and (equal? f-tagclass (car et-tag))
+             (equal? f-tagn (cadr et-tag))))))
 
+;; DER-decode-value : Asn1-Type Bytes -> Any
+;; Note: if type is ANY, c is whole TLV triple; otherwise, just value part.
 (define (DER-decode-value type c [alt-types null])
   (define hooks (DER-decode-hooks))
   (define pre-hook
@@ -497,6 +507,9 @@
 
 (define (DER-decode-value* type c)
   (match type
+    [(asn1-type:any)
+     (error 'DER-decode-value
+            "no default decoding rule for ANY")]
     [(asn1-type:base base-type)
      (DER-decode-base* base-type c)]
     [(asn1-type:sequence elts)
@@ -509,6 +522,8 @@
     [(asn1-type:set-of type*)
      (for/list ([frame (in-list (unwrap-ders c))])
        (DER-decode-frame type* frame))]
+    [(asn1-type:explicit-tag type*)
+     (DER-decode type* (unwrap-der c))]
     [(asn1-type:choice elts)
      (error 'DER-decode-value "internal error: bad type\n  type: ~e" type)]
     [(asn1-type:defined name promise)
@@ -522,7 +537,6 @@
            (if expected (format "\n  expected: ~a" expected) "")))
   (case base-type
     [(INTEGER)
-     (eprintf "c = ~s\n" c)
      (base256->signed c)]
     [(BIT-STRING)
      (decode-bit-string c)]

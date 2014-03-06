@@ -27,7 +27,7 @@
 
 (define-asn1-type FieldID
   (Sequence [fieldType OBJECT-IDENTIFIER]
-            [parameters OCTET-STRING]))
+            [parameters ANY]))
 
 (define-asn1-type ECPVer INTEGER)
 
@@ -41,4 +41,4 @@
 (define-asn1-type ECPoint OCTET-STRING)
 
 (DER-decode-hooks
- (list (list FieldID 'pre (lambda _ 'field-id))))
+ (list (list ANY 'pre (lambda (t b) (list 'ANY b)))))
