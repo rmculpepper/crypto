@@ -78,6 +78,9 @@
     [IA5String         22   primitive]
     [UTCTime           23   primitive]))
 
+;; A Tag is (list TagClass TagNumber)
+;; A CTag is (cons (U 'primitive 'constructed) Tag)
+
 (define (type->tag-entry type)
   (for/or ([entry (in-list type-tags)])
     (and (eq? type (car entry)) entry)))
@@ -124,8 +127,6 @@
 ;;   always constructed
 
 ;; ----------------------------------------
-
-;; A Tag is (list TagClass TagNumber)
 
 ;; wrap : symbol bytes [Tag] -> bytes
 (define (wrap type c [alt-tag #f])
@@ -188,7 +189,8 @@
                    (if (and as-signed? (> (car acc) 127))
                        (cons 0 acc)
                        acc)
-                   (let-values ([(q r) (quotient/remainder n 8)])
+                   (let ([r (bitwise-bit-field n 0 8)]
+                         [q (arithmetic-shift n -8)])
                      (loop q (cons r acc))))))))
 
 (define (negative-integer->base256 n)
@@ -232,9 +234,13 @@
   (define trailing-unused 0) ;; FIXME: accept trailing unused ...
   (wrap-bit-string (bytes-append (bytes trailing-unused) bits) alt-tag))
 
+(define (encode-bit-string bits trailing-unused)
+  ;; FIXME: make sure trailing unused bits are 0
+  (bytes-append (bytes trailing-unused) bits))
+
 ;; decode-bit-string : bytes -> bytes
 ;; Given encoded content, returns raw bit string
-;; NOTE: trailing-unused bits must be zero!
+;; FIXME: trailing-unused bits must be zero!
 (define (decode-bit-string c)
   (when (zero? (bytes-length c))
     (error 'decode-bit-string "ill-formed bit-string encoding: empty"))
@@ -309,16 +315,17 @@
 
 ;; object-identifier->der : (listof (U nat (list symbol nat))) [Tag] -> bytes
 (define (object-identifier->der cs [alt-tag #f])
+  (wrap-object-identifier (encode-object-identifier cs) alt-tag))
+
+(define (encode-object-identifier cs)
   (let ([cs (for/list ([c (in-list cs)])
               (if (list? c) (cadr c) c))])
-    (wrap-object-identifier
-     (let ([c1 (car cs)]
-           [c2 (cadr cs)]
-           [cs* (cddr cs)])
-       (apply bytes-append
-              (bytes (+ (* 40 c1) c2))
-              (map encode-oid-component cs*)))
-     alt-tag)))
+    (let ([c1 (car cs)]
+          [c2 (cadr cs)]
+          [cs* (cddr cs)])
+      (apply bytes-append
+             (bytes (+ (* 40 c1) c2))
+             (map encode-oid-component cs*)))))
 
 (define (encode-oid-component c)
   (define (loop c acc)
@@ -396,7 +403,10 @@
 ;; Argument is a list of DER-encoded values.
 ;; Assumes DEFAULT and OPTIONAL parts have already been stripped from list.
 (define (sequence->der lst [alt-tag #f])
-  (wrap-sequence (apply bytes-append lst) alt-tag))
+  (wrap-sequence (encode-sequence-value lst) alt-tag))
+
+(define (encode-sequence-value lst)
+  (apply bytes-append lst))
 
 ;; ===  Set ===
 
@@ -407,7 +417,10 @@
 ;; set->der : (listof bytes) [Tag] -> bytes
 ;; Argument is a list of DER-encoded values
 (define (set->der lst [alt-tag #f])
-  (wrap-set (apply bytes-append (sort lst bytes<?)) alt-tag))
+  (wrap-set (encode-set-value lst) alt-tag))
+
+(define (encode-set-value lst)
+  (apply bytes-append (sort lst bytes<?)))
 
 ;; === T61String ===
 
@@ -451,6 +464,10 @@
   (begin0 (read-der in)
     (unless (eof-object? (peek-char in))
       (error 'unwrap-der "bytes left over"))))
+
+;; unwrap-ders : bytes -> (listof DER-Frame)
+(define (unwrap-ders der)
+  (read-ders (open-input-bytes der)))
 
 ;; read-der : input-port -> DER-Frame
 (define (read-der in)
