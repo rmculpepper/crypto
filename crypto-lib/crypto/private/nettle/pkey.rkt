@@ -22,7 +22,7 @@
          "../common/catalog.rkt"
          "../common/error.rkt"
          "../gmp/ffi.rkt"
-         "../rkt/asn1.rkt"
+         "../asn1/types.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 

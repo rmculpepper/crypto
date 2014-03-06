@@ -42,12 +42,8 @@
 (struct asn1-type:defined asn1-type (name promise) #:transparent)
 
 ;; Asn1-Element-Type is one of
-;; - (element MaybeName MaybeTag Asn1-Type MaybeOptionalDefault)
+;; - (element Symbol MaybeTag Asn1-Type MaybeOptionalDefault)
 (struct element-type (name tag type option) #:transparent)
-
-;; MaybeName is one of
-;; - Symbol
-;; - #f
 
 ;; MaybeTag is one of
 ;; - (list 'explicit class nat)
@@ -67,14 +63,11 @@
         (asn1-type:defined 'name (delay type.c)))]))
 
 (begin-for-syntax
- (define-splicing-syntax-class name-clause
-   (pattern (~seq name:id))
-   (pattern (~seq) #:with name #'#f))
  (define-splicing-syntax-class tag-class
-   (pattern (~seq #:universal) #:with tclass #''universal)
-   (pattern (~seq #:private)   #:with tclass #''private)
-   (pattern (~seq #:application) #:with tclass #''application)
-   (pattern (~seq) #:with tclass #''context-specific))
+   (pattern (~seq #:universal) #:with tclass #'universal)
+   (pattern (~seq #:private)   #:with tclass #'private)
+   (pattern (~seq #:application) #:with tclass #'application)
+   (pattern (~seq) #:with tclass #'context-specific))
  (define-splicing-syntax-class tag-clause
    (pattern (~seq :tag-class #:explicit etag:nat)
             #:with tag #''(explicit tclass etag))
@@ -91,7 +84,7 @@
             #:with option #''#f))
 
  (define-syntax-class element
-   (pattern [:name-clause :tag-clause type :option-clause]
+   (pattern [name:id :tag-clause type :option-clause]
             #:declare type (expr/c #'asn1-type?)
             #:with et #'(element-type 'name tag type.c option))))
 
@@ -213,36 +206,111 @@
 
 ;; ============================================================
 
+;; Encode : T V[T] -> E[T]
+;; - bytes/integer/etc    Base-Type                          -> E[_]
+;; - (SequenceOf T)       (list V[T] ...)                    -> E[_]
+;; - (Sequence [L T] ...) (list 'sequence (list L V[T]) ...) -> E[_]
+;; - (Sequence [L T] ...) (list V[T] ...)                    -> E[_]
+;; - (SetOf T)            (list V[T] ...)                    -> E[_]
+;; - (Set [L T] ...)      (list 'set (list L V[T]) ...)      -> E[_]
+;; - (Choice [L T] ...)   (list L V[T])                      -> E[_]
+
 (define (asn1-encode type v [alt-tag #f])
   (match type
     [(asn1-type:base base-type)
-     (encode-base-type base-type v alt-tag)]
+     (asn1-encode-base-type base-type v alt-tag)]
     [(asn1-type:sequence elts)
      ;; FIXME: handle optional, default, elt/v list mismatch, etc
-     (sequence->der
-      (for/list ([v* (in-list v)]
-                 [elt (in-list elts)])
-        (match elt
-          [(element-type name tag* type* option)
-           (asn1-encode type* v* tag*)]))
-      alt-tag)]
+     (sequence->der (filter values (asn1-encode-sequence elts v)) alt-tag)]
     [(asn1-type:sequence-of type*)
+     (unless (list? v)
+       (error 'asn1-encode "bad value for SequenceOf type\n  value: ~e" v))
      (for/list ([v* (in-list v)])
        (asn1-encode type* v*))]
     [(asn1-type:set elts)
-     '...]
+     (set->der (filter values (asn1-encode-set elts v)) alt-tag)]
     [(asn1-type:set-of type*)
-     (for/list ([v* (in-list v)])
-       (asn1-encode type* v*))]
+     (unless (list? v)
+       (error 'asn1-encode "bad value for SetOf type\n  value: ~e" v))
+     (set->der
+      (for/list ([v* (in-list v)])
+        (asn1-encode type* v*)))]
     [(asn1-type:choice elts)
-     (match-define (list (? symbol? sym) v*) v)
-     (match-define (element-type _ tag* type* _)
-       (for/or ([elt (in-list elts)])
-         (and (eq? (element-type-name elt) sym) elt)))
-     (asn1-encode type* v tag*)]
+     (match v
+       [(list (? symbol? sym) v*)
+        (match-define (element-type _ tag* type* _)
+          (for/or ([elt (in-list elts)])
+            (and (eq? (element-type-name elt) sym) elt)))
+        (asn1-encode type* v tag*)]
+       [_ (error 'asn1-encode "bad value for Choice type\n  value: ~e" v)])]
     [(asn1-type:defined name promise)
      (asn1-encode (force promise) v)]))
 
-(define (encode-base-type type v alt-tag)
+(define (asn1-encode-base-type base-type v alt-tag)
   ;; FIXME: accept non-bytes for v
   (wrap base-type v alt-tag))
+
+(define (asn1-encode-sequence elts v alt-tag)
+  (match v
+    [(cons 'sequence lvs)
+     (match lvs
+       [(list (list (? symbol?) _) ...)
+        (let loop ([elts elts] [lvs lvs])
+          (cond [(and (null? elts) (null? lvs))
+                 null]
+                [(null? elts)
+                 (error 'asn1-encode
+                        "unexpected field in Sequence value\n  value: ~e\n  field: ~s"
+                        v (car (car lvs)))]
+                [else
+                 (match (car elts)
+                   [(element-type name tag* type* option)
+                    (cond [(and (pair? lvs)
+                                (eq? (car (car lvs)) name))
+                           (cons (asn1-encode type* (cadr (car lvs)) tag*)
+                                 (loop (cdr elts) (cdr lvs)))]
+                          [option
+                           (loop (cdr elts) lvs)]
+                          [else
+                           (error 'asn1-encode
+                                  "missing field in Sequence value\n  value: ~e\n  field: ~s~a"
+                                  name v
+                                  (if (pair? lvs)
+                                      (format "\n  got: ~s" (car (car lvs)))
+                                      ""))])])]))]
+       [_ (error 'asn1-encode "bad value for Sequence\n  value: ~e" v)])]
+    [(list _ ...)
+     (unless (= (length v) (length elts))
+       (error 'asn1-encode "wrong number of elements for Sequence\n  value: ~e" v))
+     (for/list ([v* (in-list v)]
+                [elt (in-list elts)])
+       (match elt
+         [(element-type name tag* type* option)
+          (asn1-encode type* v* tag*)]))]
+    [_
+     (error 'asn1-encode "bad value for Sequence\n  value: ~e" v)]))
+
+(define (asn1-encode-set elts v)
+  (define lvs
+    (match v
+      [(list 'set (and lvs (list (list l v) ...))) lvs]
+      [_ (error 'asn1-encode "bad value for Set type\n  value: ~e" v)]))
+  (for/list ([elt (in-list elts)])
+    (match elt
+      [(element-type name tag* type* option)
+       (define default
+         (match option [(list 'default default) default] [_ #f]))
+       (cond [(assq name lvs)
+              => (lambda (lv)
+                   (define v* (cadr lv))
+                   (if (equal? v* default)
+                       #f
+                       (asn1-encode type* v* tag*)))]
+             [(equal? option '(optional))
+              #f]
+             [default
+               ;; Don't encode default
+               #f]
+             [else
+              (error 'asn1-encode "no value for Set field\n  field: ~s\n  value: ~e"
+                     name v)])])))
