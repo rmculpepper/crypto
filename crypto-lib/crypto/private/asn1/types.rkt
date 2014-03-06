@@ -67,17 +67,28 @@
   '(universal application private context-specific))
 
 (define type-tags
-  '([INTEGER            2   primitive]
+  '([BOOLEAN            1   primitive]  ;; !!!
+    [INTEGER            2   primitive]
     [BIT-STRING         3   primitive]
     [OCTET-STRING       4   primitive]
     [NULL               5   primitive]
     [OBJECT-IDENTIFIER  6   primitive]
+    [REAL               9   primitive]  ;; !!!
+    [ENUMERATED        10   primitive]  ;; !!!
+    [RELATIVE-OID      13   primitive]  ;; !!!
     [SEQUENCE          16   constructed]
     [SET               17   constructed]
     [PrintableString   19   primitive]
     [T61String         20   primitive]
     [IA5String         22   primitive]
-    [UTCTime           23   primitive]))
+    [UTCTime           23   primitive]
+
+    ;; !!!
+    [UniversalString   28   primitive] ;; UCS4
+    [BMPString         30   primitive] ;; UCS2
+    [UTF8String        12   primitive] ;; UTF8
+    [GeneralizedTime   24   primitive] ;; !!!!
+    ))
 
 ;; A Tag is (list TagClass TagNumber)
 ;; A CTag is (cons (U 'primitive 'constructed) Tag)
