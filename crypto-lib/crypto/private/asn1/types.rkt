@@ -40,6 +40,11 @@
           [base256->unsigned
            (-> bytes? exact-nonnegative-integer?)]
 
+          [encode-boolean
+           (-> boolean? bytes?)]
+          [decode-boolean
+           (-> bytes? boolean?)]
+
           [encode-bit-string
            (-> bytes? (integer-in 0 7)
                bytes?)]
@@ -77,6 +82,11 @@
           [decode-printable-string
            (-> bytes? printable-string?)]
 
+          [encode-utf8string
+           (-> string? bytes?)]
+          [decode-utf8string
+           (-> bytes? string?)]
+
           [encode-sequence
            (-> (listof bytes?) bytes?)]
           [encode-set
@@ -102,21 +112,21 @@
     [OCTET-STRING       4   primitive]
     [NULL               5   primitive]
     [OBJECT-IDENTIFIER  6   primitive]
-    [REAL               9   primitive]  ;; !!!
-    [ENUMERATED        10   primitive]  ;; !!!
-    [RELATIVE-OID      13   primitive]  ;; !!!
+    ;; [REAL               9   primitive] ;; Weird, prob. not worth the effort.
+    ;; [ENUMERATED        10   primitive]
+    ;; [RELATIVE-OID      13   primitive]
     [SEQUENCE          16   constructed]
     [SET               17   constructed]
     [PrintableString   19   primitive]
-    [T61String         20   primitive]
+    ;; [T61String         20   primitive]
     [IA5String         22   primitive]
-    [UTCTime           23   primitive]
+    ;; [UTCTime           23   primitive]
 
     ;; !!!
-    [UniversalString   28   primitive] ;; UCS4
-    [BMPString         30   primitive] ;; UCS2
+    ;; [UniversalString   28   primitive] ;; UCS4
+    ;; [BMPString         30   primitive] ;; UCS2
     [UTF8String        12   primitive] ;; UTF8
-    [GeneralizedTime   24   primitive] ;; !!!!
+    ;; [GeneralizedTime   24   primitive] ;; !!!!
     ))
 
 ;; A Tag is (list TagClass TagNumber)
@@ -263,6 +273,16 @@
 
 ;; decode-<type> : bytes -> ???
 ;; Decomposes the Value component (not the full TLV triple)
+
+;; === Boolean ===
+
+(define (encode-boolean b)
+  (if b #"\1" #"\0"))
+
+(define (decode-boolean b)
+  (cond [(equal? b #"\1") #t]
+        [(equal? b #"\0") #f]
+        [else (error 'decode-boolean "bad BOOLEAN encoding\n  encoding: ~e" b)]))
 
 ;; === Bit string ===
 
@@ -430,13 +450,15 @@
 (define (encode-set lst)
   (apply bytes-append (sort lst bytes<?)))
 
-;; === T61String ===
+;; === UTF8String ===
 
-;; Not needed yet.
+(define (encode-utf8string s)
+  (string->bytes/utf-8 s))
 
-;; === UTCTime ===
-
-;; Not needed yet.
+(define (decode-utf8string b)
+  (if (bytes-utf-8-length b #f)
+      (bytes->string/utf-8 b)
+      (error 'decode-utf8string "not a UTF-8 string")))
 
 ;; ============================================================
 
