@@ -14,52 +14,81 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require racket/match)
-(provide (all-defined-out))
-#;
-(provide unsigned->base256
-         signed->base256
-         base256->unsigned
-         base256->signed
-
+(require racket/match
+         racket/contract/base)
+(provide type->tag-entry
+         tagn->tag-entry
+         tag-entry-type
+         tag-entry-tagn
+         tag-entry-p/c
+         tag-entry-tag
          wrap
-
-         wrap-bit-string
-         bit-string->der
-         decode-bit-string
+         tag-entry->tag-bytes
+         get-tag-bytes
+         length-code
 
          ia5string?
-         wrap-ia5string
-         ia5string->der
-         decode-ia5string
-
-         wrap-integer
-         integer->der
-         decode-integer
-
-         wrap-null
-         null->der
-
-         wrap-object-identifier
-         object-identifier->der
-         decode-object-identifier
-
-         wrap-octet-string
-         octet-string->der
-
          printable-string?
-         wrap-printable-string
-         printable-string->der
-         decode-printable-string
 
-         wrap-sequence
-         sequence->der
+         (contract-out
+          [signed->base256
+           (-> exact-integer? bytes?)]
+          [base256->signed
+           (-> bytes? exact-integer?)]
+          [unsigned->base256
+           (-> exact-nonnegative-integer? bytes?)]
+          [base256->unsigned
+           (-> bytes? exact-nonnegative-integer?)]
 
-         wrap-set
-         set->der
+          [encode-bit-string
+           (-> bytes? (integer-in 0 7)
+               bytes?)]
+          [decode-bit-string
+           (-> bytes? bytes?)]
 
+          [encode-ia5string
+           (-> ia5string? bytes?)]
+          [decode-ia5string
+           (-> bytes? ia5string?)]
+
+          [encode-integer
+           (-> exact-integer? bytes?)]
+          [decode-integer
+           (-> bytes? exact-integer?)]
+
+          [encode-null
+           (-> any/c bytes?)]
+          [decode-null
+           (-> bytes? #f)]
+
+          [encode-object-identifier
+           (-> (listof (or/c exact-nonnegative-integer? (list/c symbol? exact-nonnegative-integer?)))
+               bytes?)]
+          [decode-object-identifier
+           (-> bytes? (listof exact-nonnegative-integer?))]
+
+          [encode-octet-string
+           (-> bytes? bytes?)]
+          [decode-octet-string
+           (-> bytes? bytes)]
+
+          [encode-printable-string
+           (-> printable-string? bytes?)]
+          [decode-printable-string
+           (-> bytes? printable-string?)]
+
+          [encode-sequence
+           (-> (listof bytes?) bytes?)]
+          [encode-set
+           (-> (listof bytes?) bytes?)]
+          )
+
+         (struct-out der-frame)
          unwrap-der
-         read-der)
+         frame->bytes
+         unwrap-ders
+         read-der
+         read-ders)
 
 ;; Reference: http://luca.ntop.org/Teaching/Appunti/asn1.html
 
@@ -229,25 +258,25 @@
 
 ;; Conventions:
 
-;; wrap-<type> : bytes -> bytes
-;; Accepts contents as given, appends tag and length
+;; encode-<type> : ??? -> bytes
+;; Produces a Value component (not the full TLV triple)
 
-;; <type>->der : ??? -> bytes
+;; decode-<type> : bytes -> ???
+;; Decomposes the Value component (not the full TLV triple)
 
 ;; === Bit string ===
 
-;; wrap-bit-string : bytes [Tag] -> bytes
-(define (wrap-bit-string c [alt-tag #f])
-  (wrap 'BIT-STRING c alt-tag))
-
-;; bit-string->der : bytes [Tag] -> bytes
-;; Given bytes and number of trailing bits not significant (0-7)
-(define (bit-string->der bits [alt-tag #f])
-  (define trailing-unused 0) ;; FIXME: accept trailing unused ...
-  (wrap-bit-string (bytes-append (bytes trailing-unused) bits) alt-tag))
-
+;; encode-bit-string : bytes nat -> bytes
 (define (encode-bit-string bits trailing-unused)
-  ;; FIXME: make sure trailing unused bits are 0
+  (cond [(zero? (bytes-length bits))
+         (unless (zero? trailing-unused)
+           (error 'encode-bit-string
+                  "trailing unused bits non-zero for empty bit string\n  value: ~e\n  trailing unused bits: ~s"
+                  bits trailing-unused))]
+        [else
+         (unless (zero? (bitwise-bit-field (bytes-ref bits (sub1 (bytes-length bits))) 0 trailing-unused))
+           (error 'encode-bit-string "trailing unused bits are not 0\n  value: ~e\n  trailing unused bits: ~s"
+                  bits trailing-unused))])
   (bytes-append (bytes trailing-unused) bits))
 
 ;; decode-bit-string : bytes -> bytes
@@ -255,31 +284,28 @@
 ;; FIXME: trailing-unused bits must be zero!
 (define (decode-bit-string c)
   (when (zero? (bytes-length c))
-    (error 'decode-bit-string "ill-formed bit-string encoding: empty"))
+    (error 'decode-bit-string "bad encoding for BIT STRING: empty"))
   (let ([trailing-unused (bytes-ref c 0)])
     (unless (zero? trailing-unused)
-      (error 'decode-bit-string "partial-octet bit strings not supported"))
+      ;; FIXME: support ... but with what representation?
+      (error 'decode-bit-string "BIT STRING with partial octets not supported"))
     (subbytes c 1 (bytes-length c))))
 
 ;; === IA5String (ie, ASCII string) ===
 
-;; ia5string? : any -> boolean
+;; ia5string? : Any -> Boolean
 (define (ia5string? s)
   (and (string? s)
        (for/and ([c (in-string s)])
          (< (char->integer c) 256))))
 
-;; wrap-ia5string : bytes [Tag] -> bytes
-(define (wrap-ia5string c [alt-tag #f])
-  (wrap 'IA5String c alt-tag))
-
-;; ia5string->der : ia5string [Tag] -> bytes
-(define (ia5string->der s [alt-tag #f])
+;; encode-ia5string : String -> Bytes
+(define (encode-ia5string s)
   (unless (ia5string? s)
-    (raise-argument-error 'ia5string->der "ia5string?" s))
-  (wrap-ia5string (string->bytes/latin-1 s) alt-tag))
+    (raise-argument-error 'encode-ia5string "ia5string?" s))
+  (string->bytes/latin-1 s))
 
-;; decode-ia5string : bytes -> string
+;; decode-ia5string : Bytes -> String
 (define (decode-ia5string bs)
   (define s (bytes->string/latin-1 bs))
   (unless (ia5string? s)
@@ -291,13 +317,11 @@
 ;; base-256, two's-complement (!!), most significant octet first
 ;; zero encoded as 1 octet
 
-;; wrap-integer : bytes [Tag] -> bytes
-(define (wrap-integer c [alt-tag #f])
-  (wrap 'INTEGER c alt-tag))
-
-;; integer->der : exact-integer [Tag] -> bytes
-(define (integer->der n [alt-tag #f])
-  (wrap-integer (signed->base256 n) alt-tag))
+;; encode-integer : Exact-Integer -> Bytes
+(define (encode-integer n)
+  (unless (exact-integer? n)
+    (error 'encode-integer "not an exact integer: ~e" n))
+  (signed->base256 n))
 
 ;; decode-integer : bytes -> integer
 ;; Given encoded integer, returns raw integer
@@ -306,13 +330,16 @@
 
 ;; === Null ===
 
-;; wrap-null : bytes [Tag] -> bytes
-(define (wrap-null _ignored [alt-tag #f])
-  (wrap 'NULL #"" alt-tag))
+;; NULL has empty value encoding; ignore arg when encoding, return #f on decode
 
-;; null->der : [Tag] -> bytes
-(define (null->der _ignored [alt-tag #f])
-  (wrap-null #"" alt-tag))
+;; encode-null : Any -> Bytes
+(define (encode-null [_ignored #f])
+  #"")
+
+(define (decode-null bs)
+  (unless (equal? bs #"")
+    (error 'decode-null "bad encoding of NULL\n  encoding: ~e" bs))
+  #f)
 
 ;; === Object Identifier ==
 
@@ -321,14 +348,7 @@
 ;; following octets are c3, ... cN encoded as follows:
 ;;   base-128, most-significant first, high bit set on all but last octet of encoding
 
-;; wrap-object-identifier : bytes [Tag] -> bytes
-(define (wrap-object-identifier c [alt-tag #f])
-  (wrap 'OBJECT-IDENTIFIER c alt-tag))
-
-;; object-identifier->der : (listof (U nat (list symbol nat))) [Tag] -> bytes
-(define (object-identifier->der cs [alt-tag #f])
-  (wrap-object-identifier (encode-object-identifier cs) alt-tag))
-
+;; encode-object-identifier : (listof (U Nat (List Symbol Nat))) -> Bytes
 (define (encode-object-identifier cs)
   (let ([cs (for/list ([c (in-list cs)])
               (if (list? c) (cadr c) c))])
@@ -349,6 +369,7 @@
          (let-values ([(q r) (quotient/remainder c 128)])
            (loop q (list r)))))
 
+;; decode-object-identifier : Bytes -> (listof Nat)
 (define (decode-object-identifier bs)
   (when (zero? (bytes-length bs))
     (error 'decode-object-identifier "empty" bs))
@@ -373,65 +394,40 @@
 
 ;; === Octet String ===
 
-;; wrap-octet-string : bytes [Tag] -> bytes
-(define (wrap-octet-string c [alt-tag #f])
-  (wrap 'OCTET-STRING c alt-tag))
+;; Just bytes.
 
-;; octet-string->der : bytes [Tag] -> bytes
-(define (octet-string->der bs [alt-tag #f])
-  (wrap-octet-string bs alt-tag))
+(define (encode-octet-string b)
+  b)
+
+(define (decode-octet-string b)
+  b)
 
 ;; === Printable string ===
 
 (define (printable-string? s)
   (and (string? s) (regexp-match? #rx"^[-a-zA-Z0-9 '()+,./:=?]*$" s)))
 
-;; wrap-printable-string : bytes [Tag] -> bytes
-(define (wrap-printable-string c [alt-tag #f])
-  (wrap 'PrintableString c alt-tag))
+;; encode-printable-string : Printable-String -> Bytes
+(define (encode-printable-string s)
+  (string->bytes/latin-1 s))
 
-;; printable-string->der : printable-string [Tag] -> bytes
-(define (printable-string->der s [alt-tag #f])
-  (unless (printable-string? s)
-    (raise-argument-error 'printable-string->der "printable-string?"))
-  (wrap-printable-string (string->bytes/latin-1 s) alt-tag))
-
-;; decode-printable-string : bytes -> printable-string
+;; decode-printable-string : Bytes -> Printable-String
 (define (decode-printable-string bs)
   (let ([s (bytes->string/latin-1 bs)])
     (if (printable-string? s)
         s
         (error 'decode-printable-string "not a printable string: ~e" s))))
 
-;; Not needed yet.
-
 ;; === Sequence ===
 
-;; wrap-sequence : bytes [Tag] -> bytes
-(define (wrap-sequence c [alt-tag #f])
-  (wrap 'SEQUENCE c alt-tag))
-
-;; sequence->der : (listof bytes) [Tag] -> bytes
-;; Argument is a list of DER-encoded values.
-;; Assumes DEFAULT and OPTIONAL parts have already been stripped from list.
-(define (sequence->der lst [alt-tag #f])
-  (wrap-sequence (encode-sequence-value lst) alt-tag))
-
-(define (encode-sequence-value lst)
+;; encode-sequence : (listof Bytes) -> Bytes
+(define (encode-sequence lst)
   (apply bytes-append lst))
 
 ;; ===  Set ===
 
-;; wrap-set : bytes [Tag] -> bytes
-(define (wrap-set c [alt-tag #f])
-  (wrap 'SET c alt-tag))
-
-;; set->der : (listof bytes) [Tag] -> bytes
-;; Argument is a list of DER-encoded values
-(define (set->der lst [alt-tag #f])
-  (wrap-set (encode-set-value lst) alt-tag))
-
-(define (encode-set-value lst)
+;; encode-set : (listof Bytes) -> Bytes
+(define (encode-set lst)
   (apply bytes-append (sort lst bytes<?)))
 
 ;; === T61String ===
@@ -442,28 +438,7 @@
 
 ;; Not needed yet.
 
-
-;; ----
-
-;; ASN1 decoder is one of
-;; - 'decode -- decode known types
-;; - 'stop   -- leave encoded (asn1-encoded struct)
-;; - something like an ASN1-Type with other decoders at leaves???
-
-;; Control decoder by mapping of names (type names and element names?)
-;; to decoder-control-function.
-
-;; A DecoderControlFun is one of
-;; - 'decode
-;; - 'stop
-;; - ((U Asn1-Type Asn1-Element-Type) Asn1-Tag Bytes -> Any)
-
-
-
-;; TODO:
-;; decompose-der : bytes -> (values Asn1-Tag Bytes)
-
-;; ----
+;; ============================================================
 
 ;; FIXME: add checking for premature EOF, etc
 

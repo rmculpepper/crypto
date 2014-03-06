@@ -290,23 +290,23 @@
     [(asn1-type:base base-type)
      (DER-encode-base* base-type v)]
     [(asn1-type:sequence elts)
-     (encode-sequence-value (filter values (DER-encode-sequence* elts v)))]
+     (encode-sequence (filter values (DER-encode-sequence* elts v)))]
     [(asn1-type:sequence-of type*)
      (unless (list? v)
        (error 'DER-encode-value "bad value for SequenceOf type\n  value: ~e" v))
-     (encode-sequence-value
+     (encode-sequence
       (for/list ([v* (in-list v)])
         (DER-encode type* v* #f)))]
     [(asn1-type:set elts)
-     (encode-set-value (filter values (DER-encode-set* elts v)))]
+     (encode-set (filter values (DER-encode-set* elts v)))]
     [(asn1-type:set-of type*)
      (unless (list? v)
        (error 'DER-encode-value "bad value for SetOf type\n  value: ~e" v))
-     (encode-set-value
+     (encode-set
       (for/list ([v* (in-list v)])
         (DER-encode type* v* #f)))]
     [(asn1-type:explicit-tag type*)
-     (encode-sequence-value (list (DER-encode type* v)))]
+     (encode-sequence (list (DER-encode type* v)))]
     [(asn1-type:choice _)
      (error 'DER-encode-value "internal error: bad type\n  type: ~e" type)]
     [(asn1-type:defined _ _)
