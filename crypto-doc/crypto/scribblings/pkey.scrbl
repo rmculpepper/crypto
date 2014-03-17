@@ -369,6 +369,15 @@ DSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
 
 DSA private key.}
 
+@item{@racket[(list 'dh 'public 'pkix _der-bytes)]
+
+DH public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
+
+@item{@racket[(list 'dh 'private 'libcrypto _param-bytes _pub-bytes _priv-bytes)]
+
+DH private key, as DER-encoded DHParameter @cite{PKCS3} and unsigned
+base-256 encoding of the public and private integers.}
+
 @item{@racket[(list 'ec 'public 'pkix _der-bytes)]
 
 EC public-only key as DER-encoded SubjectPublicKeyInfo @cite{SEC1}.}
@@ -376,16 +385,6 @@ EC public-only key as DER-encoded SubjectPublicKeyInfo @cite{SEC1}.}
 @item{@racket[(list 'ec 'private 'sec1 _der-bytes)]
 
 EC private key as DER-encoded ECPrivateKey @cite{SEC1}.}
-
-@item{@racket[(list 'dh 'public 'libcrypto _param-bytes _pub-bytes)]
-
-DH public-only key as separate DER-encoded DHParameter @cite{PKCS3} and unsigned
-base-256 encoding of the public integer.}
-
-@item{@racket[(list 'dh 'private 'libcrypto _param-bytes _pub-bytes _priv-bytes)]
-
-DH private key, like public-only key but with additional unsigned
-base-256 encoding of the private integer.}
 ]
 
 More formats may be added in future versions of this library, as
@@ -411,15 +410,15 @@ Returns an S-expression representation of the key parameters
 @itemlist[
 @item{@racket[(list 'dsa 'parameters 'pkix _der-bytes)]
 
-DSA key parameters encoded as DSS-Parms @cite{RFC2459} (DER).}
+DSA key parameters as DER-encoded DSS-Parms @cite{RFC2459}.}
 
 @item{@racket[(list 'dh 'parameters 'pkcs3 _der-bytes)]
 
-DH key parameters encoded as DHParameter @cite{PKCS3} (DER).}
+DH key parameters as DER-encoded DHParameter @cite{PKCS3}.}
 
 @item{@racket[(list 'ec 'parameters 'sec1 _der-bytes)]
 
-EC key parameters encoded as ECDomainParameters @cite{SEC1} (DER).}
+EC key parameters as DER-encoded ECDomainParameters @cite{SEC1}.}
 ]
 
 More formats may be added in future versions of this library, as well

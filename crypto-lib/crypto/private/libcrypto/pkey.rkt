@@ -26,35 +26,6 @@
 (provide (all-defined-out))
 
 #|
-Key formats
- - PKCS1 (RSA only)
- - SubjectPublicKeyInfo ({i2d,d2i}_PUBKEY) (public key only)
- - PKCS8 DER/PEM (private key only, optional encryption/password)
-   - for DSA, format actually specified by PKCS11 v2.01 section 11.9
- - {i2d,d2i}_{Private,Public}Key uses *some* format, possibly ad hoc
-   d2i needs to be told what kind of key expected
- - {d2i,i2d}_{PublicKey,PrivateKey} doesn't seem to work on EC keys
- - {d2i,i2d}_PUBKEY encodes key as SubjectPublicKeyInfo (ie, includes type of key)
- - PKCS#8 might handle all kinds of private keys
-   - {d2i,i2d}_PKCS8_PRIV_KEY_INFO(...);
-   - EVP_PKEY *EVP_PKCS82PKEY(PKCS8_PRIV_KEY_INFO *p8);
-   - PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(EVP_PKEY *pkey);
- - Nope, both PUBKEY and PKCS8_PRIV_KEY_INFO functions also crash on EC keys.
- - ECPKParameters vs ECParameters
-   - according to http://www.faqs.org/rfcs/rfc3279.html:
-     ECPKParameters = CHOICE { ECParameters | ...}
-
-References:
- - https://groups.google.com/forum/#!topic/mailing.openssl.users/HsiN-8Lt0H8
- - http://openssl.6102.n7.nabble.com/difference-between-i2d-PUBKEY-and-i2d-PublicKey-td43869.html
- - http://www.openssl.org/docs/crypto/pem.html
-
- - http://www.ietf.org/rfc/rfc2459.txt
-   encodings including SubjectPublicKeyInfo
- - http://tools.ietf.org/html/rfc5480
-   Elliptic Curve Cryptography Subject Public Key Information
-
-
 Generating keys & params for testing:
 
   openssl genrsa -out rsa-512.key 512
@@ -76,10 +47,6 @@ Key Agreement
 
 TODO: check params (eg safe primes) on generate-params OR read-params
 
-TODO: support predefined DH params
- - http://tools.ietf.org/html/rfc3526
- - http://tools.ietf.org/html/rfc5114
-
 KNOWN BUG: Curve prime256v1 (NID=415) doesn't work with key derivation
 in OpenSSL 1.0.1c (Ubuntu 12.10), fixed in 1.0.1e (Fedora 20) (but
 NIST P-192 disappeared!).
@@ -88,7 +55,6 @@ NIST P-192 disappeared!).
 #|
 The 'libcrypto key format:
  - (list 'dh 'private 'libcrypto param-bytes pubkey-bytes privkey-bytes)
- - (list 'dh 'public  'libcrypto param-bytes pubkey-bytes)
    param-bytes is PKCS#3 DHParameter
    pubkey-bytes is unsigned binary rep of public key bignum
    privkey-bytes is unsigned binary rep of private key bignum
@@ -113,13 +79,11 @@ The 'libcrypto key format:
            (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
              (begin0 (EVP_PKCS82PKEY pkcs8info)
                (values (PKCS8_PRIV_KEY_INFO_free pkcs8info) #t)))]
-          ;; RSA, DSA public keys (and maybe others too?)
-          [(list (or 'rsa 'dsa 'ec) 'public 'pkix (? bytes? buf)) ;; SubjectPublicKeyInfo
+          ;; public key as PKIX SubjectPublicKeyInfo (RSA, DSA, DH, EC, maybe others too?)
+          [(list (or 'rsa 'dsa 'dh 'ec) 'public 'pkix (? bytes? buf))
            (values (d2i_PUBKEY buf (bytes-length buf)) #f)]
           [(list 'ec 'private 'sec1 (? bytes? buf)) ;; ECPrivateKey
            (values (read-private-ec-key buf) #t)]
-          [(list 'dh 'public 'libcrypto (? bytes? params) (? bytes? pub))
-           (values (read-dh-key params pub #f) #f)]
           [(list 'dh 'private 'libcrypto (? bytes? params) (? bytes? pub) (? bytes? priv))
            (values (read-dh-key params pub priv) #t)]
           [_ (values #f #f)]))
@@ -399,16 +363,17 @@ The 'libcrypto key format:
       `(dh parameters pkcs3 ,buf))
 
     (define/override (*write-key private? fmt evp)
-      (unless (eq? fmt #f)
-        (err/key-format fmt))
-      (define dh (EVP_PKEY_get1_DH evp))
-      (define pubkey-buf (BN->bytes/bin (DH_st_prefix-pubkey dh)))
-      (define privkey-buf (and private? (BN->bytes/bin (DH_st_prefix-privkey dh))))
-      (DH_free dh)
-      (list* 'dh (if private? 'private 'public) 'libcrypto
-             (cadddr (*write-params fmt evp))
-             pubkey-buf
-             (if private? (list privkey-buf) null)))
+      (cond [(and private? (memq fmt '(#f)))
+             (define dh (EVP_PKEY_get1_DH evp))
+             (define pubkey-buf (BN->bytes/bin (DH_st_prefix-pubkey dh)))
+             (define privkey-buf (BN->bytes/bin (DH_st_prefix-privkey dh)))
+             (DH_free dh)
+             (list 'dh 'private 'libcrypto
+                   (cadddr (*write-params fmt evp))
+                   pubkey-buf
+                   privkey-buf)]
+            [else
+             (super *write-key private? fmt evp)]))
 
     (define/public (*generate-key config evp)
       (define kdh
