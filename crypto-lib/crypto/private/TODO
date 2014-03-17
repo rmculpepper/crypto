@@ -141,6 +141,8 @@ Resources:
    - ASN.1 for PrivateKeyInfo and EncryptedPrivateKeyInfo
    - lots of holes
    - note: allows BER encoding, not just DER
+ - https://tools.ietf.org/html/rfc5958
+   - obsoletes PKCS#8 ??
  - PKIX: http://www.ietf.org/rfc/rfc3280.txt
    - obsoletes http://www.ietf.org/rfc/rfc2459.txt
    - ASN.1 for SubjectPublicKeyInfo, OIDs for variants
