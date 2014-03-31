@@ -143,13 +143,14 @@ Resources:
    - note: allows BER encoding, not just DER
  - https://tools.ietf.org/html/rfc5958
    - obsoletes PKCS#8 ??
- - PKIX: http://www.ietf.org/rfc/rfc3280.txt
+ - PKIX: http://www.ietf.org/rfc/rfc5758.txt
+   - updates http://www.ietf.org/rfc/rfc3280.txt
    - obsoletes http://www.ietf.org/rfc/rfc2459.txt
    - ASN.1 for SubjectPublicKeyInfo, OIDs for variants
      - covers RSA, DH (incompat w/ PKCS#3 ??!!), and DSA; no EC
  - PKIX algs and OIDS: http://www.ietf.org/rfc/rfc3279.txt
    - covers RSA, DSA, ECDSA, DH, ECDH
    - OIDs for several EC curves
- - RFC 5480: https://datatracker.ietf.org/doc/rfc5480/?include_text=1
+ - RFC 5480: http://www.ietf.org/rfc/rfc5480.txt
    - updates RFC 3279
    - more OIDs for EC curves?
