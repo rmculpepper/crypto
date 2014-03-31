@@ -913,7 +913,10 @@
   (_fun _EC_KEY (_ptr i _pointer) -> _int)
   #:wrap (err-wrap 'i2o_ECPublicKey))
 
+(define OPENSSL_EC_NAMED_CURVE 1)
 
+(define-crypto EC_KEY_set_asn1_flag
+  (_fun _EC_KEY _int -> _void))
 
 ;; ============================================================
 ;; Random Numbers

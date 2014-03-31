@@ -423,6 +423,8 @@ The 'libcrypto key format:
       (unless curve-nid (crypto-error "named curve not found\n  curve: ~e" curve-name))
       (define ec (EC_KEY_new_by_curve_name curve-nid))
       (unless ec (crypto-error "named curve not found\n  curve: ~e" curve-name))
+      ;; FIXME: when curves other than named curves get supported, update following:
+      (EC_KEY_set_asn1_flag ec OPENSSL_EC_NAMED_CURVE)
       (define evp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY evp ec)
       (EC_KEY_free ec)
@@ -465,6 +467,8 @@ The 'libcrypto key format:
           (begin0 (EC_KEY_dup ec0)
             (EC_KEY_free ec0))))
       (EC_KEY_generate_key kec)
+      ;; FIXME: when curves other than named curves get supported, update following:
+      (EC_KEY_set_asn1_flag kec OPENSSL_EC_NAMED_CURVE)
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY kevp kec)
       (EC_KEY_free kec)
