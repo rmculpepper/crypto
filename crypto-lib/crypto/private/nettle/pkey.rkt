@@ -15,6 +15,9 @@
 
 #lang racket/base
 (require ffi/unsafe
+         asn1
+         asn1/base256
+         asn1/sequence
          racket/class
          racket/match
          "../common/interfaces.rkt"
@@ -22,9 +25,14 @@
          "../common/catalog.rkt"
          "../common/error.rkt"
          "../gmp/ffi.rkt"
-         "../asn1/types.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
+
+(define DSA-Sig-Val
+  ;; take and produce integer components as bytes
+  (let ([INTEGER-as-bytes (Wrap INTEGER #:encode base256-unsigned->signed #:decode values)])
+    (Sequence [r INTEGER-as-bytes]
+              [s INTEGER-as-bytes])))
 
 #|
 ;; Reference: http://www.ietf.org/rfc/rfc2459.txt
@@ -453,13 +461,13 @@ ECPoint ::= OCTET STRING
       (dsa_signature->der sig))
 
     (define/private (dsa_signature->der sig)
-      (sequence->der
-       (list (wrap-integer (mpz->bin (dsa_signature_struct-r sig) #t))
-             (wrap-integer (mpz->bin (dsa_signature_struct-s sig) #t)))))
+      (DER-encode DSA-Sig-Val
+                  `(sequence [r ,(mpz->bin (dsa_signature_struct-r sig) #t)]
+                             [s ,(mpz->bin (dsa_signature_struct-s sig) #t)])))
 
     (define/private (der->dsa_signature der)
-      (match (unwrap-der der)
-        [(list 'SEQUENCE (list 'INTEGER (? bytes? r)) (list 'INTEGER (? bytes? s)))
+      (match (DER-decode DSA-Sig-Val der)
+        [`(sequence [r ,(? bytes? r)] [s ,(? bytes? s)])
          (define sig (new-dsa_signature))
          (__gmpz_set (dsa_signature_struct-r sig) (bin->mpz r))
          (__gmpz_set (dsa_signature_struct-s sig) (bin->mpz s))

@@ -2,4 +2,4 @@
 
 (define collection 'multi)
 
-(define deps '("base"))
+(define deps '("base" "asn1-lib"))
