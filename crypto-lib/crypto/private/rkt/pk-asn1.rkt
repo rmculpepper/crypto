@@ -1,68 +1,85 @@
 #lang racket/base
 (require asn1
-         racket/match)
+         asn1/sequence)
 (provide (all-defined-out))
 
-(define (rsa-public-key->SPKI n e)
-  (DER-encode
-   SubjectPublicKeyInfo
-   (list (list rsaEncryption #f)
-         `(sequence [modulus ,n] [publicExponent ,e]))))
-  
-(define (dsa-public-key->SPKI p q g y)
-  (DER-encode
-   SubjectPublicKeyInfo
-   (list (list id-dsa
-               `(sequence [p ,p] [q ,q] [g ,g]))
-         y)))
-
-(define (dh-public-key->SPKI prime base y)
-  (DER-encode
-   SubjectPublicKeyInfo
-   (list (list dhKeyAgreement
-               `(sequence [prime ,prime] [base ,base]))
-         y)))
+;; References:
+;; - RFC 3280, RFC 3279
+;; - SEC 1
+;; - PKCS #8: http://www.ietf.org/rfc/rfc5208.txt
+;; - http://tools.ietf.org/html/rfc5915
+;; - http://www.cryptsoft.com/pkcs11doc/v220/group__SEC__12__6__WRAPPING__UNWRAPPING__PRIVATE__KEYS.html
 
 ;; ============================================================
-;; from RFC 3280 (PKIX, obsoletes RFC 2459)
 
-(define (AlgorithmIdentifier typemap)
-  (Wrap (Sequence [algorithm              OBJECT-IDENTIFIER]
-                  [#:dependent parameters (get-type algorithm typemap) #:optional])
-        #:pre-encode
-        (lambda (v) (list->sequence v '(algorithm) '(parameters)))
-        #:post-decode
-        (lambda (v) (sequence->list v '(algorithm) '(parameters)))))
+(define-asn1-type AlgorithmIdentifier
+  (let ([typemap known-public-key-algorithms])
+    (Wrap (Sequence [algorithm              OBJECT-IDENTIFIER]
+                    [#:dependent parameters (get-type algorithm typemap) #:optional]))))
 
 (define-asn1-type SubjectPublicKeyInfo
-  (Wrap (Sequence [algorithm (AlgorithmIdentifier known-public-key-algorithms)]
-                  [#:dependent subjectPublicKey (BIT-STRING-containing algorithm)])
-        #:pre-encode
-        (lambda (v) (list->sequence v '(algorithm subjectPublicKey)))
-        #:post-decode
-        (lambda (v) (sequence->list v '(algorithm subjectPublicKey)))))
+  (Wrap (Sequence [algorithm AlgorithmIdentifier]
+                  [#:dependent subjectPublicKey (BIT-STRING-containing algorithm)])))
 
 (define (BIT-STRING-containing alg)
-  (let ([type (get-type2 (car alg) known-public-key-algorithms)])
-    (Wrap BIT-STRING
-          #:pre-encode (lambda (v) (bit-string (DER-encode type v) 0))
-          #:post-decode (lambda (v) (DER-decode type (bit-string-bytes v))))))
+  (define alg-oid (sequence-ref alg 'algorithm))
+  (cond [(get-type2 alg-oid known-public-key-algorithms)
+         => (lambda (type)
+              (Wrap BIT-STRING
+                    #:pre-encode (lambda (v) (bit-string (DER-encode type v) 0))
+                    #:post-decode (lambda (v) (DER-decode type (bit-string-bytes v)))))]
+        [else
+         (Wrap BIT-STRING
+               #:pre-encode (lambda (v) (bit-string v 0))
+               #:post-decode (lambda (v) (bit-string-bytes v)))]))
 
 ;; ============================================================
-;; from RFC 3279 (PKIX, obsoletes RFC 2458)
-
-;; EXPLICIT TAGS
+;; RSA
 
 (define rsadsi (OID (iso 1) (member-body 2) (us 840) (rsadsi 113549)))
+(define pkcs-1 (build-OID rsadsi (pkcs 1) 1))
 
-;; -- One-way Hash Functions
+;; OID for RSA public keys
+(define rsaEncryption (build-OID pkcs-1 1))
 
-(define md2 (build-OID rsadsi (digestAlgorithm 2) 2))
-(define md5 (build-OID rsadsi (digestAlgorithm 2) 5))
-(define id-sha1
-  (OID (iso 1) (identified-organization 3) (oiw 14) (secsig 3) (algorithms 2) 26))
+;; encoding for RSA public key
+(define RSAPublicKey
+  (Sequence [modulus         INTEGER] ;; n
+            [publicExponent  INTEGER])) ;; e
 
-;; -- DSA Keys and Signatures
+;; ----
+
+(define-asn1-type RSAPrivateKey
+  (Sequence [version           INTEGER]
+            [modulus           INTEGER] ;; n
+            [publicExponent    INTEGER] ;; e
+            [privateExponent   INTEGER] ;; d
+            [prime1            INTEGER] ;; p
+            [prime2            INTEGER] ;; q
+            [exponent1         INTEGER] ;; d mod (p-1)
+            [exponent2         INTEGER] ;; d mod (q-1)
+            [coefficient       INTEGER] ;; (inverse of q) mod p
+            [otherPrimeInfos   OtherPrimeInfos #:optional]))
+
+(define RSA:Version:two-prime 0)
+(define RSA:Version:multi 1) ;; version must be multi if otherPrimeInfos present
+
+(define-asn1-type OtherPrimeInfos
+  (SequenceOf OtherPrimeInfo)) ;; SIZE(1..MAX)
+
+(define OtherPrimeInfo
+  (Sequence [prime             INTEGER] ;; ri
+            [exponent          INTEGER] ;; di
+            [coefficient       INTEGER])) ;; ti
+
+;; ----
+
+(define (rsa-private-key->public-key s)
+  `(sequence [modulus ,(sequence-ref s 'modulus)]
+             [publicExponent ,(sequence-ref s 'publicExponent)]))
+
+;; ============================================================
+;; DSA
 
 ;; OID for DSA public key
 (define id-dsa
@@ -76,49 +93,17 @@
             [q   INTEGER]
             [g   INTEGER]))
 
-;; OID for DSA signature generated with SHA-1 hash
-
-(define id-dsa-with-sha1
-  (OID (iso 1) (member-body 2) (us 840) (x9-57 10040) (x9algorithm 4) 3))
-
-;; encoding for DSA signature generated with SHA-1 hash
-
 (define Dss-Sig-Value
   (Sequence [r   INTEGER]
             [s   INTEGER]))
 
-;; --   RSA Keys and Signatures
-
-;; arc for RSA public key and RSA signature OIDs
-
-(define pkcs-1 (build-OID rsadsi (pkcs 1) 1))
-
-;; OID for RSA public keys
-(define rsaEncryption (build-OID pkcs-1 1))
-
-;; OID for RSA signature generated with MD2 hash
-(define md2WithRSAEncryption (build-OID pkcs-1 2))
-
-;; OID for RSA signature generated with MD5 hash
-(define md5WithRSAEncryption (build-OID pkcs-1 4))
-
-;; OID for RSA signature generated with SHA-1 hash
-(define sha1WithRSAEncryption (build-OID pkcs-1 5))
-
-;; encoding for RSA public key
-
-(define RSAPublicKey
-  (Sequence [modulus         INTEGER] ;; n
-            [publicExponent  INTEGER])) ;; e
-
-
-;; --   Diffie-Hellman Keys
+;; ============================================================
+;; DH
 
 (define dhpublicnumber
   (OID (iso 1) (member-body 2) (us 840) (ansi-x942 10046) (number-type 2) 1))
 
 ;; encoding for DSA public key
-
 (define DHPublicKey INTEGER) ;; public key, y = g^x mod p
 
 (define ValidationParms
@@ -132,160 +117,7 @@
             [j       INTEGER #:optional] ;; subgroup factor, j>= 2
             [validationParms  ValidationParms #:optional]))
 
-;; --   KEA Keys
-
-(define id-keyExchangeAlgorithm (OID 2 16 840 1 101 2 1 1 22))
-(define KEA-Parms-Id OCTET-STRING)
-
-
-;; --   Elliptic Curve Keys, Signatures, and Curves
-
-;; Arc for ECDSA signature OIDS
-;; = id-ecSigType
-
-;; OID for ECDSA signatures with SHA-1
-;; = ecdsa-with-SHA1
-
-;; OID for an elliptic curve signature
-;; format for the value of an ECDSA signature value
-
-(define ECDSA-Sig-Value
-  (Sequence [r     INTEGER]
-            [s     INTEGER]))
-
-;; recognized field type OIDs are defined in the following arc
-;; = id-fieldType
-
-;; where fieldType is prime-field, the parameters are of type Prime-p
-;; = prime-field, Prime-p
-
-;; where fieldType is characteristic-two-field, the parameters are
-;; of type Characteristic-two
-;; = characteristic-two-field, Characteristic-two
-
-;; recognized basis type OIDs are defined in the following arc
-;; = id-characteristic-two-basis
-
-;; gnbasis is identified by OID gnBasis and indicates parameters are NULL
-;; = gnBasis, NULL
-
-;; trinomial basis is identified by OID tpBasis and indicates
-;; parameters of type Trinomial
-;; = tpBasis, Trinomial
-
-;; for pentanomial basis is identified by OID ppBasis and indicates
-;; parameters of type Pentanomial
-;; = ppBasis, Pentanomial
-
-;; The object identifiers gnBasis, tpBasis and ppBasis name three
-;; kinds of basis for characteristic-two finite fields
-
-;; FieldElement ::= OCTET STRING             -- Finite field element
-;; ECPoint  ::= OCTET STRING                 -- Elliptic curve point
-
-;; Elliptic Curve parameters may be specified explicitly, specified
-;; implicitly through a "named curve", or inherited from the CA
-
-;; EcpkParameters = SEC1 ECDomainParameters
-;; ECParameters = SEC1 SpecifiedECDomain
-;; Curve = SEC1 Curve
-
-(require (prefix-in sec1: asn1/examples/sec1))
-(define EcpkParameters (sec1:ECDomainParameters null))
-(define ECPoint sec1:ECPoint)
-
-#|
-   EcpkParameters ::= CHOICE {
-      ecParameters  ECParameters,
-      namedCurve    OBJECT IDENTIFIER,
-      implicitlyCA  NULL }
-
-   ECParameters  ::= SEQUENCE {         -- Elliptic curve parameters
-      version   ECPVer,
-      fieldID   FieldID,
-      curve     Curve,
-      base      ECPoint,                -- Base point G
-      order     INTEGER,                -- Order n of the base point
-      cofactor  INTEGER  OPTIONAL }     -- The integer h = #E(Fq)/n
-   ECPVer ::= INTEGER {ecpVer1(1)}
-
-   Curve  ::= SEQUENCE {
-      a     FieldElement,            -- Elliptic curve coefficient a
-      b     FieldElement,            -- Elliptic curve coefficient b
-      seed  BIT STRING  OPTIONAL }
-|#
-
-(define ansi-X9-62 (OID (iso 1) (member-body 2) (us 840) 10045))
-
-(define id-publicKeyType (build-OID ansi-X9-62 (keyType 2)))
-(define id-ecPublicKey (build-OID id-publicKeyType 1))
-
-;; -- Named Elliptic Curves in ANSI X9.62.
-
-(define ellipticCurve (build-OID ansi-X9-62 (curves 3)))
-
-(define c-TwoCurve (build-OID ellipticCurve (characteristicTwo 0)))
-(define c2pnb163v1 (build-OID c-TwoCurve  1))
-(define c2pnb163v2 (build-OID c-TwoCurve  2))
-(define c2pnb163v3 (build-OID c-TwoCurve  3))
-(define c2pnb176w1 (build-OID c-TwoCurve  4))
-(define c2tnb191v1 (build-OID c-TwoCurve  5))
-(define c2tnb191v2 (build-OID c-TwoCurve  6))
-(define c2tnb191v3 (build-OID c-TwoCurve  7))
-(define c2onb191v4 (build-OID c-TwoCurve  8))
-(define c2onb191v5 (build-OID c-TwoCurve  9))
-(define c2pnb208w1 (build-OID c-TwoCurve 10))
-(define c2tnb239v1 (build-OID c-TwoCurve 11))
-(define c2tnb239v2 (build-OID c-TwoCurve 12))
-(define c2tnb239v3 (build-OID c-TwoCurve 13))
-(define c2onb239v4 (build-OID c-TwoCurve 14))
-(define c2onb239v5 (build-OID c-TwoCurve 15))
-(define c2pnb272w1 (build-OID c-TwoCurve 16))
-(define c2pnb304w1 (build-OID c-TwoCurve 17))
-(define c2tnb359v1 (build-OID c-TwoCurve 18))
-(define c2pnb368w1 (build-OID c-TwoCurve 19))
-(define c2tnb431r1 (build-OID c-TwoCurve 20))
-
-(define primeCurve (build-OID ellipticCurve (prime 1)))
-(define prime192v1 (build-OID primeCurve  1))
-(define prime192v2 (build-OID primeCurve  2))
-(define prime192v3 (build-OID primeCurve  3))
-(define prime239v1 (build-OID primeCurve  4))
-(define prime239v2 (build-OID primeCurve  5))
-(define prime239v3 (build-OID primeCurve  6))
-(define prime256v1 (build-OID primeCurve  7))
-
-
-;; ============================================================
-;; RSA, PKCS #1
-
-;; Representation of RSA private key with information for the CRT
-;; algorithm.
-(define-asn1-type RSAPrivateKey
-  (Sequence [version           Version]
-            [modulus           INTEGER] ;; n
-            [publicExponent    INTEGER] ;; e
-            [privateExponent   INTEGER] ;; d
-            [prime1            INTEGER] ;; p
-            [prime2            INTEGER] ;; q
-            [exponent1         INTEGER] ;; d mod (p-1)
-            [exponent2         INTEGER] ;; d mod (q-1)
-            [coefficient       INTEGER] ;; (inverse of q) mod p
-            [otherPrimeInfos   OtherPrimeInfos #:optional]))
-
-(define Version INTEGER)
-(define Version:two-prime 0)
-(define Version:multi 1) ;; version must be multi if otherPrimeInfos present
-
-(define-asn1-type OtherPrimeInfos
-  (SequenceOf OtherPrimeInfo)) ;; SIZE(1..MAX)
-
-(define OtherPrimeInfo
-  (Sequence [prime             INTEGER] ;; ri
-            [exponent          INTEGER] ;; di
-            [coefficient       INTEGER])) ;; ti
-
-;; ============================================================
+;; ----
 
 (define dhKeyAgreement (build-OID rsadsi (pkcs 1) 3 1))
 
@@ -293,6 +125,96 @@
   (Sequence [prime INTEGER]
             [base INTEGER]
             [privateValueLength INTEGER #:optional]))
+
+;; ============================================================
+;; EC
+
+;; EcpkParameters = SEC1 ECDomainParameters
+;; ECParameters = SEC1 SpecifiedECDomain
+;; Curve = SEC1 Curve
+
+(define ECDSA-Sig-Value
+  (Sequence [r     INTEGER]
+            [s     INTEGER]))
+
+(define EcpkParameters
+  (Choice [namedCurve    OBJECT-IDENTIFIER]
+          #|
+          [ecParameters  ECParameters]
+          [implicitlyCA  NULL]
+          |#))
+
+(define ECPoint OCTET-STRING)
+
+(define ansi-X9-62 (OID (iso 1) (member-body 2) (us 840) 10045))
+(define id-publicKeyType (build-OID ansi-X9-62 (keyType 2)))
+(define id-ecPublicKey (build-OID id-publicKeyType 1))
+
+;; -- Named Elliptic Curves in ANSI X9.62.
+
+(define ellipticCurve (build-OID ansi-X9-62 (curves 3)))
+(define c-TwoCurve (build-OID ellipticCurve (characteristicTwo 0)))
+(define primeCurve (build-OID ellipticCurve (prime 1)))
+
+(define known-named-curves
+  (list (cons 'c2pnb163v1 (build-OID c-TwoCurve  1))
+        (cons 'c2pnb163v2 (build-OID c-TwoCurve  2))
+        (cons 'c2pnb163v3 (build-OID c-TwoCurve  3))
+        (cons 'c2pnb176w1 (build-OID c-TwoCurve  4))
+        (cons 'c2tnb191v1 (build-OID c-TwoCurve  5))
+        (cons 'c2tnb191v2 (build-OID c-TwoCurve  6))
+        (cons 'c2tnb191v3 (build-OID c-TwoCurve  7))
+        (cons 'c2onb191v4 (build-OID c-TwoCurve  8))
+        (cons 'c2onb191v5 (build-OID c-TwoCurve  9))
+        (cons 'c2pnb208w1 (build-OID c-TwoCurve 10))
+        (cons 'c2tnb239v1 (build-OID c-TwoCurve 11))
+        (cons 'c2tnb239v2 (build-OID c-TwoCurve 12))
+        (cons 'c2tnb239v3 (build-OID c-TwoCurve 13))
+        (cons 'c2onb239v4 (build-OID c-TwoCurve 14))
+        (cons 'c2onb239v5 (build-OID c-TwoCurve 15))
+        (cons 'c2pnb272w1 (build-OID c-TwoCurve 16))
+        (cons 'c2pnb304w1 (build-OID c-TwoCurve 17))
+        (cons 'c2tnb359v1 (build-OID c-TwoCurve 18))
+        (cons 'c2pnb368w1 (build-OID c-TwoCurve 19))
+        (cons 'c2tnb431r1 (build-OID c-TwoCurve 20))
+        (cons 'prime192v1 (build-OID primeCurve  1))
+        (cons 'prime192v2 (build-OID primeCurve  2))
+        (cons 'prime192v3 (build-OID primeCurve  3))
+        (cons 'prime239v1 (build-OID primeCurve  4))
+        (cons 'prime239v2 (build-OID primeCurve  5))
+        (cons 'prime239v3 (build-OID primeCurve  6))
+        (cons 'prime256v1 (build-OID primeCurve  7))))
+
+;; ----
+
+(define ECPrivateKey
+  (Sequence [version        INTEGER] ;; ecPrivkeyVer1
+            [privateKey     OCTET-STRING]
+            [parameters #:explicit 0 EcpkParameters #:optional]
+            [publicKey  #:explicit 1 BIT-STRING #:optional]))
+
+(define ecPrivkeyVer1 1)
+
+;; ============================================================
+
+(define-asn1-type PrivateKeyInfo
+  (Sequence [version                   INTEGER]
+            [privateKeyAlgorithm       AlgorithmIdentifier]
+            [#:dependent privateKey    (PrivateKey privateKeyAlgorithm)]
+            [attributes #:implicit 0   Attributes #:optional]))
+
+(define (PrivateKey alg)
+  (define alg-oid (sequence-ref alg 'algorithm))
+  (cond [(get-type alg-oid known-private-key-formats)
+         => (lambda (type)
+              (Wrap OCTET-STRING
+                    #:pre-encode
+                    (lambda (v) (DER-encode type v))
+                    #:post-decode
+                    (lambda (v) (DER-decode type v))))]
+        [else OCTET-STRING]))
+
+(define Attributes (SetOf (Wrap ANY #:decode values #:encode values)))
 
 ;; ============================================================
 ;; Some utilities
@@ -318,4 +240,12 @@
         ;; DH: PKIX says use dhpublicnumber; OpenSSL uses PKCS#3 OID
         (list dhpublicnumber  DomainParameters DHPublicKey)
         (list dhKeyAgreement  DHParameter      DHPublicKey)
-        (list id-ecPublicKey  EcpkParameters   ECPoint)))
+        ;; ECPoint octets are bit-string contents
+        (list id-ecPublicKey  EcpkParameters   #f)))
+
+;; for PKCS #8 PrivateKeyInfo
+(define known-private-key-formats
+  (list (list rsaEncryption   RSAPrivateKey)
+        (list id-dsa          INTEGER)
+        (list dhKeyAgreement  INTEGER)
+        (list id-ecPublicKey  ECPrivateKey)))

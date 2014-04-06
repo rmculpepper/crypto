@@ -154,3 +154,5 @@ Resources:
  - RFC 5480: http://www.ietf.org/rfc/rfc5480.txt
    - updates RFC 3279
    - more OIDs for EC curves?
+ - RFC 5915: http://tools.ietf.org/html/rfc5915
+   - EC private key structure (for use with PKCS #8)
