@@ -35,6 +35,7 @@
     (Sequence [r INTEGER-as-bytes]
               [s INTEGER-as-bytes])))
 
+;; TODO: avoid trip through racket bignums, if feasible
 (define (integer->mpz n)
   (bin->mpz (unsigned->base256 n)))
 
