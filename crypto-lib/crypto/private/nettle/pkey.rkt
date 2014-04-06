@@ -24,6 +24,7 @@
          "../common/common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
+         "../rkt/pk-asn1.rkt"
          "../gmp/ffi.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
@@ -34,129 +35,8 @@
     (Sequence [r INTEGER-as-bytes]
               [s INTEGER-as-bytes])))
 
-#|
-;; Reference: http://www.ietf.org/rfc/rfc2459.txt
-
-SubjectPublicKeyInfo  ::=  SEQUENCE  {
-    algorithm            AlgorithmIdentifier,
-    subjectPublicKey     BIT STRING  }
-
-AlgorithmIdentifier  ::=  SEQUENCE  {
-    algorithm               OBJECT IDENTIFIER,
-    parameters              ANY DEFINED BY algorithm OPTIONAL  }
-                            -- contains a value of the type
-                            -- registered for use with the
-                            -- algorithm object identifier value
-
-|#
-
-#|
-;; Reference: http://www.ietf.org/rfc/rfc3447.txt
-
-RSAPrivateKey ::= SEQUENCE {
-    version           Version,
-    modulus           INTEGER,  -- n
-    publicExponent    INTEGER,  -- e
-    privateExponent   INTEGER,  -- d
-    prime1            INTEGER,  -- p
-    prime2            INTEGER,  -- q
-    exponent1         INTEGER,  -- d mod (p-1)
-    exponent2         INTEGER,  -- d mod (q-1)
-    coefficient       INTEGER,  -- (inverse of q) mod p
-    otherPrimeInfos   OtherPrimeInfos OPTIONAL
-    }
-
-Version ::= INTEGER { two-prime(0), multi(1) }
-    (CONSTRAINED BY {-- version must be multi if otherPrimeInfos present --})
-
-|#
-
-#|
-;; Reference: https://www.ietf.org/rfc/rfc3279.txt
-
-;; Section 2.3.1 - RSA keys
-
-pkcs-1 OBJECT IDENTIFIER ::= { iso(1) member-body(2) us(840)
-    rsadsi(113549) pkcs(1) 1 }
-
-rsaEncryption OBJECT IDENTIFIER ::=  { pkcs-1 1}
-
-RSAPublicKey ::= SEQUENCE {
-    modulus            INTEGER,    -- n
-    publicExponent     INTEGER  }  -- e
-
-
-;; Section 2.3.2 - DSA keys
-
-id-dsa OBJECT IDENTIFIER ::= {
-    iso(1) member-body(2) us(840) x9-57(10040) x9cm(4) 1 }
-
-Dss-Parms  ::=  SEQUENCE  {
-    p             INTEGER,
-    q             INTEGER,
-    g             INTEGER  }
-
-DSAPublicKey ::= INTEGER -- public key, Y
-
-
-;; Section 2.3.3 - DH
-
-dhpublicnumber OBJECT IDENTIFIER ::= { iso(1) member-body(2)
-    us(840) ansi-x942(10046) number-type(2) 1 }
-
-DomainParameters ::= SEQUENCE {
-    p       INTEGER, -- odd prime, p=jq +1
-    g       INTEGER, -- generator, g
-    q       INTEGER, -- factor of p-1
-    j       INTEGER OPTIONAL, -- subgroup factor
-    validationParms  ValidationParms OPTIONAL }
-
-ValidationParms ::= SEQUENCE {
-    seed             BIT STRING,
-    pgenCounter      INTEGER }
-
-DHPublicKey ::= INTEGER -- public key, y = g^x mod p
-
-
-;; Section 2.3.5 - EC keys
-
-ansi-X9-62 OBJECT IDENTIFIER ::=
-    { iso(1) member-body(2) us(840) 10045 }
-
-id-public-key-type OBJECT IDENTIFIER  ::= { ansi-X9.62 2 }
-
-id-ecPublicKey OBJECT IDENTIFIER ::= { id-publicKeyType 1 }
-
-EcpkParameters ::= CHOICE {
-    ecParameters  ECParameters,
-    namedCurve    OBJECT IDENTIFIER,
-    implicitlyCA  NULL }
-
-ECParameters ::= SEQUENCE {
-    version   ECPVer,          -- version is always 1
-    fieldID   FieldID,         -- identifies the finite field over
-                               -- which the curve is defined
-    curve     Curve,           -- coefficients a and b of the
-                               -- elliptic curve
-    base      ECPoint,         -- specifies the base point P
-                               -- on the elliptic curve
-    order     INTEGER,         -- the order n of the base point
-    cofactor  INTEGER OPTIONAL -- The integer h = #E(Fq)/n
-    }
-
-ECPVer ::= INTEGER {ecpVer1(1)}
-
-Curve ::= SEQUENCE {
-    a         FieldElement,
-    b         FieldElement,
-    seed      BIT STRING OPTIONAL }
-
-FieldElement ::= OCTET STRING
-
-ECPoint ::= OCTET STRING
-
-
-|#
+(define (integer->mpz n)
+  (bin->mpz (unsigned->base256 n)))
 
 ;; ============================================================
 
@@ -168,48 +48,82 @@ ECPoint ::= OCTET STRING
     (define/public (read-key sk)
       (define (bad) #f)
       (match sk
-        ;; RSA, DSA private keys
-        [(list 'rsa 'private 'pkcs1 (? bytes? buf))
-         (bad)]
-        [(list 'dsa 'private 'libcrypto (? bytes? buf))
-         (bad)]
-        [(list (or 'rsa 'dsa) 'private 'pkcs8 (? bytes? buf)) ;; PrivateKeyInfo
-         (bad)]
         ;; RSA, DSA public keys (and maybe others too?)
         [(list (or 'rsa 'dsa 'ec) 'public 'pkix (? bytes? buf)) ;; SubjectPublicKeyInfo
+         (match (DER-decode SubjectPublicKeyInfo buf)
+           ;; Note: decode w/ type checks some well-formedness properties
+           [`(sequence [algorithm ,alg] [subjectPublicKey ,subjectPublicKey])
+            (define alg-oid (sequence-ref alg 'algorithm))
+            (define params (sequence-ref alg 'parameters #f))
+            (cond [(equal? alg-oid rsaEncryption)
+                   (match subjectPublicKey
+                     [`(sequence [modulus ,modulus] [publicExponent ,publicExponent])
+                      (define pub (new-rsa_public_key))
+                      (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz modulus))
+                      (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz publicExponent))
+                      (unless (nettle_rsa_public_key_prepare pub)
+                        (crypto-error "bad public key"))
+                      (define impl (send factory get-pk 'rsa))
+                      (new nettle-rsa-key% (impl impl) (pub pub) (priv #f))])]
+                  [(equal? alg-oid id-dsa)
+                   (match params
+                     [`(sequence [p ,p] [q ,q] [g ,g])
+                      (define pub (new-dsa_public_key))
+                      (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
+                      (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
+                      (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
+                      (__gmpz_set (dsa_public_key_struct-y pub) (integer->mpz subjectPublicKey))
+                      (define impl (send factory get-pk 'dsa))
+                      (new nettle-dsa-key% (impl impl) (pub pub) (priv #f))])]
+                  ;; Nettle has no DH support.
+                  ;; EC support not yet bound.
+                  [else (bad)])]
+           [_ (bad)])]
+        ;; RSA, DSA private keys
+        [(list 'rsa 'private 'pkcs1 (? bytes? buf))
+         (match (DER-decode RSAPrivateKey buf)
+           [`(sequence [version 0] ;; support only two-prime keys
+                       [modulus ,n]
+                       [publicExponent ,e]
+                       [privateExponent ,d]
+                       [prime1 ,p]
+                       [prime2 ,q]
+                       [exponent1 ,a]
+                       [exponent2 ,b]
+                       [coefficient ,c]
+                       . ,_)
+            (define pub (new-rsa_public_key))
+            (define priv (new-rsa_private_key))
+            (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
+            (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
+            (__gmpz_set (rsa_private_key_struct-d priv) (integer->mpz d))
+            (__gmpz_set (rsa_private_key_struct-p priv) (integer->mpz p))
+            (__gmpz_set (rsa_private_key_struct-q priv) (integer->mpz q))
+            (__gmpz_set (rsa_private_key_struct-a priv) (integer->mpz a))
+            (__gmpz_set (rsa_private_key_struct-b priv) (integer->mpz b))
+            (__gmpz_set (rsa_private_key_struct-c priv) (integer->mpz c))
+            (unless (nettle_rsa_public_key_prepare pub)
+              (crypto-error "bad public key"))
+            (unless (nettle_rsa_private_key_prepare priv)
+              (crypto-error "bad private key"))
+            (define impl (send factory get-pk 'rsa))
+            (new nettle-rsa-key% (impl impl) (pub pub) (priv priv))]
+           [_ (bad)])]
+        [(list 'dsa 'private 'libcrypto (? bytes? buf))
+         (match (DER-decode ANY buf)
+           [`(sequence-of 0 ,p ,q ,g ,y ,x)
+            (define pub (new-dsa_public_key))
+            (define priv (new-dsa_private_key))
+            (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
+            (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
+            (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
+            (__gmpz_set (dsa_public_key_struct-y pub) (integer->mpz y))
+            (__gmpz_set (dsa_private_key_struct-x priv) (integer->mpz x))
+            (define impl (send factory get-pk 'dsa))
+            (new nettle-dsa-key% (impl impl) (pub pub) (priv priv))]
+           [_ (bad)])]
+        [(list (or 'rsa 'dsa) 'private 'pkcs8 (? bytes? buf)) ;; PrivateKeyInfo
          (bad)]
-        [(list 'ec 'private 'sec1 (? bytes? buf)) ;; ECPrivateKey
-         (bad)]
-        ;; Ad hoc
-        [(list 'rsa 'private 'nettle
-               (? bytes? n) (? bytes? e)
-               (? bytes? d) (? bytes? p) (? bytes? q)
-               (? bytes? a) (? bytes? b) (? bytes? c))
-         (define pub (new-rsa_public_key))
-         (define priv (new-rsa_private_key))
-         (__gmpz_set (rsa_public_key_struct-n pub) (bin->mpz n))
-         (__gmpz_set (rsa_public_key_struct-e pub) (bin->mpz e))
-         (__gmpz_set (rsa_private_key_struct-d priv) (bin->mpz d))
-         (__gmpz_set (rsa_private_key_struct-p priv) (bin->mpz p))
-         (__gmpz_set (rsa_private_key_struct-q priv) (bin->mpz q))
-         (__gmpz_set (rsa_private_key_struct-a priv) (bin->mpz a))
-         (__gmpz_set (rsa_private_key_struct-b priv) (bin->mpz b))
-         (__gmpz_set (rsa_private_key_struct-c priv) (bin->mpz c))
-         (unless (nettle_rsa_public_key_prepare pub)
-           (crypto-error "bad public key"))
-         (unless (nettle_rsa_private_key_prepare priv)
-           (crypto-error "bad private key"))
-         (define impl (send factory get-pk 'rsa))
-         (new nettle-rsa-key% (impl impl) (pub pub) (priv priv))]
-        [(list 'rsa 'public 'nettle
-               (? bytes? n) (? bytes? e))
-         (define pub (new-rsa_public_key))
-         (__gmpz_set (rsa_public_key_struct-n pub) (bin->mpz n))
-         (__gmpz_set (rsa_public_key_struct-e pub) (bin->mpz e))
-         (unless (nettle_rsa_public_key_prepare pub)
-           (crypto-error "bad public key"))
-         (define impl (send factory get-pk 'rsa))
-         (new nettle-rsa-key% (impl impl) (pub pub) (priv #f))]
         [_ #f]))
 
     (define/public (read-params sp) #f)
