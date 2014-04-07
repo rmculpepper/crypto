@@ -84,7 +84,7 @@ Factory for
 cryptography library from the GNU project, originally part of GnuPG.
 The @tt{libgcrypt.so.11} foreign library is required.
 
-@bold{CSPRNG Initialization} The libgrypt library seems to perform
+@bold{CSPRNG Initialization} The libgcrypt library seems to perform
 some default CSPRNG initialization, but I don't know the details.
 }
 
