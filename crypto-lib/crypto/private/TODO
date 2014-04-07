@@ -60,7 +60,6 @@ To Do
   cmd-ssl impl already exposes some problems
 
 
-#|
 Misc resources
  - http://wiki.openssl.org/index.php/Libcrypto_API
  - http://www.openssl.org/docs/crypto/crypto.html
@@ -95,66 +94,6 @@ Certificate pinning
  - https://www.imperialviolet.org/2011/05/04/pinning.html
  - http://dev.chromium.org/sts
 
-|#
-
-============================================================
-PK key and parameter formats
-
-Key formats
- - PKCS1 (RSA only)
- - SubjectPublicKeyInfo ({i2d,d2i}_PUBKEY) (public key only)
- - PKCS8 DER/PEM (private key only, optional encryption/password)
-   - for DSA, format actually specified by PKCS11 v2.01 section 11.9
- - {i2d,d2i}_{Private,Public}Key uses *some* format, possibly ad hoc
-   d2i needs to be told what kind of key expected
- - {d2i,i2d}_{PublicKey,PrivateKey} doesn't seem to work on EC keys
- - {d2i,i2d}_PUBKEY encodes key as SubjectPublicKeyInfo (ie, includes type of key)
- - PKCS#8 might handle all kinds of private keys
-   - {d2i,i2d}_PKCS8_PRIV_KEY_INFO(...);
-   - EVP_PKEY *EVP_PKCS82PKEY(PKCS8_PRIV_KEY_INFO *p8);
-   - PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(EVP_PKEY *pkey);
- - Nope, both PUBKEY and PKCS8_PRIV_KEY_INFO functions also crash on EC keys.
- - ECPKParameters vs ECParameters
-   - according to http://www.faqs.org/rfcs/rfc3279.html:
-     ECPKParameters = CHOICE { ECParameters | ...}
-
-References:
- - https://groups.google.com/forum/#!topic/mailing.openssl.users/HsiN-8Lt0H8
- - http://openssl.6102.n7.nabble.com/difference-between-i2d-PUBKEY-and-i2d-PublicKey-td43869.html
- - http://www.openssl.org/docs/crypto/pem.html
-
- - http://www.ietf.org/rfc/rfc2459.txt
-   encodings including SubjectPublicKeyInfo
- - http://tools.ietf.org/html/rfc5480
-   Elliptic Curve Cryptography Subject Public Key Information
-
 TODO: support predefined DH params
  - http://tools.ietf.org/html/rfc3526
  - http://tools.ietf.org/html/rfc5114
-
-Resources:
- - http://csrc.nist.gov/groups/ST/crypto_apps_infra/csor/algorithms.html#modules
-   - some OIDs for AES, digests, etc
- - PKCS#3: ftp://ftp.rsasecurity.com/pub/pkcs/ascii/pkcs-3.asc
-   - ASN.1 for DHParameter, dhKeyAgreement OID for AlgorithmIdentifier
- - PKCS#8: http://www.ietf.org/rfc/rfc5208.txt
-   - ASN.1 for PrivateKeyInfo and EncryptedPrivateKeyInfo
-   - lots of holes
-   - note: allows BER encoding, not just DER
- - https://tools.ietf.org/html/rfc5958
-   - obsoletes PKCS#8 ??
- - PKIX: http://www.ietf.org/rfc/rfc5758.txt
-   - updates http://www.ietf.org/rfc/rfc3280.txt
-   - obsoletes http://www.ietf.org/rfc/rfc2459.txt
-   - ASN.1 for SubjectPublicKeyInfo, OIDs for variants
-     - covers RSA, DH (incompat w/ PKCS#3 ??!!), and DSA; no EC
- - PKIX algs and OIDS: http://www.ietf.org/rfc/rfc3279.txt
-   - covers RSA, DSA, ECDSA, DH, ECDH
-   - OIDs for several EC curves
- - RFC 5480: http://www.ietf.org/rfc/rfc5480.txt
-   - updates RFC 3279
-   - more OIDs for EC curves?
- - RFC 5915: http://tools.ietf.org/html/rfc5915
-   - EC private key structure (for use with PKCS #8)
- - http://tools.ietf.org/html/rfc5912
-   - updated ASN.1 modules for PKIX

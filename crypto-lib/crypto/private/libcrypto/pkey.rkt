@@ -28,38 +28,11 @@
 (provide (all-defined-out))
 
 #|
-Generating keys & params for testing:
-
-  openssl genrsa -out rsa-512.key 512
-  openssl rsa -inform pem -outform der -in rsa-512.key -out rsa-512.der
-  (bytes->private-key rsai (file->bytes "rsa-512.der"))
-
-  openssl dsaparam -outform pem -out dsa-512.params 512
-  openssl gendsa -out dsa-512.key dsa-512.params
-  openssl dsa -inform pem -outform der -in dsa-512.key -out dsa-512.der
-  (bytes->private-key dsai (file->bytes "dsa-512.der"))
-
-Key Agreement
- - generate shared params => params%
- - generate private key-part => key%
- - compute shared secret from private key-part and public key-part (?) => bytes
-   - Note: result is biased, not uniform, so unsuitable as key!
- - compute key from shared secret
-   - eg, use digest (see RFC 2631)
-
 TODO: check params (eg safe primes) on generate-params OR read-params
 
 KNOWN BUG: Curve prime256v1 (NID=415) doesn't work with key derivation
 in OpenSSL 1.0.1c (Ubuntu 12.10), fixed in 1.0.1e (Fedora 20) (but
 NIST P-192 disappeared!).
-|#
-
-#|
-The 'libcrypto key format:
- - (list 'dh 'private 'libcrypto param-bytes pubkey-bytes privkey-bytes)
-   param-bytes is PKCS#3 DHParameter
-   pubkey-bytes is unsigned binary rep of public key bignum
-   privkey-bytes is unsigned binary rep of private key bignum
 |#
 
 ;; ============================================================
@@ -435,8 +408,11 @@ The 'libcrypto key format:
       (unless curve-nid (crypto-error "named curve not found\n  curve: ~e" curve-name))
       (define ec (EC_KEY_new_by_curve_name curve-nid))
       (unless ec (crypto-error "named curve not found\n  curve: ~e" curve-name))
-      ;; FIXME: when curves other than named curves get supported, update following:
-      (EC_KEY_set_asn1_flag ec OPENSSL_EC_NAMED_CURVE)
+      (begin
+        ;; See http://wiki.openssl.org/index.php/Elliptic_Curve_Diffie_Hellman
+        ;; in section "ECDH and Named Curves"
+        ;; FIXME: when/if curves other than named curves get supported, update
+        (EC_KEY_set_asn1_flag ec OPENSSL_EC_NAMED_CURVE))
       (define evp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY evp ec)
       (EC_KEY_free ec)
@@ -473,15 +449,15 @@ The 'libcrypto key format:
           (begin0 (EC_KEY_dup ec0)
             (EC_KEY_free ec0))))
       (EC_KEY_generate_key kec)
-      ;; FIXME: when curves other than named curves get supported, update following:
-      (EC_KEY_set_asn1_flag kec OPENSSL_EC_NAMED_CURVE)
+      (begin
+        ;; See note in generate-params above.
+        (EC_KEY_set_asn1_flag kec OPENSSL_EC_NAMED_CURVE))
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY kevp kec)
       (EC_KEY_free kec)
       (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))
 
     (define/public (*convert-peer-pubkey evp peer-pubkey0)
-      (eprintf "convert-peer-pubkey\n")
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (define group (EC_KEY_get0_group ec))
       (define group-degree (EC_GROUP_get_degree group))
@@ -541,8 +517,9 @@ The 'libcrypto key format:
       (new libcrypto-pk-key% (impl impl) (evp pub-evp) (private? #f)))
 
     (define/public (get-params)
-      ;; Note: EVP_PKEY_copy_parameters doesn't work!
-      ;; We treat keys as read-only once created, so safe to share evp.
+      ;; Note: EVP_PKEY_copy_parameters doesn't work! (Probably used
+      ;; to copy params from cert to key).  We treat keys as read-only
+      ;; once created, so safe to share evp.
       (new libcrypto-pk-params% (impl impl) (evp evp)))
 
     (define/public (write-key fmt)

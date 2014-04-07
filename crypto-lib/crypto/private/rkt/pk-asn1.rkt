@@ -3,12 +3,34 @@
          asn1/sequence)
 (provide (all-defined-out))
 
-;; References:
-;; - RFC 3280, RFC 3279
-;; - SEC 1
-;; - PKCS #8: http://www.ietf.org/rfc/rfc5208.txt
-;; - http://tools.ietf.org/html/rfc5915
-;; - http://www.cryptsoft.com/pkcs11doc/v220/group__SEC__12__6__WRAPPING__UNWRAPPING__PRIVATE__KEYS.html
+#|
+============================================================
+PK key and parameter formats
+
+References:
+ - PKIX RFCs
+   - http://www.ietf.org/rfc/rfc5758.txt
+   - http://www.ietf.org/rfc/rfc3280.txt
+   - http://www.ietf.org/rfc/rfc2459.txt
+ - PKIX Algorithms and Identifiers RFCs
+   - http://www.ietf.org/rfc/rfc5480.txt
+   - http://www.ietf.org/rfc/rfc3279.txt
+ - http://tools.ietf.org/html/rfc5912
+   - updated ASN.1 modules for PKIX
+ - PKCS#3: ftp://ftp.rsasecurity.com/pub/pkcs/ascii/pkcs-3.asc
+   - ASN.1 for DHParameter, dhKeyAgreement OID for AlgorithmIdentifier
+ - PKCS#8: http://www.ietf.org/rfc/rfc5208.txt
+   - ASN.1 for PrivateKeyInfo and EncryptedPrivateKeyInfo
+   - lots of holes
+   - note: allows BER encoding, not just DER
+   - https://tools.ietf.org/html/rfc5958
+     - obsoletes PKCS#8 ??
+   - RFC 5915: http://tools.ietf.org/html/rfc5915
+     - EC private key structure (for use with PKCS #8)
+ - http://csrc.nist.gov/groups/ST/crypto_apps_infra/csor/algorithms.html#modules
+   - some OIDs for AES, digests, etc
+ - http://www.cryptsoft.com/pkcs11doc/v220/group__SEC__12__6__WRAPPING__UNWRAPPING__PRIVATE__KEYS.html
+|#
 
 ;; ============================================================
 
