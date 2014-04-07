@@ -108,12 +108,6 @@ References:
             [exponent          INTEGER] ;; di
             [coefficient       INTEGER])) ;; ti
 
-;; ----
-
-(define (rsa-private-key->public-key s)
-  `(sequence [modulus ,(sequence-ref s 'modulus)]
-             [publicExponent ,(sequence-ref s 'publicExponent)]))
-
 ;; ============================================================
 ;; DSA
 
