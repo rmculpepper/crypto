@@ -189,13 +189,30 @@ References:
 (define id-publicKeyType (build-OID ansi-X9-62 (keyType 2)))
 (define id-ecPublicKey (build-OID id-publicKeyType 1))
 
-;; -- Named Elliptic Curves in ANSI X9.62.
+;; Curves from RFC 5480: http://www.ietf.org/rfc/rfc5480.txt
+(define known-curves
+  (list
+   (cons 'secp192r1 (OID (iso 1) (member-body 2) (us 840) (ansi-X9-62 10045) (curves 3) (prime 1) 1))
+   (cons 'sect163k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 1))
+   (cons 'sect163r2 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 15))
+   (cons 'secp224r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 33))
+   (cons 'sect233k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 26))
+   (cons 'sect233r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 27))
+   (cons 'secp256r1 (OID (iso 1) (member-body 2) (us 840) (ansi-X9-62 10045) (curves 3) (prime 1) 7))
+   (cons 'sect283k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 16))
+   (cons 'sect283r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 17))
+   (cons 'secp384r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 34))
+   (cons 'sect409k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 36))
+   (cons 'sect409r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 37))
+   (cons 'secp521r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 35))
+   (cons 'sect571k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 38))
+   (cons 'sect571r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 39))))
 
+;; -- Named Elliptic Curves in ANSI X9.62.
 (define ellipticCurve (build-OID ansi-X9-62 (curves 3)))
 (define c-TwoCurve (build-OID ellipticCurve (characteristicTwo 0)))
 (define primeCurve (build-OID ellipticCurve (prime 1)))
-
-(define known-named-curves
+(define more-known-curves
   (list (cons 'c2pnb163v1 (build-OID c-TwoCurve  1))
         (cons 'c2pnb163v2 (build-OID c-TwoCurve  2))
         (cons 'c2pnb163v3 (build-OID c-TwoCurve  3))
