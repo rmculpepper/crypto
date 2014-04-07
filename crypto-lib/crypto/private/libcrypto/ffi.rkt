@@ -882,11 +882,11 @@
   #:wrap (compose (allocator PKCS8_PRIV_KEY_INFO_free) (err-wrap/pointer 'EVP_PKEY2PKCS8)))
 
 (define-crypto d2i_PKCS8_PRIV_KEY_INFO
-  (_fun (_pointer = #f) (_ptr i _PKCS8_PRIV_KEY_INFO) _long -> _PKCS8_PRIV_KEY_INFO)
+  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _PKCS8_PRIV_KEY_INFO/null)
   #:wrap (compose (allocator PKCS8_PRIV_KEY_INFO_free)
                   (err-wrap/pointer 'd2i_PKCS8_PRIV_KEY_INFO)))
 (define-crypto i2d_PKCS8_PRIV_KEY_INFO
-  (_fun _PKCS8_PRIV_KEY_INFO _pointer -> _int)
+  (_fun _PKCS8_PRIV_KEY_INFO (_ptr i _pointer) -> _int)
   #:wrap (err-wrap 'i2d_PKCS8_PRIV_KEY_INFO))
 
 (define-crypto d2i_DSAparams

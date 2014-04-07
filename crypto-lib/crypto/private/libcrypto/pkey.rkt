@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2014 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -18,6 +18,8 @@
 (require ffi/unsafe
          racket/class
          racket/match
+         asn1
+         "../rkt/pk-asn1.rkt"
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
@@ -77,6 +79,10 @@ The 'libcrypto key format:
           [(SubjectPublicKeyInfo)
            (check-bytes)
            (values (d2i_PUBKEY sk (bytes-length sk)) #f)]
+          [(PrivateKeyInfo)
+           (check-bytes)
+           (define p8 (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk)))
+           (values (and p8 (EVP_PKCS82PKEY p8)) #t)]
           [(RSAPrivateKey)
            (check-bytes)
            (values (d2i_PrivateKey EVP_PKEY_RSA sk (bytes-length sk)) #t)]
@@ -86,11 +92,6 @@ The 'libcrypto key format:
           [(ECPrivateKey)
            (check-bytes)
            (values (read-private-ec-key sk) #t)]
-          [(#f)
-           (match sk
-             [(list 'dh 'private 'libcrypto (? bytes? params) (? bytes? pub) (? bytes? priv))
-              (values (read-dh-key params pub priv) #t)]
-             [_ (values #f #f)])]
           [else (values #f #f)]))
       (define impl (and evp (evp->impl evp)))
       (and evp impl (new libcrypto-pk-key% (impl impl) (evp evp) (private? private?))))
@@ -126,35 +127,47 @@ The 'libcrypto key format:
       (EC_KEY_free ec)
       evp)
 
-    (define/public (read-params sp fmt)
-      (define evp
-        (match sp
-          [(list 'dsa 'parameters 'pkix (? bytes? buf))
-           (define dsa (d2i_DSAparams buf (bytes-length buf)))
-           (define evp (EVP_PKEY_new))
-           (EVP_PKEY_set1_DSA evp dsa)
-           (DSA_free dsa)
-           evp]
-          [(list 'dh 'parameters 'pkcs3 (? bytes? buf))
-           (define dh (d2i_DHparams buf (bytes-length buf)))
-           ;; FIXME: DH_check
-           (define evp (EVP_PKEY_new))
-           (EVP_PKEY_set1_DH evp dh)
-           (DH_free dh)
-           evp]
-          [(list 'ec 'parameters 'sec1 (? bytes? buf))
-           (define group (d2i_ECPKParameters buf (bytes-length buf)))
-           ;; FIXME: check?
-           (define ec (EC_KEY_new))
-           (EC_KEY_set_group ec group)
-           (EC_GROUP_free group)
-           (define evp (EVP_PKEY_new))
-           (EVP_PKEY_set1_EC_KEY evp ec)
-           (EC_KEY_free ec)
-           evp]
-          [_ #f]))
-      (define impl (and evp (evp->impl evp)))
-      (and impl (new libcrypto-pk-params% (impl impl) (evp evp))))
+    (define/public (read-params buf fmt)
+      (define (evp->params evp)
+        (define impl (and evp (evp->impl evp)))
+        (and impl (new libcrypto-pk-params% (impl impl) (evp evp))))
+      (case fmt
+        [(AlgorithmIdentifier)
+         (match (DER-decode AlgorithmIdentifier buf)
+           [`(sequence [algorithm ,alg-oid]
+                       [parameters ,parameters])
+            (cond [(equal? alg-oid id-dsa)
+                   (read-params (DER-encode Dss-Parms parameters) 'DSAParameters)]
+                  [(equal? alg-oid dhKeyAgreement)
+                   (read-params (DER-encode DHParameter parameters) 'DHParameter)]
+                  [(equal? alg-oid id-ecPublicKey)
+                   (read-params (DER-encode EcpkParameters parameters) 'EcpkParameters)]
+                  [else #f])]
+           [_ #f])]
+        [(DSAParameters)
+         (define dsa (d2i_DSAparams buf (bytes-length buf)))
+         (define evp (EVP_PKEY_new))
+         (EVP_PKEY_set1_DSA evp dsa)
+         (DSA_free dsa)
+         (evp->params evp)]
+        [(DHParameter) ;; PKCS#3 ... not DomainParameters!
+         (define dh (d2i_DHparams buf (bytes-length buf)))
+         ;; FIXME: DH_check
+         (define evp (EVP_PKEY_new))
+         (EVP_PKEY_set1_DH evp dh)
+         (DH_free dh)
+         (evp->params evp)]
+        [(EcpkParameters)
+         (define group (d2i_ECPKParameters buf (bytes-length buf)))
+         ;; FIXME: check?
+         (define ec (EC_KEY_new))
+         (EC_KEY_set_group ec group)
+         (EC_GROUP_free group)
+         (define evp (EVP_PKEY_new))
+         (EVP_PKEY_set1_EC_KEY evp ec)
+         (EC_KEY_free ec)
+         (evp->params evp)]
+        [else #f]))
     ))
 
 ;; ============================================================
@@ -170,6 +183,11 @@ The 'libcrypto key format:
       (case fmt
         [(SubjectPublicKeyInfo)
          (i2d i2d_PUBKEY evp)]
+        [(PrivateKeyInfo)
+         (unless private?
+           (err/key-format spec private? fmt))
+         (define p8 (EVP_PKEY2PKCS8 evp))
+         (i2d i2d_PKCS8_PRIV_KEY_INFO p8)]
         [else (err/key-format spec private? fmt)]))
 
     (define/public (generate-key config)
@@ -275,13 +293,17 @@ The 'libcrypto key format:
             [else (super *write-key private? fmt evp)]))
 
     (define/public (*write-params fmt evp)
-      (unless (memq fmt '(#f libcrypto))
-        (err/params-format spec fmt))
-      (define dsa (EVP_PKEY_get1_DSA evp))
-      (define buf (make-bytes (i2d_DSAparams dsa #f)))
-      (i2d_DSAparams dsa buf)
-      (DSA_free dsa)
-      `(dsa parameters libcrypto ,buf))
+      (case fmt
+        [(AlgorithmIdentifier)
+         (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
+                     `(sequence [a ,id-dsa] [b ,(*write-params 'DSAParameters evp)]))]
+        [(DSAParameters)
+         (define dsa (EVP_PKEY_get1_DSA evp))
+         (define buf (make-bytes (i2d_DSAparams dsa #f)))
+         (i2d_DSAparams dsa buf)
+         (DSA_free dsa)
+         buf]
+        [else (err/params-format spec fmt)]))
 
     #|
     ;; Similarly, this version of generate-params crashes.
@@ -350,25 +372,20 @@ The 'libcrypto key format:
         (new libcrypto-pk-params% (impl this) (evp evp))))
 
     (define/public (*write-params fmt evp)
-      (unless (memq fmt '(#f libcrypto))
-        (err/params-format spec fmt))
-      (define dh (EVP_PKEY_get1_DH evp))
-      (define buf (make-bytes (i2d_DHparams dh #f)))
-      (i2d_DHparams dh buf)
-      (DH_free dh)
-      `(dh parameters pkcs3 ,buf))
+      (case fmt
+        [(AlgorithmIdentifier)
+         (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
+                     `(sequence [a ,dhKeyAgreement] [b ,(*write-params 'DHParameter evp)]))]
+        [(DHParameter)
+         (define dh (EVP_PKEY_get1_DH evp))
+         (define buf (make-bytes (i2d_DHparams dh #f)))
+         (i2d_DHparams dh buf)
+         (DH_free dh)
+         buf]
+        [else (err/params-format spec fmt)]))
 
     (define/override (*write-key private? fmt evp)
-      (cond [(and (eq? fmt #f) private?)
-             (define dh (EVP_PKEY_get1_DH evp))
-             (define pubkey-buf (BN->bytes/bin (DH_st_prefix-pubkey dh)))
-             (define privkey-buf (BN->bytes/bin (DH_st_prefix-privkey dh)))
-             (DH_free dh)
-             (list 'dh 'private 'libcrypto
-                   (cadddr (*write-params fmt evp))
-                   pubkey-buf
-                   privkey-buf)]
-            [else (super *write-key private? fmt evp)]))
+      (super *write-key private? fmt evp))
 
     (define/public (*generate-key config evp)
       (define kdh
@@ -426,15 +443,19 @@ The 'libcrypto key format:
       (new libcrypto-pk-params% (impl this) (evp evp)))
 
     (define/public (*write-params fmt evp)
-      (unless (memq fmt '(#f libcrypto))
-        (err/params-format spec fmt))
-      (define ec (EVP_PKEY_get1_EC_KEY evp))
-      (define group (EC_KEY_get0_group ec))
-      (define len (i2d_ECPKParameters group #f))
-      (define buf (make-bytes len))
-      (define len2 (i2d_ECPKParameters group buf))
-      (EC_KEY_free ec)
-      `(ec parameters sec1 ,(shrink-bytes buf len2)))
+      (case fmt
+        [(AlgorithmIdentifier)
+         (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
+                     `(sequence [a ,id-ecPublicKey] [b ,(*write-params 'EcpkParameters evp)]))]
+        [(EcpkParameters)
+         (define ec (EVP_PKEY_get1_EC_KEY evp))
+         (define group (EC_KEY_get0_group ec))
+         (define len (i2d_ECPKParameters group #f))
+         (define buf (make-bytes len))
+         (define len2 (i2d_ECPKParameters group buf))
+         (EC_KEY_free ec)
+         (shrink-bytes buf len2)]
+        [else (err/params-format spec fmt)]))
 
     (define/override (*write-key private? fmt evp)
       (cond [(and (eq? fmt 'ECPrivateKey) private?)

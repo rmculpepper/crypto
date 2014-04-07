@@ -14,12 +14,12 @@
 
 (define-asn1-type AlgorithmIdentifier
   (let ([typemap known-public-key-algorithms])
-    (Wrap (Sequence [algorithm              OBJECT-IDENTIFIER]
-                    [#:dependent parameters (get-type algorithm typemap) #:optional]))))
+    (Sequence [algorithm              OBJECT-IDENTIFIER]
+              [#:dependent parameters (get-type algorithm typemap) #:optional])))
 
 (define-asn1-type SubjectPublicKeyInfo
-  (Wrap (Sequence [algorithm AlgorithmIdentifier]
-                  [#:dependent subjectPublicKey (BIT-STRING-containing algorithm)])))
+  (Sequence [algorithm AlgorithmIdentifier]
+            [#:dependent subjectPublicKey (BIT-STRING-containing algorithm)]))
 
 (define (BIT-STRING-containing alg)
   (define alg-oid (sequence-ref alg 'algorithm))

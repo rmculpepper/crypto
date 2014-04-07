@@ -128,3 +128,10 @@
   (negative? (__gmpz_cmp a b)))
 (define (mpz>? a b)
   (mpz<? b a))
+
+(define-gmp __gmpz_powm
+  (_fun (dst  : _mpz_t)
+        (base : _mpz_t)
+        (exp  : _mpz_t)
+        (mod  : _mpz_t)
+        -> _void))

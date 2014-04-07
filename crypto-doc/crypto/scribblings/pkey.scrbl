@@ -362,19 +362,24 @@ supported:
 @item{@racket['SubjectPublicKeyInfo] --- DER-encoded
 SubjectPublicKeyInfo @cite["PKIX"] representation of the public part
 of @racket[pk]. All key types are supported, and an identifier for the
-key type is embedded in the encoding. 
+key type is embedded in the encoding.
 
 For compatibility with OpenSSL, DH keys are encoded using the PKCS #3
 identifier and parameters @cite["PKCS3"] rather than those specified
-by PKIX.}
+by @cite["PKIX-AlgId"].}
+
+@item{@racket['PrivateKeyInfo] --- DER-encoded PrivateKeyInfo
+@cite["PKCS8"] representation of @racket[pk], which must be a private
+key. All key types are supported, and an identifier for the key type
+is embedded in the encoding.}
 
 @item{@racket['RSAPrivateKey] --- DER-encoded RSAPrivateKey
 @cite["PKCS1"] representation of @racket[pk], which must be an RSA
 private key.}
 
-@item{@racket['DSAPrivateKey] --- DER-encoded representation of
+@;{@item{@racket['DSAPrivateKey] --- DER-encoded representation of
 @racket[pk], which must be a DSA private key, in a non-standard format
-used by OpenSSL.}
+used by OpenSSL.}}
 
 @item{@racket['ECPrivateKey] --- DER-encoded ECPrivateKey @cite{SEC1}
 representation of @racket[pk], which must be an EC private key. Only
@@ -399,38 +404,49 @@ See @racket[pk-key->datum] for information about the @racket[fmt]
 argument.
 }
 
-@defproc[(pk-parameters->sexpr [pkp pk-parameters?])
+@defproc[(pk-parameters->datum [pkp pk-parameters?]
+                               [fmt symbol?])
          printable/c]{
 
-Returns an S-expression representation of the key parameters
-@racket[pkp]. The result has one of the following forms:
+Returns a datum representing the key parameters @racket[pkp], where
+the encoding is selected by @racket[fmt]. Unless noted below, the
+result is a bytestring (@racket[bytes?]). The following @racket[fmt]
+options are supported:
 
 @itemlist[
-@item{@racket[(list 'dsa 'parameters 'pkix _der-bytes)]
 
-DSA key parameters as DER-encoded DSS-Parms @cite{PKIX}.}
+@item{@racket['AlgorithmIdentifier] --- DER-encoded
+AlgorithmIdentifier @cite["PKIX"] representation of @racket[pkp]. All
+key parameter types are supported, and an identifier for the key
+parameter type is embedded in the encoding.
 
-@item{@racket[(list 'dh 'parameters 'pkcs3 _der-bytes)]
+For compatibility with OpenSSL, the PKCS #3 identifier and parameter
+format @cite["PKCS3"] are used rather than those specified by
+@cite["PKIX-AlgId"].}
 
-DH key parameters as DER-encoded DHParameter @cite{PKCS3}.}
+@item{@racket['DSAParameters] --- DER-encoded Dss-Parms @cite["PKIX-AlgId"]}
 
-@item{@racket[(list 'ec 'parameters 'sec1 _der-bytes)]
+@item{@racket['DHParameter] --- DER-encoded DHParameter
+@cite["PKCS3"]. Note: this format differs from the DomainParameters
+format specified by PKIX.}
 
-EC key parameters as DER-encoded ECDomainParameters @cite{SEC1}.}
+@item{@racket['EcpkParameters] --- DER-encoded EcpkParameters
+@cite["PKIX-AlgId"] (called ECDomainParameters in @cite["SEC1"]).}
+
 ]
 
-More formats may be added in future versions of this library, as well
-as options to select a preferred format.
+More formats may be added in future versions of this library.
 }
 
-@defproc[(sexpr->pk-parameters [sexpr any/c]
+@defproc[(datum->pk-parameters [datum any/c]
+                               [fmt symbol?]
                                [factories (or/c crypto-factory? (listof crypto-factory?)) 
                                           (crypto-factories)])
          pk-parameters?]{
 
-Parses @racket[sexpr] and returns a key-parameters value associated
-with the @racket[pki] implementation. If @racket[pki] does not support
-the format of @racket[sexpr], an exception is raised.
+Parses @racket[datum] and returns a key-parameters value associated
+with an implementation in @racket[factories]. If no implementation is
+found that accepts @racket[fmt], an exception is raised.
 }
         
 

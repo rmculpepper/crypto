@@ -167,7 +167,7 @@
 (define (datum->pk-parameters datum fmt [factory/s (crypto-factories)])
   (with-crypto-entry 'sexpr->pk-parameters
     (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
-          (let ([reader (send factory get-key-reader)])
+          (let ([reader (send factory get-pk-reader)])
             (and reader (send reader read-params datum fmt))))
         (crypto-error "unable to read parameters\n  key: ~e" datum))))
 
