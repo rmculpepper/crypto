@@ -11,7 +11,6 @@ To Do
   - then impl contains info struct, can extend w/o changing catalog
 - stress test (to find elusive crashes)
 
-- implement other key formats: pkcs1 pkcs3 pkcs8 ...
 - keygen/paramgen support: add required flag, auto-check
 - libcrypto: add yield callbacks for interactivity
 - check safety
@@ -40,15 +39,7 @@ To Do
   - regarding nettle padding support (lacking):
     http://blog.gmane.org/gmane.comp.encryption.nettle.bugs/month=20130601
 
-- nettle RSA
-  - encrypt/decrypt undocumented, uses PKCS#1 v1.5 padding (bad!)
-
 - CRYPTO_memcmp & other timing-related stuff
-
-- sections for Password Hashing
-  - pbkdf2
-    - libcrypto, gcrypt (gcry_kdf_derive)
-  - bcrypt, scrypt (from elsewhere)
 
 - update docs
 - offer multiple padding options?
