@@ -1,6 +1,5 @@
-#lang scribble/doc
-@(require scribble/manual
-          scribble/basic
+#lang scribble/manual
+@(require scribble/basic
           (for-label racket/base
                      racket/contract
                      crypto))
