@@ -27,8 +27,6 @@ secret key to form an authenticity and integrity mechanism
 This library provides both high-level, all-at-once digest operations
 and low-level, incremental operations.
 
-@section{Administrative Digest Functions}
-
 @defproc[(digest-spec? [v any/c]) boolean?]{
 
 Returns @racket[#f] if @racket[v] represents a digest

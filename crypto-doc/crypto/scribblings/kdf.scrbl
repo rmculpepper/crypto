@@ -18,12 +18,12 @@ A key derivation function can be used to derive a secret key from a
 master secret such as a passphrase. Typically, KDFs have additional
 parameters such as salts and work factors.
 
-KDFs are also used in password storage @cite["HtSSaP" "DUB"]. A KDF is
-preferable to simple hashing (even with a salt) because the work
-factor can be chosen to make exhaustively searching the space of
-passwords chosen by humans (typically short and composed of
-alpha-numeric characters) costly. Different KDFs have different
-parameters, which may control time or space requirements.
+KDFs are also used to store passwords @cite["HtSSaP" "DUB"]. A KDF is
+preferable to a simple digest function (even with a salt) because the
+work factor can be chosen to make exhaustively searching the space of
+likely passwords (typically short and composed of alpha-numeric
+characters) costly. Different KDFs have different parameters, which
+may control time or space requirements.
 
 @;{ When a password is created, a KDF is applied (with appropriate
 parameters, such as a random salt and a chosen work factor) and the

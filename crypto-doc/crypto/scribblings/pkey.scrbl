@@ -20,8 +20,6 @@ derivation), and some PK implementations may support a subset of a PK
 cryptosystem's potential operations.
 
 
-@section[#:tag "pk-admin"]{Administrative PK Functions}
-
 @defproc[(pk-spec? [v any/c]) boolean?]{
 
 Returns @racket[#t] if @racket[v] is a PK cryptosystem specifier,
