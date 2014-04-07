@@ -346,59 +346,57 @@ generate key material using a process such as described in RFC 2631
 
 @section[#:tag "pk-external"]{PK External Representations}
 
-@defproc[(pk-key->sexpr [pk pk-key?])
+This section describes serialization of public and private keys in
+various formats.
+
+@defproc[(pk-key->datum [pk pk-key?] [fmt symbol?])
          printable/c]{
 
-Returns an S-expression representation of the key @racket[pk]. The
-result has one of the following forms:
+Returns a datum representing the key @racket[pk], where the encoding
+is selected by @racket[fmt]. Unless noted below, the result is a
+bytestring (@racket[bytes?]). The following @racket[fmt] options are
+supported:
 
 @itemlist[
-@item{@racket[(list 'rsa 'public 'pkix _der-bytes)]
 
-RSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
+@item{@racket['SubjectPublicKeyInfo] --- DER-encoded
+SubjectPublicKeyInfo @cite["PKIX"] representation of the public part
+of @racket[pk]. All key types are supported, and an identifier for the
+key type is embedded in the encoding. 
 
-@item{@racket[(list 'rsa 'private 'pkcs1 _der-bytes)]
+For compatibility with OpenSSL, DH keys are encoded using the PKCS #3
+identifier and parameters @cite["PKCS3"] rather than those specified
+by PKIX.}
 
-RSA private key as DER-encoded RSAPrivateKey @cite{PKCS1}.}
+@item{@racket['RSAPrivateKey] --- DER-encoded RSAPrivateKey
+@cite["PKCS1"] representation of @racket[pk], which must be an RSA
+private key.}
 
-@item{@racket[(list 'dsa 'public 'pkix _der-bytes)]
+@item{@racket['DSAPrivateKey] --- DER-encoded representation of
+@racket[pk], which must be a DSA private key, in a non-standard format
+used by OpenSSL.}
 
-DSA public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
+@item{@racket['ECPrivateKey] --- DER-encoded ECPrivateKey @cite{SEC1}
+representation of @racket[pk], which must be an EC private key. Only
+keys using named curves are supported.}
 
-@item{@racket[(list 'dsa 'private 'libcrypto _der-bytes)]
-
-DSA private key.}
-
-@item{@racket[(list 'dh 'public 'pkix _der-bytes)]
-
-DH public-only key as DER-encoded SubjectPublicKeyInfo @cite{RFC2459}.}
-
-@item{@racket[(list 'dh 'private 'libcrypto _param-bytes _pub-bytes _priv-bytes)]
-
-DH private key, as DER-encoded DHParameter @cite{PKCS3} and unsigned
-base-256 encoding of the public and private integers.}
-
-@item{@racket[(list 'ec 'public 'pkix _der-bytes)]
-
-EC public-only key as DER-encoded SubjectPublicKeyInfo @cite{SEC1}.}
-
-@item{@racket[(list 'ec 'private 'sec1 _der-bytes)]
-
-EC private key as DER-encoded ECPrivateKey @cite{SEC1}.}
 ]
 
-More formats may be added in future versions of this library, as
-well as options to select a preferred format.
+More formats may be added in future versions of this library.
 }
 
-@defproc[(sexpr->pk-key [sexpr any/c]
+@defproc[(datum->pk-key [datum any/c]
+                        [fmt symbol?]
                         [factories (or/c crypto-factory? (listof crypto-factory?))
                                    (crypto-factories)])
          pk-key?]{
 
-Parses @racket[sexpr] and returns a PK key associated with the
-@racket[pki] implementation. If @racket[pki] does not support the
-format of @racket[sexpr], an exception is raised.
+Parses @racket[datum] and returns a PK key associated with an
+implementation from @racket[factories]. If no implementation in
+@racket[factories] supports @racket[fmt], an exception is raised.
+
+See @racket[pk-key->datum] for information about the @racket[fmt]
+argument.
 }
 
 @defproc[(pk-parameters->sexpr [pkp pk-parameters?])
@@ -410,7 +408,7 @@ Returns an S-expression representation of the key parameters
 @itemlist[
 @item{@racket[(list 'dsa 'parameters 'pkix _der-bytes)]
 
-DSA key parameters as DER-encoded DSS-Parms @cite{RFC2459}.}
+DSA key parameters as DER-encoded DSS-Parms @cite{PKIX}.}
 
 @item{@racket[(list 'dh 'parameters 'pkcs3 _der-bytes)]
 
@@ -451,17 +449,17 @@ the format of @racket[sexpr], an exception is raised.
            #:title "PKCS #8: Private-Key Information Syntax Specification, version 1.2"
            #:url "http://www.ietf.org/rfc/rfc5208.txt"]
 
-@bib-entry[#:key "RFC2459"
-           #:title "RFC 2459: Internet X.509 Public Key Infrastructure: Certificate and CRL Profile"
-           #:url "http://www.ietf.org/rfc/rfc2459.txt"]
+@bib-entry[#:key "PKIX"
+           #:title "RFC 3280: Internet X.509 Public Key Infrastructure: Certificate and CRL Profile"
+           #:url "http://www.ietf.org/rfc/rfc3280.txt"]
+
+@bib-entry[#:key "PKIX-AlgId"
+           #:title "RFC 3279: Algorithms and Identifiers for the Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile"
+           #:url "http://www.ietf.org/rfc/rfc3279.txt"]
 
 @bib-entry[#:key "RFC2631"
            #:title "RFC 2631: Diffie-Hellman Key Agreement Method"
            #:url "http://www.ietf.org/rfc/rfc2631.txt"]
-
-@bib-entry[#:key "RFC3279"
-           #:title "RFC 3279: Algorithms and Identifiers for the Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile"
-           #:url "http://www.ietf.org/rfc/rfc3279.txt"]
 
 @bib-entry[#:key "SEC1"
            #:title "SEC 1: Elliptic Curve Cryptography"

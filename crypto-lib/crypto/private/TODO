@@ -156,3 +156,5 @@ Resources:
    - more OIDs for EC curves?
  - RFC 5915: http://tools.ietf.org/html/rfc5915
    - EC private key structure (for use with PKCS #8)
+ - http://tools.ietf.org/html/rfc5912
+   - updated ASN.1 modules for PKIX

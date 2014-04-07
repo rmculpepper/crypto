@@ -72,13 +72,12 @@
    "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
    spec iv-size (if (bytes? iv) (bytes-length iv) 0)))
 
-(define (err/*-format kind spec fmt)
-  (crypto-error "~a format not supported\n  algorithm: ~e\n  format: ~e"
-                kind spec fmt))
-(define (err/key-format spec fmt)
-  (err/*-format "key" spec fmt))
+(define (err/key-format spec private? fmt)
+  (crypto-error "key format not supported\n  key type: ~a ~a key\n  format: ~e"
+                spec (if private? "private" "public") fmt))
 (define (err/params-format spec fmt)
-  (err/*-format "parameters" spec fmt))
+  (crypto-error "parameters format not supported\n  algorithm: ~a\n  format: ~e"
+                spec fmt))
 
 (define (err/bad-*-pad kind spec pad)
   (crypto-error "bad ~a padding mode\n  algorithm: ~e\n  padding mode: ~e"

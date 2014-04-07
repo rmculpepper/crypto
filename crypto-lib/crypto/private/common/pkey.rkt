@@ -44,16 +44,16 @@
   [pk-key->public-only-key
    (-> pk-key? public-only-key?)]
 
-  [pk-key->sexpr
-   (-> pk-key? any/c)]
-  [sexpr->pk-key
-   (->* [any/c] [(or/c crypto-factory? (listof crypto-factory?))]
+  [pk-key->datum
+   (-> pk-key? symbol? any/c)]
+  [datum->pk-key
+   (->* [any/c symbol?] [(or/c crypto-factory? (listof crypto-factory?))]
         pk-key?)]
 
-  [pk-parameters->sexpr
-   (-> pk-parameters? any/c)]
-  [sexpr->pk-parameters
-   (->* [any/c] [(or/c crypto-factory? (listof crypto-factory?))]
+  [pk-parameters->datum
+   (-> pk-parameters? symbol? any/c)]
+  [datum->pk-parameters
+   (->* [any/c symbol?] [(or/c crypto-factory? (listof crypto-factory?))]
         pk-parameters?)]
 
   [pk-sign-digest
@@ -151,25 +151,25 @@
     (for/and ([k (in-list ks)])
       (send k1 equal-to-key? k))))
 
-(define (pk-key->sexpr pk)
-  (with-crypto-entry 'pk-key->sexpr
-    (send pk write-key #f)))
-(define (sexpr->pk-key sexpr [factory/s (crypto-factories)])
-  (with-crypto-entry 'sexpr->pk-key
+(define (pk-key->datum pk fmt)
+  (with-crypto-entry 'pk-key->datum
+    (send pk write-key fmt)))
+(define (datum->pk-key datum fmt [factory/s (crypto-factories)])
+  (with-crypto-entry 'datum->pk-key
     (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
           (let ([reader (send factory get-pk-reader)])
-            (and reader (send reader read-key sexpr)))) 
-        (crypto-error "unable to read key\n  key: ~e" sexpr))))
+            (and reader (send reader read-key datum fmt))))
+        (crypto-error "unable to read key\n  key: ~e" datum))))
 
-(define (pk-parameters->sexpr pkp)
-  (with-crypto-entry 'pk-parameters->sexpr
-    (send pkp write-params #f)))
-(define (sexpr->pk-parameters sexpr [factory/s (crypto-factories)])
+(define (pk-parameters->datum pkp fmt)
+  (with-crypto-entry 'pk-parameters->datum
+    (send pkp write-params fmt)))
+(define (datum->pk-parameters datum fmt [factory/s (crypto-factories)])
   (with-crypto-entry 'sexpr->pk-parameters
     (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
           (let ([reader (send factory get-key-reader)])
-            (and reader (send reader read-params sexpr)))) 
-        (crypto-error "unable to read parameters\n  key: ~e" sexpr))))
+            (and reader (send reader read-params datum fmt))))
+        (crypto-error "unable to read parameters\n  key: ~e" datum))))
 
 (define (pk-key->public-only-key pk)
   (with-crypto-entry 'pk-key->public-only-key

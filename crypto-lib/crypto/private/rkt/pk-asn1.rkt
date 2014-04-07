@@ -97,6 +97,15 @@
   (Sequence [r   INTEGER]
             [s   INTEGER]))
 
+;; used by OpenSSL
+(define DSAPrivateKey
+  (Sequence [version INTEGER] ;; = 0
+            [p INTEGER]
+            [q INTEGER]
+            [g INTEGER]
+            [y INTEGER]
+            [x INTEGER]))
+
 ;; ============================================================
 ;; DH
 

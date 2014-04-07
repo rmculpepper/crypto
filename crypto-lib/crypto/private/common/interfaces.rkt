@@ -187,8 +187,8 @@
 
 (define pk-read-key<%>
   (interface (impl<%>)
-    read-key        ;; SerializedKey -> pk-key<%>/#f
-    read-params     ;; SerializedParams -> pk-params<%>/#f
+    read-key        ;; SerializedKey KeyFormat -> pk-key<%>/#f
+    read-params     ;; SerializedParams ParamsFormat -> pk-params<%>/#f
     ))
 
 (define pk-params<%>

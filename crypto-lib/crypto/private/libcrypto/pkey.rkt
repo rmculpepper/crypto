@@ -67,26 +67,31 @@ The 'libcrypto key format:
     (inherit-field factory)
     (super-new (spec 'libcrypto-read-key))
 
-    (define/public (read-key sk)
+    (define/public (read-key sk fmt)
+      (define (check-bytes)
+        (unless (bytes? sk)
+          (crypto-error "bad value for key format\n  format: ~e\n  expected: ~s\n  got: ~e"
+                        fmt 'bytes? sk)))
       (define-values (evp private?)
-        (match sk
-          ;; RSA, DSA private keys
-          [(list 'rsa 'private 'pkcs1 (? bytes? buf))
-           (values (d2i_PrivateKey EVP_PKEY_RSA buf (bytes-length buf)) #t)]
-          [(list 'dsa 'private 'libcrypto (? bytes? buf))
-           (values (d2i_PrivateKey EVP_PKEY_DSA buf (bytes-length buf)) #t)]
-          [(list (or 'rsa 'dsa) 'private 'pkcs8 (? bytes? buf)) ;; PrivateKeyInfo
-           (let ([pkcs8info (d2i_PKCS8_PRIV_KEY_INFO buf (bytes-length buf))])
-             (begin0 (EVP_PKCS82PKEY pkcs8info)
-               (values (PKCS8_PRIV_KEY_INFO_free pkcs8info) #t)))]
-          ;; public key as PKIX SubjectPublicKeyInfo (RSA, DSA, DH, EC, maybe others too?)
-          [(list (or 'rsa 'dsa 'dh 'ec) 'public 'pkix (? bytes? buf))
-           (values (d2i_PUBKEY buf (bytes-length buf)) #f)]
-          [(list 'ec 'private 'sec1 (? bytes? buf)) ;; ECPrivateKey
-           (values (read-private-ec-key buf) #t)]
-          [(list 'dh 'private 'libcrypto (? bytes? params) (? bytes? pub) (? bytes? priv))
-           (values (read-dh-key params pub priv) #t)]
-          [_ (values #f #f)]))
+        (case fmt
+          [(SubjectPublicKeyInfo)
+           (check-bytes)
+           (values (d2i_PUBKEY sk (bytes-length sk)) #f)]
+          [(RSAPrivateKey)
+           (check-bytes)
+           (values (d2i_PrivateKey EVP_PKEY_RSA sk (bytes-length sk)) #t)]
+          [(DSAPrivateKey)
+           (check-bytes)
+           (values (d2i_PrivateKey EVP_PKEY_DSA sk (bytes-length sk)) #t)]
+          [(ECPrivateKey)
+           (check-bytes)
+           (values (read-private-ec-key sk) #t)]
+          [(#f)
+           (match sk
+             [(list 'dh 'private 'libcrypto (? bytes? params) (? bytes? pub) (? bytes? priv))
+              (values (read-dh-key params pub priv) #t)]
+             [_ (values #f #f)])]
+          [else (values #f #f)]))
       (define impl (and evp (evp->impl evp)))
       (and evp impl (new libcrypto-pk-key% (impl impl) (evp evp) (private? private?))))
 
@@ -121,7 +126,7 @@ The 'libcrypto key format:
       (EC_KEY_free ec)
       evp)
 
-    (define/public (read-params sp)
+    (define/public (read-params sp fmt)
       (define evp
         (match sp
           [(list 'dsa 'parameters 'pkix (? bytes? buf))
@@ -162,19 +167,10 @@ The 'libcrypto key format:
     (abstract pktype)
 
     (define/public (*write-key private? fmt evp)
-      (cond [private?
-             (case fmt
-               [(pkcs8 #f)
-                ;; FIXME: doesn't seem to work!
-                ;; Writing RSA key gives only 3 non-NUL bytes at beginning.
-                (define pkcs8info (EVP_PKEY2PKCS8 evp))
-                `(,spec private pkcs8 ,(i2d i2d_PKCS8_PRIV_KEY_INFO pkcs8info))]
-               [else (err/key-format fmt)])]
-            [else ;; public
-             (case fmt
-               [(#f) ;; PUBKEY
-                `(,spec public pkix ,(i2d i2d_PUBKEY evp))]
-               [else (err/key-format fmt)])]))
+      (case fmt
+        [(SubjectPublicKeyInfo)
+         (i2d i2d_PUBKEY evp)]
+        [else (err/key-format spec private? fmt)]))
 
     (define/public (generate-key config)
       (err/no-direct-keygen spec))
@@ -202,8 +198,8 @@ The 'libcrypto key format:
     (define/override (can-sign?) #t)
 
     (define/override (*write-key private? fmt evp)
-      (cond [(and private? (memq fmt '(pkcs1 #f)))
-             `(rsa private pkcs1 ,(i2d i2d_PrivateKey evp))]
+      (cond [(and (eq? fmt 'RSAPrivateKey) private?)
+             (i2d i2d_PrivateKey evp)]
             [else (super *write-key private? fmt evp)]))
 
     #|
@@ -274,8 +270,8 @@ The 'libcrypto key format:
     (define/override (has-params?) #t)
 
     (define/override (*write-key private? fmt evp)
-      (cond [(and private? (memq fmt '(#f)))
-             `(dsa private libcrypto ,(i2d i2d_PrivateKey evp))]
+      (cond [(and (eq? fmt 'DSAPrivateKey) private?)
+             (i2d i2d_PrivateKey evp)]
             [else (super *write-key private? fmt evp)]))
 
     (define/public (*write-params fmt evp)
@@ -363,7 +359,7 @@ The 'libcrypto key format:
       `(dh parameters pkcs3 ,buf))
 
     (define/override (*write-key private? fmt evp)
-      (cond [(and private? (memq fmt '(#f)))
+      (cond [(and (eq? fmt #f) private?)
              (define dh (EVP_PKEY_get1_DH evp))
              (define pubkey-buf (BN->bytes/bin (DH_st_prefix-pubkey dh)))
              (define privkey-buf (BN->bytes/bin (DH_st_prefix-privkey dh)))
@@ -372,8 +368,7 @@ The 'libcrypto key format:
                    (cadddr (*write-params fmt evp))
                    pubkey-buf
                    privkey-buf)]
-            [else
-             (super *write-key private? fmt evp)]))
+            [else (super *write-key private? fmt evp)]))
 
     (define/public (*generate-key config evp)
       (define kdh
@@ -442,24 +437,14 @@ The 'libcrypto key format:
       `(ec parameters sec1 ,(shrink-bytes buf len2)))
 
     (define/override (*write-key private? fmt evp)
-      (unless (memq fmt '(#f libcrypto))
-        (err/key-format spec fmt))
-      (define ec (EVP_PKEY_get1_EC_KEY evp))
-      (cond [private?
+      (cond [(and (eq? fmt 'ECPrivateKey) private?)
+             (define ec (EVP_PKEY_get1_EC_KEY evp))
              (define outlen (i2d_ECPrivateKey ec #f))
              (define outbuf (make-bytes outlen))
              (define outlen2 (i2d_ECPrivateKey ec outbuf))
              (EC_KEY_free ec)
-             `(ec private sec1 ,(shrink-bytes outbuf outlen2))]
-            [else ;; public
-             (super *write-key private? fmt evp)
-             #|
-             (define outlen (i2o_ECPublicKey ec #f))
-             (define outbuf (make-bytes outlen))
-             (define outlen2 (i2o_ECPublicKey ec outbuf))
-             (EC_KEY_free ec)
-             `(sec1 ec public ,(shrink-bytes outbuf outlen2))
-             |#]))
+             (shrink-bytes outbuf outlen2)]
+            [else (super *write-key private? fmt evp)]))
 
     (define/public (*generate-key config evp)
       (define kec
