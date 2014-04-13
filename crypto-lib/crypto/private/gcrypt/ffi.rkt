@@ -25,13 +25,6 @@
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)
 
-(define-gcrypt gcry_check_version
-  (_fun _bytes -> _string/utf-8)
-  #:fail (lambda () void))
-
-;; Initializes library
-(void (gcry_check_version #f))
-
 ;; ----
 
 (define-ffi-definer define-racket #f)
@@ -64,6 +57,20 @@
        (if (= status GPG_ERR_NO_ERROR)
            result
            (error 'libgcrypt "~a" (gcry_strerror status)))))))
+
+(define-gcrypt gcry_check_version
+  (_fun _bytes -> _string/utf-8)
+  #:fail (lambda () void))
+
+(define GCRYCTL_ENABLE_QUICK_RANDOM 44)
+(define-gcrypt gcry_control
+  (_fun _int _int -> _gcry_error)
+  #:wrap check)
+
+;; Library Initialization
+
+;; (void (gcry_control GCRYCTL_ENABLE_QUICK_RANDOM 0))
+(void (gcry_check_version #f))
 
 ;; ----
 
@@ -261,11 +268,15 @@
   (_fun _gcry_mpi -> _void)
   #:wrap (deallocator))
 
-#|
 (define-gcrypt gcry_mpi_new
   (_fun (_uint = 0) -> _gcry_mpi)
   #:wrap (allocator gcry_mpi_release))
 
+(define-gcrypt gcry_mpi_powm
+  (_fun _gcry_mpi _gcry_mpi _gcry_mpi _gcry_mpi -> _void))
+
+
+#|
 (define-gcrypt gcry_mpi_sub_ui
   (_fun (dst : _gcry_mpi)
         (a   : _gcry_mpi)
@@ -310,6 +321,15 @@
         -> (values status nwrote))
   #:wrap check2)
 
+(define (base256->mpi buf)
+  (gcry_mpi_scan GCRYMPI_FMT_USG buf))
+
+(define (mpi->base256 mpi)
+  (define len (quotient (+ 7 (gcry_mpi_get_nbits mpi)) 8))
+  (define buf (make-bytes len))
+  (define len2 (gcry_mpi_print GCRYMPI_FMT_USG mpi buf))
+  (subbytes buf 0 len2))
+
 ;; ----
 
 (define-cpointer-type _gcry_sexp)
@@ -339,6 +359,29 @@
         (arg3 : _pointer = (get-sexp-build-arg args 3))
         (arg4 : _pointer = (get-sexp-build-arg args 4))
         (arg5 : _pointer = (get-sexp-build-arg args 5))
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:c-id gcry_sexp_build
+  #:wrap (compose (allocator gcry_sexp_release) check2))
+
+(define-gcrypt gcry_sexp_build/%b
+  (_fun (fmt arg) ::
+        (result : (_ptr o _gcry_sexp/null))
+        (erroff : (_ptr o _size))
+        (fmt : _string/utf-8)
+        (len : _int = (bytes-length arg))
+        (arg : _bytes)
+        -> (status : _gcry_error)
+        -> (values status result))
+  #:c-id gcry_sexp_build
+  #:wrap (compose (allocator gcry_sexp_release) check2))
+
+(define-gcrypt gcry_sexp_build/%u
+  (_fun (fmt arg) ::
+        (result : (_ptr o _gcry_sexp/null))
+        (erroff : (_ptr o _size))
+        (fmt : _string/utf-8)
+        (arg : _uint)
         -> (status : _gcry_error)
         -> (values status result))
   #:c-id gcry_sexp_build
@@ -401,7 +444,7 @@
 
 (define-gcrypt gcry_pk_encrypt
   (_fun (data pubkey) ::
-        (result : (_ptr o _gcry_sexp))
+        (result : (_ptr o _gcry_sexp/null))
         (data   : _gcry_sexp)
         (pubkey : _gcry_sexp)
         -> (status : _gcry_error)
@@ -410,16 +453,20 @@
 
 (define-gcrypt gcry_pk_decrypt
   (_fun (data privkey) ::
-        (result  : (_ptr o _gcry_sexp))
+        (result  : (_ptr o _gcry_sexp/null))
         (data    : _gcry_sexp)
         (privkey : _gcry_sexp)
         -> (status : _gcry_error)
         -> (values status result))
-  #:wrap (compose (allocator gcry_sexp_release) check2))
+  #:wrap (compose (allocator gcry_sexp_release)
+                  (lambda (f)
+                    (lambda args
+                      (let-values ([(status result) (apply f args)])
+                        (and (= status GPG_ERR_NO_ERROR) result))))))
 
 (define-gcrypt gcry_pk_sign
   (_fun (data privkey) ::
-        (result : (_ptr o _gcry_sexp))
+        (result : (_ptr o _gcry_sexp/null))
         (data   : _gcry_sexp)
         (privkey : _gcry_sexp)
         -> (status : _gcry_error)

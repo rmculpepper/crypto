@@ -22,6 +22,7 @@
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"
+         "pkey.rkt"
          "kdf.rkt")
 (provide gcrypt-factory)
 
@@ -158,6 +159,15 @@
           [_ #f]))
       (or (search block-ciphers block-modes)
           (search stream-ciphers stream-modes)))
+
+    (define gcrypt-read-key (new gcrypt-read-key% (factory this)))
+    (define/override (get-pk-reader)
+      gcrypt-read-key)
+
+    (define/override (get-pk* spec)
+      (case spec
+        [(rsa) (new gcrypt-rsa-impl% (factory this))]
+        [else #f]))
 
     (define/override (get-random)
       gcrypt-random-impl)
