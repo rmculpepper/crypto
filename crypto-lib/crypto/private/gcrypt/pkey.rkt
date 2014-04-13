@@ -28,8 +28,6 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
-;; TODO: factor out common code (eg sign/verify)
-
 (define DSA-Sig-Val
   ;; take and produce integer components as bytes
   (let ([INTEGER-as-bytes (Wrap INTEGER #:encode base256-unsigned->signed #:decode values)])
@@ -230,6 +228,72 @@
       (send r get-context))
     ))
 
+(define gcrypt-pk-key%
+  (class* ctx-base% (pk-key<%>)
+    (init-field pub priv)
+    (inherit-field impl)
+    (super-new)
+
+    (define/public (is-private?) (and priv #t))
+
+    (define/public (get-public-key)
+      (if priv (new this% (impl impl) (pub pub) (priv #f)) this))
+
+    (define/public (get-params)
+      (crypto-error "key parameters not supported"))
+
+    (abstract write-key)
+
+    (define/public (equal-to-key? other)
+      (and (is-a? other gcrypt-pk-key%)
+           (equal? (gcry_sexp->bytes pub)
+                   (gcry_sexp->bytes (get-field pub other)))))
+
+    (define/public (sign digest digest-spec pad)
+      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
+      (unless priv (err/sign-requires-private))
+      (check-digest digest digest-spec)
+      (check-sig-pad pad)
+      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
+      (define sig-sexp (gcry_pk_sign data-sexp priv))
+      (define result (sign-unpack-sig-sexp sig-sexp))
+      (gcry_sexp_release sig-sexp)
+      (gcry_sexp_release data-sexp)
+      result)
+
+    (define/public (verify digest digest-spec pad sig)
+      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
+      (check-digest digest digest-spec)
+      (check-sig-pad pad)
+      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
+      (define sig-sexp (verify-make-sig-sexp sig))
+      (define result (gcry_pk_verify sig-sexp data-sexp pub))
+      (gcry_sexp_release sig-sexp)
+      (gcry_sexp_release data-sexp)
+      result)
+
+    (abstract sign-make-data-sexp
+              sign-unpack-sig-sexp
+              verify-make-sig-sexp
+              check-sig-pad)
+
+    (define/private (check-digest digest digest-spec)
+      (unless (= (bytes-length digest)
+                 (digest-spec-size digest-spec))
+        (crypto-error
+         "digest wrong size\n  digest algorithm: ~s\n  expected size:  ~s\n  digest: ~e"
+         digest-spec (digest-spec-size digest-spec) digest)))
+
+    (define/public (encrypt buf pad)
+      (err/no-encrypt (send impl get-spec)))
+
+    (define/public (decrypt buf pad)
+      (err/no-encrypt (send impl get-spec)))
+
+    (define/public (compute-secret peer-pubkey0)
+      (crypto-error "not supported"))
+    ))
+
 ;; ============================================================
 
 (define allowed-rsa-keygen
@@ -259,20 +323,12 @@
     ))
 
 (define gcrypt-rsa-key%
-  (class* ctx-base% (pk-key<%>)
-    (init-field pub priv)
-    (inherit-field impl)
+  (class gcrypt-pk-key%
+    (inherit-field pub priv impl)
+    (inherit is-private?)
     (super-new)
 
-    (define/public (is-private?) (and priv #t))
-
-    (define/public (get-public-key)
-      (if priv (new gcrypt-rsa-key% (impl impl) (pub pub) (priv #f)) this))
-
-    (define/public (get-params)
-      (crypto-error "key parameters not supported"))
-
-    (define/public (write-key fmt)
+    (define/override (write-key fmt)
       (define (get-mpi sexp tag)
         (define rsa-sexp (gcry_sexp_find_token sexp "rsa"))
         (define tag-sexp (gcry_sexp_find_token rsa-sexp tag))
@@ -309,65 +365,34 @@
         |#
         [else (err/key-format 'rsa (is-private?) fmt)]))
 
-    (define/public (equal-to-key? other)
-      (and (is-a? other gcrypt-rsa-key%)
-           (equal? (gcry_sexp->bytes pub)
-                   (gcry_sexp->bytes (get-field pub other)))))
+    (define/override (sign-make-data-sexp digest digest-spec pad)
+      (define padding (check-sig-pad pad))
+      (gcry_sexp_build "(data (flags %s) (hash %s %b))"
+                       padding
+                       (string->bytes/utf-8 (symbol->string digest-spec))
+                       (cast (bytes-length digest) _uintptr _pointer)
+                       digest))
 
-    (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
-      (unless priv (err/sign-requires-private))
-      (check-digest digest digest-spec)
-      (define padding (check-sig-padding pad))
-      (define data-sexp
-        (gcry_sexp_build "(data (flags %s) (hash %s %b))"
-                         padding
-                         (string->bytes/utf-8 (symbol->string digest-spec))
-                         (cast (bytes-length digest) _uintptr _pointer)
-                         digest))
-      (define sig-sexp (gcry_pk_sign data-sexp priv))
+    (define/override (sign-unpack-sig-sexp sig-sexp)
       (define sig-part (gcry_sexp_find_token sig-sexp "rsa"))
       (define sig-s-part (gcry_sexp_find_token sig-part "s"))
       (define sig-data (gcry_sexp_nth_data sig-s-part 1))
       (gcry_sexp_release sig-s-part)
       (gcry_sexp_release sig-part)
-      (gcry_sexp_release sig-sexp)
-      (gcry_sexp_release data-sexp)
       sig-data)
 
-    (define/private (check-digest digest digest-spec)
-      (unless (= (bytes-length digest)
-                 (digest-spec-size digest-spec))
-        (crypto-error
-         "digest wrong size\n  digest algorithm: ~s\n  expected size:  ~s\n  digest: ~e"
-         digest-spec (digest-spec-size digest-spec) digest)))
-
-    (define/private (check-sig-padding pad)
+    (define/override (check-sig-pad pad)
       (case pad
         [(#f pss) #"pss"]
         [(pkcs1-v1.5) #"pkcs1"]
         [else (crypto-error "RSA padding mode not supported\n  padding: ~e" pad)]))
 
-    (define/public (verify digest digest-spec pad sig)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
-      (check-digest digest digest-spec)
-      (define padding (check-sig-padding pad))
-      (define data-sexp
-        (gcry_sexp_build "(data (flags %s) (hash %s %b))"
-                         padding
-                         (string->bytes/utf-8 (symbol->string digest-spec))
-                         (cast (bytes-length digest) _uintptr _pointer)
-                         digest))
-      (define sig-sexp
-        (gcry_sexp_build "(sig-val (rsa (s %b)))"
-                         (cast (bytes-length sig) _uintptr _pointer)
-                         sig))
-      (define result (gcry_pk_verify sig-sexp data-sexp pub))
-      (gcry_sexp_release sig-sexp)
-      (gcry_sexp_release data-sexp)
-      result)
+    (define/override (verify-make-sig-sexp sig)
+      (gcry_sexp_build "(sig-val (rsa (s %b)))"
+                       (cast (bytes-length sig) _uintptr _pointer)
+                       sig))
 
-    (define/public (encrypt data pad)
+    (define/override (encrypt data pad)
       (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (define padding (check-enc-padding pad))
       (define data-sexp
@@ -387,7 +412,7 @@
       (gcry_sexp_release data-sexp)
       enc-data)
 
-    (define/public (decrypt data pad)
+    (define/override (decrypt data pad)
       (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (unless priv (err/decrypt-requires-private))
       (define padding (check-enc-padding pad))
@@ -408,9 +433,6 @@
         [(#f oaep) #"oaep"]
         [(pkcs1-v1.5) #"pkcs1"]
         [else (crypto-error "RSA padding mode not supported\n  padding: ~e" pad)]))
-
-    (define/public (compute-secret peer-pubkey0)
-      (crypto-error "not supported"))
     ))
 
 
@@ -443,20 +465,12 @@
     ))
 
 (define gcrypt-dsa-key%
-  (class* ctx-base% (pk-key<%>)
-    (init-field pub priv)
-    (inherit-field impl)
+  (class gcrypt-pk-key%
+    (inherit-field pub priv impl)
+    (inherit is-private?)
     (super-new)
 
-    (define/public (is-private?) (and priv #t))
-
-    (define/public (get-public-key)
-      (if priv (new gcrypt-dsa-key% (impl impl) (pub pub) (priv #f)) this))
-
-    (define/public (get-params)
-      (crypto-error "key parameters not supported"))
-
-    (define/public (write-key fmt)
+    (define/override (write-key fmt)
       (define (get-mpi sexp tag)
         (define rsa-sexp (gcry_sexp_find_token sexp "dsa"))
         (define tag-sexp (gcry_sexp_find_token rsa-sexp tag))
@@ -488,21 +502,11 @@
                       ,(mpi->int (get-mpi priv "x"))]))]
         [else (err/key-format 'dsa (is-private?) fmt)]))
 
-    (define/public (equal-to-key? other)
-      (and (is-a? other gcrypt-dsa-key%)
-           (equal? (gcry_sexp->bytes pub)
-                   (gcry_sexp->bytes (get-field pub other)))))
+    (define/override (sign-make-data-sexp digest digest-spec pad)
+      (gcry_sexp_build "(data (flags raw) (value %M))"
+                       (base256->mpi digest)))
 
-    (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
-      (unless priv (err/sign-requires-private))
-      (check-digest digest digest-spec)
-      (unless (member pad '(#f))
-        (crypto-error "DSA padding mode not supported\n  padding: ~e" pad))
-      (define data-sexp
-        (gcry_sexp_build "(data (flags raw) (value %M))"
-                         (base256->mpi digest)))
-      (define sig-sexp (gcry_pk_sign data-sexp priv))
+    (define/override (sign-unpack-sig-sexp sig-sexp)
       (define sig-part (gcry_sexp_find_token sig-sexp "dsa"))
       (define sig-r-part (gcry_sexp_find_token sig-part "r"))
       (define sig-r-data (gcry_sexp_nth_data sig-r-part 1))
@@ -511,49 +515,21 @@
       (gcry_sexp_release sig-r-part)
       (gcry_sexp_release sig-s-part)
       (gcry_sexp_release sig-part)
-      (gcry_sexp_release sig-sexp)
-      (gcry_sexp_release data-sexp)
       (DER-encode DSA-Sig-Val `(sequence [r ,sig-r-data] [s ,sig-s-data])))
 
-    (define/public (verify digest digest-spec pad sig-der)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
-      (check-digest digest digest-spec)
+    (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
-        (crypto-error "DSA padding mode not supported\n  padding: ~e" pad))
-      (define-values (r s) (der->dsa-signature-parts sig-der))
-      (define data-sexp
-        (gcry_sexp_build "(data (flags raw) (value %M))"
-                         (base256->mpi digest)))
-      (define sig-sexp
-        (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))"
-                         (base256->mpi r)
-                         (base256->mpi s)))
-      (define result (gcry_pk_verify sig-sexp data-sexp pub))
-      (gcry_sexp_release sig-sexp)
-      (gcry_sexp_release data-sexp)
-      result)
+        (crypto-error "DSA padding mode not supported\n  padding: ~e" pad)))
 
-    (define/private (der->dsa-signature-parts der)
-      (match (DER-decode DSA-Sig-Val der)
-        [`(sequence [r ,(? bytes? r)] [s ,(? bytes? s)])
-         (values r s)]
-        [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
-
-    (define/private (check-digest digest digest-spec)
-      (unless (= (bytes-length digest)
-                 (digest-spec-size digest-spec))
-        (crypto-error
-         "digest wrong size\n  digest algorithm: ~s\n  expected size:  ~s\n  digest: ~e"
-         digest-spec (digest-spec-size digest-spec) digest)))
-
-    (define/public (encrypt buf pad)
-      (err/no-encrypt (send impl get-spec)))
-
-    (define/public (decrypt buf pad)
-      (err/no-encrypt (send impl get-spec)))
-
-    (define/public (compute-secret peer-pubkey0)
-      (crypto-error "not supported"))
+    (define/override (verify-make-sig-sexp sig-der)
+      (define-values (r s)
+        (match (DER-decode DSA-Sig-Val sig-der)
+          [`(sequence [r ,(? bytes? r)] [s ,(? bytes? s)])
+           (values r s)]
+          [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
+      (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))"
+                       (base256->mpi r)
+                       (base256->mpi s)))
     ))
 
 ;; ============================================================
