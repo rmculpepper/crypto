@@ -188,6 +188,8 @@
 (define GCRY_CIPHER_CAMELLIA128  310)
 (define GCRY_CIPHER_CAMELLIA192  311)
 (define GCRY_CIPHER_CAMELLIA256  312)
+(define GCRY_CIPHER_SALSA20      313)
+(define GCRY_CIPHER_SALSA20R12   314) ;; added v1.6.0
 
 (define GCRY_CIPHER_MODE_NONE    0) ;; Not yet specified.
 (define GCRY_CIPHER_MODE_ECB     1) ;; Electronic codebook.
@@ -197,6 +199,7 @@
 (define GCRY_CIPHER_MODE_OFB     5) ;; Outer feedback.
 (define GCRY_CIPHER_MODE_CTR     6) ;; Counter.
 (define GCRY_CIPHER_MODE_AESWRAP 7) ;; AES-WRAP algorithm.
+(define GCRY_CIPHER_MODE_GCM     9) ;; introduced v1.6.0
 
 (define-gcrypt gcry_cipher_close
   (_fun _gcry_cipher_hd -> _void)

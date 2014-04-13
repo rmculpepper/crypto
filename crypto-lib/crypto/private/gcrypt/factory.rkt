@@ -47,7 +47,7 @@
 
 ;; ----------------------------------------
 
-(define ciphers
+(define block-ciphers
   `(;;[Name   ([KeySize AlgId] ...)]
     [cast128 ([128 ,GCRY_CIPHER_CAST5])]
     [blowfish ([128 ,GCRY_CIPHER_BLOWFISH])]
@@ -64,17 +64,25 @@
                [256 ,GCRY_CIPHER_CAMELLIA256])]
     [des      ([64 ,GCRY_CIPHER_DES])] ;; takes key as 64 bits, high bits ignored
     [des-ede3 ([192 ,GCRY_CIPHER_3DES])] ;; takes key as 192 bits, high bits ignored
-    ;; [rc4   ([??? ,GCRY_CIPHER_ARCFOUR])]
-    ;; [idea  ([??? ,GCRY_CIPHER_IDEA])]
+    [idea     ([128 ,GCRY_CIPHER_IDEA])]
     ))
 
-(define modes
-  `(;[Mode ModeId]
+(define stream-ciphers
+  `(;;[Name ([KeySize AlgId] ...)
+    [rc4        ,GCRY_CIPHER_ARCFOUR]
+    [salsa20    ([32 ,GCRY_CIPHER_SALSA20])]
+    [salsa20r12 ([32 ,GCRY_CIPHER_SALSA20R12])]))
+
+(define block-modes
+  `(;;[Mode ModeId]
     [ecb    ,GCRY_CIPHER_MODE_ECB]
     [cbc    ,GCRY_CIPHER_MODE_CBC]
     [cfb    ,GCRY_CIPHER_MODE_CFB]
     [ofb    ,GCRY_CIPHER_MODE_OFB]
-    [ctr    ,GCRY_CIPHER_MODE_CTR]
+    [ctr    ,GCRY_CIPHER_MODE_CTR]))
+
+(define stream-modes
+  `(;;[Mode ModeId]
     [stream ,GCRY_CIPHER_MODE_STREAM]))
 
 ;; ----------------------------------------
@@ -101,29 +109,35 @@
 
 (define gcrypt-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest)
+    (inherit get-digest get-cipher)
     (super-new)
 
+    ;; get-version : -> (values Nat Nat)
+    (define/private (get-version)
+      ;; Note: returns (values 0 0) if can't parse version.
+      (match (regexp-match #rx"^([0-9]+)\\.([0-9]+)\\.([0-9]+)$" (gcry_check_version #f))
+        [(list _ major minor _)
+         (values (string->number major) (string->number minor))]
+        [_ (values 0 0)]))
+
     (define/override (get-digest* spec)
-      (cond [(assq spec digests)
-             => (lambda (entry)
-                  (match entry
-                    [(list _ algid blocksize)
-                     (and (gcry_md_test_algo algid)
-                          (new gcrypt-digest-impl%
-                               (spec spec)
-                               (factory this)
-                               (md algid)
-                               (blocksize blocksize)))]
-                    [_ #f]))]
-            [else #f]))
+      (match (assq spec digests)
+        [(list _ algid blocksize)
+         (and (gcry_md_test_algo algid)
+              (new gcrypt-digest-impl%
+                   (spec spec)
+                   (factory this)
+                   (md algid)
+                   (blocksize blocksize)))]
+        [_ #f]))
 
     (define/override (get-cipher* spec)
-      (cond [(and (assq (cadr spec) modes)
-                  (assq (car spec) ciphers))
-             => (lambda (entry)
-                  (match entry
-                    [(list _ keylens+algids)
+      (define (search ciphers modes)
+        (match (assq (car spec) ciphers)
+          [(list _ keylens+algids)
+           (match (assq (cadr spec) modes)
+             [(list _ mode-id)
+              (cond [(list? keylens+algids)
                      (for/list ([keylen+algid (in-list keylens+algids)])
                        (cons (quotient (car keylen+algid) 8)
                              (and (gcry_cipher_test_algo (cadr keylen+algid))
@@ -131,9 +145,19 @@
                                        (spec spec)
                                        (factory this)
                                        (cipher (cadr keylen+algid))
-                                       (mode (cadr (assq (cadr spec) modes)))))))]
-                    [_ #f]))]
-            [else #f]))
+                                       (mode mode-id)))))]
+                    [else
+                     (let ([algid keylens+algids])
+                       (and (gcry_cipher_test_algo algid)
+                            (new gcrypt-cipher-impl%
+                                 (spec spec)
+                                 (factory this)
+                                 (cipher algid)
+                                 (mode mode-id))))])]
+             [_ #f])]
+          [_ #f]))
+      (or (search block-ciphers block-modes)
+          (search stream-ciphers stream-modes)))
 
     (define/override (get-random)
       gcrypt-random-impl)
@@ -146,6 +170,38 @@
         ['scrypt
          (new gcrypt-scrypt-impl% (spec spec) (factory this))]
         [_ #f]))
+
+    ;; ----
+
+    (define/public (print-info)
+      (printf "Library info:\n")
+      (printf " version: ~s\n" (gcry_check_version #f))
+      (printf "Available digests:\n")
+      (for ([digest (map car digests)])
+        (when (get-digest digest)
+          (printf " ~v\n" digest)))
+      (printf "Available ciphers:\n")
+      (for ([ciphers (list block-ciphers stream-ciphers)]
+            [modes   (list block-modes   stream-modes)])
+        (for ([cipher (map car ciphers)])
+          (for ([mode (map car modes)])
+            (when (get-cipher (list cipher mode))
+              (printf " ~v\n" (list cipher mode))))))
+      #|
+      (printf "Available PK:\n")
+      (printf "Available EC named curves:\n")
+      |#
+      (printf "Available KDFs:\n")
+      (let-values ([(major minor) (get-version)])
+        ;; PBKDF2 available since 1.5
+        ;; scrypt available since 1.6
+        (when (>= major 1)
+          (when (>= minor 5)
+            (printf " `(pbkdf2 hmac ,DIGEST)  ;; for all digests listed above\n"))
+          (when (>= minor 6)
+            (printf " 'scrypt\n"))))
+      (void))
+
     ))
 
 (define gcrypt-factory (new gcrypt-factory%))

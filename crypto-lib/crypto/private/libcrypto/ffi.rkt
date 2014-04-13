@@ -120,6 +120,18 @@
 (define-crypto OBJ_sn2nid
   (_fun _string/utf-8 -> _int))
 
+(define SSLEAY_VERSION		0)
+(define SSLEAY_CFLAGS		2)
+(define SSLEAY_BUILT_ON		3)
+(define SSLEAY_PLATFORM		4)
+(define SSLEAY_DIR		5)
+
+(define-crypto SSLeay_version
+  (_fun _int -> _string/utf-8))
+
+(define-crypto SSLeay
+  (_fun -> _long))
+
 ;; ============================================================
 ;; Bignum
 

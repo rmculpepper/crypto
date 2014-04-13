@@ -100,7 +100,7 @@
            [camellia   .  [ 16    (16 24 32)]]
            [serpent    .  [ 16    #s(variable-size 0 32 1)]]
            [twofish    .  [ 16    #s(variable-size 8 32 1)]]
-           ;; [idea       .  [ 8     (16)]]
+           [idea       .  [ 8     (16)]]
            ;; [rc5        .  [ 8     #s(variable-size 0 255 1)]]
            ;; [rc5-64     .  [ 16    #s(variable-size 0 255 1)]]
            ;; [rc6-64     .  [ 32    #s(variable-size 0 255 1)]]

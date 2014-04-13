@@ -1,9 +1,7 @@
 To Do
 =====
 
-- better version awareness
-  - eg, scrypt added to gcrypt 1.6
-  - find and add common library versions
+- find and add common library versions
 - need predicate: whether pk works with digest (eg, can't use md5 with ECDSA)
 - need ctx->impl operation?
 - still crashes in paramgen/keygen

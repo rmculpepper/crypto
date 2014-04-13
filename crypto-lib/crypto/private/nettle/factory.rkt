@@ -77,7 +77,7 @@
 
 (define nettle-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest)
+    (inherit get-digest get-cipher)
     (super-new)
 
     (define/override (get-digest* spec)
@@ -141,6 +141,36 @@
          (let ([di (get-digest di-spec)])
            (and di (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
         [_ #f]))
+
+    ;; ----
+
+    (define/public (print-info)
+      (printf "Library info:\n")
+      ;; Nettle seems to provide no way to query version.
+      (printf " Version: unknown\n")
+      (printf "Available digests:\n")
+      (for ([digest (map car digests)])
+        (when (get-digest digest)
+          (printf " ~v\n" digest)))
+      (printf "Available ciphers:\n")
+      (for ([cipher (map car block-ciphers)])
+        (for ([mode (in-list block-modes)])
+          (when (get-cipher (list cipher mode))
+            (printf " ~v\n" (list cipher mode)))))
+      (for ([cipher (map car stream-ciphers)])
+        (when (get-cipher (list cipher 'stream))
+          (printf " ~v\n" (list cipher 'stream))))
+      (printf "Available PK:\n")
+      (for ([pk '(rsa dsa)])
+        ;; FIXME: check impl avail???
+        (printf " ~v\n" pk))
+      #|
+      (printf "Available EC named curves:\n")
+      |#
+      (printf "Available KDFs:\n")
+      (printf " `(pbkdf hmac ,DIGEST)  ;; for all digests listed above\n")
+      (void))
+
     ))
 
 (define nettle-factory (new nettle-factory%))
