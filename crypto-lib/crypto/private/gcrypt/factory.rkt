@@ -168,6 +168,7 @@
       (case spec
         [(rsa) (new gcrypt-rsa-impl% (factory this))]
         [(dsa) (new gcrypt-dsa-impl% (factory this))]
+        ;; [(ec)  (new gcrypt-ec-impl%  (factory this))]
         [else #f]))
 
     (define/override (get-random)

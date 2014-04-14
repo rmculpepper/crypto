@@ -28,6 +28,8 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
+(define gcrypt-curve-names '(secp192r1 secp224r1 secp256r1 secp384r1 secp521r1))
+
 (define DSA-Sig-Val
   ;; take and produce integer components as bytes
   (let ([INTEGER-as-bytes (Wrap INTEGER #:encode base256-unsigned->signed #:decode values)])
@@ -61,7 +63,6 @@
                       (define pub (make-rsa-public-key modulus publicExponent))
                       (define impl (send factory get-pk 'rsa))
                       (new gcrypt-rsa-key% (impl impl) (pub pub) (priv #f))])]
-                  #|
                   [(equal? alg-oid id-dsa)
                    (match params
                      [`(sequence [p ,p] [q ,q] [g ,g])
@@ -69,6 +70,7 @@
                       (define impl (send factory get-pk 'dsa))
                       (new gcrypt-dsa-key% (impl impl) (pub pub) (priv #f))])]
                   ;; GCrypt has no DH support.
+                  #|
                   [(equal? alg-oid id-ecPublicKey)
                    (match params
                      [`(namedCurve ,curve-oid)
@@ -124,14 +126,25 @@
                       (new gcrypt-dsa-key% (impl impl) (pub pub) (priv priv))])]
                   #|
                   [(equal? alg-oid id-ecPublicKey)
-                   (match alg-params
-                     [`(namedCurve ,curve-oid)
-                      (cond [(curve-oid->name curve-oid)
-                             => (lambda (curve-name)
-                                  (define q (___ gcry_mpi_ec_get_point ___))
-                                  (define pub (make-ec-public-key curve-name q))
-                                  (define priv (make-ec-private-key curve-name q privateKey)))]
-                            [else #f])])]
+                   (define curve
+                     (match alg-params
+                       [`(namedCurve ,curve-oid)
+                        (cond [(curve-oid->name curve-oid) => values]
+                              [else #f])]))
+                   (match privateKey
+                     [`(sequence [version 1]
+                                 [privateKey ,privkey]
+                                 [parameters ,params]
+                                 [publicKey ,pubkey])
+                      ;; FIXME: recover q if publicKey field not present
+                      ;;  -- grr, gcrypt doesn't seem to provide point<->bytes
+                      ;;     support
+                      (define q pubkey)
+                      (define pub (make-ec-public-key curve q))
+                      (define priv (make-ec-private-key curve q privkey))
+                      (define impl (send factory get-pk 'ec))
+                      (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv))]
+                     [_ #f])]
                   |#
                   [else #f])]
            [_ #f])]
@@ -191,7 +204,7 @@
         (for/first ([entry (in-list known-curves)]
                     #:when (equal? (cdr entry) oid))
           (car entry)))
-      (and (memq name-sym '(secp192r1 secp224r1 secp256r1 secp384r1 secp521r1))
+      (and (memq name-sym gcrypt-curve-names)
            (string->bytes/latin-1 (symbol->string name-sym))))
 
     (define/public (read-params sp) #f)
@@ -472,8 +485,8 @@
 
     (define/override (write-key fmt)
       (define (get-mpi sexp tag)
-        (define rsa-sexp (gcry_sexp_find_token sexp "dsa"))
-        (define tag-sexp (gcry_sexp_find_token rsa-sexp tag))
+        (define dsa-sexp (gcry_sexp_find_token sexp "dsa"))
+        (define tag-sexp (gcry_sexp_find_token dsa-sexp tag))
         (gcry_sexp_nth_mpi tag-sexp 1))
       (case fmt
         [(SubjectPublicKeyInfo)
@@ -526,12 +539,122 @@
         (match (DER-decode DSA-Sig-Val sig-der)
           [`(sequence [r ,(? bytes? r)] [s ,(? bytes? s)])
            (values r s)]
-          [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
+          [_ (crypto-error "signature is not well-formed")]))
       (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))"
                        (base256->mpi r)
                        (base256->mpi s)))
     ))
 
 ;; ============================================================
-;; ============================================================
+
+#|
+
+#|
+Problems with gcrypt EC keys:
+ - infeasible to recover Q (public key) from private components,
+   so can't read PrivateKeyInfo (unless pubkey included --- but seems rare?)
+ - keygen returns key tagged "ecdh" ??!! with curve params rather than named curve (v1.5)
+   so can't generate keys
+|#
+
+(define allowed-ec-keygen
+  `((curve ,string? "string?")))
+
+(define gcrypt-ec-impl%
+  (class gcrypt-pk-impl%
+    (inherit-field spec factory)
+    (inherit get-random-ctx *generate-key)
+    (super-new (spec 'dsa))
+
+    (define/override (can-encrypt?) #f)
+    (define/override (can-sign?) #t)
+
+    (define/override (generate-key config)
+      (check-keygen-spec config allowed-ec-keygen)
+      (let ([curve (keygen-spec-ref config 'curve)])
+        (*generate-key
+         (gcry_sexp_build "(genkey (ecc (curve %s)))"
+                          (string->bytes/utf-8 curve))
+         gcrypt-ec-key%)))
+    ))
+
+(define gcrypt-ec-key%
+  (class gcrypt-pk-key%
+    (inherit-field pub priv impl)
+    (inherit is-private?)
+    (super-new)
+
+    (define/override (write-key fmt)
+      (define (get-mpi sexp tag)
+        (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
+        (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
+        (gcry_sexp_nth_mpi tag-sexp 1))
+      (define (get-data sexp tag)
+        (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
+        (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
+        (gcry_sexp_nth_data tag-sexp 1))
+      (define (get-key-params sexp)
+        (eprintf "sexp = ~e\n" (gcry_sexp->bytes sexp))
+        (define curve (string->symbol (bytes->string/utf-8 (get-data sexp "curve"))))
+        (cond [(assq curve known-curves) => cdr]
+              [else (crypto-error "unknown curve name\n  curve: ~e" curve)]))
+      (case fmt
+        [(SubjectPublicKeyInfo)
+         (DER-encode
+          SubjectPublicKeyInfo
+          `(sequence [algorithm
+                      (sequence [algorithm ,id-ecPublicKey]
+                                [parameters ,(get-key-params pub)])]
+                     [subjectPublicKey
+                      ,(get-data pub "q")]))]
+        [(PrivateKeyInfo)
+         (unless (is-private?) (err/key-format 'ec #f fmt))
+         (DER-encode
+          PrivateKeyInfo
+          `(sequence [version 0]
+                     [privateKeyAlgorithm
+                      (sequence [algorithm ,id-ecPublicKey]
+                                [parameters ,(get-key-params priv)])]
+                     [privateKey
+                      (sequence [version 1]
+                                [privateKey
+                                 ,(mpi->base256 (get-mpi priv "d"))]
+                                [parameters
+                                 ,(get-key-params priv)]
+                                [publicKey
+                                 ,(DER-encode BIT-STRING
+                                              (bit-string (get-data priv "q") 0))])]))]
+        [else (err/key-format 'dsa (is-private?) fmt)]))
+
+    (define/override (sign-make-data-sexp digest digest-spec pad)
+      (gcry_sexp_build "(data (flags raw) (value %M))"
+                       (base256->mpi digest)))
+
+    (define/override (sign-unpack-sig-sexp sig-sexp)
+      (define sig-part (gcry_sexp_find_token sig-sexp "ecdsa"))
+      (define sig-r-part (gcry_sexp_find_token sig-part "r"))
+      (define sig-r-data (gcry_sexp_nth_data sig-r-part 1))
+      (define sig-s-part (gcry_sexp_find_token sig-part "s"))
+      (define sig-s-data (gcry_sexp_nth_data sig-s-part 1))
+      (gcry_sexp_release sig-r-part)
+      (gcry_sexp_release sig-s-part)
+      (gcry_sexp_release sig-part)
+      (DER-encode DSA-Sig-Val `(sequence [r ,sig-r-data] [s ,sig-s-data])))
+
+    (define/override (check-sig-pad pad)
+      (unless (member pad '(#f))
+        (crypto-error "DSA padding mode not supported\n  padding: ~e" pad)))
+
+    (define/override (verify-make-sig-sexp sig-der)
+      (define-values (r s)
+        (match (DER-decode DSA-Sig-Val sig-der)
+          [`(sequence [r ,(? bytes? r)] [s ,(? bytes? s)])
+           (values r s)]
+          [_ (crypto-error "signature is not well-formed")]))
+      (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))"
+                       (base256->mpi r)
+                       (base256->mpi s)))
+    ))
+|#
+
 ;; ============================================================
