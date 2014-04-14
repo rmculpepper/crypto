@@ -275,26 +275,11 @@
 (define-gcrypt gcry_mpi_powm
   (_fun _gcry_mpi _gcry_mpi _gcry_mpi _gcry_mpi -> _void))
 
-
-#|
 (define-gcrypt gcry_mpi_sub_ui
-  (_fun (dst : _gcry_mpi)
-        (a   : _gcry_mpi)
-        (b   : _ulong)
-        -> _void))
-
-(define-gcrypt gcry_mpi_mul
-  (_fun (dst : _gcry_mpi)
-        (a   : _gcry_mpi)
-        (b   : _gcry_mpi)
-        -> _void))
+  (_fun _gcry_mpi _gcry_mpi _ulong -> _void))
 
 (define-gcrypt gcry_mpi_invm
-  (_fun (dst : _gcry_mpi)
-        (a   : _gcry_mpi)
-        (m   : _gcry_mpi)
-        -> _int))
-|#
+  (_fun _gcry_mpi _gcry_mpi _gcry_mpi -> _bool))
 
 (define-gcrypt gcry_mpi_get_nbits
   (_fun _gcry_mpi -> _uint))
