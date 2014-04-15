@@ -111,7 +111,7 @@
                                    (dsa_private_key_struct-x priv)
                                    (dsa_public_key_struct-p pub))
                       (define impl (send factory get-pk 'dsa))
-                      (new nettle-dsa-key% (impl impl) (pub pub) (priv #f))])]
+                      (new nettle-dsa-key% (impl impl) (pub pub) (priv priv))])]
                   [else #f])]
            [_ #f])]
         [(RSAPrivateKey)
@@ -473,7 +473,7 @@
           [(sha1) nettle_dsa_sha1_verify_digest]
           [(sha256) nettle_dsa_sha256_verify_digest]
           [else
-           (crypto-error "DSA verification not supported for digest\n  digest algorithm: ~s\n"
+           (crypto-error "DSA verification not supported for digest\n  digest algorithm: ~s"
                          digest-spec)]))
       (unless (member pad '(#f))
         (crypto-error "DSA padding not supported\n  padding: ~s" pad))
