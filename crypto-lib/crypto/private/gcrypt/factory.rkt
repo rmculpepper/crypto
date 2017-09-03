@@ -31,26 +31,41 @@
 (define digests
   `(;;[Name     AlgId               BlockSize]
     (sha1       ,GCRY_MD_SHA1       64)
-    (ripemd160  ,GCRY_MD_RMD160     64) ;; Doesn't seem to be available!
     (md2        ,GCRY_MD_MD2        16)
+    (md5        ,GCRY_MD_MD5        64)
     (sha224     ,GCRY_MD_SHA224     64)
     (sha256     ,GCRY_MD_SHA256     64)
     (sha384     ,GCRY_MD_SHA384     128)
     (sha512     ,GCRY_MD_SHA512     128)
     (md4        ,GCRY_MD_MD4        64)
     (whirlpool  ,GCRY_MD_WHIRLPOOL  64)
-    (tiger1     ,GCRY_MD_TIGER1     64)
-    (tiger2     ,GCRY_MD_TIGER2     64)
+    (sha3-224   ,GCRY_MD_SHA3_224   144)
+    (sha3-256   ,GCRY_MD_SHA3_256   136)
+    (sha3-384   ,GCRY_MD_SHA3_384   104)
+    (sha3-512   ,GCRY_MD_SHA3_512   72)
+    (shake128   ,GCRY_MD_SHAKE128   168)
+    (shake256   ,GCRY_MD_SHAKE256   136)
+    (blake2b-512 ,GCRY_MD_BLAKE2B_512 128)
+    (blake2b-384 ,GCRY_MD_BLAKE2B_384 128)
+    (blake2b-256 ,GCRY_MD_BLAKE2B_256 128)
+    (blake2b-160 ,GCRY_MD_BLAKE2B_160 128)
+    (blake2s-256 ,GCRY_MD_BLAKE2S_256 64)
+    (blake2s-224 ,GCRY_MD_BLAKE2S_224 64)
+    (blake2s-160 ,GCRY_MD_BLAKE2S_160 64)
+    (blake2s-128 ,GCRY_MD_BLAKE2S_128 64)
     #|
+    (ripemd160  ,GCRY_MD_RMD160     64) ;; Doesn't seem to be available!
     (haval      ,GCRY_MD_HAVAL      128)
     (tiger      ,GCRY_MD_TIGER      #f) ;; special old GnuPG-compat output order
+    (tiger1     ,GCRY_MD_TIGER1     64)
+    (tiger2     ,GCRY_MD_TIGER2     64)
     |#))
 
 ;; ----------------------------------------
 
 (define block-ciphers
   `(;;[Name   ([KeySize AlgId] ...)]
-    [cast128 ([128 ,GCRY_CIPHER_CAST5])]
+    [cast128  ([128 ,GCRY_CIPHER_CAST5])]
     [blowfish ([128 ,GCRY_CIPHER_BLOWFISH])]
     [aes      ([128 ,GCRY_CIPHER_AES]
                [192 ,GCRY_CIPHER_AES192]
@@ -63,7 +78,7 @@
     [camellia ([128 ,GCRY_CIPHER_CAMELLIA128]
                [192 ,GCRY_CIPHER_CAMELLIA192]
                [256 ,GCRY_CIPHER_CAMELLIA256])]
-    [des      ([64 ,GCRY_CIPHER_DES])] ;; takes key as 64 bits, high bits ignored
+    [des      ([64  ,GCRY_CIPHER_DES])] ;; takes key as 64 bits, high bits ignored
     [des-ede3 ([192 ,GCRY_CIPHER_3DES])] ;; takes key as 192 bits, high bits ignored
     [idea     ([128 ,GCRY_CIPHER_IDEA])]
     ))
@@ -72,7 +87,9 @@
   `(;;[Name ([KeySize AlgId] ...)
     [rc4        ,GCRY_CIPHER_ARCFOUR]
     [salsa20    ([32 ,GCRY_CIPHER_SALSA20])]
-    [salsa20r12 ([32 ,GCRY_CIPHER_SALSA20R12])]))
+    [salsa20r12 ([32 ,GCRY_CIPHER_SALSA20R12])]
+    [chacha20   ([32 ,GCRY_CIPHER_CHACHA20])]
+    ))
 
 (define block-modes
   `(;;[Mode ModeId]
@@ -80,11 +97,18 @@
     [cbc    ,GCRY_CIPHER_MODE_CBC]
     [cfb    ,GCRY_CIPHER_MODE_CFB]
     [ofb    ,GCRY_CIPHER_MODE_OFB]
-    [ctr    ,GCRY_CIPHER_MODE_CTR]))
+    [ctr    ,GCRY_CIPHER_MODE_CTR]
+    ;; [ccm    ,GCRY_CIPHER_MODE_CCM]
+    [gcm    ,GCRY_CIPHER_MODE_GCM]
+    [ocb    ,GCRY_CIPHER_MODE_OCB]
+    ;; [xts    ,GCRY_CIPHER_MODE_XTS]
+    ))
 
 (define stream-modes
   `(;;[Mode ModeId]
-    [stream ,GCRY_CIPHER_MODE_STREAM]))
+    [stream ,GCRY_CIPHER_MODE_STREAM]
+    [poly1305 ,GCRY_CIPHER_MODE_POLY1305] ;; chacha20 only?
+    ))
 
 ;; ----------------------------------------
 

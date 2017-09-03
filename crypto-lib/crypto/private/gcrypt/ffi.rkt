@@ -20,7 +20,7 @@
          ffi/unsafe/atomic)
 (provide (protect-out (all-defined-out)))
 
-(define libgcrypt (ffi-lib "libgcrypt" '(#f "20" "11")))
+(define libgcrypt (ffi-lib "libgcrypt" '(#f "20")))
 
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)
@@ -94,6 +94,20 @@
 (define GCRY_MD_WHIRLPOOL      305)
 (define GCRY_MD_TIGER1         306) ;; TIGER (fixed).
 (define GCRY_MD_TIGER2         307) ;; TIGER2 variant.
+(define GCRY_MD_SHA3_224       312)
+(define GCRY_MD_SHA3_256       313)
+(define GCRY_MD_SHA3_384       314)
+(define GCRY_MD_SHA3_512       315)
+(define GCRY_MD_SHAKE128       316)
+(define GCRY_MD_SHAKE256       317)
+(define GCRY_MD_BLAKE2B_512    318)
+(define GCRY_MD_BLAKE2B_384    319)
+(define GCRY_MD_BLAKE2B_256    320)
+(define GCRY_MD_BLAKE2B_160    321)
+(define GCRY_MD_BLAKE2S_256    322)
+(define GCRY_MD_BLAKE2S_224    323)
+(define GCRY_MD_BLAKE2S_160    324)
+(define GCRY_MD_BLAKE2S_128    325)
 
 (define GCRY_MD_FLAG_SECURE    1) ;; Allocate all buffers in "secure" memory.
 (define GCRY_MD_FLAG_HMAC      2) ;; Make an HMAC out of this algorithm.
@@ -197,6 +211,7 @@
 (define GCRY_CIPHER_CAMELLIA256  312)
 (define GCRY_CIPHER_SALSA20      313)
 (define GCRY_CIPHER_SALSA20R12   314) ;; added v1.6.0
+(define GCRY_CIPHER_CHACHA20     316) ;; added ??
 
 (define GCRY_CIPHER_MODE_NONE    0) ;; Not yet specified.
 (define GCRY_CIPHER_MODE_ECB     1) ;; Electronic codebook.
@@ -206,7 +221,12 @@
 (define GCRY_CIPHER_MODE_OFB     5) ;; Outer feedback.
 (define GCRY_CIPHER_MODE_CTR     6) ;; Counter.
 (define GCRY_CIPHER_MODE_AESWRAP 7) ;; AES-WRAP algorithm.
+(define GCRY_CIPHER_MODE_CCM     8)
 (define GCRY_CIPHER_MODE_GCM     9) ;; introduced v1.6.0
+(define GCRY_CIPHER_MODE_POLY1305 10) ;; introduced ???
+(define GCRY_CIPHER_MODE_OCB     11)
+(define GCRY_CIPHER_MODE_CFB8    12)
+(define GCRY_CIPHER_MODE_XTS     13)
 
 (define-gcrypt gcry_cipher_close
   (_fun _gcry_cipher_hd -> _void)
