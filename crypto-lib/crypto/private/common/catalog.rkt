@@ -123,8 +123,10 @@
 ;;   ofb: iv=1 block, stream cipher
 ;;   cfb: iv=1 block, stream cipher
 ;;   ctr: iv=1 block, stream cipher
-;;   gcm: iv=variable, 12 bytes (3/4 block) typical, stream cipher
+;;   gcm: nonce up to 1 block (12 bytes typical), stream cipher
 ;;   ccm: NOTE: offline/nonincremental: needs length before starting; don't support
+;;   ocb (RFC 7253): nonce=1-15 bytes (12 recommended), tag up to 16 bytes
+;;   eax: nonce up to 1 block, tag up to 1 block
 (define known-block-modes
   '(;; Mode IVblocks IVbytes Type ATblocks
     [ecb 0 0 block   #f]
@@ -133,12 +135,24 @@
     [cfb 1 0 stream  #f]
     [ctr 1 0 stream  #f]
     [gcm 0 12 stream  1]
+    [ocb 0 12 stream  1]
     ))
 
 (define (block-mode? x) (and (symbol? x) (assq x known-block-modes) #t))
 
+;; Mode effects:
+;;   stream: no nonce, no auth tag
+;;   poly1305 (rfc7539: chacha20-poly1305): 12 byte nonce, 16 byte auth tag
+(define known-stream-modes
+  '(;; Mode   IVbytes ATbytes
+    [stream   0       #f]
+    [poly1305 12      16]
+    ))
+
+(define (stream-mode? x) (and (symbol? x) (assq x known-stream-modes) #t))
+
 ;; A CipherSpec is one of
-;;  - (list StreamCipherName 'stream)
+;;  - (list StreamCipherName StreamMode)
 ;;  - (list BlockCipherName BlockMode)
 ;; BlockMode is one of 'ecb, 'cbc, 'cfb, 'ofb, 'ctr.
 ;; BlockCipherName is a symbol in the domain of known-block-ciphers,
@@ -146,7 +160,7 @@
 
 (define (cipher-spec? x)
   (match x
-    [(list (? symbol? cipher-name) 'stream)
+    [(list (? symbol? cipher-name) (? stream-mode?))
      (and (hash-ref known-stream-ciphers cipher-name #f) #t)]
     [(list (? symbol? cipher-name) (? block-mode?))
      (and (hash-ref known-block-ciphers cipher-name #f) #t)]
@@ -156,7 +170,7 @@
 
 (define (cipher-spec-key-sizes cipher-spec)
   (match cipher-spec
-    [(list cipher-name 'stream)
+    [(list cipher-name (? stream-mode?))
      (match (hash-ref known-stream-ciphers cipher-name #f)
        [(list _ allowed-keys) allowed-keys]
        [_ #f])]
@@ -188,8 +202,9 @@
 
 (define (cipher-spec-default-auth-size cipher-spec)
   (match cipher-spec
-    [(list cipher-name 'stream)
-     0]
+    [(list cipher-name (? stream-mode? mode))
+     (match (assq mode known-stream-modes)
+       [(list _ _ ATbytes) ATbytes])]
     [(list cipher-name (? block-mode? mode))
      (match (hash-ref known-block-ciphers cipher-name #f)
        [(list block-size allowed-keys)
@@ -200,7 +215,7 @@
 
 (define (cipher-spec-block-size cipher-spec)
   (match cipher-spec
-    [(list cipher-name 'stream) 1]
+    [(list cipher-name (? stream-mode?)) 1]
     [(list (? symbol? cipher-name) (? block-mode? mode))
      (let ([entry (hash-ref known-block-ciphers cipher-name #f)])
        (match entry
@@ -212,10 +227,12 @@
 
 (define (cipher-spec-iv-size cipher-spec)
   (match cipher-spec
-    [(list cipher-name 'stream)
-     (match (hash-ref known-stream-ciphers cipher-name #f)
-       [(list iv-bytes allowed-keys)
-        iv-bytes])]
+    [(list cipher-name (? stream-mode? mode))
+     (max (match (hash-ref known-stream-ciphers cipher-name #f)
+            [(list iv-bytes allowed-keys)
+             iv-bytes])
+          (match (assq mode known-stream-modes)
+            [(list _ IVbytes _) IVbytes]))]
     [(list (? symbol? cipher-name) (? block-mode? mode))
      (match (hash-ref known-block-ciphers cipher-name #f)
        [(list block-size allowed-keys)
