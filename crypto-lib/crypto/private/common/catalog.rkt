@@ -144,6 +144,7 @@
     [ctr 1 0 stream  #f]
     [gcm 0 12 stream  1]
     [ocb 0 12 stream  1]
+    [eax 0 12 stream  1]
     ))
 
 (define (block-mode? x) (and (symbol? x) (assq x known-block-modes) #t))
