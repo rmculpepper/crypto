@@ -38,7 +38,12 @@
     [sha224    "sha224"]
     [sha256    "sha256"]
     [sha384    "sha384"]
-    [sha512    "sha512"]))
+    [sha512    "sha512"]
+    [sha3-224  "sha3_224"]
+    [sha3-256  "sha3_256"]
+    [sha3-384  "sha3_384"]
+    [sha3-512  "sha3_512"]
+    ))
 
 ;; ----------------------------------------
 
@@ -63,15 +68,20 @@
                  [192 "twofish192"]
                  [256 "twofish256"])]))
 
-(define block-modes '(ecb cbc ctr gcm))
+(define block-modes `(ecb cbc ctr
+                      ,@(if nettle_gcm_set_key '(gcm) '())
+                      ,@(if nettle_eax_set_key '(eax) '())))
 
 (define stream-ciphers
   `(;;[Name String/([KeySize String] ...)]
     [salsa20 "salsa20"]
     [salsa20r12 "salsa20r12"]
+    [chacha20 "chacha"]
     [rc4 "arcfour128"]
     ;; "arctwo40", "arctwo64", "arctwo128"
     ))
+
+(define stream-modes '(stream)) ;; FIXME: poly1305 (but only for chacha20)
 
 ;; ----------------------------------------
 
@@ -146,8 +156,7 @@
 
     (define/public (print-info)
       (printf "Library info:\n")
-      ;; Nettle seems to provide no way to query version.
-      (printf " Version: unknown\n")
+      (printf " Version: ~s.~s\n" (or (nettle_version_major) '?) (or (nettle_version_minor) '?))
       (printf "Available digests:\n")
       (for ([digest (map car digests)])
         (when (get-digest digest)
@@ -158,8 +167,9 @@
           (when (get-cipher (list cipher mode))
             (printf " ~v\n" (list cipher mode)))))
       (for ([cipher (map car stream-ciphers)])
-        (when (get-cipher (list cipher 'stream))
-          (printf " ~v\n" (list cipher 'stream))))
+        (for ([mode (in-list stream-modes)])
+          (when (get-cipher (list cipher mode))
+            (printf " ~v\n" (list cipher mode)))))
       (printf "Available PK:\n")
       (for ([pk '(rsa dsa)])
         ;; FIXME: check impl avail???

@@ -21,10 +21,13 @@
          "../gmp/ffi.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libnettle (ffi-lib "libnettle" '("4" #f)))
+(define libnettle (ffi-lib "libnettle" '("6" #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
+
+(define-nettle nettle_version_major (_fun -> _int) #:fail (lambda () (lambda () #f)))
+(define-nettle nettle_version_minor (_fun -> _int) #:fail (lambda () (lambda () #f)))
 
 ;; ----
 
@@ -49,7 +52,7 @@
 ;; struct nettle_hash *nettle_hashes[], array terminated by NULL
 (define nettle_hashes (ffi-obj #"nettle_hashes" libnettle))
 
-(define nettle-hashes
+(define nettle-regular-hashes
   (let ([ptr nettle_hashes])
     (let loop ([i 0])
       (let ([next (ptr-ref ptr _nettle_hash-pointer/null i)])
@@ -57,6 +60,18 @@
             (cons (list (nettle_hash-name next) next)
                   (loop (add1 i)))
             null)))))
+
+(define nettle-more-hashes
+  (filter values
+          (map (lambda (name)
+                 (let ([obj (get-ffi-obj name libnettle _nettle_hash)])
+                   (and obj (list (nettle_hash-name obj) obj))))
+               '(#"nettle_sha3_224"
+                 #"nettle_sha3_256"
+                 #"nettle_sha3_384"
+                 #"nettle_sha3_512"))))
+
+(define nettle-hashes (append nettle-regular-hashes nettle-more-hashes))
 
 ;; ----
 
@@ -156,12 +171,14 @@
                       nettle_blowfish_encrypt nettle_blowfish_decrypt
                       null)))
 
+(define _nettle_set_iv/nonce_func (_fun _CIPHER_CTX _pointer -> _void))
+
 (define SALSA20_CONTEXT_SIZE (* 4 16))
 (define SALSA20_KEY_SIZE 32)
 (define SALSA20_BLOCK_SIZE 64)
 (define SALSA20_IV_SIZE 8)
 (define-nettle nettle_salsa20_set_key _nettle_set_key_func)
-(define-nettle nettle_salsa20_set_iv (_fun _CIPHER_CTX _pointer -> _void))
+(define-nettle nettle_salsa20_set_iv _nettle_set_iv/nonce_func)
 (define-nettle nettle_salsa20_crypt _nettle_crypt_func #:fail (lambda () #f))
 (define-nettle nettle_salsa20r12_crypt _nettle_crypt_func #:fail (lambda () #f))
 
@@ -181,13 +198,32 @@
                       nettle_salsa20r12_crypt nettle_salsa20r12_crypt
                       `((set-iv ,nettle_salsa20_set_iv)))))
 
+(define CHACHA_CONTEXT_SIZE (* 4 16))
+(define CHACHA_KEY_SIZE 32)
+(define CHACHA_BLOCK_SIZE 64)
+(define CHACHA_NONCE_SIZE 8)
+(define CHACHA_NONCE96_SIZE 12)
+(define-nettle nettle_chacha_set_key _nettle_set_key_func)
+(define-nettle nettle_chacha_set_nonce _nettle_set_iv/nonce_func)
+(define-nettle nettle_chacha_set_nonce96 _nettle_set_iv/nonce_func)
+(define-nettle nettle_chacha_crypt _nettle_crypt_func #:fail (lambda () #f))
+
+(define chacha-cipher
+  (and nettle_chacha_crypt
+       (nettle-cipher "chacha"
+                      CHACHA_CONTEXT_SIZE CHACHA_BLOCK_SIZE CHACHA_KEY_SIZE
+                      nettle_chacha_set_key nettle_chacha_set_key
+                      nettle_chacha_crypt nettle_chacha_crypt
+                      `((set-iv ,nettle_chacha_set_nonce)))))
+
 (define nettle-all-ciphers
   (let* ([more-ciphers
           (append nettle-regular-ciphers
                   (filter values
                           (list blowfish-cipher
                                 salsa20-cipher
-                                salsa20r12-cipher)))])
+                                salsa20r12-cipher
+                                chacha-cipher)))])
     (for/list ([cipher (in-list more-ciphers)])
       (list (nettle-cipher-name cipher) cipher))))
 
@@ -223,6 +259,27 @@
         (src     : _pointer)
         -> _void))
 
+(define EAX_BLOCK_SIZE 16)
+(define EAX_DIGEST_SIZE 16)
+(define EAX_KEY_SIZE (* 2 16))
+(define EAX_CTX_SIZE (* 4 16))
+(define-cpointer-type _eax_key)
+(define-cpointer-type _eax_ctx)
+
+(define-nettle nettle_eax_set_key
+  (_fun _eax_key _CIPHER_CTX _nettle_crypt_func -> _void)
+  #:fail (lambda () #f))
+(define-nettle nettle_eax_set_nonce
+  (_fun _eax_ctx _eax_key _CIPHER_CTX _nettle_crypt_func _size _pointer -> _void))
+(define-nettle nettle_eax_update
+  (_fun _eax_ctx _eax_key _CIPHER_CTX _nettle_crypt_func _size _pointer -> _void))
+(define-nettle nettle_eax_encrypt
+  (_fun _eax_ctx _eax_key _CIPHER_CTX _nettle_crypt_func _size _pointer _pointer -> _void))
+(define-nettle nettle_eax_decrypt
+  (_fun _eax_ctx _eax_key _CIPHER_CTX _nettle_crypt_func _size _pointer _pointer -> _void))
+(define-nettle nettle_eax_digest
+  (_fun _eax_ctx _eax_key _CIPHER_CTX _nettle_crypt_func _size _pointer -> _void))
+
 (define GCM_BLOCK_SIZE 16)
 (define GCM_IV_SIZE (- GCM_BLOCK_SIZE 4))
 (define GCM_TABLE_BITS 8)
@@ -236,7 +293,8 @@
 (define-cpointer-type _gcm_ctx)
 
 (define-nettle nettle_gcm_set_key
-  (_fun _gcm_key _CIPHER_CTX _nettle_crypt_func -> _void))
+  (_fun _gcm_key _CIPHER_CTX _nettle_crypt_func -> _void)
+  #:fail (lambda () #f))
 (define-nettle nettle_gcm_set_iv
   (_fun _gcm_ctx _gcm_key _uint _pointer -> _void))
 
@@ -317,7 +375,8 @@
 
 ;; ----
 
-(define-ffi-definer define-nettleHW (ffi-lib "libhogweed"))
+(define-ffi-definer define-nettleHW (ffi-lib "libhogweed" '("4" #f))
+  #:default-make-fail make-not-available)
 
 (define-cstruct _rsa_public_key_struct
   ([size _uint]  ;; size of modulo in octets, also size in sigs
