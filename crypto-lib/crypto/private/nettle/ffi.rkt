@@ -108,7 +108,8 @@
 (define-cpointer-type _CIPHER_CTX)
 
 (define _nettle_set_key_func (_fun _CIPHER_CTX _pointer -> _void))
-(define _nettle_crypt_func    _fpointer)
+(define _nettle_crypt_func   _fpointer)
+(define _rkt_crypt_func      (_fun _CIPHER_CTX _size _pointer _pointer -> _void))
 
 (define _nettle_set_key/len_func
   (_fun (ctx key) ::
@@ -132,6 +133,7 @@
                        context-size block-size key-size
                        set-encrypt-key set-decrypt-key
                        encrypt decrypt
+                       rkt-encrypt rkt-decrypt
                        extras))
 
 ;; struct nettle_cipher *nettle_ciphers[], array terminated by NULL
@@ -150,6 +152,8 @@
                                  (nettle_cipher-set_decrypt_key next)
                                  (nettle_cipher-encrypt next)
                                  (nettle_cipher-decrypt next)
+                                 (cast (nettle_cipher-encrypt next) _fpointer _rkt_crypt_func)
+                                 (cast (nettle_cipher-decrypt next) _fpointer _rkt_crypt_func)
                                  null)
                   (loop (add1 i)))
             null)))))
@@ -170,6 +174,8 @@
                       BLOWFISH_CONTEXT_SIZE BLOWFISH_BLOCK_SIZE BLOWFISH_KEY_SIZE
                       nettle_blowfish_set_key nettle_blowfish_set_key
                       nettle_blowfish_encrypt nettle_blowfish_decrypt
+                      (cast nettle_blowfish_encrypt _fpointer _rkt_crypt_func)
+                      (cast nettle_blowfish_decrypt _fpointer _rkt_crypt_func)
                       null)))
 
 (define _nettle_set_iv/nonce_func (_fun _CIPHER_CTX _pointer -> _void))
@@ -179,7 +185,7 @@
 (define SALSA20_BLOCK_SIZE 64)
 (define SALSA20_IV_SIZE 8)
 (define-nettle nettle_salsa20_set_key _nettle_set_key/len_func)
-(define-nettle nettle_salsa20_set_iv _nettle_set_iv/nonce_func)
+(define-nettle nettle_salsa20_set_nonce _nettle_set_iv/nonce_func)
 (define-nettle nettle_salsa20_crypt _nettle_crypt_func #:fail (lambda () #f))
 (define-nettle nettle_salsa20r12_crypt _nettle_crypt_func #:fail (lambda () #f))
 
@@ -189,7 +195,9 @@
                       SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
                       nettle_salsa20_set_key nettle_salsa20_set_key
                       nettle_salsa20_crypt nettle_salsa20_crypt
-                      `((set-iv ,nettle_salsa20_set_iv)))))
+                      (cast nettle_salsa20_crypt _fpointer _rkt_crypt_func)
+                      (cast nettle_salsa20_crypt _fpointer _rkt_crypt_func)
+                      `((set-iv ,nettle_salsa20_set_nonce)))))
 
 (define salsa20r12-cipher
   (and nettle_salsa20r12_crypt
@@ -197,7 +205,9 @@
                       SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
                       nettle_salsa20_set_key nettle_salsa20_set_key
                       nettle_salsa20r12_crypt nettle_salsa20r12_crypt
-                      `((set-iv ,nettle_salsa20_set_iv)))))
+                      (cast nettle_salsa20r12_crypt _fpointer _rkt_crypt_func)
+                      (cast nettle_salsa20r12_crypt _fpointer _rkt_crypt_func)
+                      `((set-iv ,nettle_salsa20_set_nonce)))))
 
 (define CHACHA_CONTEXT_SIZE (* 4 16))
 (define CHACHA_KEY_SIZE 32)
@@ -215,6 +225,8 @@
                       CHACHA_CONTEXT_SIZE CHACHA_BLOCK_SIZE CHACHA_KEY_SIZE
                       nettle_chacha_set_key nettle_chacha_set_key
                       nettle_chacha_crypt nettle_chacha_crypt
+                      (cast nettle_chacha_crypt _fpointer _rkt_crypt_func)
+                      (cast nettle_chacha_crypt _fpointer _rkt_crypt_func)
                       `((set-iv ,nettle_chacha_set_nonce)))))
 
 (define nettle-all-ciphers

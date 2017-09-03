@@ -83,12 +83,12 @@
         (nettle_gcm_set_iv  gcm-ctx gcm-key (bytes-length iv) iv)))
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
-      (define crypt (if encrypt? (nettle-cipher-encrypt nc) (nettle-cipher-decrypt nc)))
       (case mode
         [(ecb stream)
-         (let ([crypt (cast crypt _fpointer (_fun _CIPHER_CTX _size _pointer _pointer -> _void))])
-           (crypt ctx (- inend instart) (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
+         (define crypt (if encrypt? (nettle-cipher-rkt-encrypt nc) (nettle-cipher-rkt-decrypt nc)))
+         (crypt ctx (- inend instart) (ptr-add outbuf outstart) (ptr-add inbuf instart))]
         [(cbc)
+         (define crypt (if encrypt? (nettle-cipher-encrypt nc) (nettle-cipher-decrypt nc)))
          (let ([cbc_*crypt (if encrypt? nettle_cbc_encrypt nettle_cbc_decrypt)])
            (cbc_*crypt ctx crypt chunk-size iv (- inend instart)
                        (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
