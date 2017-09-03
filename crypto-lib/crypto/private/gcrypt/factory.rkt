@@ -86,9 +86,9 @@
 (define stream-ciphers
   `(;;[Name ([KeySize AlgId] ...)
     [rc4        ,GCRY_CIPHER_ARCFOUR]
-    [salsa20    ([32 ,GCRY_CIPHER_SALSA20])]
-    [salsa20r12 ([32 ,GCRY_CIPHER_SALSA20R12])]
-    [chacha20   ([32 ,GCRY_CIPHER_CHACHA20])]
+    [salsa20    ([256 ,GCRY_CIPHER_SALSA20])]
+    [salsa20r12 ([256 ,GCRY_CIPHER_SALSA20R12])]
+    [chacha20   ([256 ,GCRY_CIPHER_CHACHA20])]
     ))
 
 (define block-modes
