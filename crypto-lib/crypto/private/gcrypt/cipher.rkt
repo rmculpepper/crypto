@@ -63,7 +63,7 @@
 
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
       (case (cadr (send impl get-spec))
-        [(ctr ofb cfb stream)
+        [(ctr ofb cfb gcm ocb stream)
          (check-output-range outbuf outstart outend (- inend instart))
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]
