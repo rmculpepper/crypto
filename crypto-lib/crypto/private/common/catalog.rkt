@@ -46,19 +46,27 @@
            [sha384      .  [ 48   128]]
            [sha512      .  [ 64   128]]
 
+           [sha3-224    .  [ 28   144]]
+           [sha3-256    .  [ 32   136]]
+           [sha3-384    .  [ 48   104]]
+           [sha3-512    .  [ 64   72]]
+           [shake128    .  [ 16   168]]
+           [shake256    .  [ 32   136]]
+
+           ;; FIXME: the following take keys (blake2b up to 64 bytes, blake2s up to 32 bytes)
+           [blake2b-512 .  [ 64   128]]
+           [blake2b-384 .  [ 48   128]]
+           [blake2b-256 .  [ 32   128]]
+           [blake2b-160 .  [ 20   128]]
+           [blake2s-256 .  [ 32   64]]
+           [blake2s-224 .  [ 28   64]]
+           [blake2s-160 .  [ 20   64]]
+           [blake2s-128 .  [ 16   64]]
+
            ;; Many recent hash algorithms can be configured to produce a wide
            ;; range of output sizes, and some have additional parameters.
            ;; List common configurations here, and add another kind of DigestSpec
            ;; to handle the other cases.
-
-           ;; Note: As of 10/2013, SHA3 is not standardized, and SHA3 is expected
-           ;; to be different (maybe?) from Keccak as submitted to the NIST contest.
-           ;; [sha3-224       28   144]
-           ;; [sha3-256       32   136]
-           ;; [sha3-384       48   104]
-           ;; [sha3-512       64   72 ]
-           ;; skein*
-           ;; blake*, blake2-*
            ))
 
 ;; A DigestSpec is a symbol in domain of known-digests.
