@@ -36,9 +36,9 @@
 (define _nettle_hash_init_func
   (_fun _HASH_CTX -> _void))
 (define _nettle_hash_update_func
-  (_fun _HASH_CTX _uint _pointer -> _void))
+  (_fun _HASH_CTX _size _pointer -> _void))
 (define _nettle_hash_digest_func
-  (_fun _HASH_CTX _uint _pointer -> _void))
+  (_fun _HASH_CTX _size _pointer -> _void))
 
 (define-cstruct _nettle_hash
   ([name         _string/utf-8]
@@ -81,7 +81,7 @@
         (inner : _HASH_CTX)
         (state : _HASH_CTX)
         (hash  : _nettle_hash-pointer)
-        (keylen : _uint = (bytes-length key))
+        (keylen : _size = (bytes-length key))
         (key   : _pointer)
         -> _void))
 
@@ -89,7 +89,7 @@
   (_fun (state hash inbuf inlen) ::
         (state : _HASH_CTX)
         (hash  : _nettle_hash-pointer)
-        (inlen : _uint)
+        (inlen : _size)
         (inbuf : _pointer)
         -> _void))
 
@@ -99,7 +99,7 @@
         (inner  : _HASH_CTX)
         (state  : _HASH_CTX)
         (hash   : _nettle_hash-pointer)
-        (outlen : _uint)
+        (outlen : _size)
         (outbuf : _pointer)
         -> _void))
 
@@ -107,11 +107,12 @@
 
 (define-cpointer-type _CIPHER_CTX)
 
-(define _nettle_set_key_func
-  (_fun _CIPHER_CTX _uint _pointer -> _void))
+(define _nettle_set_key_func (_fun _CIPHER_CTX _pointer -> _void))
+(define _nettle_crypt_func    _fpointer)
 
-(define _nettle_crypt_func
-  (_fun _CIPHER_CTX _uint _pointer _pointer -> _void))
+(define _nettle_set_key/len_func
+  (_fun (ctx key) ::
+        (ctx : _CIPHER_CTX) (_size = (bytes-length key)) (key : _pointer) -> _void))
 
 (define-cstruct _nettle_cipher
   ([name            _string/utf-8]
@@ -159,7 +160,7 @@
 (define BLOWFISH_CONTEXT_SIZE (+ (* 4 4 256) (* 4 (+ 2 BLOWFISH_ROUNDS))))
 (define BLOWFISH_BLOCK_SIZE 8)
 (define BLOWFISH_KEY_SIZE 16) ;; reasonable default
-(define-nettle nettle_blowfish_set_key _nettle_set_key_func)
+(define-nettle nettle_blowfish_set_key _nettle_set_key/len_func)
 (define-nettle nettle_blowfish_encrypt _nettle_crypt_func #:fail (lambda () #f))
 (define-nettle nettle_blowfish_decrypt _nettle_crypt_func #:fail (lambda () #f))
 
@@ -177,7 +178,7 @@
 (define SALSA20_KEY_SIZE 32)
 (define SALSA20_BLOCK_SIZE 64)
 (define SALSA20_IV_SIZE 8)
-(define-nettle nettle_salsa20_set_key _nettle_set_key_func)
+(define-nettle nettle_salsa20_set_key _nettle_set_key/len_func)
 (define-nettle nettle_salsa20_set_iv _nettle_set_iv/nonce_func)
 (define-nettle nettle_salsa20_crypt _nettle_crypt_func #:fail (lambda () #f))
 (define-nettle nettle_salsa20r12_crypt _nettle_crypt_func #:fail (lambda () #f))
@@ -232,9 +233,9 @@
 (define-nettle nettle_cbc_encrypt
   (_fun (ctx     : _CIPHER_CTX)
         (encrypt : _nettle_crypt_func)
-        (blksize : _uint)
+        (blksize : _size)
         (iv      : _pointer)
-        (length  : _uint)
+        (length  : _size)
         (dst     : _pointer)
         (src     : _pointer)
         -> _void))
@@ -242,9 +243,9 @@
 (define-nettle nettle_cbc_decrypt
   (_fun (ctx     : _CIPHER_CTX)
         (decrypt : _nettle_crypt_func)
-        (blksize : _uint)
+        (blksize : _size)
         (iv      : _pointer)
-        (length  : _uint)
+        (length  : _size)
         (dst     : _pointer)
         (src     : _pointer)
         -> _void))
@@ -252,9 +253,9 @@
 (define-nettle nettle_ctr_crypt
   (_fun (ctx     : _CIPHER_CTX)
         (crypt   : _nettle_crypt_func)
-        (blksize : _uint)
+        (blksize : _size)
         (ctr     : _pointer)
-        (length  : _uint)
+        (length  : _size)
         (dst     : _pointer)
         (src     : _pointer)
         -> _void))
@@ -296,23 +297,15 @@
   (_fun _gcm_key _CIPHER_CTX _nettle_crypt_func -> _void)
   #:fail (lambda () #f))
 (define-nettle nettle_gcm_set_iv
-  (_fun _gcm_ctx _gcm_key _uint _pointer -> _void))
-
+  (_fun _gcm_ctx _gcm_key _size _pointer -> _void))
 (define-nettle nettle_gcm_update
-  ;; add AAD, all but last must be block-size multiple
   (_fun _gcm_ctx _gcm_key _uint _pointer -> _void))
-
 (define-nettle nettle_gcm_encrypt
-  ;; add plaintext, all but last must be block-size multiple
-  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer _pointer -> _void))
+  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _size _pointer _pointer -> _void))
 (define-nettle nettle_gcm_decrypt
-  ;; add ciphertext, all but last must be block-size multiple
-  ;; use cipher's *encrypt* func for _nettle_crypt_func argument
-  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer _pointer -> _void))
-
+  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _size _pointer _pointer -> _void))
 (define-nettle nettle_gcm_digest
-  ;; get auth tag; length usually GCM_BLOCK_SIZE, but can be shorter
-  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _uint _pointer -> _void))
+  (_fun _gcm_ctx _gcm_key _CIPHER_CTX _nettle_crypt_func _size _pointer -> _void))
 
 ;; ----
 
@@ -321,11 +314,11 @@
         (mac_ctx : _HASH_CTX) ;; 3 * digest_size !
         (update_func : _fpointer)
         (digest_func : _fpointer)
-        (digest_size : _uint)
+        (digest_size : _size)
         (iterations : _uint)
-        (salt_length : _uint = (bytes-length salt))
+        (salt_length : _size = (bytes-length salt))
         (salt : _bytes)
-        (outlen : _uint = (bytes-length out))
+        (outlen : _size = (bytes-length out))
         (out : _bytes)
         -> _void))
 
@@ -339,13 +332,12 @@
 (define-cpointer-type _yarrow_source)
 
 (define-nettle nettle_yarrow256_init
-  (_fun _yarrow256_ctx _uint _yarrow_source/null
-        -> _void))
+  (_fun _yarrow256_ctx _uint _yarrow_source/null -> _void))
 
 (define-nettle nettle_yarrow256_seed
   (_fun (ctx buf) ::
         (ctx : _yarrow256_ctx)
-        (len : _uint = (bytes-length buf))
+        (len : _size = (bytes-length buf))
         (buf : _bytes)
         -> _void))
 
@@ -354,12 +346,12 @@
         (ctx : _yarrow256_ctx)
         (src : _uint)
         (entropy : _uint)
-        (len : _uint = (bytes-length buf))
+        (len : _size = (bytes-length buf))
         (buf : _bytes)
         -> _int))
 
 (define-nettle nettle_yarrow256_random
-  (_fun _yarrow256_ctx _uint _pointer
+  (_fun _yarrow256_ctx _size _pointer
         -> _void))
 
 (define-nettle nettle_yarrow256_is_seeded

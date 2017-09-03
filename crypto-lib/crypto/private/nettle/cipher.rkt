@@ -70,8 +70,8 @@
       (when (positive? (bytes-length iv))
         (bytes-copy! iv 0 iv* 0 (bytes-length iv)))
       (if (or encrypt? (memq mode '(ctr gcm))) ;; CTR, GCM use block cipher's encrypt
-          ((nettle-cipher-set-encrypt-key nc) ctx (bytes-length key) key)
-          ((nettle-cipher-set-decrypt-key nc) ctx (bytes-length key) key))
+          ((nettle-cipher-set-encrypt-key nc) ctx key)
+          ((nettle-cipher-set-decrypt-key nc) ctx key))
       (for ([extra (in-list (nettle-cipher-extras nc))])
         (case (car extra)
           [(set-iv)
@@ -86,7 +86,8 @@
       (define crypt (if encrypt? (nettle-cipher-encrypt nc) (nettle-cipher-decrypt nc)))
       (case mode
         [(ecb stream)
-         (crypt ctx (- inend instart) (ptr-add outbuf outstart) (ptr-add inbuf instart))]
+         (let ([crypt (cast crypt _fpointer (_fun _CIPHER_CTX _size _pointer _pointer -> _void))])
+           (crypt ctx (- inend instart) (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
         [(cbc)
          (let ([cbc_*crypt (if encrypt? nettle_cbc_encrypt nettle_cbc_decrypt)])
            (cbc_*crypt ctx crypt chunk-size iv (- inend instart)
