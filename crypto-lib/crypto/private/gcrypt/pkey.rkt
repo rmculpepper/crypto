@@ -18,8 +18,7 @@
          racket/match
          ffi/unsafe
          asn1
-         asn1/base256
-         asn1/sequence
+         asn1/private/base256
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/catalog.rkt"
@@ -54,18 +53,18 @@
          (check-bytes)
          (match (DER-decode SubjectPublicKeyInfo sk)
            ;; Note: decode w/ type checks some well-formedness properties
-           [`(sequence [algorithm ,alg] [subjectPublicKey ,subjectPublicKey])
-            (define alg-oid (sequence-ref alg 'algorithm))
-            (define params (sequence-ref alg 'parameters #f))
+           [(hash-table ['algorithm alg] ['subjectPublicKey subjectPublicKey])
+            (define alg-oid (hash-ref alg 'algorithm))
+            (define params (hash-ref alg 'parameters #f))
             (cond [(equal? alg-oid rsaEncryption)
                    (match subjectPublicKey
-                     [`(sequence [modulus ,modulus] [publicExponent ,publicExponent])
+                     [(hash-table ['modulus modulus] ['publicExponent publicExponent])
                       (define pub (make-rsa-public-key modulus publicExponent))
                       (define impl (send factory get-pk 'rsa))
                       (new gcrypt-rsa-key% (impl impl) (pub pub) (priv #f))])]
                   [(equal? alg-oid id-dsa)
                    (match params
-                     [`(sequence [p ,p] [q ,q] [g ,g])
+                     [(hash-table ['p p] ['q q] ['g g])
                       (define pub (make-dsa-public-key p q g subjectPublicKey))
                       (define impl (send factory get-pk 'dsa))
                       (new gcrypt-dsa-key% (impl impl) (pub pub) (priv #f))])]
@@ -87,17 +86,16 @@
         [(PrivateKeyInfo)
          (check-bytes)
          (match (DER-decode PrivateKeyInfo sk)
-           [`(sequence [version ,version]
-                       [privateKeyAlgorithm ,alg]
-                       [privateKey ,privateKey]
-                       . ,_)
-            (define alg-oid (sequence-ref alg 'algorithm))
-            (define alg-params (sequence-ref alg 'parameters #f))
+           [(hash-table ['version version]
+                        ['privateKeyAlgorithm alg]
+                        ['privateKey privateKey])
+            (define alg-oid (hash-ref alg 'algorithm))
+            (define alg-params (hash-ref alg 'parameters #f))
             (cond [(equal? alg-oid rsaEncryption)
                    (RSAPrivateKey->key privateKey)]
                   [(equal? alg-oid id-dsa)
                    (match alg-params
-                     [`(sequence [p ,p] [q ,q] [g ,g])
+                     [(hash-table ['p p] ['q q] ['g g])
                       (define y  ;; g^x mod p
                         (let ([y (gcry_mpi_new)])
                           (gcry_mpi_powm y (int->mpi g) (int->mpi privateKey) (int->mpi p))
@@ -106,7 +104,7 @@
                       (define priv (make-dsa-private-key p q g y privateKey))
                       (define impl (send factory get-pk 'dsa))
                       (new gcrypt-dsa-key% (impl impl) (pub pub) (priv priv))])]
-                  #|
+                  #;
                   [(equal? alg-oid id-ecPublicKey)
                    (define curve
                      (match alg-params
@@ -114,10 +112,10 @@
                         (cond [(curve-oid->name curve-oid) => values]
                               [else #f])]))
                    (match privateKey
-                     [`(sequence [version 1]
-                                 [privateKey ,privkey]
-                                 [parameters ,params]
-                                 [publicKey ,pubkey])
+                     [(hash-table ['version 1]
+                                  ['privateKey privkey]
+                                  ['parameters params]
+                                  ['publicKey pubkey])
                       ;; FIXME: recover q if publicKey field not present
                       ;;  -- grr, gcrypt doesn't seem to provide point<->bytes
                       ;;     support
@@ -127,7 +125,6 @@
                       (define impl (send factory get-pk 'ec))
                       (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv))]
                      [_ #f])]
-                  |#
                   [else #f])]
            [_ #f])]
         [(RSAPrivateKey)
@@ -137,16 +134,15 @@
 
     (define/private (RSAPrivateKey->key privateKey)
       (match privateKey
-        [`(sequence [version 0] ;; support only two-prime keys
-                    [modulus ,n]
-                    [publicExponent ,e]
-                    [privateExponent ,d]
-                    [prime1 ,p]
-                    [prime2 ,q]
-                    [exponent1 ,dp]     ;; e * dp = 1 mod (p-1)
-                    [exponent2 ,dq]     ;; e * dq = 1 mod (q-1)
-                    [coefficient ,qInv] ;; q * c = 1 mod p
-                    . ,_)
+        [(hash-table ['version 0] ;; support only two-prime keys
+                     ['modulus n]
+                     ['publicExponent e]
+                     ['privateExponent d]
+                     ['prime1 p]
+                     ['prime2 q]
+                     ['exponent1 dp]     ;; e * dp = 1 mod (p-1)
+                     ['exponent2 dq]     ;; e * dq = 1 mod (q-1)
+                     ['coefficient qInv]);; q * c = 1 mod p
          ;; Note: gcrypt requires q < p (swap if needed)
          (define-values (p* q* qInv*)
            (cond [(< q p)
@@ -362,21 +358,16 @@
         [(SubjectPublicKeyInfo)
          (DER-encode
           SubjectPublicKeyInfo
-          `(sequence [algorithm
-                      (sequence [algorithm ,rsaEncryption]
-                                [parameters #f])]
-                     [subjectPublicKey
-                      (sequence [modulus ,(mpi->int (get-mpi pub "n"))]
-                                [publicExponent ,(mpi->int (get-mpi pub "e"))])]))]
+          (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
+                  'subjectPublicKey (hasheq 'modulus (mpi->int (get-mpi pub "n"))
+                                            'publicExponent (mpi->int (get-mpi pub "e")))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
          (DER-encode
           PrivateKeyInfo
-          `(sequence [version 0]
-                     [privateKeyAlgorithm
-                      (sequence [algorithm ,rsaEncryption]
-                                [parameters #f])]
-                     [privateKey ,(get-RSAPrivateKey priv)]))]
+          (hasheq 'version 0
+                  'privateKeyAlgorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
+                  'privateKey (get-RSAPrivateKey priv)))]
         [(RSAPrivateKey)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
          (DER-encode RSAPrivateKey (get-RSAPrivateKey priv))]
@@ -404,15 +395,15 @@
       (define qInv-mpi (gcry_mpi_new))
       (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
           (crypto-error "failed to calculate qInv"))
-      `(sequence [version 0]
-                 [modulus ,(mpi->int n-mpi)]
-                 [publicExponent ,(mpi->int e-mpi)]
-                 [privateExponent ,(mpi->int d-mpi)]
-                 [prime1 ,(mpi->int p-mpi)]
-                 [prime2 ,(mpi->int q-mpi)]
-                 [exponent1 ,(mpi->int dp-mpi)]
-                 [exponent2 ,(mpi->int dq-mpi)]
-                 [coefficient ,(mpi->int qInv-mpi)]))
+      (hasheq 'version 0
+              'modulus (mpi->int n-mpi)
+              'publicExponent (mpi->int e-mpi)
+              'privateExponent (mpi->int d-mpi)
+              'prime1 (mpi->int p-mpi)
+              'prime2 (mpi->int q-mpi)
+              'exponent1 (mpi->int dp-mpi)
+              'exponent2 (mpi->int dq-mpi)
+              'coefficient (mpi->int qInv-mpi)))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (define padding (check-sig-pad pad))
@@ -528,27 +519,23 @@
         [(SubjectPublicKeyInfo)
          (DER-encode
           SubjectPublicKeyInfo
-          `(sequence [algorithm
-                      (sequence [algorithm ,id-dsa]
-                                [parameters
-                                 (sequence [p ,(mpi->int (get-mpi pub "p"))]
-                                           [q ,(mpi->int (get-mpi pub "q"))]
-                                           [g ,(mpi->int (get-mpi pub "g"))])])]
-                     [subjectPublicKey
-                      ,(mpi->int (get-mpi pub "y"))]))]
+          (hasheq 'algorithm
+                  (hasheq 'algorithm id-dsa
+                          'parameters (hasheq 'p (mpi->int (get-mpi pub "p"))
+                                              'q (mpi->int (get-mpi pub "q"))
+                                              'g (mpi->int (get-mpi pub "g"))))
+                  'subjectPublicKey (mpi->int (get-mpi pub "y"))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'dsa #f fmt))
          (DER-encode
           PrivateKeyInfo
-          `(sequence [version 0]
-                     [privateKeyAlgorithm
-                      (sequence [algorithm ,id-dsa]
-                                [parameters
-                                 (sequence [p ,(mpi->int (get-mpi priv "p"))]
-                                           [q ,(mpi->int (get-mpi priv "q"))]
-                                           [g ,(mpi->int (get-mpi priv "g"))])])]
-                     [privateKey
-                      ,(mpi->int (get-mpi priv "x"))]))]
+          (hasheq 'version 0
+                  'privateKeyAlgorithm
+                  (hasheq 'algorithm id-dsa
+                          'parameters (hasheq 'p (mpi->int (get-mpi priv "p"))
+                                              'q (mpi->int (get-mpi priv "q"))
+                                              'g (mpi->int (get-mpi priv "g"))))
+                  'privateKey (mpi->int (get-mpi priv "x"))))]
         [else (err/key-format 'dsa (is-private?) fmt)]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
@@ -573,7 +560,7 @@
     (define/override (verify-make-sig-sexp sig-der)
       (define-values (r s)
         (match (DER-decode DSA-Sig-Val sig-der)
-          [`(sequence [r ,(? bytes? r)] [s ,(? bytes? s)])
+          [(hash-table ['r (? bytes? r)] ['s (? bytes? s)])
            (values r s)]
           [_ (crypto-error "signature is not well-formed")]))
       (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))"

@@ -107,8 +107,7 @@ NIST P-192 disappeared!).
       (case fmt
         [(AlgorithmIdentifier)
          (match (DER-decode AlgorithmIdentifier buf)
-           [`(sequence [algorithm ,alg-oid]
-                       [parameters ,parameters])
+           [(hash-table ['algorithm alg-oid] ['parameters parameters])
             (cond [(equal? alg-oid id-dsa)
                    (read-params (DER-encode Dss-Parms parameters) 'DSAParameters)]
                   [(equal? alg-oid dhKeyAgreement)
@@ -269,7 +268,7 @@ NIST P-192 disappeared!).
       (case fmt
         [(AlgorithmIdentifier)
          (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
-                     `(sequence [a ,id-dsa] [b ,(*write-params 'DSAParameters evp)]))]
+                     (hasheq 'a id-dsa 'b (*write-params 'DSAParameters evp)))]
         [(DSAParameters)
          (define dsa (EVP_PKEY_get1_DSA evp))
          (define buf (make-bytes (i2d_DSAparams dsa #f)))
@@ -348,7 +347,7 @@ NIST P-192 disappeared!).
       (case fmt
         [(AlgorithmIdentifier)
          (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
-                     `(sequence [a ,dhKeyAgreement] [b ,(*write-params 'DHParameter evp)]))]
+                     (hasheq 'a dhKeyAgreement 'b (*write-params 'DHParameter evp)))]
         [(DHParameter)
          (define dh (EVP_PKEY_get1_DH evp))
          (define buf (make-bytes (i2d_DHparams dh #f)))
@@ -422,7 +421,7 @@ NIST P-192 disappeared!).
       (case fmt
         [(AlgorithmIdentifier)
          (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
-                     `(sequence [a ,id-ecPublicKey] [b ,(*write-params 'EcpkParameters evp)]))]
+                     (hasheq 'a id-ecPublicKey 'b (*write-params 'EcpkParameters evp)))]
         [(EcpkParameters)
          (define ec (EVP_PKEY_get1_EC_KEY evp))
          (define group (EC_KEY_get0_group ec))

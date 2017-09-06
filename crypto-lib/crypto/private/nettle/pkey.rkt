@@ -16,8 +16,7 @@
 #lang racket/base
 (require ffi/unsafe
          asn1
-         asn1/base256
-         asn1/sequence
+         asn1/private/base256
          racket/class
          racket/match
          "../common/interfaces.rkt"
@@ -58,12 +57,12 @@
          (check-bytes)
          (match (DER-decode SubjectPublicKeyInfo sk)
            ;; Note: decode w/ type checks some well-formedness properties
-           [`(sequence [algorithm ,alg] [subjectPublicKey ,subjectPublicKey])
-            (define alg-oid (sequence-ref alg 'algorithm))
-            (define params (sequence-ref alg 'parameters #f))
+           [(hash-table ['algorithm alg] ['subjectPublicKey subjectPublicKey])
+            (define alg-oid (hash-ref alg 'algorithm))
+            (define params (hash-ref alg 'parameters #f))
             (cond [(equal? alg-oid rsaEncryption)
                    (match subjectPublicKey
-                     [`(sequence [modulus ,modulus] [publicExponent ,publicExponent])
+                     [(hash-table ['modulus modulus] ['publicExponent publicExponent])
                       (define pub (new-rsa_public_key))
                       (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz modulus))
                       (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz publicExponent))
@@ -73,7 +72,7 @@
                       (new nettle-rsa-key% (impl impl) (pub pub) (priv #f))])]
                   [(equal? alg-oid id-dsa)
                    (match params
-                     [`(sequence [p ,p] [q ,q] [g ,g])
+                     [(hash-table ['p p] ['q q] ['g g])
                       (define pub (new-dsa_public_key))
                       (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
                       (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
@@ -88,17 +87,16 @@
         [(PrivateKeyInfo)
          (check-bytes)
          (match (DER-decode PrivateKeyInfo sk)
-           [`(sequence [version ,version]
-                       [privateKeyAlgorithm ,alg]
-                       [privateKey ,privateKey]
-                       . ,_)
-            (define alg-oid (sequence-ref alg 'algorithm))
-            (define alg-params (sequence-ref alg 'parameters #f))
+           [(hash-table ['version version]
+                        ['privateKeyAlgorithm alg]
+                        ['privateKey privateKey])
+            (define alg-oid (hash-ref alg 'algorithm))
+            (define alg-params (hash-ref alg 'parameters #f))
             (cond [(equal? alg-oid rsaEncryption)
                    (RSAPrivateKey->key privateKey)]
                   [(equal? alg-oid id-dsa)
                    (match alg-params
-                     [`(sequence [p ,p] [q ,q] [g ,g])
+                     [(hash-table ['p p] ['q q] ['g g])
                       (define pub (new-dsa_public_key))
                       (define priv (new-dsa_private_key))
                       (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
@@ -119,7 +117,7 @@
          (RSAPrivateKey->key (DER-decode RSAPrivateKey sk))]
         [(DSAPrivateKey)
          (match (DER-decode ANY sk)
-           [`(sequence-of 0 ,p ,q ,g ,y ,x)
+           [(list 0 p q g y x) ;; FIXME!!!
             (define pub (new-dsa_public_key))
             (define priv (new-dsa_private_key))
             (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
@@ -134,16 +132,15 @@
 
     (define/private (RSAPrivateKey->key v)
       (match v
-        [`(sequence [version 0] ;; support only two-prime keys
-                    [modulus ,n]
-                    [publicExponent ,e]
-                    [privateExponent ,d]
-                    [prime1 ,p]
-                    [prime2 ,q]
-                    [exponent1 ,a]
-                    [exponent2 ,b]
-                    [coefficient ,c]
-                    . ,_)
+        [(hash-table ['version 0] ;; support only two-prime keys
+                     ['modulus n]
+                     ['publicExponent e]
+                     ['privateExponent d]
+                     ['prime1 p]
+                     ['prime2 q]
+                     ['exponent1 a]
+                     ['exponent2 b]
+                     ['coefficient c])
          (define pub (new-rsa_public_key))
          (define priv (new-rsa_private_key))
          (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
@@ -232,35 +229,32 @@
         [(SubjectPublicKeyInfo)
          (DER-encode
           SubjectPublicKeyInfo
-          `(sequence [algorithm
-                      (sequence [algorithm ,rsaEncryption]
-                                [parameters #f])]
-                     [subjectPublicKey
-                      (sequence [modulus ,(mpz->integer (rsa_public_key_struct-n pub))]
-                                [publicExponent ,(mpz->integer (rsa_public_key_struct-e pub))])]))]
+          (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
+                  'subjectPublicKey
+                  (hasheq 'modulus (mpz->integer (rsa_public_key_struct-n pub))
+                          'publicExponent (mpz->integer (rsa_public_key_struct-e pub)))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (DER-encode PrivateKeyInfo
-                     `(sequence [version 0]
-                                [privateKeyAlgorithm
-                                 (sequence [algorithm ,rsaEncryption]
-                                           [parameters #f])]
-                                [privateKey ,(get-RSAPrivateKey)]))]
+         (DER-encode
+          PrivateKeyInfo
+          (hasheq 'version 0
+                  'privateKeyAlgorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
+                  'privateKey (get-RSAPrivateKey)))]
         [(RSAPrivateKey)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
          (DER-encode RSAPrivateKey (get-RSAPrivateKey))]
         [else (err/key-format 'rsa (is-private?) fmt)]))
 
     (define/private (get-RSAPrivateKey)
-      `(sequence [version 0]
-                 [modulus ,(mpz->integer (rsa_public_key_struct-n pub))]
-                 [publicExponent ,(mpz->integer (rsa_public_key_struct-e pub))]
-                 [privateExponent ,(mpz->integer (rsa_private_key_struct-d priv))]
-                 [prime1 ,(mpz->integer (rsa_private_key_struct-p priv))]
-                 [prime2 ,(mpz->integer (rsa_private_key_struct-q priv))]
-                 [exponent1 ,(mpz->integer (rsa_private_key_struct-a priv))]
-                 [exponent2 ,(mpz->integer (rsa_private_key_struct-b priv))]
-                 [coefficient ,(mpz->integer (rsa_private_key_struct-c priv))]))
+      (hasheq 'version 0
+              'modulus (mpz->integer (rsa_public_key_struct-n pub))
+              'publicExponent (mpz->integer (rsa_public_key_struct-e pub))
+              'privateExponent (mpz->integer (rsa_private_key_struct-d priv))
+              'prime1 (mpz->integer (rsa_private_key_struct-p priv))
+              'prime2 (mpz->integer (rsa_private_key_struct-q priv))
+              'exponent1 (mpz->integer (rsa_private_key_struct-a priv))
+              'exponent2 (mpz->integer (rsa_private_key_struct-b priv))
+              'coefficient (mpz->integer (rsa_private_key_struct-c priv))))
 
     (define/public (equal-to-key? other)
       (and (is-a? other nettle-rsa-key%)
@@ -384,37 +378,33 @@
         [(SubjectPublicKeyInfo)
          (DER-encode
           SubjectPublicKeyInfo
-          `(sequence [algorithm
-                      (sequence [algorithm ,id-dsa]
-                                [parameters
-                                 (sequence [p ,(mpz->integer (dsa_public_key_struct-p pub))]
-                                           [q ,(mpz->integer (dsa_public_key_struct-q pub))]
-                                           [g ,(mpz->integer (dsa_public_key_struct-g pub))])])]
-                     [subjectPublicKey
-                      ,(mpz->integer (dsa_public_key_struct-y pub))]))]
+          (hasheq 'algorithm
+                  (hasheq 'algorithm id-dsa
+                          'parameters (hasheq 'p (mpz->integer (dsa_public_key_struct-p pub))
+                                              'q (mpz->integer (dsa_public_key_struct-q pub))
+                                              'g (mpz->integer (dsa_public_key_struct-g pub))))
+                  'subjectPublicKey (mpz->integer (dsa_public_key_struct-y pub))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'dsa #f fmt))
          (DER-encode
           PrivateKeyInfo
-          `(sequence [version 0]
-                     [privateKeyAlgorithm
-                      (sequence [algorithm ,id-dsa]
-                                [parameters
-                                 (sequence [p ,(mpz->integer (dsa_public_key_struct-p pub))]
-                                           [q ,(mpz->integer (dsa_public_key_struct-q pub))]
-                                           [g ,(mpz->integer (dsa_public_key_struct-g pub))])])]
-                     [privateKey
-                      ,(mpz->integer (dsa_private_key_struct-x priv))]))]
+          (hasheq 'version 0
+                  'privateKeyAlgorithm
+                  (hasheq 'algorithm id-dsa
+                          'parameters (hasheq 'p (mpz->integer (dsa_public_key_struct-p pub))
+                                              'q (mpz->integer (dsa_public_key_struct-q pub))
+                                              'g (mpz->integer (dsa_public_key_struct-g pub))))
+                  'privateKey (mpz->integer (dsa_private_key_struct-x priv))))]
         [(DSAPrivateKey)
          (unless (is-private?) (err/key-format 'dsa #f fmt))
          (DER-encode
           (SequenceOf INTEGER)
-          `(sequence-of 0
-                        ,(mpz->integer (dsa_public_key_struct-p pub))
-                        ,(mpz->integer (dsa_public_key_struct-q pub))
-                        ,(mpz->integer (dsa_public_key_struct-g pub))
-                        ,(mpz->integer (dsa_public_key_struct-y pub))
-                        ,(mpz->integer (dsa_private_key_struct-x priv))))]
+          (list 0 ;; FIXME ???
+                (mpz->integer (dsa_public_key_struct-p pub))
+                (mpz->integer (dsa_public_key_struct-q pub))
+                (mpz->integer (dsa_public_key_struct-g pub))
+                (mpz->integer (dsa_public_key_struct-y pub))
+                (mpz->integer (dsa_private_key_struct-x priv))))]
         [else (err/key-format 'dsa (is-private?) fmt)]))
 
     (define/public (equal-to-key? other)
@@ -446,12 +436,12 @@
 
     (define/private (dsa_signature->der sig)
       (DER-encode DSA-Sig-Val
-                  `(sequence [r ,(mpz->bin (dsa_signature_struct-r sig) #t)]
-                             [s ,(mpz->bin (dsa_signature_struct-s sig) #t)])))
+                  (hasheq 'r (mpz->bin (dsa_signature_struct-r sig) #t)
+                          's (mpz->bin (dsa_signature_struct-s sig) #t))))
 
     (define/private (der->dsa_signature der)
       (match (DER-decode DSA-Sig-Val der)
-        [`(sequence [r ,(? bytes? r)] [s ,(? bytes? s)])
+        [(hash-table ['r (? bytes? r)] ['s (? bytes? s)])
          (define sig (new-dsa_signature))
          (__gmpz_set (dsa_signature_struct-r sig) (bin->mpz r))
          (__gmpz_set (dsa_signature_struct-s sig) (bin->mpz s))
