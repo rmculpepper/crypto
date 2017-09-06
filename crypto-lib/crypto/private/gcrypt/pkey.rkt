@@ -145,7 +145,7 @@
                      ['coefficient qInv]);; q * c = 1 mod p
          ;; Note: gcrypt requires q < p (swap if needed)
          (define-values (p* q* qInv*)
-           (cond [(< q p)
+           (cond [(< p q)
                   (values p q qInv)]
                  [else
                   (define qInv*-mpi (gcry_mpi_new))
