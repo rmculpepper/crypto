@@ -51,11 +51,11 @@ References:
 (define-asn1-type AlgorithmIdentifier
   (let ([typemap known-public-key-algorithms])
     (Sequence [algorithm              OBJECT-IDENTIFIER]
-              [#:dependent parameters (get-type algorithm typemap) #:optional])))
+              [parameters #:dependent (get-type algorithm typemap) #:optional])))
 
 (define-asn1-type SubjectPublicKeyInfo
   (Sequence [algorithm AlgorithmIdentifier]
-            [#:dependent subjectPublicKey (BIT-STRING-containing algorithm)]))
+            [subjectPublicKey #:dependent (BIT-STRING-containing algorithm)]))
 
 (define (BIT-STRING-containing alg)
   (define alg-oid (sequence-ref alg 'algorithm))
@@ -256,7 +256,7 @@ References:
 (define-asn1-type PrivateKeyInfo
   (Sequence [version                   INTEGER]
             [privateKeyAlgorithm       AlgorithmIdentifier]
-            [#:dependent privateKey    (PrivateKey privateKeyAlgorithm)]
+            [privateKey #:dependent    (PrivateKey privateKeyAlgorithm)]
             [attributes #:implicit 0   Attributes #:optional]))
 
 (define (PrivateKey alg)
