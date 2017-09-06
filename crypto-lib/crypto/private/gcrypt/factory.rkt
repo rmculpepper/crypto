@@ -92,16 +92,16 @@
     ))
 
 (define block-modes
-  `(;;[Mode ModeId]
-    [ecb    ,GCRY_CIPHER_MODE_ECB]
-    [cbc    ,GCRY_CIPHER_MODE_CBC]
-    [cfb    ,GCRY_CIPHER_MODE_CFB]
-    [ofb    ,GCRY_CIPHER_MODE_OFB]
-    [ctr    ,GCRY_CIPHER_MODE_CTR]
-    ;; [ccm    ,GCRY_CIPHER_MODE_CCM]
-    [gcm    ,GCRY_CIPHER_MODE_GCM]
-    [ocb    ,GCRY_CIPHER_MODE_OCB]
-    ;; [xts    ,GCRY_CIPHER_MODE_XTS]
+  `(;;[Mode ModeId                 RequiredBlockSize]
+    [ecb    ,GCRY_CIPHER_MODE_ECB  #f]
+    [cbc    ,GCRY_CIPHER_MODE_CBC  #f]
+    [cfb    ,GCRY_CIPHER_MODE_CFB  #f]
+    [ofb    ,GCRY_CIPHER_MODE_OFB  #f]
+    [ctr    ,GCRY_CIPHER_MODE_CTR  #f]
+    ;; [ccm ,GCRY_CIPHER_MODE_CCM  16]
+    [gcm    ,GCRY_CIPHER_MODE_GCM  16]
+    [ocb    ,GCRY_CIPHER_MODE_OCB  16]
+    ;; [xts ,GCRY_CIPHER_MODE_XTS  16]
     ))
 
 (define stream-modes
@@ -157,6 +157,13 @@
         [_ #f]))
 
     (define/override (get-cipher* spec)
+      (define (algid->cipher algid mode-id)
+        (and (gcry_cipher_test_algo algid)
+             (new gcrypt-cipher-impl%
+                  (spec spec)
+                  (factory this)
+                  (cipher algid)
+                  (mode mode-id))))
       (define (search ciphers modes)
         (match (assq (car spec) ciphers)
           [(list _ keylens+algids)
@@ -165,20 +172,10 @@
               (cond [(list? keylens+algids)
                      (for/list ([keylen+algid (in-list keylens+algids)])
                        (cons (quotient (car keylen+algid) 8)
-                             (and (gcry_cipher_test_algo (cadr keylen+algid))
-                                  (new gcrypt-cipher-impl%
-                                       (spec spec)
-                                       (factory this)
-                                       (cipher (cadr keylen+algid))
-                                       (mode mode-id)))))]
+                             (algid->cipher (cadr keylen+algid) mode-id)))]
                     [else
                      (let ([algid keylens+algids])
-                       (and (gcry_cipher_test_algo algid)
-                            (new gcrypt-cipher-impl%
-                                 (spec spec)
-                                 (factory this)
-                                 (cipher algid)
-                                 (mode mode-id))))])]
+                       (algid->cipher algid mode-id))])]
              [_ #f])]
           [_ #f]))
       (or (search block-ciphers block-modes)
