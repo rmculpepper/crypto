@@ -92,16 +92,16 @@
     ))
 
 (define block-modes
-  `(;;[Mode ModeId                 RequiredBlockSize]
-    [ecb    ,GCRY_CIPHER_MODE_ECB  #f]
-    [cbc    ,GCRY_CIPHER_MODE_CBC  #f]
-    [cfb    ,GCRY_CIPHER_MODE_CFB  #f]
-    [ofb    ,GCRY_CIPHER_MODE_OFB  #f]
-    [ctr    ,GCRY_CIPHER_MODE_CTR  #f]
-    ;; [ccm ,GCRY_CIPHER_MODE_CCM  16]
-    [gcm    ,GCRY_CIPHER_MODE_GCM  16]
-    [ocb    ,GCRY_CIPHER_MODE_OCB  16]
-    ;; [xts ,GCRY_CIPHER_MODE_XTS  16]
+  `(;;[Mode ModeId]
+    [ecb    ,GCRY_CIPHER_MODE_ECB]
+    [cbc    ,GCRY_CIPHER_MODE_CBC]
+    [cfb    ,GCRY_CIPHER_MODE_CFB]
+    [ofb    ,GCRY_CIPHER_MODE_OFB]
+    [ctr    ,GCRY_CIPHER_MODE_CTR]
+    ;; [ccm ,GCRY_CIPHER_MODE_CCM]
+    [gcm    ,GCRY_CIPHER_MODE_GCM]
+    [ocb    ,GCRY_CIPHER_MODE_OCB]
+    ;; [xts ,GCRY_CIPHER_MODE_XTS]
     ))
 
 (define stream-modes
@@ -109,6 +109,25 @@
     [stream ,GCRY_CIPHER_MODE_STREAM]
     [poly1305 ,GCRY_CIPHER_MODE_POLY1305] ;; chacha20 only?
     ))
+
+;; GCrypt does not seem to have a function to test whether a cipher
+;; mode is supported, so try using it and catch the error.
+(define (mode-ok? mode)
+  (with-handlers ([exn:fail? (lambda (e) #f)])
+    (begin (gcry_cipher_close (gcry_cipher_open GCRY_CIPHER_AES mode 0)) #t)))
+(define gcm-ok? (mode-ok? GCRY_CIPHER_MODE_GCM))
+(define ocb-ok? (mode-ok? GCRY_CIPHER_MODE_OCB))
+
+(define (spec-ok? spec)
+  ;; Additional mode compat checks
+  (match-define (list cipher mode) spec)
+  (and (case mode
+         [(gcm) gcm-ok?]
+         [(ocb) ocb-ok?]
+         [else #t])
+       (case mode
+         [(ccm gcm ocb xts) (memq cipher '(aes twofish serpent camellia))]
+         [else #t])))
 
 ;; ----------------------------------------
 
@@ -178,8 +197,9 @@
                        (algid->cipher algid mode-id))])]
              [_ #f])]
           [_ #f]))
-      (or (search block-ciphers block-modes)
-          (search stream-ciphers stream-modes)))
+      (and (spec-ok? spec)
+           (or (search block-ciphers block-modes)
+               (search stream-ciphers stream-modes))))
 
     (define gcrypt-read-key (new gcrypt-read-key% (factory this)))
     (define/override (get-pk-reader)

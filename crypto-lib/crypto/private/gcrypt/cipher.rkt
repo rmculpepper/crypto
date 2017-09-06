@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2017 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -20,6 +20,7 @@
          "../common/common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
+         "../common/util.rkt"
          "ffi.rkt")
 (provide gcrypt-cipher-impl%)
 
@@ -50,10 +51,13 @@
     ))
 
 (define gcrypt-cipher-ctx%
-  (class* whole-chunk-cipher-ctx% (cipher-ctx<%>)
+  (class* AE-whole-chunk-cipher-ctx% (cipher-ctx<%>)
     (inherit-field impl encrypt? pad?)
     (init-field ctx)
     (super-new)
+
+    (define mode (cadr (send impl get-spec)))
+    (define auth-tag #f)
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
       (let ([op (if encrypt? gcry_cipher_encrypt gcry_cipher_decrypt)])
@@ -76,4 +80,30 @@
       (when ctx
         (gcry_cipher_close ctx)
         (set! ctx #f)))
+
+    (define/override (*after-final)
+      (dynamic-wind void
+                    (lambda ()
+                      (when auth-tag
+                        (define actual-AT (*get-auth-tag (bytes-length auth-tag)))
+                        (unless (crypto-bytes=? auth-tag actual-AT)
+                          (crypto-error "authenticated decryption failed"))))
+                    (lambda () (super *after-final))))
+
+    (define/override (*aad inbuf instart inend)
+      (case mode
+        [(gcm ocb)
+         (gcry_cipher_authenticate ctx (ptr-add inbuf instart) (- inend instart))]
+        [else (crypto-error "bad mode: ~e" mode)]))
+
+    (define/override (*set-auth-tag tag)
+      (set! auth-tag tag))
+
+    (define/override (*get-auth-tag taglen)
+      (define tag (make-bytes taglen))
+      (case mode
+        [(gcm ocb)
+         (gcry_cipher_gettag ctx tag taglen)
+         tag]
+        [else (crypto-error "bad mode: ~e" mode)]))
     ))

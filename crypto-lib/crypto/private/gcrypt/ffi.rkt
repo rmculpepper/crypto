@@ -250,6 +250,17 @@
   (_fun _gcry_cipher_hd _pointer _size -> _gcry_error)
   #:wrap check)
 
+(define-gcrypt gcry_cipher_authenticate
+  (_fun _gcry_cipher_hd _pointer _size -> _gcry_error)
+  #:wrap check)
+
+(define-gcrypt gcry_cipher_gettag
+  (_fun _gcry_cipher_hd _pointer _size -> _gcry_error)
+  #:wrap check)
+
+(define-gcrypt gcry_cipher_checktag
+  (_fun _gcry_cipher_hd _pointer _size -> _gcry_error))
+
 (define-gcrypt gcry_cipher_encrypt
   (_fun _gcry_cipher_hd _pointer _size _pointer _size -> _gcry_error)
   #:wrap check)
