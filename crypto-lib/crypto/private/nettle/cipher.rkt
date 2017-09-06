@@ -33,7 +33,7 @@
 (define (make-gcm_key)  (make-tagged-mem GCM_KEY_SIZE gcm_key-tag))
 (define (make-gcm_ctx)  (make-tagged-mem GCM_CTX_SIZE gcm_ctx-tag))
 (define (make-eax_key) (make-tagged-mem EAX_KEY_SIZE eax_key-tag))
-(define (make-eax_ctx) (make-tagged-mem EAX_CTX_SIZE eax_key-tag))
+(define (make-eax_ctx) (make-tagged-mem EAX_CTX_SIZE eax_ctx-tag))
 
 (define nettle-cipher-impl%
   (class* cipher-impl-base% (cipher-impl<%>)
@@ -86,7 +86,8 @@
          (nettle_gcm_set_iv  super-ctx super-key (bytes-length iv) iv)]
         [(eax)
          (nettle_eax_set_key super-key ctx (nettle-cipher-encrypt nc))
-         (nettle_eax_set_nonce super-ctx super-key (bytes-length iv) iv)]))
+         (nettle_eax_set_nonce super-ctx super-key ctx (nettle-cipher-encrypt nc)
+                               (bytes-length iv) iv)]))
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
       (case mode
@@ -118,7 +119,7 @@
 
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
       (case mode
-        [(ctr gcm stream)
+        [(ctr gcm eax stream)
          (check-output-range outbuf outstart outend (- inend instart))
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]

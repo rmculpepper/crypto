@@ -115,7 +115,7 @@
       (or (match (assq (car spec) block-ciphers)
             [(list _ gcm-ok? alg)
              (and (memq (cadr spec) block-modes)
-                  (if (eq? (cadr spec) 'gcm) gcm-ok? #t)
+                  (if (memq (cadr spec) '(gcm eax)) gcm-ok? #t)
                   (alg->cipher alg))]
             [_ #f])
           (match (assq (car spec) stream-ciphers)
