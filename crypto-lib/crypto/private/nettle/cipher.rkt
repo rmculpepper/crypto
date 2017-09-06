@@ -1,4 +1,4 @@
-;; Copyright 2013-2014 Ryan Culpepper
+;; Copyright 2013-2017 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -32,6 +32,8 @@
 (define (make-ctx size) (make-tagged-mem size CIPHER_CTX-tag))
 (define (make-gcm_key)  (make-tagged-mem GCM_KEY_SIZE gcm_key-tag))
 (define (make-gcm_ctx)  (make-tagged-mem GCM_CTX_SIZE gcm_ctx-tag))
+(define (make-eax_key) (make-tagged-mem EAX_KEY_SIZE eax_key-tag))
+(define (make-eax_ctx) (make-tagged-mem EAX_CTX_SIZE eax_key-tag))
 
 (define nettle-cipher-impl%
   (class* cipher-impl-base% (cipher-impl<%>)
@@ -61,15 +63,15 @@
     ;; FIXME: reconcile padding and stream ciphers (raise error?)
     (define mode (cadr (send impl get-spec)))
     (define ctx (make-ctx (nettle-cipher-context-size nc)))
-    (define gcm-key (and (eq? mode 'gcm) (make-gcm_key)))
-    (define gcm-ctx (and (eq? mode 'gcm) (make-gcm_ctx)))
+    (define super-key (case mode [(gcm) (make-gcm_key)] [(eax) (make-eax_key)] [else #f]))
+    (define super-ctx (case mode [(gcm) (make-gcm_ctx)] [(eax) (make-eax_ctx)] [else #f]))
     (define iv (make-bytes (send impl get-iv-size)))
     (define auth-tag #f)
 
     (define/public (set-key+iv key iv*)
       (when (positive? (bytes-length iv))
         (bytes-copy! iv 0 iv* 0 (bytes-length iv)))
-      (if (or encrypt? (memq mode '(ctr gcm))) ;; CTR, GCM use block cipher's encrypt
+      (if (or encrypt? (memq mode '(ctr gcm eax))) ;; CTR, GCM use block cipher's encrypt
           ((nettle-cipher-set-encrypt-key nc) ctx key)
           ((nettle-cipher-set-decrypt-key nc) ctx key))
       (for ([extra (in-list (nettle-cipher-extras nc))])
@@ -78,9 +80,13 @@
            (let ([set-iv-fun (cadr extra)])
              (set-iv-fun ctx iv))]
           [else (void)]))
-      (when (memq mode '(gcm))
-        (nettle_gcm_set_key gcm-key ctx (nettle-cipher-encrypt nc))
-        (nettle_gcm_set_iv  gcm-ctx gcm-key (bytes-length iv) iv)))
+      (case mode
+        [(gcm)
+         (nettle_gcm_set_key super-key ctx (nettle-cipher-encrypt nc))
+         (nettle_gcm_set_iv  super-ctx super-key (bytes-length iv) iv)]
+        [(eax)
+         (nettle_eax_set_key super-key ctx (nettle-cipher-encrypt nc))
+         (nettle_eax_set_nonce super-ctx super-key (bytes-length iv) iv)]))
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
       (case mode
@@ -101,7 +107,12 @@
          ;; Note: must use *encrypt* function in GCM mode
          (let ([crypt (nettle-cipher-encrypt nc)]
                [gcm*crypt (if encrypt? nettle_gcm_encrypt nettle_gcm_decrypt)])
-           (gcm*crypt gcm-ctx gcm-key ctx crypt (- inend instart)
+           (gcm*crypt super-ctx super-key ctx crypt (- inend instart)
+                      (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
+        [(eax)
+         (let ([crypt (nettle-cipher-encrypt nc)]
+               [eax*crypt (if encrypt? nettle_eax_encrypt nettle_eax_decrypt)])
+           (eax*crypt super-ctx super-key ctx crypt (- inend instart)
                       (ptr-add outbuf outstart) (ptr-add inbuf instart)))]
         [else (crypto-error "internal error: bad mode: ~e" mode)]))
 
@@ -130,17 +141,25 @@
                     (lambda () (super *after-final))))
 
     (define/override (*aad inbuf instart inend)
-      (unless (eq? mode 'gcm)
-        (crypto-error "bad mode: ~e" mode))
-      (nettle_gcm_update gcm-ctx gcm-key (- inend instart) (ptr-add inbuf instart)))
+      (case mode
+        [(gcm)
+         (nettle_gcm_update super-ctx super-key (- inend instart) (ptr-add inbuf instart))]
+        [(eax)
+         (nettle_eax_update super-ctx super-key ctx (nettle-cipher-encrypt nc)
+                            (- inend instart) (ptr-add inbuf instart))]
+        [else (crypto-error "bad mode: ~e" mode)]))
 
     (define/override (*set-auth-tag tag)
       (set! auth-tag tag))
 
     (define/override (*get-auth-tag taglen)
-      (unless (eq? mode 'gcm)
-        (crypto-error "bad mode: ~e" mode))
       (define tag (make-bytes taglen))
-      (nettle_gcm_digest gcm-ctx gcm-key ctx (nettle-cipher-encrypt nc) taglen tag)
-      tag)
+      (case mode
+        [(gcm)
+         (nettle_gcm_digest super-ctx super-key ctx (nettle-cipher-encrypt nc) taglen tag)
+         tag]
+        [(eax)
+         (nettle_eax_digest super-ctx super-key ctx (nettle-cipher-encrypt nc) taglen tag)
+         tag]
+        [else (crypto-error "bad mode: ~e" mode)]))
     ))
