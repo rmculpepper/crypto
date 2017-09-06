@@ -54,10 +54,9 @@ References:
 
 (define-asn1-type SubjectPublicKeyInfo
   (Sequence [algorithm AlgorithmIdentifier]
-            [subjectPublicKey #:dependent (BIT-STRING-containing algorithm)]))
+            [subjectPublicKey #:dependent (BIT-STRING-containing (hash-ref algorithm 'algorithm))]))
 
-(define (BIT-STRING-containing alg)
-  (define alg-oid (hash-ref alg 'algorithm))
+(define (BIT-STRING-containing alg-oid)
   (cond [(get-type2 alg-oid known-public-key-algorithms)
          => (lambda (type)
               (Wrap BIT-STRING
@@ -242,11 +241,11 @@ References:
 
 ;; ----
 
-(define ECPrivateKey
+(define-asn1-type ECPrivateKey
   (Sequence [version        INTEGER] ;; ecPrivkeyVer1
             [privateKey     OCTET-STRING]
             [parameters #:explicit 0 EcpkParameters #:optional]
-            [publicKey  #:explicit 1 BIT-STRING #:optional]))
+            [publicKey  #:explicit 1 (BIT-STRING-containing id-ecPublicKey) #:optional]))
 
 (define ecPrivkeyVer1 1)
 
@@ -296,7 +295,7 @@ References:
         (list dhpublicnumber  DomainParameters DHPublicKey)
         (list dhKeyAgreement  DHParameter      DHPublicKey)
         ;; ECPoint octets are bit-string contents
-        (list id-ecPublicKey  EcpkParameters   #f)))
+        (list id-ecPublicKey  EcpkParameters   ECPoint)))
 
 ;; for PKCS #8 PrivateKeyInfo
 (define known-private-key-formats
