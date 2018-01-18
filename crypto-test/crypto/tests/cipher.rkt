@@ -38,13 +38,13 @@
 (define (test-cipher/spec factory spec)
   (define ci (send factory get-cipher spec))
   (cond [ci
-         (when #f
-           (eprintf "   testing ~e\n" spec))
+         (when #t
+           (eprintf "+  testing ~e\n" spec))
          (for ([in plaintexts])
            (test-cipher ci in))]
         [else
          (when #f
-           (eprintf "-- skipping cipher ~e\n" spec))]))
+           (eprintf "-  skipping cipher ~e\n" spec))]))
 
 (define (test-cipher ci msg)
   (case (cadr (send ci get-spec))
@@ -154,12 +154,12 @@
                  (for/list ([factory factories])
                    (cons factory (send factory get-cipher spec))))])
     (when (zero? (length names+impls))
-      (eprintf "** no impl for cipher ~e\n" spec))
+      (eprintf "-  no impl for cipher ~e\n" spec))
     (when (= (length names+impls) 1)
-      (eprintf "** only one impl for cipher ~e\n" spec))
+      (eprintf "-  only one impl for cipher ~e\n" spec))
     (when (> (length names+impls) 1)
       (when #t
-        (eprintf "*  testing agreement ~e (~s impls)\n" spec (length names+impls)))
+        (eprintf "+  testing agreement ~e (~s impls)\n" spec (length names+impls)))
       (define names (map car names+impls))
       (define impls (map cdr names+impls))
       (test-case (format "cipher agreement for ~e\n" spec)

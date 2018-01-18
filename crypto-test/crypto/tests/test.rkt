@@ -29,7 +29,7 @@
 (provide make-factory-tests)
 
 (define (make-factory-tests name factory)
-  (when #f (eprintf ">>> Testing ~a\n" name))
+  (when #t (eprintf ">>> Testing ~a\n" name))
   (test-suite name
     (test-suite "digests" (test-digests factory))
     (test-suite "ciphers" (test-ciphers factory))
@@ -48,7 +48,10 @@
      (when #t (eprintf ">>> Digest agreement\n"))
      (test-suite "digest agreement"
        (test-digests-agree all-factories))
-     (when #f (eprintf ">>> Cipher agreement\n"))
+     (when #t (eprintf ">>> Cipher agreement\n"))
      (test-suite "cipher agreement"
        (test-ciphers-agree all-factories))
+     (when #t (eprintf ">>> PKey agreement\n"))
+     (test-suite "pkey agreement"
+       (test-pk libcrypto-factory (list gcrypt-factory nettle-factory)))
      )))

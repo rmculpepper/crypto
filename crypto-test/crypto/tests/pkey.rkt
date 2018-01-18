@@ -35,30 +35,44 @@
 ;; Key agreement
 ;;  - privkey1+pubkey2 derives same key as privkey2+pubkey11
 
-(define (test-pk factory)
+(define (readkey sexpr factory)
+  (with-handlers ([exn:fail? (lambda (e) #f)])
+    (datum->pk-key (caddr sexpr) (car sexpr) factory)))
+
+(define (test-pk factory [pub-factories null])
   (for ([key-sexpr private-keys])
-    (define key
-      (with-handlers ([exn:fail?
-                       (lambda (e)
-                         ;; (eprintf "<<ERROR>>\n~a\n" (exn-message e))
-                         #f)])
-        (sexpr->pk-key key-sexpr factory)))
-    ;; (eprintf "~a pk ~a\n" (if key "+ testing" "! skipping") (car key-sexpr))
+    (define key (readkey key-sexpr factory))
+    (unless key
+      (when #t
+        (eprintf "-  cannot read ~s\n" (cadr key-sexpr))))
     (when key
+      (when #t
+        (eprintf "+  testing ~s\n" (cadr key-sexpr)))
       (test-case (format "~a ~a" (car key-sexpr) (cadr key-sexpr))
         (define pubkey (pk-key->public-only-key key))
         ;; Can convert to pubkey, can serialize and deserialize
-        (begin
-          (check-pred private-key? key)
-          (check-pred public-only-key? pubkey)
-          (check public-key=? key pubkey)
-          (check public-key=? pubkey (sexpr->pk-key (pk-key->sexpr pubkey) factory)))
-        (when (pk-can-sign? key)
-          (test-pk-sign key pubkey))
-        (when (pk-can-encrypt? key)
-          (test-pk-encrypt key pubkey))
-        (when (pk-can-key-agree? key)
-          (test-pk-key-agree key pubkey))))))
+        (check-pred private-key? key)
+        (check-pred public-only-key? pubkey)
+        (check public-key=? key pubkey)
+        (test-pk-key key pubkey)
+        (define pubkey-der (pk-key->datum pubkey 'SubjectPublicKeyInfo))
+        (for ([pub-factory pub-factories])
+          (define pubkey*
+            (with-handlers ([exn:fail? (lambda (e) #f)])
+              (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
+          (when pubkey*
+            (when #t
+              (eprintf " + cross-testing with ~s\n" pub-factory))
+            ;; (check public-key=? pubkey pubkey*) ;; FIXME?
+            (test-pk-key key pubkey*)))))))
+
+(define (test-pk-key key pubkey)
+  (when (pk-can-sign? key)
+    (test-pk-sign key pubkey))
+  (when (pk-can-encrypt? key)
+    (test-pk-encrypt key pubkey))
+  (when (pk-can-key-agree? key)
+    (test-pk-key-agree key pubkey)))
 
 (define msg #"I am the walrus.")
 (define badmsg #"I am the egg nog.")
@@ -70,29 +84,29 @@
     (define sig1 (pk-sign-digest key di (digest di* msg)))
     (define sig2 (digest/sign key di msg))
 
-    (check-true (pk-verify-digest key di (digest di* msg) sig1))
-    (check-true (pk-verify-digest key di (digest di* msg) sig2))
-    (check-true (pk-verify-digest pubkey di (digest di* msg) sig1))
-    (check-true (pk-verify-digest pubkey di (digest di* msg) sig2))
-    (check-true (digest/verify key di msg sig1))
-    (check-true (digest/verify key di msg sig2))
-    (check-true (digest/verify pubkey di msg sig1))
-    (check-true (digest/verify pubkey di msg sig2))
+    (check-true (pk-verify-digest key di (digest di* msg) sig1) "pvd key sig1")
+    (check-true (pk-verify-digest key di (digest di* msg) sig2) "pvd key sig2")
+    (check-true (pk-verify-digest pubkey di (digest di* msg) sig1) "pvd pubkey sig1")
+    (check-true (pk-verify-digest pubkey di (digest di* msg) sig2) "pvd pubkey sig2")
+    (check-true (digest/verify key di msg sig1) "d/v key sig1")
+    (check-true (digest/verify key di msg sig2) "d/v key sig2")
+    (check-true (digest/verify pubkey di msg sig1) "d/v pubkey sig1")
+    (check-true (digest/verify pubkey di msg sig2) "d/v pubkey sig2")
 
-    (check-false (digest/verify key di badmsg sig1))))
+    (check-false (digest/verify key di badmsg sig1) "bad d/v")))
 
 (define (test-pk-encrypt key pubkey)
   (define skey (semirandom-bytes 16))
   (define wkey (pk-encrypt pubkey skey))
-  (check-equal? (pk-decrypt key wkey) skey))
+  (check-equal? (pk-decrypt key wkey) skey "pk-decrypt"))
 
 (define (test-pk-key-agree key1 pubkey1)
   (define params (pk-key->parameters key1))
   (define key2 (generate-private-key params))
   (define pubkey2 (pk-key->public-only-key key2))
-
   (check-equal? (pk-derive-secret key1 pubkey2)
-                (pk-derive-secret key2 pubkey1)))
+                (pk-derive-secret key2 pubkey1)
+                "pk-derive-secret"))
 
 
 ;; ----------------------------------------
@@ -138,9 +152,8 @@ K\4\30\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\376\377\
 (define private-keys
   (list
 
-'(rsa
-  private
-  pkcs1
+'(RSAPrivateKey
+  "RSA"
   #"0\202\1;\2\1\0\2A\0\275w\365\342{\273\n\n\337\340,\230\260\243\371p\0\316\206j\310\257\
 \356\214F\371.\244eHV\210\307L\2\342'\357l\327Y\312k\235\306\334\24\315\322D3\273DQ\242\225\
 K?tw\24\22Q\277\2\3\1\0\1\2@0q\334\320\5\35\4\353T\344\347\342>\300\36\206Q\336|\246\17\34T\
@@ -154,30 +167,11 @@ s\331\206\255m-)\227\331\2!\0\366-+\303\322;\370\345]\21\256\271\255W\345k\211\2
 
 ;; FIXME: (generate-private-key dsaparams) causes segfault
 
-'(dh
-  private
-  libcrypto
-  #"0F\2A\0\371]; \1G\236E@\351<e\266J\34\237u\314\260\6\345\305\347hT\320v\230Qxx\3n\
-\rQ\357E%V\321FLE\230\241\354\300\322-sSdC\306\243\230/\341\341\372(>\244\23\2\1\2"
-  #"/2l\263\362\206\355\372\237\0266`\332\316\4\231\206\6\2606\260\212\350A\334\30\344\
-\5\314R\344\224\356\225\240G\233\367\\TA&\305\360\302\275:\262\a\321z\263\317\3\36\240\
-\322\25\t\243\360\373v\312"
-  #"\\\27\6\264\277:\210\326\222(\2226\v\246\332\235\2m\331\254\2\e\322ND\205P\245]\326\
-\256\325\300\310c\27\325\277t\1\206\2273\3376\261\t\327\277\327D\360\270[U\230\351\255\
-\256\223\22\32\310\0")
+'(PrivateKeyInfo
+  "DH nbits=512, generator=2, generated by libcrypto"
+  #"0\201\234\2\1\0000S\6\t*\206H\206\367\r\1\3\0010F\2A\0\265\267\350{\303\342\200\366\200\235\263\302\305\304\245\233i\205`,\204\bN\5\22rq\265\360>\246l\254\37[\201\244\222\363|\361\206\265\32\2247\306\320\337\31u\2\357\360e\343\220f\222~\270\375b\203\2\1\2\4B\2@@\e5k\317\256M\222\30\306\314jNg\0N\346[l~o/\f\311e\374\261s\240\273\240^r.\271\204\321\340.M\2664}\337A0\376\303\214*\b\nr\341\257\342\365\327\274\233\0027-U")
 
-'(ec
-  private
-  sec1
-  #"0\202\1 \2\1\1\4\30\230\373\315\217l\3039E\2\232\216\a){J\263\360@T\377J\366p\226\240\
-\201\3120\201\307\2\1\0010$\6\a*\206H\316=\1\1\2\31\0\377\377\377\377\377\377\377\377\377\
-\377\377\377\377\377\377\376\377\377\377\377\377\377\377\3770K\4\30\377\377\377\377\377\377\
-\377\377\377\377\377\377\377\377\377\376\377\377\377\377\377\377\377\374\4\30d!\5\31\345\
-\234\200\347\17\247\351\253r$0I\376\270\336\354\301F\271\261\3\25\0000E\256o\310B/d\355W\
-\225(\323\201 \352\341!\226\325\0041\4\30\215\250\16\2600\220\366|\277 \353C\241\210\0\364\
-\377\n\375\202\377\20\22\a\31+\225\377\310\332xc\20\21\355k$\315\325s\371w\241\36yH\21\2\31\
-\0\377\377\377\377\377\377\377\377\377\377\377\377\231\336\3706\24k\311\261\264\322(1\2\1\1\
-\2414\0032\0\4\340\343\337\24z\322 \58e\212W\1\376\350q\243\256\r\215$B\22\264\2\256\307T\
-\327\375\314V\320\t\355\212\372\204R\205m;\314\315\f\365\254\230")
-
+'(PrivateKeyInfo
+  "EC secp192r1, generated by libcrypto"
+  #"0o\2\1\0000\23\6\a*\206H\316=\2\1\6\b*\206H\316=\3\1\1\4U0S\2\1\1\4\30\274\242\276U\341\256d\355\304'\222\276\277\327\244\216\250\0\221w\3jr\254\2414\0032\0\4^\6\300\342\f\266\34\336<\324\245LX-\323\244\344\257\217\31\204\234\353\2769A\301oS\24\6]\320\213:\205\334\207j[\333\366kHSgK\371")
 ))
