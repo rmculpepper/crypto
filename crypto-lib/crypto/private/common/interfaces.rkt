@@ -81,6 +81,7 @@
     all-ciphers        ;; -> (listof cipher-impl<%>)
     all-pks          ;; -> (listof pk-impl<%>)
     |#
+    get-name    ;; -> Symbol, for testing
     get-digest  ;; DigestSpec -> digest-impl<%>/#f
     get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
     get-pk      ;; PKSpec -> pk-impl<%>/#f

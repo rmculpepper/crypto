@@ -156,6 +156,8 @@
     (inherit get-digest get-cipher)
     (super-new)
 
+    (define/override (get-name) 'gcrypt)
+
     ;; get-version : -> (values Nat Nat)
     (define/private (get-version)
       ;; Note: returns (values 0 0) if can't parse version.

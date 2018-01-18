@@ -68,6 +68,8 @@
     (inherit get-digest get-cipher)
     (super-new)
 
+    (define/override (get-name) 'libcrypto)
+
     (define/override (get-digest* spec)
       (let* ([name-string (hash-ref libcrypto-digests spec #f)]
              [evp (and name-string (EVP_get_digestbyname name-string))])

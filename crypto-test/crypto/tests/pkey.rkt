@@ -82,28 +82,42 @@
 (define msg #"I am the walrus.")
 (define badmsg #"I am the egg nog.")
 
+(define (sign-pad-ok? key pad)
+  (case pad
+    [(pkcs1-v1.5) #t]
+    [(pss) (memq (send (get-factory key) get-name) '(libcrypto gcrypt))]))
+
 (define (test-pk-sign key pubkey)
   (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
-  (for* ([pad (if rsa? '(pkcs1-v1.5 pss) '(#f))]
-         [di '(sha1 sha256)])
-    (define di* (get-digest di (get-factory key)))
-    (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
-    (define sig2 (digest/sign key di msg #:pad pad))
+  (for* ([pad (if rsa? '(pkcs1-v1.5 pss) '(#f))])
+    (define pad-ok? (and (sign-pad-ok? key pad) (sign-pad-ok? pubkey pad)))
+    (unless pad-ok?
+      (eprintf "  -skipping pad = ~v\n" pad))
+    (when pad-ok?
+      (eprintf "  +testing pad = ~v\n" pad)
+      (for ([di '(sha1 sha256)])
+        (define di* (get-digest di (get-factory key)))
+        (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
+        (define sig2 (digest/sign key di msg #:pad pad))
+        (check-true (pk-verify-digest key di (digest di* msg) sig1 #:pad pad) "pvd key sig1")
+        (check-true (pk-verify-digest key di (digest di* msg) sig2 #:pad pad) "pvd key sig2")
+        (check-true (pk-verify-digest pubkey di (digest di* msg) sig1 #:pad pad) "pvd pubkey sig1")
+        (check-true (pk-verify-digest pubkey di (digest di* msg) sig2 #:pad pad) "pvd pubkey sig2")
+        (check-true (digest/verify key di msg sig1 #:pad pad) "d/v key sig1")
+        (check-true (digest/verify key di msg sig2 #:pad pad) "d/v key sig2")
+        (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
+        (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
+        (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")))))
 
-    (check-true (pk-verify-digest key di (digest di* msg) sig1 #:pad pad) "pvd key sig1")
-    (check-true (pk-verify-digest key di (digest di* msg) sig2 #:pad pad) "pvd key sig2")
-    (check-true (pk-verify-digest pubkey di (digest di* msg) sig1 #:pad pad) "pvd pubkey sig1")
-    (check-true (pk-verify-digest pubkey di (digest di* msg) sig2 #:pad pad) "pvd pubkey sig2")
-    (check-true (digest/verify key di msg sig1 #:pad pad) "d/v key sig1")
-    (check-true (digest/verify key di msg sig2 #:pad pad) "d/v key sig2")
-    (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
-    (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
-
-    (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")))
+(define (encrypt-pad-ok? key pad)
+  (case pad
+    [(pkcs1-v1.5) #t]
+    [(oaep) (memq (send (get-factory key) get-name) '(libcrypto gcrypt))]))
 
 (define (test-pk-encrypt key pubkey)
   (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
-  (for ([pad (if rsa? '(pkcs1-v1.5 oaep) '(#f))])
+  (for ([pad (if rsa? '(pkcs1-v1.5 oaep) '(#f))]
+        #:when (and (encrypt-pad-ok? key pad) (encrypt-pad-ok? pubkey pad)))
     (define skey (semirandom-bytes 16))
     (define wkey (pk-encrypt pubkey skey #:pad pad))
     (check-equal? (pk-decrypt key wkey #:pad pad) skey "pk-decrypt")))

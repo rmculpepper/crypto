@@ -62,6 +62,8 @@
   (class* object% (factory<%>)
     (super-new)
 
+    (define/public (get-name) #f)
+
     ;; digest-table : hasheq[DigestSpec => DigestImpl/'none]
     (define digest-table (make-hasheq))
     ;; cipher-table : hash[CipherSpec => CipherImpl/'none]

@@ -412,6 +412,8 @@ FIXME: check again whether DER available in older versions
   (class* factory-base% (factory<%>)
     (super-new)
 
+    (define/override (get-name) 'cmd-ssl)
+
     (define/override (get-digest* name)
       (cond [(assq name digests)
              => (lambda (entry)

@@ -90,6 +90,8 @@
     (inherit get-digest get-cipher)
     (super-new)
 
+    (define/override (get-name) 'nettle)
+
     (define/override (get-digest* spec)
       (cond [(assq spec digests)
              => (lambda (entry)
