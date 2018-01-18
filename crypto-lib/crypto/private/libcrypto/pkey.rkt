@@ -106,14 +106,14 @@ NIST P-192 disappeared!).
         (and impl (new libcrypto-pk-params% (impl impl) (evp evp))))
       (case fmt
         [(AlgorithmIdentifier)
-         (match (DER-decode AlgorithmIdentifier buf)
+         (match (bytes->asn1/DER AlgorithmIdentifier/DER buf)
            [(hash-table ['algorithm alg-oid] ['parameters parameters])
             (cond [(equal? alg-oid id-dsa)
-                   (read-params (DER-encode Dss-Parms parameters) 'DSAParameters)]
+                   (read-params parameters 'DSAParameters)] ;; Dss-Parms
                   [(equal? alg-oid dhKeyAgreement)
-                   (read-params (DER-encode DHParameter parameters) 'DHParameter)]
+                   (read-params parameters 'DHParameter)] ;; DHParameter
                   [(equal? alg-oid id-ecPublicKey)
-                   (read-params (DER-encode EcpkParameters parameters) 'EcpkParameters)]
+                   (read-params parameters 'EcpkParameters)] ;; PcpkParameters
                   [else #f])]
            [_ #f])]
         [(DSAParameters)
@@ -267,8 +267,9 @@ NIST P-192 disappeared!).
     (define/public (*write-params fmt evp)
       (case fmt
         [(AlgorithmIdentifier)
-         (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
-                     (hasheq 'a id-dsa 'b (*write-params 'DSAParameters evp)))]
+         (asn1->bytes/DER AlgorithmIdentifier/DER
+          (hasheq 'algorithm id-dsa
+                  'parameters (*write-params 'DSAParameters evp)))]
         [(DSAParameters)
          (define dsa (EVP_PKEY_get1_DSA evp))
          (define buf (make-bytes (i2d_DSAparams dsa #f)))
@@ -346,8 +347,9 @@ NIST P-192 disappeared!).
     (define/public (*write-params fmt evp)
       (case fmt
         [(AlgorithmIdentifier)
-         (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
-                     (hasheq 'a dhKeyAgreement 'b (*write-params 'DHParameter evp)))]
+         (asn1->bytes/DER AlgorithmIdentifier/DER
+          (hasheq 'algorithm dhKeyAgreement
+                  'parameters (*write-params 'DHParameter evp)))]
         [(DHParameter)
          (define dh (EVP_PKEY_get1_DH evp))
          (define buf (make-bytes (i2d_DHparams dh #f)))
@@ -420,8 +422,9 @@ NIST P-192 disappeared!).
     (define/public (*write-params fmt evp)
       (case fmt
         [(AlgorithmIdentifier)
-         (DER-encode (Sequence [a OBJECT-IDENTIFIER] [b (Wrap ANY #:encode values)])
-                     (hasheq 'a id-ecPublicKey 'b (*write-params 'EcpkParameters evp)))]
+         (asn1->bytes/DER AlgorithmIdentifier/DER
+          (hasheq 'algorithm id-ecPublicKey
+                  'parameters (*write-params 'EcpkParameters evp)))]
         [(EcpkParameters)
          (define ec (EVP_PKEY_get1_EC_KEY evp))
          (define group (EC_KEY_get0_group ec))

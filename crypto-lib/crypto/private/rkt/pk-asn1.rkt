@@ -47,25 +47,36 @@ References:
 
 ;; ============================================================
 
+;; Helper for embedding DER into larger structures
+(define ANY/DER (WRAP ANY
+                      #:encode (lambda (v) (bytes->asn1/DER ANY v))
+                      #:decode (lambda (v) (asn1->bytes/DER ANY v))))
+
+;; ============================================================
+
 (define-asn1-type AlgorithmIdentifier
   (let ([typemap known-public-key-algorithms])
-    (Sequence [algorithm              OBJECT-IDENTIFIER]
+    (SEQUENCE [algorithm              OBJECT-IDENTIFIER]
               [parameters #:dependent (get-type algorithm typemap) #:optional])))
 
+(define AlgorithmIdentifier/DER
+  (SEQUENCE [algorithm  OBJECT-IDENTIFIER]
+            [parameters ANY/DER #:optional]))
+
 (define-asn1-type SubjectPublicKeyInfo
-  (Sequence [algorithm AlgorithmIdentifier]
+  (SEQUENCE [algorithm AlgorithmIdentifier]
             [subjectPublicKey #:dependent (BIT-STRING-containing (hash-ref algorithm 'algorithm))]))
 
 (define (BIT-STRING-containing alg-oid)
   (cond [(get-type2 alg-oid known-public-key-algorithms)
          => (lambda (type)
-              (Wrap BIT-STRING
-                    #:pre-encode (lambda (v) (bit-string (DER-encode type v) 0))
-                    #:post-decode (lambda (v) (DER-decode type (bit-string-bytes v)))))]
+              (WRAP BIT-STRING
+                    #:encode (lambda (v) (bit-string (asn1->bytes/DER type v) 0))
+                    #:decode (lambda (v) (bytes->asn1/DER type (bit-string-bytes v)))))]
         [else
-         (Wrap BIT-STRING
-               #:pre-encode (lambda (v) (bit-string v 0))
-               #:post-decode (lambda (v) (bit-string-bytes v)))]))
+         (WRAP BIT-STRING
+               #:encode (lambda (v) (bit-string v 0))
+               #:decode (lambda (v) (bit-string-bytes v)))]))
 
 ;; ============================================================
 ;; RSA
@@ -78,13 +89,13 @@ References:
 
 ;; encoding for RSA public key
 (define RSAPublicKey
-  (Sequence [modulus         INTEGER] ;; n
+  (SEQUENCE [modulus         INTEGER] ;; n
             [publicExponent  INTEGER])) ;; e
 
 ;; ----
 
 (define-asn1-type RSAPrivateKey
-  (Sequence [version           INTEGER]
+  (SEQUENCE [version           INTEGER]
             [modulus           INTEGER] ;; n
             [publicExponent    INTEGER] ;; e
             [privateExponent   INTEGER] ;; d
@@ -99,10 +110,10 @@ References:
 (define RSA:Version:multi 1) ;; version must be multi if otherPrimeInfos present
 
 (define-asn1-type OtherPrimeInfos
-  (SequenceOf OtherPrimeInfo)) ;; SIZE(1..MAX)
+  (SEQUENCE-OF OtherPrimeInfo)) ;; SIZE(1..MAX)
 
 (define OtherPrimeInfo
-  (Sequence [prime             INTEGER] ;; ri
+  (SEQUENCE [prime             INTEGER] ;; ri
             [exponent          INTEGER] ;; di
             [coefficient       INTEGER])) ;; ti
 
@@ -117,17 +128,17 @@ References:
 (define DSAPublicKey INTEGER) ;; public key, y
 
 (define Dss-Parms
-  (Sequence [p   INTEGER]
+  (SEQUENCE [p   INTEGER]
             [q   INTEGER]
             [g   INTEGER]))
 
 (define Dss-Sig-Value
-  (Sequence [r   INTEGER]
+  (SEQUENCE [r   INTEGER]
             [s   INTEGER]))
 
 ;; used by OpenSSL
 (define DSAPrivateKey
-  (Sequence [version INTEGER] ;; = 0
+  (SEQUENCE [version INTEGER] ;; = 0
             [p INTEGER]
             [q INTEGER]
             [g INTEGER]
@@ -144,11 +155,11 @@ References:
 (define DHPublicKey INTEGER) ;; public key, y = g^x mod p
 
 (define ValidationParms
-  (Sequence [seed          BIT-STRING]
+  (SEQUENCE [seed          BIT-STRING]
             [pgenCounter   INTEGER]))
 
 (define DomainParameters
-  (Sequence [p       INTEGER] ;; odd prime, p=jq +1
+  (SEQUENCE [p       INTEGER] ;; odd prime, p=jq +1
             [g       INTEGER] ;; generator, g
             [q       INTEGER] ;; factor of p-1
             [j       INTEGER #:optional] ;; subgroup factor, j>= 2
@@ -159,7 +170,7 @@ References:
 (define dhKeyAgreement (build-OID rsadsi (pkcs 1) 3 1))
 
 (define DHParameter
-  (Sequence [prime INTEGER]
+  (SEQUENCE [prime INTEGER]
             [base INTEGER]
             [privateValueLength INTEGER #:optional]))
 
@@ -171,11 +182,11 @@ References:
 ;; Curve = SEC1 Curve
 
 (define ECDSA-Sig-Value
-  (Sequence [r     INTEGER]
+  (SEQUENCE [r     INTEGER]
             [s     INTEGER]))
 
 (define EcpkParameters
-  (Choice [namedCurve    OBJECT-IDENTIFIER]
+  (CHOICE [namedCurve    OBJECT-IDENTIFIER]
           #|
           [ecParameters  ECParameters]
           [implicitlyCA  NULL]
@@ -242,7 +253,7 @@ References:
 ;; ----
 
 (define-asn1-type ECPrivateKey
-  (Sequence [version        INTEGER] ;; ecPrivkeyVer1
+  (SEQUENCE [version        INTEGER] ;; ecPrivkeyVer1
             [privateKey     OCTET-STRING]
             [parameters #:explicit 0 EcpkParameters #:optional]
             [publicKey  #:explicit 1 (BIT-STRING-containing id-ecPublicKey) #:optional]))
@@ -252,7 +263,7 @@ References:
 ;; ============================================================
 
 (define-asn1-type PrivateKeyInfo
-  (Sequence [version                   INTEGER]
+  (SEQUENCE [version                   INTEGER]
             [privateKeyAlgorithm       AlgorithmIdentifier]
             [privateKey #:dependent    (PrivateKey privateKeyAlgorithm)]
             [attributes #:implicit 0   Attributes #:optional]))
@@ -261,14 +272,12 @@ References:
   (define alg-oid (hash-ref alg 'algorithm))
   (cond [(get-type alg-oid known-private-key-formats)
          => (lambda (type)
-              (Wrap OCTET-STRING
-                    #:pre-encode
-                    (lambda (v) (DER-encode type v))
-                    #:post-decode
-                    (lambda (v) (DER-decode type v))))]
+              (WRAP OCTET-STRING
+                    #:encode (lambda (v) (asn1->bytes/DER type v))
+                    #:decode (lambda (v) (bytes->asn1/DER type v))))]
         [else OCTET-STRING]))
 
-(define Attributes (SetOf (Wrap ANY #:decode values #:encode values)))
+(define Attributes (SET-OF ANY/DER))
 
 ;; ============================================================
 ;; Some utilities

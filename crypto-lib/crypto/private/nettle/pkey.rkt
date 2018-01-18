@@ -16,23 +16,19 @@
 #lang racket/base
 (require ffi/unsafe
          asn1
-         asn1/private/base256
          racket/class
          racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
+         "../common/base256.rkt"
          "../rkt/pk-asn1.rkt"
          "../gmp/ffi.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 
-(define DSA-Sig-Val
-  ;; take and produce integer components as bytes
-  (let ([INTEGER-as-bytes (Wrap INTEGER #:encode base256-unsigned->signed #:decode values)])
-    (Sequence [r INTEGER-as-bytes]
-              [s INTEGER-as-bytes])))
+(define DSA-Sig-Val (SEQUENCE [r INTEGER] [s INTEGER]))
 
 ;; TODO: avoid trip through racket bignums, if feasible
 (define (integer->mpz n)
@@ -55,7 +51,7 @@
       (case fmt
         [(SubjectPublicKeyInfo)
          (check-bytes)
-         (match (DER-decode SubjectPublicKeyInfo sk)
+         (match (bytes->asn1/DER SubjectPublicKeyInfo sk)
            ;; Note: decode w/ type checks some well-formedness properties
            [(hash-table ['algorithm alg] ['subjectPublicKey subjectPublicKey])
             (define alg-oid (hash-ref alg 'algorithm))
@@ -86,7 +82,7 @@
            [_ #f])]
         [(PrivateKeyInfo)
          (check-bytes)
-         (match (DER-decode PrivateKeyInfo sk)
+         (match (bytes->asn1/DER PrivateKeyInfo sk)
            [(hash-table ['version version]
                         ['privateKeyAlgorithm alg]
                         ['privateKey privateKey])
@@ -114,9 +110,9 @@
            [_ #f])]
         [(RSAPrivateKey)
          (check-bytes)
-         (RSAPrivateKey->key (DER-decode RSAPrivateKey sk))]
+         (RSAPrivateKey->key (bytes->asn1/DER RSAPrivateKey sk))]
         [(DSAPrivateKey)
-         (match (DER-decode ANY sk)
+         (match (bytes->asn1/DER (SEQUENCE-OF INTEGER) sk)
            [(list 0 p q g y x) ;; FIXME!!!
             (define pub (new-dsa_public_key))
             (define priv (new-dsa_private_key))
@@ -227,7 +223,7 @@
     (define/public (write-key fmt)
       (case fmt
         [(SubjectPublicKeyInfo)
-         (DER-encode
+         (asn1->bytes/DER
           SubjectPublicKeyInfo
           (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
                   'subjectPublicKey
@@ -235,14 +231,14 @@
                           'publicExponent (mpz->integer (rsa_public_key_struct-e pub)))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (DER-encode
+         (asn1->bytes/DER
           PrivateKeyInfo
           (hasheq 'version 0
                   'privateKeyAlgorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
                   'privateKey (get-RSAPrivateKey)))]
         [(RSAPrivateKey)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (DER-encode RSAPrivateKey (get-RSAPrivateKey))]
+         (asn1->bytes/DER RSAPrivateKey (get-RSAPrivateKey))]
         [else (err/key-format 'rsa (is-private?) fmt)]))
 
     (define/private (get-RSAPrivateKey)
@@ -376,7 +372,7 @@
     (define/public (write-key fmt)
       (case fmt
         [(SubjectPublicKeyInfo)
-         (DER-encode
+         (asn1->bytes/DER
           SubjectPublicKeyInfo
           (hasheq 'algorithm
                   (hasheq 'algorithm id-dsa
@@ -386,7 +382,7 @@
                   'subjectPublicKey (mpz->integer (dsa_public_key_struct-y pub))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'dsa #f fmt))
-         (DER-encode
+         (asn1->bytes/DER
           PrivateKeyInfo
           (hasheq 'version 0
                   'privateKeyAlgorithm
@@ -397,8 +393,8 @@
                   'privateKey (mpz->integer (dsa_private_key_struct-x priv))))]
         [(DSAPrivateKey)
          (unless (is-private?) (err/key-format 'dsa #f fmt))
-         (DER-encode
-          (SequenceOf INTEGER)
+         (asn1->bytes/DER
+          (SEQUENCE-OF INTEGER)
           (list 0 ;; FIXME ???
                 (mpz->integer (dsa_public_key_struct-p pub))
                 (mpz->integer (dsa_public_key_struct-q pub))
@@ -435,16 +431,17 @@
       (dsa_signature->der sig))
 
     (define/private (dsa_signature->der sig)
-      (DER-encode DSA-Sig-Val
-                  (hasheq 'r (mpz->bin (dsa_signature_struct-r sig) #t)
-                          's (mpz->bin (dsa_signature_struct-s sig) #t))))
+      (asn1->bytes/DER DSA-Sig-Val
+       (hasheq 'r (mpz->integer (dsa_signature_struct-r sig))
+               's (mpz->integer (dsa_signature_struct-s sig)))))
 
     (define/private (der->dsa_signature der)
-      (match (DER-decode DSA-Sig-Val der)
-        [(hash-table ['r (? bytes? r)] ['s (? bytes? s)])
+      (match (bytes->asn1/DER DSA-Sig-Val der)
+        [(hash-table ['r (? exact-nonnegative-integer? r)]
+                     ['s (? exact-nonnegative-integer? s)])
          (define sig (new-dsa_signature))
-         (__gmpz_set (dsa_signature_struct-r sig) (bin->mpz r))
-         (__gmpz_set (dsa_signature_struct-s sig) (bin->mpz s))
+         (__gmpz_set (dsa_signature_struct-r sig) (integer->mpz r))
+         (__gmpz_set (dsa_signature_struct-s sig) (integer->mpz s))
          sig]
         [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
 

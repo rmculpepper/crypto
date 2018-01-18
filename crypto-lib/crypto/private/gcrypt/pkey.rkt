@@ -18,22 +18,18 @@
          racket/match
          ffi/unsafe
          asn1
-         asn1/private/base256
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
+         "../common/base256.rkt"
          "../rkt/pk-asn1.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 
 (define gcrypt-curve-names '(secp192r1 secp224r1 secp256r1 secp384r1 secp521r1))
 
-(define DSA-Sig-Val
-  ;; take and produce integer components as bytes
-  (let ([INTEGER-as-bytes (Wrap INTEGER #:encode base256-unsigned->signed #:decode values)])
-    (Sequence [r INTEGER-as-bytes]
-              [s INTEGER-as-bytes])))
+(define DSA-Sig-Val (SEQUENCE [r INTEGER] [s INTEGER]))
 
 (define (int->mpi n)   (base256->mpi (unsigned->base256 n)))
 (define (mpi->int mpi) (base256->unsigned (mpi->base256 mpi)))
@@ -51,7 +47,7 @@
       (case fmt
         [(SubjectPublicKeyInfo)
          (check-bytes)
-         (match (DER-decode SubjectPublicKeyInfo sk)
+         (match (bytes->asn1/DER SubjectPublicKeyInfo sk)
            ;; Note: decode w/ type checks some well-formedness properties
            [(hash-table ['algorithm alg] ['subjectPublicKey subjectPublicKey])
             (define alg-oid (hash-ref alg 'algorithm))
@@ -83,7 +79,7 @@
            [_ #f])]
         [(PrivateKeyInfo)
          (check-bytes)
-         (match (DER-decode PrivateKeyInfo sk)
+         (match (bytes->asn1/DER PrivateKeyInfo sk)
            [(hash-table ['version version]
                         ['privateKeyAlgorithm alg]
                         ['privateKey privateKey])
@@ -123,7 +119,7 @@
            [_ #f])]
         [(RSAPrivateKey)
          (check-bytes)
-         (RSAPrivateKey->key (DER-decode RSAPrivateKey sk))]
+         (RSAPrivateKey->key (bytes->asn1/DER RSAPrivateKey sk))]
         [else #f]))
 
     (define/private (RSAPrivateKey->key privateKey)
@@ -350,21 +346,21 @@
         (gcry_sexp_nth_mpi tag-sexp 1))
       (case fmt
         [(SubjectPublicKeyInfo)
-         (DER-encode
+         (asn1->bytes/DER
           SubjectPublicKeyInfo
           (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
                   'subjectPublicKey (hasheq 'modulus (mpi->int (get-mpi pub "n"))
                                             'publicExponent (mpi->int (get-mpi pub "e")))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (DER-encode
+         (asn1->bytes/DER
           PrivateKeyInfo
           (hasheq 'version 0
                   'privateKeyAlgorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
                   'privateKey (get-RSAPrivateKey priv)))]
         [(RSAPrivateKey)
          (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (DER-encode RSAPrivateKey (get-RSAPrivateKey priv))]
+         (asn1->bytes/DER RSAPrivateKey (get-RSAPrivateKey priv))]
         [else (err/key-format 'rsa (is-private?) fmt)]))
 
     (define/private (get-RSAPrivateKey priv)
@@ -511,7 +507,7 @@
         (gcry_sexp_nth_mpi tag-sexp 1))
       (case fmt
         [(SubjectPublicKeyInfo)
-         (DER-encode
+         (asn1->bytes/DER
           SubjectPublicKeyInfo
           (hasheq 'algorithm
                   (hasheq 'algorithm id-dsa
@@ -521,7 +517,7 @@
                   'subjectPublicKey (mpi->int (get-mpi pub "y"))))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'dsa #f fmt))
-         (DER-encode
+         (asn1->bytes/DER
           PrivateKeyInfo
           (hasheq 'version 0
                   'privateKeyAlgorithm
@@ -537,30 +533,32 @@
                        (base256->mpi digest)))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
-      (define sig-part (gcry_sexp_find_token sig-sexp "dsa"))
-      (define sig-r-part (gcry_sexp_find_token sig-part "r"))
-      (define sig-r-data (gcry_sexp_nth_data sig-r-part 1))
-      (define sig-s-part (gcry_sexp_find_token sig-part "s"))
-      (define sig-s-data (gcry_sexp_nth_data sig-s-part 1))
-      (gcry_sexp_release sig-r-part)
-      (gcry_sexp_release sig-s-part)
-      (gcry_sexp_release sig-part)
-      (DER-encode DSA-Sig-Val `(sequence [r ,sig-r-data] [s ,sig-s-data])))
+      (unpack-sig-sexp sig-sexp "dsa"))
 
     (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
         (crypto-error "DSA padding mode not supported\n  padding: ~e" pad)))
 
     (define/override (verify-make-sig-sexp sig-der)
-      (define-values (r s)
-        (match (DER-decode DSA-Sig-Val sig-der)
-          [(hash-table ['r (? bytes? r)] ['s (? bytes? s)])
-           (values r s)]
-          [_ (crypto-error "signature is not well-formed")]))
-      (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))"
-                       (base256->mpi r)
-                       (base256->mpi s)))
+      (match (bytes->asn1/DER DSA-Sig-Val sig-der)
+        [(hash-table ['r (? exact-nonnegative-integer? r)]
+                     ['s (? exact-nonnegative-integer? s)])
+         (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
+        [_ (crypto-error "signature is not well-formed")]))
     ))
+
+(define (unpack-sig-sexp sig-sexp label)
+  (define sig-part (gcry_sexp_find_token sig-sexp label))
+  (define sig-r-part (gcry_sexp_find_token sig-part "r"))
+  (define sig-r-data (gcry_sexp_nth_data sig-r-part 1))
+  (define sig-s-part (gcry_sexp_find_token sig-part "s"))
+  (define sig-s-data (gcry_sexp_nth_data sig-s-part 1))
+  (gcry_sexp_release sig-r-part)
+  (gcry_sexp_release sig-s-part)
+  (gcry_sexp_release sig-part)
+  (asn1->bytes/DER DSA-Sig-Val
+                   (hasheq 'r (base256->unsigned sig-r-data)
+                           's (base256->unsigned sig-s-data))))
 
 ;; ============================================================
 
@@ -613,14 +611,14 @@
               [else (crypto-error "unknown curve name\n  curve: ~e" curve)]))
       (case fmt
         [(SubjectPublicKeyInfo)
-         (DER-encode
+         (asn1->bytes/DER
           SubjectPublicKeyInfo
           (hasheq 'algorithm (hasheq 'algorithm id-ecPublicKey
                                      'parameters (get-key-params pub))
                   'subjectPublicKey (get-data pub "q")))]
         [(PrivateKeyInfo)
          (unless (is-private?) (err/key-format 'ec #f fmt))
-         (DER-encode
+         (asn1->bytes/DER
           PrivateKeyInfo
           (hasheq 'version 0
                   'privateKeyAlgorithm (hasheq 'algorithm id-ecPublicKey
@@ -628,8 +626,6 @@
                   'privateKey (hasheq 'version 1
                                       'privateKey (mpi->base256 (get-mpi priv "d"))
                                       'publicKey (mpi->base256 (get-mpi priv "q")))))]
-        ;; (get-data priv "q"))))]
-        ;; (DER-encode BIT-STRING (bit-string (get-data priv "q") 0)))))]
         [else (err/key-format 'dsa (is-private?) fmt)]))
 
     (define/private (get-mpi sexp tag)
@@ -642,29 +638,18 @@
                        (base256->mpi digest)))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
-      (define sig-part (gcry_sexp_find_token sig-sexp "ecdsa"))
-      (define sig-r-part (gcry_sexp_find_token sig-part "r"))
-      (define sig-r-data (gcry_sexp_nth_data sig-r-part 1))
-      (define sig-s-part (gcry_sexp_find_token sig-part "s"))
-      (define sig-s-data (gcry_sexp_nth_data sig-s-part 1))
-      (gcry_sexp_release sig-r-part)
-      (gcry_sexp_release sig-s-part)
-      (gcry_sexp_release sig-part)
-      (DER-encode DSA-Sig-Val (hasheq 'r sig-r-data 's sig-s-data)))
+      (unpack-sig-sexp sig-sexp "ecdsa"))
 
     (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
         (crypto-error "DSA padding mode not supported\n  padding: ~e" pad)))
 
     (define/override (verify-make-sig-sexp sig-der)
-      (define-values (r s)
-        (match (DER-decode DSA-Sig-Val sig-der)
-          [(hash-table ['r (? bytes? r)] ['s (? bytes? s)])
-           (values r s)]
-          [_ (crypto-error "signature is not well-formed")]))
-      (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))"
-                       (base256->mpi r)
-                       (base256->mpi s)))
+      (match (bytes->asn1/DER DSA-Sig-Val sig-der)
+        [(hash-table ['r (? exact-nonnegative-integer? r)]
+                     ['s (? exact-nonnegative-integer? s)])
+         (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
+        [_ (crypto-error "signature is not well-formed")]))
     ))
 
 ;; ============================================================
