@@ -31,6 +31,7 @@
     (let ([di (send factory get-digest name)])
       (when di
         (test-case (format "~s" name)
+          (when #t (eprintf "+  testing ~v\n" name))
           (for ([in+out (dict-ref digest-test-vectors name null)])
             (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out))))
           (for ([in digest-inputs])
@@ -66,7 +67,7 @@
       (when (zero? (length impls))
         (eprintf "-  no impl for digest ~e\n" name))
       (when (= (length impls) 1)
-        (eprintf "-  only one impl for digest ~e\n" name))
+        (eprintf "-  only one impl for digest ~e ~e\n" name (map object-name impls)))
       (when (> (length impls) 1)
         (when #t
           (eprintf "+  testing agreement ~e\n" name))
@@ -81,8 +82,6 @@
   (test-digest/in+out di in (digest di-base in)))
 
 (define (test-digest/in+out di in out)
-  (when #f
-    (eprintf "testing ~a (~s)\n" (send di get-spec) (bytes-length in)))
   (test-case (format "~a: ~e" (send di get-spec) in)
     (check-equal? (digest di in) out)
     (check-equal? (digest di (open-input-bytes in)) out)

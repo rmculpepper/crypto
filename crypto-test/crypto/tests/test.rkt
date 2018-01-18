@@ -33,7 +33,7 @@
   (test-suite name
     (test-suite "digests" (test-digests factory))
     (test-suite "ciphers" (test-ciphers factory))
-    (test-suite "pkey"    (test-pk factory))
+    (test-suite "pkey"    (test-pk factory name))
     ))
 
 (module+ main
@@ -53,5 +53,7 @@
        (test-ciphers-agree all-factories))
      (when #t (eprintf ">>> PKey agreement\n"))
      (test-suite "pkey agreement"
-       (test-pk libcrypto-factory (list gcrypt-factory nettle-factory)))
+       (test-pk libcrypto-factory "libcrypto" all-factories)
+       (test-pk gcrypt-factory "gcrypt" all-factories)
+       (test-pk nettle-factory "nettle" all-factories))
      )))

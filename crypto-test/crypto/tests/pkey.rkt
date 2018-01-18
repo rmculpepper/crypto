@@ -39,31 +39,36 @@
   (with-handlers ([exn:fail? (lambda (e) #f)])
     (datum->pk-key (caddr sexpr) (car sexpr) factory)))
 
-(define (test-pk factory [pub-factories null])
+(define (test-pk factory factory-name [pub-factories null])
   (for ([key-sexpr private-keys])
     (define key (readkey key-sexpr factory))
+    (define pubkey (and key (pk-key->public-only-key key)))
     (unless key
       (when #t
-        (eprintf "-  cannot read ~s\n" (cadr key-sexpr))))
+        (eprintf "-  cannot read ~s (~s)\n" (cadr key-sexpr) factory-name)))
     (when key
       (when #t
-        (eprintf "+  testing ~s\n" (cadr key-sexpr)))
-      (test-case (format "~a ~a" (car key-sexpr) (cadr key-sexpr))
-        (define pubkey (pk-key->public-only-key key))
+        (eprintf "+  testing ~s (~s)\n" (cadr key-sexpr) factory-name))
+      (test-case (format "~a ~a ~a" factory-name (car key-sexpr) (cadr key-sexpr))
         ;; Can convert to pubkey, can serialize and deserialize
         (check-pred private-key? key)
         (check-pred public-only-key? pubkey)
         (check public-key=? key pubkey)
-        (test-pk-key key pubkey)
-        (define pubkey-der (pk-key->datum pubkey 'SubjectPublicKeyInfo))
-        (for ([pub-factory pub-factories])
-          (define pubkey*
-            (with-handlers ([exn:fail? (lambda (e) #f)])
-              (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
-          (when pubkey*
-            (when #t
-              (eprintf " + cross-testing with ~s\n" pub-factory))
-            ;; (check public-key=? pubkey pubkey*) ;; FIXME?
+        (test-pk-key key pubkey))
+      (define pubkey-der (pk-key->datum pubkey 'SubjectPublicKeyInfo))
+      (for ([pub-factory (remove factory pub-factories)])
+        (define pubkey*
+          (with-handlers ([exn:fail? (lambda (e) #f)])
+            (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
+        (unless pubkey*
+          (when #t
+            (eprintf " - cannot read public key for ~s (~s)\n" (cadr key-sexpr) pub-factory)))
+        (when pubkey*
+          (when #t
+            (eprintf " + cross-testing with ~s\n" pub-factory))
+          ;; (check public-key=? pubkey pubkey*) ;; FIXME?
+          (test-case (format "~a => ~a, ~a ~a" factory-name pub-factory
+                             (car key-sexpr) (cadr key-sexpr))
             (test-pk-key key pubkey*)))))))
 
 (define (test-pk-key key pubkey)
@@ -78,27 +83,30 @@
 (define badmsg #"I am the egg nog.")
 
 (define (test-pk-sign key pubkey)
-
-  (for ([di '(sha1 sha256)])
+  (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
+  (for* ([pad (if rsa? '(pkcs1-v1.5 pss) '(#f))]
+         [di '(sha1 sha256)])
     (define di* (get-digest di (get-factory key)))
-    (define sig1 (pk-sign-digest key di (digest di* msg)))
-    (define sig2 (digest/sign key di msg))
+    (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
+    (define sig2 (digest/sign key di msg #:pad pad))
 
-    (check-true (pk-verify-digest key di (digest di* msg) sig1) "pvd key sig1")
-    (check-true (pk-verify-digest key di (digest di* msg) sig2) "pvd key sig2")
-    (check-true (pk-verify-digest pubkey di (digest di* msg) sig1) "pvd pubkey sig1")
-    (check-true (pk-verify-digest pubkey di (digest di* msg) sig2) "pvd pubkey sig2")
-    (check-true (digest/verify key di msg sig1) "d/v key sig1")
-    (check-true (digest/verify key di msg sig2) "d/v key sig2")
-    (check-true (digest/verify pubkey di msg sig1) "d/v pubkey sig1")
-    (check-true (digest/verify pubkey di msg sig2) "d/v pubkey sig2")
+    (check-true (pk-verify-digest key di (digest di* msg) sig1 #:pad pad) "pvd key sig1")
+    (check-true (pk-verify-digest key di (digest di* msg) sig2 #:pad pad) "pvd key sig2")
+    (check-true (pk-verify-digest pubkey di (digest di* msg) sig1 #:pad pad) "pvd pubkey sig1")
+    (check-true (pk-verify-digest pubkey di (digest di* msg) sig2 #:pad pad) "pvd pubkey sig2")
+    (check-true (digest/verify key di msg sig1 #:pad pad) "d/v key sig1")
+    (check-true (digest/verify key di msg sig2 #:pad pad) "d/v key sig2")
+    (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
+    (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
 
-    (check-false (digest/verify key di badmsg sig1) "bad d/v")))
+    (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")))
 
 (define (test-pk-encrypt key pubkey)
-  (define skey (semirandom-bytes 16))
-  (define wkey (pk-encrypt pubkey skey))
-  (check-equal? (pk-decrypt key wkey) skey "pk-decrypt"))
+  (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
+  (for ([pad (if rsa? '(pkcs1-v1.5 oaep) '(#f))])
+    (define skey (semirandom-bytes 16))
+    (define wkey (pk-encrypt pubkey skey #:pad pad))
+    (check-equal? (pk-decrypt key wkey #:pad pad) skey "pk-decrypt")))
 
 (define (test-pk-key-agree key1 pubkey1)
   (define params (pk-key->parameters key1))
