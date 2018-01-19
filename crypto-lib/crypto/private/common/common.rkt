@@ -18,6 +18,7 @@
 (require racket/class
          racket/contract/base
          racket/string
+         racket/random
          "catalog.rkt"
          "interfaces.rkt"
          "error.rkt"
@@ -39,7 +40,8 @@
          shrink-bytes
          keygen-spec/c
          check-keygen-spec
-         keygen-spec-ref)
+         keygen-spec-ref
+         crypto-random-bytes)
 
 ;; ----
 
