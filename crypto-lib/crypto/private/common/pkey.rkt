@@ -105,7 +105,7 @@
 (define encrypt-pad/c
   (or/c 'pkcs1-v1.5 'oaep 'none #f))
 (define sign-pad/c
-  (or/c 'pkcs1-v1.5 'pss 'none #f))
+  (or/c 'pkcs1-v1.5 'pss 'pss* 'none #f))
 
 (define key-format/c
   (or/c symbol? #f))

@@ -230,13 +230,16 @@ NIST P-192 disappeared!).
         (RSA_free rsa)
         (new libcrypto-pk-key% (impl this) (evp evp) (private? #t))))
 
-    (define/public (*set-sign-padding ctx pad saltlen)
+    (define/public (*set-sign-padding ctx pad saltlen sign?)
       (case pad
-        [(pkcs1-v1.5)
+        [(pkcs1-v1.5 #f)
          (EVP_PKEY_CTX_set_rsa_padding ctx RSA_PKCS1_PADDING)]
-        [(pss #f)
+        [(pss)
          (EVP_PKEY_CTX_set_rsa_padding ctx RSA_PKCS1_PSS_PADDING)
          (when saltlen (EVP_PKEY_CTX_set_rsa_pss_saltlen ctx saltlen))]
+        [(pss*)
+         (EVP_PKEY_CTX_set_rsa_padding ctx RSA_PKCS1_PSS_PADDING)
+         (when sign? (EVP_PKEY_CTX_set_rsa_pss_saltlen ctx saltlen))]
         [else (err/bad-signature-pad spec pad)]))
 
     (define/public (*set-encrypt-padding ctx pad)
@@ -313,7 +316,7 @@ NIST P-192 disappeared!).
           (EVP_PKEY_CTX_free ctx)
           (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))))
 
-    (define/public (*set-sign-padding ctx pad saltlen)
+    (define/public (*set-sign-padding ctx pad saltlen sign?)
       (case pad
         [(#f) (void)]
         [else (err/bad-signature-pad spec pad)]))
@@ -478,7 +481,7 @@ NIST P-192 disappeared!).
       (EC_KEY_free peer-ec)
       peer-evp)
 
-    (define/public (*set-sign-padding ctx pad saltlen)
+    (define/public (*set-sign-padding ctx pad saltlen sign?)
       (case pad
         [(#f) (void)]
         [else (err/bad-signature-pad spec pad)]))
@@ -540,7 +543,7 @@ NIST P-192 disappeared!).
       (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_sign_init ctx)
-      (send impl *set-sign-padding ctx pad #f)
+      (send impl *set-sign-padding ctx pad (send di get-size) #t)
       (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
       (define siglen (EVP_PKEY_sign ctx #f 0 digest (bytes-length digest)))
       (define sigbuf (make-bytes siglen))
@@ -554,7 +557,7 @@ NIST P-192 disappeared!).
       (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_verify_init ctx)
-      (send impl *set-sign-padding ctx pad #f)
+      (send impl *set-sign-padding ctx pad (send di get-size) #f)
       (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
       (begin0 (EVP_PKEY_verify ctx sig (bytes-length sig) digest (bytes-length digest))
         (EVP_PKEY_CTX_free ctx)))

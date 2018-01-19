@@ -222,7 +222,7 @@ is supported by the RSA, DSA, and EC (ECDSA) cryptosystems.
 @defproc[(pk-sign-digest [pk private-key?]
                          [di (or/c digest-spec? digest-impl?)]
                          [dgst bytes?]
-                         [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
+                         [#:pad padding (or/c #f 'pkcs1-v1.5 'pss 'pss*) #f])
          bytes?]{
 
 Returns the signature using the private key @racket[pk] of
@@ -230,10 +230,17 @@ Returns the signature using the private key @racket[pk] of
 using digest function @racket[di]. The @racket[dgst] argument should
 be the @racket[di] digest of some message.
 
-If @racket[pk] is an RSA private key, then @racket[padding] selects
-between PKCS#1-v1.5 and PSS @cite{PKCS1}. If @racket[padding] is
-@racket[#f], then an implementation-dependent mode is chosen. For all
-other cryptosystems, @racket[padding] must be @racket[#f].
+If @racket[pk] is an RSA private key, then @racket[padding] must be
+one of the following:
+@itemlist[
+@item{@racket['pkcs1-v1.5] or @racket[#f] --- use PKCS#1-v1.5 padding}
+@item{@racket['pss] --- use PSS padding with a salt length equal to
+@racket[(digest-size di)]}
+@item{@racket['pss*] --- sign using PSS padding with a salt length
+equal to @racket[(digest-size di)], but infer the salt length when
+verifying}
+]
+For all other cryptosystems, @racket[padding] must be @racket[#f].
 
 If @racket[di] is not a digest compatible with @racket[pk], or if the
 size of @racket[dgst] is not the digest size of @racket[di], or if the

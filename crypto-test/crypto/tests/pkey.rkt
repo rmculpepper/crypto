@@ -45,10 +45,10 @@
     (define pubkey (and key (pk-key->public-only-key key)))
     (unless key
       (when #t
-        (eprintf "-  cannot read ~s (~s)\n" (cadr key-sexpr) factory-name)))
+        (eprintf "-  cannot read ~s (~a)\n" (cadr key-sexpr) factory-name)))
     (when key
       (when #t
-        (eprintf "+  testing ~s (~s)\n" (cadr key-sexpr) factory-name))
+        (eprintf "+  testing ~s (~a)\n" (cadr key-sexpr) factory-name))
       (test-case (format "~a ~a ~a" factory-name (car key-sexpr) (cadr key-sexpr))
         ;; Can convert to pubkey, can serialize and deserialize
         (check-pred private-key? key)
@@ -62,12 +62,13 @@
             (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
         (unless pubkey*
           (when #t
-            (eprintf " - cannot read public key for ~s (~s)\n" (cadr key-sexpr) pub-factory)))
+            (eprintf " - cannot read public key for ~s (~s)\n"
+                     (cadr key-sexpr) (send pub-factory get-name))))
         (when pubkey*
           (when #t
-            (eprintf " + cross-testing with ~s\n" pub-factory))
+            (eprintf " + cross-testing with ~s\n" (send pub-factory get-name)))
           ;; (check public-key=? pubkey pubkey*) ;; FIXME?
-          (test-case (format "~a => ~a, ~a ~a" factory-name pub-factory
+          (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name)
                              (car key-sexpr) (cadr key-sexpr))
             (test-pk-key key pubkey*)))))))
 
@@ -85,11 +86,12 @@
 (define (sign-pad-ok? key pad)
   (case pad
     [(pkcs1-v1.5) #t]
-    [(pss) (memq (send (get-factory key) get-name) '(libcrypto #;gcrypt))]))
+    [(pss) (memq (send (get-factory key) get-name) '(libcrypto #;gcrypt #;nettle))]
+    [(pss*) (memq (send (get-factory key) get-name) '(libcrypto))]))
 
 (define (test-pk-sign key pubkey)
   (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
-  (for* ([pad (if rsa? '(pkcs1-v1.5 pss) '(#f))])
+  (for* ([pad (if rsa? '(pkcs1-v1.5 pss pss*) '(#f))])
     (define pad-ok? (and (sign-pad-ok? key pad) (sign-pad-ok? pubkey pad)))
     (unless pad-ok?
       (eprintf "  -skipping pad = ~v\n" pad))
