@@ -274,6 +274,8 @@
           [else
            (crypto-error "RSA signing not supported for digest\n  digest algorithm: ~s"
                          digest-spec)]))
+      (unless (member pad '(#f pkcs1-v1.5))
+        (crypto-error "RSA padding not supported\n  padding: ~s" pad))
       (define sigz (new-mpz))
       (or (sign-fun priv digest sigz)
           (crypto-error "RSA signing failed"))
