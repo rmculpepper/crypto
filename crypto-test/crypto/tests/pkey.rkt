@@ -86,7 +86,7 @@
 (define (sign-pad-ok? key pad)
   (case pad
     [(pkcs1-v1.5) #t]
-    [(pss) (memq (send (get-factory key) get-name) '(libcrypto #;gcrypt #;nettle))]
+    [(pss) (memq (send (get-factory key) get-name) '(libcrypto #;gcrypt nettle))]
     [(pss*) (memq (send (get-factory key) get-name) '(libcrypto))]))
 
 (define (test-pk-sign key pubkey)

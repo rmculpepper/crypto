@@ -265,20 +265,27 @@
       (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
       (unless priv (err/sign-requires-private))
       (check-digest digest digest-spec)
-      (define sign-fun
-        (case digest-spec
-          [(md5) nettle_rsa_md5_sign_digest]
-          [(sha1) nettle_rsa_sha1_sign_digest]
-          [(sha256) nettle_rsa_sha256_sign_digest]
-          [(sha512) nettle_rsa_sha512_sign_digest]
-          [else
-           (crypto-error "RSA signing not supported for digest\n  digest algorithm: ~s"
-                         digest-spec)]))
-      (unless (member pad '(#f pkcs1-v1.5))
-        (crypto-error "RSA padding not supported\n  padding: ~s" pad))
+      (define randctx (send impl get-random-ctx))
       (define sigz (new-mpz))
-      (or (sign-fun priv digest sigz)
-          (crypto-error "RSA signing failed"))
+      (define signed-ok?
+        (case pad
+          [(pkcs1-v1.5 #f)
+           (case digest-spec
+             [(md5)    (nettle_rsa_md5_sign_digest_tr    pub priv randctx digest sigz)]
+             [(sha1)   (nettle_rsa_sha1_sign_digest_tr   pub priv randctx digest sigz)]
+             [(sha256) (nettle_rsa_sha256_sign_digest_tr pub priv randctx digest sigz)]
+             [(sha512) (nettle_rsa_sha512_sign_digest_tr pub priv randctx digest sigz)]
+             [else (nosupport/digest+pad "signing" digest-spec pad)])]
+          [(pss)
+           (define saltlen (digest-spec-size digest-spec))
+           (define salt (crypto-random-bytes saltlen))
+           (case digest-spec
+             [(sha256) (nettle_rsa_pss_sha256_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
+             [(sha384) (nettle_rsa_pss_sha256_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
+             [(sha384) (nettle_rsa_pss_sha256_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
+             [else (nosupport/digest+pad "signing" digest-spec pad)])]
+          [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
+      (unless signed-ok? (crypto-error "RSA signing failed"))
       (mpz->bin sigz))
 
     (define/private (check-digest digest digest-spec)
@@ -288,41 +295,57 @@
          "digest wrong size\n  digest algorithm: ~s\n  expected size:  ~s\n  digest: ~e"
          digest-spec (digest-spec-size digest-spec) digest)))
 
+    (define/private (nosupport/digest+pad op digest-spec pad)
+      (crypto-error (string-append "RSA ~a not supported for digest and padding combination"
+                                   "\n  digest algorithm: ~s\n  padding: ~s")
+                    op digest-spec (or pad 'pkcs1-v1.5)))
+
     (define/public (verify digest digest-spec pad sig)
       (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
       (check-digest digest digest-spec)
-      (define verify-fun
-        (case digest-spec
-          [(md5) nettle_rsa_md5_verify_digest]
-          [(sha1) nettle_rsa_sha1_verify_digest]
-          [(sha256) nettle_rsa_sha256_verify_digest]
-          [(sha512) nettle_rsa_sha512_verify_digest]
-          [else
-           (crypto-error "RSA verification not supported for digest\n  digest algorithm: ~s\n"
-                         digest-spec)]))
-      (unless (member pad '(#f pkcs1-v1.5))
-        (crypto-error "RSA padding not supported\n  padding: ~s" pad))
       (define sigz (bin->mpz sig))
-      (verify-fun pub digest sigz))
+      (define verified-ok?
+        (case pad
+          [(pkcs1-v1.5 #f)
+           (case digest-spec
+             [(md5)    (nettle_rsa_md5_verify_digest    pub digest sigz)]
+             [(sha1)   (nettle_rsa_sha1_verify_digest   pub digest sigz)]
+             [(sha256) (nettle_rsa_sha256_verify_digest pub digest sigz)]
+             [(sha512) (nettle_rsa_sha512_verify_digest pub digest sigz)]
+             [else (nosupport/digest+pad "verification" digest-spec pad)])]
+          [(pss)
+           (define saltlen (digest-spec-size digest-spec))
+           (case digest-spec
+             [(sha256) (nettle_rsa_pss_sha256_verify_digest pub saltlen digest sigz)]
+             [(sha384) (nettle_rsa_pss_sha384_verify_digest pub saltlen digest sigz)]
+             [(sha512) (nettle_rsa_pss_sha512_verify_digest pub saltlen digest sigz)]
+             [else (nosupport/digest+pad "verification" digest-spec pad)])]
+          [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
+      verified-ok?)
 
     (define/public (encrypt buf pad)
       (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
-      (unless (member pad '(#f pkcs1-v1.5))
-        (crypto-error "bad pad")) ;; FIXME
-      (define enc-z (new-mpz))
-      (or (nettle_rsa_encrypt pub (send impl get-random-ctx) buf enc-z)
-          (crypto-error "RSA encyption failed"))
-      (mpz->bin enc-z))
+      (case pad
+        [(pkcs1-v1.5 #f)
+         (define enc-z (new-mpz))
+         (or (nettle_rsa_encrypt pub (send impl get-random-ctx) buf enc-z)
+             (crypto-error "RSA encyption failed"))
+         (mpz->bin enc-z)]
+        [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
 
     (define/public (decrypt buf pad)
       (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (unless priv (err/decrypt-requires-private))
-      (define enc-z (bin->mpz buf))
-      (define dec-buf (make-bytes (rsa_public_key_struct-size pub)))
-      (define dec-size (nettle_rsa_decrypt priv dec-buf enc-z))
-      (unless dec-size
-        (crypto-error "RSA decryption failed"))
-      (shrink-bytes dec-buf dec-size))
+      (case pad
+        [(pkcs1-v1.5 #f)
+         (define randctx (send impl get-random-ctx))
+         (define enc-z (bin->mpz buf))
+         (define dec-buf (make-bytes (rsa_public_key_struct-size pub)))
+         (define dec-size (nettle_rsa_decrypt_tr pub priv randctx dec-buf enc-z))
+         (unless dec-size
+           (crypto-error "RSA decryption failed"))
+         (shrink-bytes dec-buf dec-size)]
+        [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
 
     (define/public (compute-secret peer-pubkey0)
       (crypto-error "not supported"))

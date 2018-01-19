@@ -432,15 +432,38 @@
 (define-nettleHW nettle_rsa_private_key_prepare
   (_fun _rsa_private_key -> _void))
 
-(define-nettleHW nettle_rsa_md5_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha1_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha256_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha512_sign_digest (_fun _rsa_private_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_md5_sign_digest    (_fun _rsa_private_key _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha1_sign_digest   (_fun _rsa_private_key _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha256_sign_digest (_fun _rsa_private_key _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha512_sign_digest (_fun _rsa_private_key _bytes _mpz_t -> _bool))
 
-(define-nettleHW nettle_rsa_md5_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha1_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define sign-digest-type
+  (_fun _rsa_public_key _rsa_private_key _pointer (_fpointer = yarrow_random)
+        _bytes _mpz_t -> _bool))
+
+;; timing-resistant functions added in Nettle 3.2
+(define-nettleHW nettle_rsa_md5_sign_digest_tr sign-digest-type)
+(define-nettleHW nettle_rsa_sha1_sign_digest_tr sign-digest-type)
+(define-nettleHW nettle_rsa_sha256_sign_digest_tr sign-digest-type)
+(define-nettleHW nettle_rsa_sha512_sign_digest_tr sign-digest-type)
+
+;; PSS functions added in Nettle 3.4
+(define pss-sign-digest-type
+  (_fun _rsa_public_key _rsa_private_key _pointer (_fpointer = yarrow_random)
+        _size _bytes _bytes _mpz_t -> _bool))
+
+(define-nettleHW nettle_rsa_pss_sha256_sign_digest_tr pss-sign-digest-type)
+(define-nettleHW nettle_rsa_pss_sha384_sign_digest_tr pss-sign-digest-type)
+(define-nettleHW nettle_rsa_pss_sha512_sign_digest_tr pss-sign-digest-type)
+
+(define-nettleHW nettle_rsa_md5_verify_digest    (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha1_verify_digest   (_fun _rsa_public_key _pointer _mpz_t -> _bool))
 (define-nettleHW nettle_rsa_sha256_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
 (define-nettleHW nettle_rsa_sha512_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+
+(define-nettleHW nettle_rsa_pss_sha256_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_pss_sha384_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_pss_sha512_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
 
 (define-nettle yarrow_random _fpointer
   #:c-id nettle_yarrow256_random)
@@ -469,11 +492,25 @@
 (define-nettleHW nettle_rsa_decrypt ;; PKCS1 v1.5 padding
   (_fun (priv cleartext ciphertext) ::
         (priv : _rsa_private_key)
-        (len : (_ptr io _uint) = (bytes-length cleartext))
+        (len : (_ptr io _size) = (bytes-length cleartext))
         (cleartext : _bytes)
         (ciphertext : _mpz_t)
         -> (result : _bool)
         -> (and result len)))
+
+(define-nettleHW nettle_rsa_decrypt_tr
+  (_fun (pub priv randomctx cleartext ciphertext) ::
+        (pub : _rsa_public_key)
+        (priv : _rsa_private_key)
+        (randomctx : _pointer)
+        (_fpointer = yarrow_random)
+        (len : (_ptr io _size) = (bytes-length cleartext))
+        (cleartext : _bytes)
+        (ciphertext : _mpz_t)
+        -> (result : _bool)
+        -> (and result len))
+  #:fail (lambda () (lambda (pub priv randomctx cleartext ciphertext)
+                      (nettle_rsa_decrypt priv cleartext ciphertext))))
 
 ;; ----
 
