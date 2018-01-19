@@ -413,7 +413,9 @@
 
     (define/override (check-sig-pad pad)
       (case pad
-        [(#f pss) #"pss"]
+        ;; FIXME: gcrypt PSS is for fixed salt length (20), incompatible with libcrypto
+        ;;   gcrypt 1.7 adds option to set salt length, but still no max/auto support
+        ;; [(#f pss) #"pss"]
         [(pkcs1-v1.5) #"pkcs1"]
         [else (crypto-error "RSA padding mode not supported\n  padding: ~e" pad)]))
 
