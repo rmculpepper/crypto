@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -23,72 +23,45 @@
 (provide gcrypt-digest-impl%)
 
 (define gcrypt-digest-impl%
-  (class* impl-base% (digest-impl<%>)
-    (init-field md         ;; int
-                blocksize) ;; no way to fetch w/ ffi (?)
-    (inherit-field spec)
+  (class digest-impl%
+    (init-field md) ;; int
+    (init blocksize)
     (super-new)
+    (inherit get-spec get-size get-block-size sanity-check)
 
-    (define hmac-impl #f)
-    (define size (gcry_md_get_algo_dlen md))
+    (sanity-check #:size (gcry_md_get_algo_dlen md) #:block-size blocksize)
 
-    (define/public (get-size) size)
-    (define/public (get-block-size) blocksize)
-
-    (define/public (new-ctx)
+    (define/override (new-ctx)
       (let ([ctx (gcry_md_open md 0)])
         (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 
-    (define/public (get-hmac-impl)
-      (unless hmac-impl (set! hmac-impl (new gcrypt-hmac-impl% (digest this))))
-      hmac-impl)
+    (define/override (new-hmac-ctx key)
+      (let ([ctx (gcry_md_open md GCRY_MD_FLAG_HMAC)])
+        (gcry_md_setkey ctx key (bytes-length key))
+        (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 
-    ;; ----
-
-    (define/public (can-digest-buffer!?) #t)
-    (define/public (digest-buffer! buf start end outbuf outstart)
-      (check-input-range buf start end)
-      (check-output-range outbuf outstart (bytes-length outbuf) size)
-      (gcry_md_hash_buffer md (ptr-add outbuf outstart)
-                           (ptr-add buf start) (- end start)))
-
-    (define/public (can-hmac-buffer!?) #f)
-    (define/public (hmac-buffer! key buf start end outbuf outstart) (void))
+    (define/override (-digest-buffer buf start end)
+      ;; FIXME: docs say "will abort the process if an unavailable algorithm is used"
+      ;; so maybe not worth the trouble?
+      (define outbuf (make-bytes (get-size)))
+      (gcry_md_hash_buffer md outbuf (ptr-add buf start) (- end start))
+      outbuf)
     ))
 
 (define gcrypt-digest-ctx%
-  (class* ctx-base% (digest-ctx<%>)
+  (class digest-ctx%
     (init-field ctx)
     (inherit-field impl)
     (super-new)
 
-    (define/public (update buf start end)
-      (check-input-range buf start end)
+    (define/override (-update buf start end)
       (gcry_md_write ctx (ptr-add buf start) (- end start)))
 
-    (define/public (final! buf start end)
-      (check-output-range buf start end (send impl get-size))
-      (gcry_md_read ctx (ptr-add buf start) (- end start))
-      (gcry_md_close ctx)
-      (set! ctx #f)
-      (send impl get-size))
+    (define/override (-final! buf)
+      (gcry_md_read ctx buf (bytes-length buf))
+      (gcry_md_close ctx))
 
-    (define/public (copy)
+    (define/override (-copy)
       (let ([ctx2 (gcry_md_copy ctx)])
         (new gcrypt-digest-ctx% (impl impl) (ctx ctx2))))
-    ))
-
-;; ============================================================
-
-(define gcrypt-hmac-impl%
-  (class* object% (hmac-impl<%>)
-    (init-field digest)
-    (super-new)
-    (define/public (get-spec) `(hmac ,(send digest get-spec)))
-    (define/public (get-factory) (send digest get-factory))
-    (define/public (get-digest) digest)
-    (define/public (new-ctx key)
-      (let ([ctx (gcry_md_open (get-field md digest) GCRY_MD_FLAG_HMAC)])
-        (gcry_md_setkey ctx key (bytes-length key))
-        (new gcrypt-digest-ctx% (impl digest) (ctx ctx))))
     ))

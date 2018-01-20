@@ -18,6 +18,7 @@
 (require racket/class
          racket/dict
          rackunit
+         crypto/private/common/interfaces
          crypto/private/common/catalog
          crypto/private/common/digest
          crypto/private/common/util
@@ -92,14 +93,14 @@
     (let* ([r 57]
            [in* (bytes-append (make-bytes r 65) in (make-bytes r 66))])
       (let ([ctx (make-digest-ctx di)])
-        (digest-update ctx in* r (+ r (bytes-length in)))
+        (digest-update ctx (bytes-range in* r (+ r (bytes-length in))))
         (check-equal? (digest-final ctx) out))
       (let ([ctx (make-digest-ctx di)])
         (for ([i (in-range r (+ r (bytes-length in)))])
-          (digest-update ctx in* i (add1 i))
+          (digest-update ctx (bytes-range in* i (add1 i)))
           (let ([so-far (digest-peek-final ctx)])
             (when so-far
-              (check-equal? so-far (digest-bytes di in* r (+ i 1))))))
+              (check-equal? so-far (digest di (bytes-range in* r (+ i 1)))))))
         (check-equal? (digest-final ctx) out)))))
 
 (define (test-hmac-impls-agree di di-base key in)
@@ -115,11 +116,11 @@
     (let* ([r 57]
            [in* (bytes-append (make-bytes r 65) in (make-bytes r 66))])
       (let ([ctx (make-hmac-ctx di key)])
-        (digest-update ctx in* r (+ r (bytes-length in)))
+        (digest-update ctx (bytes-range in* r (+ r (bytes-length in))))
         (check-equal? (digest-final ctx) out))
       (let ([ctx (make-hmac-ctx di key)])
         (for ([i (in-range r (+ r (bytes-length in)))])
-          (digest-update ctx in* i (add1 i)))
+          (digest-update ctx (bytes-range in* i (add1 i))))
         (check-equal? (digest-final ctx) out)))))
 
 ;; ----------------------------------------

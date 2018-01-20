@@ -96,16 +96,12 @@ The random bytes are generated with @racket[crypto-random-bytes].
 @section{High-level Digest Functions}
 
 @defproc[(digest [di (or/c digest-spec? digest-impl?)]
-                 [input (or/c bytes? string? input-port?)])
+                 [input input/c])
          bytes?]{
 
 Computes the digest of @racket[input] using the digest function
-represented by @racket[di].
-
-If @racket[input] is a string, it is converted by bytes by calling
-@racket[string->bytes/utf-8].  If @racket[input] is an input port, its
-contents are read until until it produces @racket[eof], but the port
-is not closed.
+represented by @racket[di]. See @racket[input/c] for accepted values
+and their conversion rules to bytes.
 
 @examples[#:eval the-eval
 (digest 'sha1 "Hello world!")
@@ -115,7 +111,7 @@ is not closed.
 
 @defproc[(hmac [di (or/c digest-spec? digest-impl?)]
                [key bytes?]
-               [input (or/c bytes? string? input-port?)])
+               [input input/c])
          bytes?]{
 
 Like @racket[digest], but computes the HMAC of @racket[input] using
@@ -141,15 +137,13 @@ otherwise.
 }
 
 @defproc[(digest-update [dctx digest-ctx?]
-                        [input bytes?]
-                        [start exact-nonnegative-integer? 0]
-                        [end exact-nonnegative-integer? (bytes-length input)])
+                        [input input/c])
          void?]{
 
 Updates @racket[dctx] with the message data corresponding to
-@racket[(subbytes input start end)]. The @racket[digest-update]
-function can be called multiple times, in which case @racket[dctx]
-computes the digest of the concatenated inputs.
+@racket[input]. The @racket[digest-update] function can be called
+multiple times, in which case @racket[dctx] computes the digest of the
+concatenated inputs.
 }
 
 @defproc[(digest-final [dctx digest-ctx?])

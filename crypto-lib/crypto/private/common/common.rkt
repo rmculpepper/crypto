@@ -16,6 +16,7 @@
 
 #lang racket/base
 (require racket/class
+         racket/match
          racket/contract/base
          racket/string
          racket/random
@@ -26,13 +27,18 @@
          "../rkt/padding.rkt")
 (provide impl-base%
          ctx-base%
+         state-mixin
+         state-ctx%
          factory-base%
+         digest-impl%
+         digest-ctx%
          cipher-impl-base%
          multikeylen-cipher-impl%
          get-output-size*
          cipher-segment-input
          whole-chunk-cipher-ctx%
          AE-whole-chunk-cipher-ctx%
+         process-input
          get-impl*
          get-spec*
          get-factory*
@@ -42,7 +48,11 @@
          keygen-spec-ref
          crypto-random-bytes)
 
-;; ----
+;; Convention: methods starting with `-` (eg, `-digest-buffer`) are
+;; hooks for overrriding. They receive pre-checked arguments, and they
+;; are called within the appropriate mutex and state, if applicable.
+
+;; ============================================================
 
 (define impl-base%
   (class* object% (impl<%>)
@@ -57,7 +67,32 @@
     (define/public (get-impl) impl)
     (super-new)))
 
-;; ----
+;; ----------------------------------------
+
+(define state-mixin
+  (mixin () (state<%>)
+    (init-field state)
+    (field [sema (make-semaphore 1)])
+    (super-new)
+
+    (define/public (with-state #:ok [ok-states #f] #:pre [pre-state #f] #:post [post-state #f]
+                     #:msg [msg #f]
+                     proc)
+      (call-with-semaphore sema
+        (lambda ()
+          (when ok-states (unless (memq state ok-states) (bad-state state ok-states msg)))
+          (when pre-state (unless (equal? state pre-state) (set! state pre-state)))
+          (begin0 (proc)
+            (when post-state (unless (equal? state post-state) (set! state post-state)))))))
+
+    (define/public (bad-state state ok-states msg)
+      (crypto-error "wrong state\n  state: ~s~a" state (or msg "")))
+    ))
+
+(define state-ctx% (state-mixin ctx-base%))
+
+;; ============================================================
+;; Factory
 
 (define factory-base%
   (class* object% (factory<%>)
@@ -117,7 +152,95 @@
     (define/public (get-kdf spec) #f)
     ))
 
-;; ----
+;; ============================================================
+;; Digest
+
+(define digest-impl%
+  (class* impl-base% (digest-impl<%>)
+    (super-new)
+    (inherit get-spec)
+
+    (define/public (get-size) (digest-spec-size (get-spec)))
+    (define/public (get-block-size) (digest-spec-block-size (get-spec)))
+
+    (define/public (sanity-check #:size [size #f] #:block-size [block-size #f])
+      ;; Use digest-spec-{block-,}size directly so that subclasses can
+      ;; override get-size and get-block-size with faster versions.
+      (when size
+        (unless (= size (digest-spec-size (get-spec)))
+          (crypto-error "internal error in digest ~v size: expected ~s but got ~s"
+                        (get-spec) (digest-spec-size (get-spec)) size)))
+      (when block-size
+        (unless (= block-size (digest-spec-block-size (get-spec)))
+          (crypto-error "internal error in digest ~v block size: expected ~s but got ~s"
+                        (get-spec) (digest-spec-block-size (get-spec)) block-size))))
+
+    (abstract new-ctx)        ;; -> digest-ctx<%>
+    (abstract new-hmac-ctx)   ;; Bytes -> digest-ctx<%>
+
+    (define/public (digest src)
+      (define (fallback) (send (new-ctx) digest src))
+      (match src
+        [(? bytes?) (or (-digest-buffer src 0 (bytes-length src)) (fallback))]
+        [(bytes-range buf start end) (or (-digest-buffer buf start end) (fallback))]
+        [_ (fallback)]))
+
+    (define/public (hmac key src)
+      (define (fallback) (send (new-hmac-ctx key) digest src))
+      (match src
+        [(? bytes?) (or (-hmac-buffer key src 0 (bytes-length src)) (fallback))]
+        [(bytes-range buf start end) (or (-hmac-buffer key buf start end) (fallback))]
+        [_ (fallback)]))
+
+    ;; {-digest,-hmac}-buffer : ... -> Bytes/#f
+    ;; Return bytes if can compute digest/hmac directly, #f to fall back
+    ;; to default ctx code.
+    (define/public (-digest-buffer src src-start src-end) #f)
+    (define/public (-hmac-buffer key src src-start src-end) #f)
+    ))
+
+(define digest-ctx%
+  (class* (state-mixin ctx-base%) (digest-ctx<%>)
+    (super-new [state 'open])
+    (inherit get-impl with-state)
+    (define/public (get-size) (send (get-impl) get-size))
+
+    (define/public (digest src)
+      (update src)
+      (final))
+
+    (define/public (update src)
+      (with-state #:ok '(open)
+        (lambda ()
+          (let loop ([src src])
+            (match src
+              [(? bytes?) (void (-update src 0 (bytes-length src)))]
+              [(bytes-range buf start end) (void (-update buf start end))]
+              [(? input-port?)
+               (process-input src (lambda (buf len) (-update buf 0 len)))]
+              [(? string?)
+               ;; Alternative: could process string in chunks like process-input.
+               ;; Note: open-input-bytes makes copy, so can't just use that.
+               (loop (string->bytes/utf-8 src))]
+              [(? list?) (for ([sub (in-list src)]) (loop sub))])))))
+
+    (define/public (final)
+      (with-state #:ok '(open) #:post 'closed
+        (lambda ()
+          (define dest (make-bytes (get-size)))
+          (-final! dest)
+          dest)))
+
+    (define/public (copy)
+      (with-state #:ok '(open) (lambda () (-copy))))
+
+    (abstract -update) ;; Bytes Nat Nat -> Void
+    (abstract -final!) ;; Bytes -> Void
+    (define/public (-copy) #f) ;; -> digest-ctx<%> or #f
+    ))
+
+;; ============================================================
+;; Cipher
 
 (define cipher-impl-base%
   (class* impl-base% (cipher-impl<%>)
@@ -162,8 +285,6 @@
                     spec (bytes-length key)
                     (string-join (map number->string (map car impls)) ", "))]))
     ))
-
-;; ----
 
 (define whole-chunk-cipher-ctx%
   (class* ctx-base% (cipher-ctx<%>)
@@ -449,7 +570,21 @@
   (define alignend (max alignstart alignend1))
   (values prefixlen flush-partial? (- alignend alignstart)))
 
-;; ----
+;; ============================================================
+;; Input
+
+(define DEFAULT-CHUNK 1000)
+
+;; process-input : InputPort (Bytes Nat -> Void) -> Void
+(define (process-input in process #:chunk [chunk-size DEFAULT-CHUNK])
+  (define buf (make-bytes chunk-size))
+  (let loop ()
+    (define len (read-bytes! buf in))
+    (unless (eof-object? len)
+      (process buf len)
+      (loop))))
+
+;; ============================================================
 
 (define (get-impl* src0 [fail-ok? #f])
   (let loop ([src src0])

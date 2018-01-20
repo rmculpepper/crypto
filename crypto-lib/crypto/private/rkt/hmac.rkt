@@ -23,7 +23,7 @@
 ;; Reference: http://www.ietf.org/rfc/rfc2104.txt
 
 (define rkt-hmac-impl%
-  (class* impl-base% (hmac-impl<%>)
+  (class* impl-base% ()
     (init-field digest)
     (super-new)
     (define/public (get-digest) digest)

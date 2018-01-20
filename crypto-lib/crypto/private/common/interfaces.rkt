@@ -15,13 +15,14 @@
 
 #lang racket/base
 (require racket/class
+         racket/contract/base
          "catalog.rkt")
 (provide impl<%>
          ctx<%>
+         state<%>
          factory<%>
          digest-impl<%>
          digest-ctx<%>
-         hmac-impl<%>
          cipher-impl<%>
          cipher-ctx<%>
          pk-impl<%>
@@ -29,6 +30,9 @@
          pk-params<%>
          pk-key<%>
          kdf-impl<%>
+
+         input/c
+         (struct-out bytes-range)
 
          crypto-factory?
          digest-impl?
@@ -63,6 +67,35 @@
     get-impl    ;; -> impl<%>
     ))
 
+(define state<%>
+  (interface ()
+    with-state ;; [#:ok States #:pre State #:post State #:msg Any] (-> Any) -> Any
+    ;; Acquires mutex, checks state, and updates state before and after calling proc.
+    ))
+
+;; ============================================================
+;; Inputs
+
+;; An Input is one of
+;; - Bytes
+;; - String
+;; - InputPort
+;; - (bytes-range Bytes Nat Nat)
+;; - (Listof Input)
+(struct bytes-range (bs start end)
+  #:guard (lambda (buf start end _name)
+            (unless (bytes? buf)
+              (raise-argument-error 'bytes-range "bytes?" 0 buf start end))
+            (unless (exact-nonnegative-integer? start)
+              (raise-argument-error 'bytes-range "exact-nonnegative-integer?" 1 buf start end))
+            (unless (exact-nonnegative-integer? end)
+              (raise-argument-error 'bytes-range "exact-nonnegative-integer?" 2 buf start end))
+            (unless (<= start end (bytes-length buf))
+              (raise-range-error 'bytes-range "bytes" "ending " end buf start (bytes-length buf) 0))
+            (values buf start end)))
+
+(define input/c (or/c bytes? string? input-port? bytes-range? (listof (recursive-contract input/c))))
+
 ;; ============================================================
 ;; Implementation Factories
 
@@ -89,40 +122,25 @@
 
 (define (crypto-factory? x) (is-a? x factory<%>))
 
-
 ;; ============================================================
 ;; Digests
 
-;; FIXME: elim end indexes: simplifies interface, clients can check easily
-;; FIXME: add hmac-buffer! method
-
 (define digest-impl<%>
   (interface (impl<%>)
-    ;; get-spec      ;; -> DigestSpec
-    get-size      ;; -> nat
-    get-block-size;; -> nat
-    get-hmac-impl ;; -> digest-impl<%>
-    new-ctx       ;; -> digest-ctx<%>
-
-    can-digest-buffer!? ;; -> boolean
-    digest-buffer!      ;; bytes nat nat bytes nat -> nat
-
-    can-hmac-buffer!?   ;; -> boolean
-    hmac-buffer!        ;; bytes bytes nat nat bytes nat -> nat
+    get-size       ;; -> Nat
+    get-block-size ;; -> Nat
+    new-ctx        ;; -> digest-ctx<%>
+    new-hmac-ctx   ;; Bytes -> digest-ctx<%>
+    digest         ;; Input -> Bytes
+    hmac           ;; Bytes Input -> Bytes
     ))
 
-;; FIXME: add some option to reset instead of close; add to new-ctx or final! (???)
 (define digest-ctx<%>
   (interface (ctx<%>)
-    update   ;; bytes nat nat -> void
-    final!   ;; bytes nat nat -> nat
-    copy     ;; -> digest-ctx<%>/#f
-    ))
-
-(define hmac-impl<%>
-  (interface (impl<%>)
-    get-digest ;; -> digest-impl<%>
-    new-ctx    ;; bytes -> digest-ctx<%>
+    digest     ;; Input -> Bytes
+    update     ;; Input -> Void
+    final      ;; -> Bytes
+    copy       ;; -> digest-ctx<%> or #f
     ))
 
 (define (digest-impl? x) (is-a? x digest-impl<%>))

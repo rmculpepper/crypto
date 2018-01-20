@@ -52,4 +52,6 @@
          get-kdf
          kdf-spec?
          kdf-impl?
-         )
+
+         (struct-out bytes-range)
+         input/c)
