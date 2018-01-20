@@ -22,7 +22,6 @@
          crypto/libcrypto
          crypto/gcrypt
          crypto/nettle
-         crypto/private/cmd-ssl/cmd
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt")
