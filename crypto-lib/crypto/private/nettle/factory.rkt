@@ -1,4 +1,4 @@
-;; Copyright 2013-2014 Ryan Culpepper
+;; Copyright 2013-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -17,6 +17,7 @@
 (require racket/class
          racket/match
          "../common/interfaces.rkt"
+         "../common/catalog.rkt"
          "../common/common.rkt"
          "ffi.rkt"
          "digest.rkt"
@@ -78,6 +79,7 @@
     [salsa20r12 "salsa20r12"]
     [chacha20 "chacha"]
     [rc4 "arcfour128"]
+    [chacha20-poly1305 "chacha-poly1305"]
     ;; "arctwo40", "arctwo64", "arctwo128"
     ))
 
@@ -114,13 +116,13 @@
                (for/list ([keylen+algid (in-list alg)])
                  (cons (quotient (car keylen+algid) 8)
                        (get-nc spec (cadr keylen+algid))))]))
-      (or (match (assq (car spec) block-ciphers)
+      (or (match (assq (cipher-spec-algo spec) block-ciphers)
             [(list _ gcm-ok? alg)
-             (and (memq (cadr spec) block-modes)
-                  (if (memq (cadr spec) '(gcm eax)) gcm-ok? #t)
+             (and (memq (cipher-spec-mode spec) block-modes)
+                  (if (memq (cipher-spec-mode spec) '(gcm eax)) gcm-ok? #t)
                   (alg->cipher alg))]
             [_ #f])
-          (match (assq (car spec) stream-ciphers)
+          (match (assq (cipher-spec-algo spec) stream-ciphers)
             [(list _ alg)
              (alg->cipher alg)]
             [_ #f])))
@@ -169,9 +171,8 @@
           (when (get-cipher (list cipher mode))
             (printf " ~v\n" (list cipher mode)))))
       (for ([cipher (map car stream-ciphers)])
-        (for ([mode (in-list stream-modes)])
-          (when (get-cipher (list cipher mode))
-            (printf " ~v\n" (list cipher mode)))))
+        (when (get-cipher (list cipher 'stream))
+          (printf " ~v\n" (list cipher 'stream))))
       (printf "Available PK:\n")
       (for ([pk '(rsa dsa)])
         ;; FIXME: check impl avail???

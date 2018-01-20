@@ -1,4 +1,4 @@
-;; Copyright 2013-2014 Ryan Culpepper
+;; Copyright 2013-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -135,6 +135,8 @@
                        encrypt decrypt
                        rkt-encrypt rkt-decrypt
                        extras))
+(define (nettle-cipher-ref nc key)
+  (cond [(assq key (nettle-cipher-extras nc)) => cadr] [else #f]))
 
 ;; struct nettle_cipher *nettle_ciphers[], array terminated by NULL
 (define nettle_ciphers (ffi-obj #"nettle_ciphers" libnettle))
@@ -229,6 +231,47 @@
                       (cast nettle_chacha_crypt _fpointer _rkt_crypt_func)
                       `((set-iv ,nettle_chacha_set_nonce)))))
 
+(define POLY1305_CONTEXT_SIZE
+  (ctype-sizeof
+   (make-cstruct-type
+    (list (_union (_array _uint32 6) (_array _uint64 3))
+          (_array _uint32 3)
+          _uint32
+          (_union (_array _uint32 4) (_array _uint64 2))))))
+(define POLY1305_BLOCK_SIZE 16)
+
+(define CHACHA_POLY1305_CONTEXT_SIZE
+  (ctype-sizeof
+   (make-cstruct-type
+    (list (_array _byte CHACHA_CONTEXT_SIZE)
+          (_array _byte POLY1305_CONTEXT_SIZE)
+          (_array _ulong (/ 16 (ctype-sizeof _ulong))) ;; nettle_block16
+          _uint64
+          _uint64
+          (_array _uint8 POLY1305_BLOCK_SIZE)
+          _uint))))
+(define CHACHA_POLY1305_KEY_SIZE 32)
+(define CHACHA_POLY1305_BLOCK_SIZE 64)
+(define CHACHA_POLY1305_NONCE96_SIZE 12)
+(define-nettle nettle_chacha_poly1305_set_key _nettle_set_key_func)
+(define-nettle nettle_chacha_poly1305_set_nonce _nettle_set_iv/nonce_func)
+(define-nettle nettle_chacha_poly1305_update (_fun _CIPHER_CTX _size _pointer -> _void))
+(define-nettle nettle_chacha_poly1305_encrypt _nettle_crypt_func #:fail (lambda () #f))
+(define-nettle nettle_chacha_poly1305_decrypt _nettle_crypt_func #:fail (lambda () #f))
+(define-nettle nettle_chacha_poly1305_digest (_fun _CIPHER_CTX _size _pointer -> _void))
+
+(define chacha-poly1305-cipher
+  (and nettle_chacha_poly1305_encrypt
+       (nettle-cipher "chacha-poly1305"
+                      CHACHA_POLY1305_CONTEXT_SIZE CHACHA_POLY1305_BLOCK_SIZE CHACHA_POLY1305_KEY_SIZE
+                      nettle_chacha_poly1305_set_key nettle_chacha_poly1305_set_key
+                      nettle_chacha_poly1305_encrypt nettle_chacha_poly1305_decrypt
+                      (cast nettle_chacha_poly1305_encrypt _fpointer _rkt_crypt_func)
+                      (cast nettle_chacha_poly1305_decrypt _fpointer _rkt_crypt_func)
+                      `((set-iv ,nettle_chacha_poly1305_set_nonce)
+                        (update-aad ,nettle_chacha_poly1305_update)
+                        (get-auth-tag ,nettle_chacha_poly1305_digest)))))
+
 (define nettle-all-ciphers
   (let* ([more-ciphers
           (append nettle-regular-ciphers
@@ -236,7 +279,8 @@
                           (list blowfish-cipher
                                 salsa20-cipher
                                 salsa20r12-cipher
-                                chacha-cipher)))])
+                                chacha-cipher
+                                chacha-poly1305-cipher)))])
     (for/list ([cipher (in-list more-ciphers)])
       (list (nettle-cipher-name cipher) cipher))))
 

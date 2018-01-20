@@ -1,4 +1,4 @@
-;; Copyright 2013-2017 Ryan Culpepper
+;; Copyright 2013-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -74,12 +74,6 @@
       (if (or encrypt? (memq mode '(ctr gcm eax))) ;; CTR, GCM use block cipher's encrypt
           ((nettle-cipher-set-encrypt-key nc) ctx key)
           ((nettle-cipher-set-decrypt-key nc) ctx key))
-      (for ([extra (in-list (nettle-cipher-extras nc))])
-        (case (car extra)
-          [(set-iv)
-           (let ([set-iv-fun (cadr extra)])
-             (set-iv-fun ctx iv))]
-          [else (void)]))
       (case mode
         [(gcm)
          (nettle_gcm_set_key super-key ctx (nettle-cipher-encrypt nc))
@@ -87,7 +81,9 @@
         [(eax)
          (nettle_eax_set_key super-key ctx (nettle-cipher-encrypt nc))
          (nettle_eax_set_nonce super-ctx super-key ctx (nettle-cipher-encrypt nc)
-                               (bytes-length iv) iv)]))
+                               (bytes-length iv) iv)]
+        [else (let ([set-iv (nettle-cipher-ref nc 'set-iv)])
+                (when set-iv (set-iv ctx iv)))]))
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
       (case mode
@@ -129,6 +125,9 @@
       (and ctx #t))
 
     (define/override (*close)
+      (set! super-key #f)
+      (set! super-ctx #f)
+      (set! auth-tag #f)
       (set! ctx #f)
       (set! iv #f))
 
@@ -148,7 +147,10 @@
         [(eax)
          (nettle_eax_update super-ctx super-key ctx (nettle-cipher-encrypt nc)
                             (- inend instart) (ptr-add inbuf instart))]
-        [else (crypto-error "bad mode: ~e" mode)]))
+        [else
+         (let ([update-aad (nettle-cipher-ref nc 'update-aad)])
+           (unless update-aad (crypto-error "internal error: cannot update AAD\n  mode: ~e" mode))
+           (update-aad ctx (- inend instart) (ptr-add inbuf instart)))]))
 
     (define/override (*set-auth-tag tag)
       (set! auth-tag tag))
@@ -162,5 +164,9 @@
         [(eax)
          (nettle_eax_digest super-ctx super-key ctx (nettle-cipher-encrypt nc) taglen tag)
          tag]
-        [else (crypto-error "bad mode: ~e" mode)]))
+        [else
+         (let ([get-auth-tag (nettle-cipher-ref nc 'get-auth-tag)])
+           (unless get-auth-tag (crypto-error "internal error: cannot get auth tag\n  mode: ~e" mode))
+           (get-auth-tag ctx taglen tag)
+           tag)]))
     ))

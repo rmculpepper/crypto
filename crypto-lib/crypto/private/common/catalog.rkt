@@ -219,7 +219,7 @@
            [salsa20r12 .  [ 8  (32)]]
            [chacha20   .  [ 8  (32)]]
            [chacha20-poly1305   . [ 12 (32)]] ;; 96-bit nonce (IETF)
-           [chacha20-poly1305/8 . [ 8  (32)]] ;; 64-bit nonce (original)
+           ;; [chacha20-poly1305/8 . [ 8  (32)]] ;; 64-bit nonce (original)
            ))
 
 ;; stream-cipher-name? : Any -> Boolean
