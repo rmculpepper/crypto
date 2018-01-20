@@ -53,7 +53,7 @@ A cipher specifier is one of the following:
                   (racket '#,(racketvalfont (format "~a" name))))
                 ", ")),
 and @racket[_block-mode] is one of the following symbols: 
-@(add-between (for/list ([mode (map car known-block-modes)])
+@(add-between (for/list ([mode known-block-modes])
                 (racket '#,(racketvalfont (format "~a" mode))))
               ", ").}
 ]

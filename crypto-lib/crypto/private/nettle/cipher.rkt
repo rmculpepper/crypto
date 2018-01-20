@@ -61,7 +61,7 @@
     (super-new)
 
     ;; FIXME: reconcile padding and stream ciphers (raise error?)
-    (define mode (cadr (send impl get-spec)))
+    (define mode (cipher-spec-mode (send impl get-spec)))
     (define ctx (make-ctx (nettle-cipher-context-size nc)))
     (define super-key (case mode [(gcm) (make-gcm_key)] [(eax) (make-eax_key)] [else #f]))
     (define super-ctx (case mode [(gcm) (make-gcm_ctx)] [(eax) (make-eax_ctx)] [else #f]))

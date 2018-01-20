@@ -140,14 +140,9 @@
           [else (send (get-impl* o) get-default-key-size)])))
 (define (cipher-key-sizes o)
   (with-crypto-entry 'cipher-key-sizes
-    (let ([sizes (cond [(list? o) (cipher-spec-key-sizes o)]
-                       [else (send (get-impl* o) get-key-sizes)])])
-      (cond [(variable-size? sizes)
-             (for/list ([n (in-range (variable-size-min sizes)
-                                     (add1 (variable-size-max sizes))
-                                     (variable-size-step sizes))])
-               n)]
-            [else sizes]))))
+    (size-set->list
+     (cond [(list? o) (cipher-spec-key-sizes o)]
+           [else (send (get-impl* o) get-key-sizes)]))))
 (define (cipher-block-size o)
   (with-crypto-entry 'cipher-block-size
     (cond [(list? o) (cipher-spec-block-size o)]

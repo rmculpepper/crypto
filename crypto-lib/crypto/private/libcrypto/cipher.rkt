@@ -46,7 +46,7 @@
     (define/override (get-block-size) block-size)
     (define/override (get-iv-size) iv-size)
     (define/override (get-chunk-size) block-size)
-    (define/public (is-ae?) (and (memq (cadr spec) '(gcm ccm))))
+    (define/public (is-ae?) (cipher-spec-aead? spec))
 
     (define/override (new-ctx key iv enc? pad?)
       (check-key-size spec (bytes-length key))
@@ -57,7 +57,7 @@
         (EVP_CIPHER_CTX_set_key_length ctx (bytes-length key))
         (EVP_CIPHER_CTX_set_padding ctx pad?)
         (define ivlen (if iv (bytes-length iv) 0))
-        (case (cadr spec)
+        (case (cipher-spec-mode spec)
           [(gcm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_SET_IVLEN ivlen #f)]
           [(ccm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_CCM_SET_IVLEN ivlen #f)]
           [else (void)])
@@ -142,7 +142,7 @@
     (define/public (set-auth-tag tag)
       (check-state '(0) #:next 1)
       (unless ctx (err/cipher-closed))
-      (case (cadr (send impl get-spec))
+      (case (cipher-spec-mode (send impl get-spec))
         [(gcm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_SET_TAG (bytes-length tag) tag)]
         [else (crypto-error "cannot set authentication tag\n  spec: ~s" (send impl get-spec))]))
 
@@ -150,7 +150,7 @@
       (unless encrypt? (crypto-error "cannot get authentication tag for decryption context"))
       (check-state '(3))
       (unless ctx (err/cipher-closed))
-      (case (cadr (send impl get-spec))
+      (case (cipher-spec-mode (send impl get-spec))
         [(gcm)
          (define tagbuf (make-bytes taglen))
          (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_GET_TAG taglen tagbuf)

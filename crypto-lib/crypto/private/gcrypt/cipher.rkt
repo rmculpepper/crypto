@@ -56,7 +56,7 @@
     (init-field ctx)
     (super-new)
 
-    (define mode (cadr (send impl get-spec)))
+    (define mode (cipher-spec-mode (send impl get-spec)))
     (define auth-tag #f)
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
@@ -66,7 +66,7 @@
             (ptr-add inbuf instart) (- inend instart))))
 
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
-      (case (cadr (send impl get-spec))
+      (case mode
         [(ctr ofb cfb gcm ocb stream)
          (check-output-range outbuf outstart outend (- inend instart))
          (gcry_cipher_final ctx)

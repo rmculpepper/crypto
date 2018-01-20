@@ -28,7 +28,7 @@
 
 (define (test-ciphers factory)
   (for* ([name (in-hash-keys known-block-ciphers)]
-         [mode (map car known-block-modes)])
+         [mode known-block-modes])
     (define spec (list name mode))
     (test-cipher/spec factory spec))
   (for ([name (in-hash-keys known-stream-ciphers)])
@@ -141,7 +141,7 @@
 
 (define (test-ciphers-agree factories)
   (for* ([name (in-hash-keys known-block-ciphers)]
-         [mode (map car known-block-modes)])
+         [mode known-block-modes])
     (define spec (list name mode))
     (test-cipher-agreement spec factories))
   (for ([name (in-hash-keys known-stream-ciphers)])
