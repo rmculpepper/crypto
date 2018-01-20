@@ -3,6 +3,7 @@
           scribble/basic
           (for-label racket/base
                      racket/contract
+                     racket/random
                      crypto
                      crypto/libcrypto
                      crypto/nettle

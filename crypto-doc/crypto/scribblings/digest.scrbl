@@ -6,6 +6,7 @@
           crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
+                     racket/random
                      crypto))
 
 @(define the-eval (make-base-eval))

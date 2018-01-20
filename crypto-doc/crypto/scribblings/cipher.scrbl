@@ -6,6 +6,7 @@
           crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
+                     racket/random
                      crypto))
 
 @(define the-eval (make-base-eval))
@@ -83,6 +84,24 @@ Returns an implementation of cipher @racket[ci] from the given
 @racket[ci], returns @racket[#f].
 }
 
+@defproc[(cipher-block-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
+         exact-positive-integer?]{
+
+Returns the size in bytes of the blocks manipulated by the cipher. If
+@racket[ci] is a stream cipher (including block ciphers using a stream
+mode such as CTR), returns @racket[1].
+
+A cipher produces a ciphertext that is a multiple of its block
+size. If a cipher is used without padding, the plaintext must be a
+multiple of the block size.
+
+@examples[#:eval the-eval
+(cipher-block-size '(aes cbc))
+(cipher-block-size '(aes ctr))
+(cipher-block-size '(salsa20 stream))
+]
+}
+
 @defproc[(cipher-default-key-size [ci (or/c cipher-spec? cipher-impl?)])
          exact-nonnegative-integer?]{
 
@@ -105,24 +124,6 @@ cipher.
 ]
 }
 
-@defproc[(cipher-block-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
-         exact-positive-integer?]{
-
-Returns the size in bytes of the blocks manipulated by the cipher. If
-@racket[ci] is a stream cipher (including block ciphers using a stream
-mode such as CTR), returns @racket[1].
-
-A cipher produces a ciphertext that is a multiple of its block
-size. If a cipher is used without padding, the plaintext must be a
-multiple of the block size.
-
-@examples[#:eval the-eval
-(cipher-block-size '(aes cbc))
-(cipher-block-size '(aes ctr))
-(cipher-block-size '(salsa20 stream))
-]
-}
-
 @defproc[(cipher-iv-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
          exact-nonnegative-integer?]{
 
@@ -142,6 +143,19 @@ returns the size of the counter.
 ]
 }
 
+@defproc[(cipher-aead? [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)]) boolean?]{
+
+Returns @racket[#t] if @racket[ci] is an @tech{authenticated
+encryption} cipher, @racket[#f] otherwise. See @racket[encrypt/auth]
+for more details.
+
+@examples[#:eval the-eval
+(cipher-aead? '(aes ctr))
+(cipher-aead? '(aes gcm))
+(cipher-aead? '(chacha20-poly1305 stream))
+]
+}
+
 @defproc[(cipher-default-auth-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
          (or/c exact-nonnegative-integer? #f)]{
 
@@ -152,7 +166,7 @@ encryption"]{authenticated encryption or decryption} algorithm;
 
 @examples[#:eval the-eval
 (cipher-default-auth-size '(aes gcm))
-(cipher-default-auth-size '(aes cbc))
+(cipher-default-auth-size '(aes ctr))
 ]
 }
 
@@ -378,26 +392,6 @@ If @racket[cctx] is an @tech{authenticated encryption} context, use
 Like @racket[cipher-final], but also return an @tech{authentication tag}. The
 @racket[cctx] argument must be an @tech{authenticated encryption}
 context. See also @racket[encrypt/auth].
-}
-
-@defproc[(cipher-get-output-size [cctx cipher-ctx?]
-                                 [len exact-nonnegative-integer?]
-                                 [final? boolean? #t])
-         exact-nonnegative-integer?]{
-
-Returns the maximum number of bytes to be produced by calling
-@racket[cipher-update] with @racket[len] bytes of input followed by a
-call to @racket[cipher-final] if @racket[final?] is true. The result
-depends on the number of bytes internally buffered by @racket[cctx] as
-a result of previous calls to @racket[cipher-update].
-
-In general, the result is bounded by @racket[len] plus up to one chunk
-size for the internal buffer, plus up to another block size for
-padding if @racket[final?] is true and @racket[cctx] uses padding.
-
-@;{The number returned may be inexact only when decrypting in block
-mode with padding. Encryption or decryption may still fail with a
-padding error or padding length error.}
 }
 
 @(close-eval the-eval)

@@ -33,6 +33,8 @@
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-iv-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
+  [cipher-aead?
+   (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) boolean?)]
   [cipher-default-auth-size
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) (or/c nat? #f))]
   [cipher-chunk-size
@@ -151,6 +153,10 @@
     (cond [(list? o) (cipher-spec-iv-size o)]
           [else (send (get-impl* o) get-iv-size)])))
 
+(define (cipher-aead? o)
+  (with-crypto-entry 'cipher-auth-size
+    (cond [(list? o) (cipher-spec-aead? o)]
+          [else (send (get-impl* o) get-auth-size)])))
 (define (cipher-default-auth-size o)
   (with-crypto-entry 'cipher-auth-size
     (cond [(list? o) (cipher-spec-default-auth-size o)]
