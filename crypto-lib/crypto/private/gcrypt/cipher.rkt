@@ -69,6 +69,7 @@
       (case (cadr (send impl get-spec))
         [(ctr ofb cfb gcm ocb stream)
          (check-output-range outbuf outstart outend (- inend instart))
+         (gcry_cipher_final ctx)
          (*crypt inbuf instart inend outbuf outstart outend)
          (- inend instart)]
         [else #f]))

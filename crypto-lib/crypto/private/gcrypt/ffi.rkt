@@ -113,6 +113,7 @@
 (define GCRY_MD_FLAG_HMAC      2) ;; Make an HMAC out of this algorithm.
 
 (define GCRYCTL_TEST_ALGO      8)
+(define GCRYCTL_FINALIZE       5)
 
 (define-gcrypt gcry_md_close
   (_fun _gcry_md_hd -> _void)
@@ -278,6 +279,11 @@
 
 (define (gcry_cipher_test_algo a)
   (zero? (gcry_cipher_algo_info a GCRYCTL_TEST_ALGO #f #f)))
+
+(define-gcrypt gcry_cipher_final
+  (_fun _gcry_cipher_hd (_int = GCRYCTL_FINALIZE) (_pointer = #f) (_size = 0) -> _gcry_error)
+  #:c-id gcry_cipher_ctl
+  #:fail (lambda () void))
 
 ;; ----
 
