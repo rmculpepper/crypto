@@ -289,7 +289,7 @@
     (inherit-field encrypt? pad? impl block-size chunk-size partlen partial)
     (super-new)
 
-    (define AE? (memq (cadr (send impl get-spec)) '(gcm ccm ocb)))
+    (define AE? (memq (cadr (send impl get-spec)) '(gcm ccm ocb eax)))
 
     ;; State is nat
     ;;  0 - needs tag set (decrypting)
