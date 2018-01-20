@@ -1,4 +1,4 @@
-;; Copyright 2012-2013 Ryan Culpepper
+;; Copyright 2012-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -18,6 +18,7 @@
          racket/match
          ffi/unsafe
          "../common/interfaces.rkt"
+         "../common/catalog.rkt"
          "../common/common.rkt"
          "ffi.rkt"
          "digest.rkt"
@@ -85,12 +86,12 @@
     ))
 
 (define stream-ciphers
-  `(;;[Name ([KeySize AlgId] ...)
-    [rc4        ,GCRY_CIPHER_ARCFOUR]
-    [salsa20    ([256 ,GCRY_CIPHER_SALSA20])]
-    [salsa20r12 ([256 ,GCRY_CIPHER_SALSA20R12])]
-    [chacha20   ([256 ,GCRY_CIPHER_CHACHA20])]
-    ))
+  `(;;[Name ([KeySize AlgId] ...) Mode]
+    [rc4        ,GCRY_CIPHER_ARCFOUR            ,GCRY_CIPHER_MODE_STREAM]
+    [salsa20    ([256 ,GCRY_CIPHER_SALSA20])    ,GCRY_CIPHER_MODE_STREAM]
+    [salsa20r12 ([256 ,GCRY_CIPHER_SALSA20R12]) ,GCRY_CIPHER_MODE_STREAM]
+    [chacha20   ([256 ,GCRY_CIPHER_CHACHA20])   ,GCRY_CIPHER_MODE_STREAM]
+    [chacha20-poly1305 ([256 ,GCRY_CIPHER_CHACHA20]) ,GCRY_CIPHER_MODE_POLY1305]))
 
 (define block-modes
   `(;;[Mode ModeId]
@@ -103,12 +104,6 @@
     [gcm    ,GCRY_CIPHER_MODE_GCM]
     [ocb    ,GCRY_CIPHER_MODE_OCB]
     ;; [xts ,GCRY_CIPHER_MODE_XTS]
-    ))
-
-(define stream-modes
-  `(;;[Mode ModeId]
-    [stream ,GCRY_CIPHER_MODE_STREAM]
-    [poly1305 ,GCRY_CIPHER_MODE_POLY1305] ;; chacha20 only?
     ))
 
 ;; GCrypt does not seem to have a function to test whether a cipher
@@ -186,23 +181,26 @@
                   (factory this)
                   (cipher algid)
                   (mode mode-id))))
+      (define (multi->cipher keylens+algids mode-id)
+        (cond [(list? keylens+algids)
+               (for/list ([keylen+algid (in-list keylens+algids)])
+                 (cons (quotient (car keylen+algid) 8)
+                       (algid->cipher (cadr keylen+algid) mode-id)))]
+              [else (let ([algid keylens+algids])
+                      (algid->cipher algid mode-id))]))
       (define (search ciphers modes)
-        (match (assq (car spec) ciphers)
+        (match (assq (cipher-spec-algo spec) ciphers)
+          [(list _ keylens+algids mode-id)
+           (multi->cipher keylens+algids mode-id)]
           [(list _ keylens+algids)
-           (match (assq (cadr spec) modes)
+           (match (assq (cipher-spec-mode spec) modes)
              [(list _ mode-id)
-              (cond [(list? keylens+algids)
-                     (for/list ([keylen+algid (in-list keylens+algids)])
-                       (cons (quotient (car keylen+algid) 8)
-                             (algid->cipher (cadr keylen+algid) mode-id)))]
-                    [else
-                     (let ([algid keylens+algids])
-                       (algid->cipher algid mode-id))])]
+              (multi->cipher keylens+algids mode-id)]
              [_ #f])]
           [_ #f]))
       (and (spec-ok? spec)
            (or (search block-ciphers block-modes)
-               (search stream-ciphers stream-modes))))
+               (search stream-ciphers '()))))
 
     (define gcrypt-read-key (new gcrypt-read-key% (factory this)))
     (define/override (get-pk-reader)
@@ -238,7 +236,7 @@
           (printf " ~v\n" digest)))
       (printf "Available ciphers:\n")
       (for ([ciphers (list block-ciphers stream-ciphers)]
-            [modes   (list block-modes   stream-modes)])
+            [modes   (list block-modes   '(stream))])
         (for ([cipher (map car ciphers)])
           (for ([mode (map car modes)])
             (when (get-cipher (list cipher mode))

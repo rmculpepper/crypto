@@ -56,7 +56,7 @@
     (init-field ctx)
     (super-new)
 
-    (define mode (cipher-spec-mode (send impl get-spec)))
+    (define spec (send impl get-spec))
     (define auth-tag #f)
 
     (define/override (*crypt inbuf instart inend outbuf outstart outend)
@@ -66,7 +66,7 @@
             (ptr-add inbuf instart) (- inend instart))))
 
     (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
-      (case mode
+      (case (cipher-spec-mode spec)
         [(ctr ofb cfb gcm ocb stream)
          (check-output-range outbuf outstart outend (- inend instart))
          (gcry_cipher_final ctx)
@@ -92,19 +92,17 @@
                     (lambda () (super *after-final))))
 
     (define/override (*aad inbuf instart inend)
-      (case mode
-        [(gcm ocb)
-         (gcry_cipher_authenticate ctx (ptr-add inbuf instart) (- inend instart))]
-        [else (crypto-error "bad mode: ~e" mode)]))
+      (cond [(cipher-spec-aead? spec)
+             (gcry_cipher_authenticate ctx (ptr-add inbuf instart) (- inend instart))]
+            [else (crypto-error "not an AEAD cipher\n  cipher: ~e" (send impl get-spec))]))
 
     (define/override (*set-auth-tag tag)
       (set! auth-tag tag))
 
     (define/override (*get-auth-tag taglen)
       (define tag (make-bytes taglen))
-      (case mode
-        [(gcm ocb)
-         (gcry_cipher_gettag ctx tag taglen)
-         tag]
-        [else (crypto-error "bad mode: ~e" mode)]))
+      (cond [(cipher-spec-aead? spec)
+             (gcry_cipher_gettag ctx tag taglen)
+             tag]
+            [else (crypto-error "not an AEAD cipher\n  cipher: ~e" (send impl get-spec))]))
     ))

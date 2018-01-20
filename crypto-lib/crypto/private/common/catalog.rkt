@@ -294,9 +294,9 @@
 
 (define (cipher-spec-aead? cipher-spec)
   (match cipher-spec
-    [(list (? stream-cipher-name? cipher-name) 'stream)
+    [(list cipher-name 'stream)
      (stream-cipher-aead? cipher-name)]
-    [(list (? block-cipher-name? cipher-name) (? block-mode? mode))
+    [(list cipher-name (? block-mode? mode))
      (block-mode-aead? mode)]))
 
 (define (cipher-spec-default-auth-size cipher-spec)
