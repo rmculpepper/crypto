@@ -88,18 +88,9 @@ of the right size:
 iv
 ]
 
-There are also functions to generate session keys, HMAC keys, etc.
-
-Randomness itself is a cryptographic operation, and crypto factories
-also manage cryptographically-secure pseudo-random number generators
-(CSPRNGs). The call to @racket[generate-cipher-iv] above used
-@racket[(crypto-factories)] to find a CSPRNG. The following code uses
-the libcrypto CSPRNG explicitly:
-
-@interaction[#:eval the-eval
-(define random-impl (get-random libcrypto-factory))
-(random-bytes (cipher-iv-size '(aes ctr)) random-impl)
-]
+There are also functions to generate session keys, HMAC keys,
+etc. These functions use @racket[crypto-random-bytes], a
+cryptographically strong source of randomness.
 
 In addition to ``all-at-once'' operations like @racket[digest] and
 @racket[encrypt], this library also supports algorithm contexts for

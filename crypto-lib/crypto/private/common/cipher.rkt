@@ -22,7 +22,6 @@
          "catalog.rkt"
          "factory.rkt"
          "common.rkt"
-         "random.rkt"
          "error.rkt")
 (provide
  (contract-out
@@ -111,9 +110,9 @@
   ;;       output-port?)]
 
   [generate-cipher-key
-   (->* [cipher/c] [#:size nat? #:random (or/c random-impl? #f)] key/c)]
+   (->* [cipher/c] [#:size nat?] key/c)]
   [generate-cipher-iv
-   (->* [cipher/c] [#:random (or/c random-impl? #f)] iv/c)]))
+   (->* [cipher/c] [#:size nat?] iv/c)]))
 
 (define cipher/c (or/c cipher-spec? cipher-impl?))
 
@@ -389,18 +388,11 @@
 
 ;; ----
 
-(define (generate-cipher-key ci
-                             #:size [size (cipher-default-key-size ci)]
-                             #:random [rand #f])
+(define (generate-cipher-key ci #:size [size (cipher-default-key-size ci)])
   (with-crypto-entry 'generate-cipher-key
-    (let ([rand (or rand (get-random* ci))])
-      ;; FIXME: any way to check for weak keys, avoid???
-      (random-bytes size rand))))
+    ;; FIXME: any way to check for weak keys, avoid???
+    (crypto-random-bytes size)))
 
-(define (generate-cipher-iv ci
-                            #:random [rand #f])
+(define (generate-cipher-iv ci #:size [size (cipher-iv-size ci)])
   (with-crypto-entry 'generate-cipher-iv
-    (let ([size (cipher-iv-size ci)])
-      (and (positive? size)
-           (let* ([rand (or rand (get-random* ci))])
-             (random-bytes size rand))))))
+    (and (positive? size) (crypto-random-bytes size))))

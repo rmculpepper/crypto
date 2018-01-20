@@ -127,26 +127,6 @@
 
 ;; ----------------------------------------
 
-(define gcrypt-random-impl%
-  (class* object% (random-impl<%>)
-    (super-new)
-    (define/public (get-spec) 'random)
-    (define/public (get-factory) gcrypt-factory)
-    (define/public (random-bytes! buf start end level)
-      ;; FIXME: better mapping to quality levels
-      (gcry_randomize (ptr-add buf start) (- end start)
-                      (case level
-                        [(very-strong) GCRY_VERY_STRONG_RANDOM]
-                        [else GCRY_STRONG_RANDOM])))
-    (define/public (ok?) #t)
-    (define/public (can-add-entropy?) #f)
-    (define/public (add-entropy buf entropy-in-bytes) (void))
-    ))
-
-(define gcrypt-random-impl (new gcrypt-random-impl%))
-
-;; ----------------------------------------
-
 (define gcrypt-factory%
   (class* factory-base% (factory<%>)
     (inherit get-digest get-cipher)
@@ -212,9 +192,6 @@
         [(dsa) (new gcrypt-dsa-impl% (factory this))]
         ;; [(ec)  (new gcrypt-ec-impl%  (factory this))]
         [else #f]))
-
-    (define/override (get-random)
-      gcrypt-random-impl)
 
     (define/override (get-kdf spec)
       (match spec

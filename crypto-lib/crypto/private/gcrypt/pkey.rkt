@@ -233,10 +233,6 @@
         (or (gcry_sexp_find_token result "private-key")
             (crypto-error "failed to generate private key component")))
       (new key-class (impl this) (pub pub) (priv priv)))
-
-    (define/public (get-random-ctx)
-      (define r (send factory get-random))
-      (send r get-context))
     ))
 
 (define gcrypt-pk-key%
@@ -314,8 +310,7 @@
 (define gcrypt-rsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit get-random-ctx
-             *generate-key)
+    (inherit *generate-key)
     (super-new (spec 'rsa))
 
     (define/override (can-encrypt?) #t)
@@ -479,7 +474,7 @@
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit get-random-ctx *generate-key)
+    (inherit *generate-key)
     (super-new (spec 'dsa))
 
     (define/override (can-encrypt?) #f)
@@ -577,7 +572,7 @@
 (define gcrypt-ec-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit get-random-ctx *generate-key)
+    (inherit *generate-key)
     (super-new (spec 'dsa))
 
     (define/override (can-encrypt?) #f)

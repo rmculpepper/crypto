@@ -24,8 +24,7 @@
          "cipher.rkt"
          "pkey.rkt"
          "kdf.rkt"
-         "ffi.rkt"
-         "rand.rkt")
+         "ffi.rkt")
 (provide libcrypto-factory)
 
 (define libcrypto-digests
@@ -113,12 +112,6 @@
     (define libcrypto-read-key (new libcrypto-read-key% (factory this)))
     (define/override (get-pk-reader)
       libcrypto-read-key)
-
-    (define random-impl #f)
-    (define/override (get-random)
-      (unless random-impl
-        (set! random-impl (new libcrypto-random-impl% (spec 'random) (factory this))))
-      random-impl)
 
     (define/override (get-kdf spec)
       (match spec

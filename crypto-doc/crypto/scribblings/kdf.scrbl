@@ -25,12 +25,6 @@ likely passwords (typically short and composed of alpha-numeric
 characters) costly. Different KDFs have different parameters, which
 may control time or space requirements.
 
-@;{ When a password is created, a KDF is applied (with appropriate
-parameters, such as a random salt and a chosen work factor) and the
-result is stored. Checking the password involves running the KDF on
-the candidate with the same parameters and comparing the result
-against the stored value.}
-
 
 @defproc[(kdf-spec? [v any/c])
          boolean?]{

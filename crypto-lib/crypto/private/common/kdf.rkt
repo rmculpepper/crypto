@@ -20,7 +20,6 @@
          "catalog.rkt"
          "factory.rkt"
          "common.rkt"
-         "random.rkt"
          "error.rkt"
          "digest.rkt")
 (provide

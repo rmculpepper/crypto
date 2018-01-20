@@ -26,7 +26,6 @@
   [get-factory
    (-> (or/c digest-impl? digest-ctx?
              cipher-impl? cipher-ctx?
-             random-impl?
              pk-impl? pk-parameters? pk-key?)
        crypto-factory?)]
   [get-digest
@@ -35,8 +34,6 @@
    (->* [cipher-spec?] [factories/c] (or/c cipher-impl? #f))]
   [get-pk
    (->* [symbol?] [factories/c] (or/c pk-impl? #f))]
-  [get-random
-   (->* [] [factories/c] (or/c random-impl? #f))]
   [get-kdf
    (->* [kdf-spec?] [factories/c] (or/c kdf-impl? #f))]
   ))
@@ -66,11 +63,6 @@
   (with-crypto-entry 'get-pk
     (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
       (send f get-pk pki))))
-
-(define (get-random [factory/s (crypto-factories)])
-  (with-crypto-entry 'get-random
-    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
-      (send f get-random))))
 
 (define (get-kdf k [factory/s (crypto-factories)])
   (with-crypto-entry 'get-kdf

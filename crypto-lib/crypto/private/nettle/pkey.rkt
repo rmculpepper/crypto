@@ -175,8 +175,7 @@
     (define/public (has-params?) #f)
 
     (define/public (get-random-ctx)
-      (define r (send factory get-random))
-      (send r get-context))
+      (send factory get-random-ctx))
     ))
 
 ;; ============================================================

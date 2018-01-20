@@ -36,7 +36,6 @@
          get-impl*
          get-spec*
          get-factory*
-         get-random*
          shrink-bytes
          keygen-spec/c
          check-keygen-spec
@@ -110,7 +109,6 @@
                pki)]))
 
     (define/public (get-pk-reader) #f)  ; -> pk-read-key<%>
-    (define/public (get-random) #f)
 
     (define/public (get-digest* spec) #f) ;; -> (U #f DigestImpl)
     (define/public (get-cipher* spec) #f) ;; -> (U #f CipherImpl (listof (cons nat CipherImpl)))
@@ -483,18 +481,6 @@
          #f]
         [else
          (crypto-error "internal error: cannot get factory\n  from: ~e" src)]))
-
-;; search src (if impl or ctx), then usual search factories
-(define (get-random* src)
-  (let* ([src (get-factory* src #t)]
-         [random-impl
-          (or (and src (send src get-random))
-              (get-random))])
-    (or random-impl
-        (crypto-error "no source of randomness available~a"
-                      (if src
-                          (format "\n  from: ~e" src)
-                          "")))))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))

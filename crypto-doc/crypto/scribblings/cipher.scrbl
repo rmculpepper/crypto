@@ -158,10 +158,10 @@ encryption"]{authenticated encryption or decryption} algorithm;
 
 @deftogether[[
 @defproc[(generate-cipher-key [ci (or/c cipher-spec? cipher-impl?)]
-                              [#:random rand (or/c random-impl? #f) #f])
+                              [#:size size exact-positive-integer? (cipher-default-key-size ci)])
          bytes?]
 @defproc[(generate-cipher-iv [ci (or/c cipher-spec? cipher-impl?)]
-                             [#:random rand (or/c random-impl? #f) #f])
+                             [#:size size exact-positive-integer? (cipher-iv-size ci)])
          bytes?]
 ]]{
 
@@ -171,10 +171,7 @@ set of weak keys; @racket[generate-cipher-key] currently does
 @emph{not} detect or avoid weak keys. If @racket[ci] does not use an
 IV, @racket[generate-cipher-iv] returns @racket[#f].
 
-If @racket[rand] is given, then it is used as the source of
-randomness; otherwise, if @racket[ci] is an implementation, its
-associated random source is used; if none is found, then
-@racket[(crypto-factories)] is searched.
+The random bytes are generated with @racket[crypto-random-bytes].
 }
 
 

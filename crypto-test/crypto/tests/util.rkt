@@ -14,12 +14,9 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require racket/class
-         crypto/private/common/interfaces)
 (provide semirandom-bytes
          semirandom-bytes/no-nul
-         semirandom-bytes/alpha
-         semirandom)
+         semirandom-bytes/alpha)
 
 ;; let's not exhaust our entropy pool on testing
 (define (semirandom-bytes len)
@@ -39,18 +36,3 @@
     (for ([i (in-range len)])
       (bytes-set! bs i (+ 65 (random 26))))
     bs))
-
-(define semirandom-impl%
-  (class* object% (random-impl<%>)
-    (super-new)
-    (define/public (get-spec) #f)
-    (define/public (get-factory) #f)
-    (define/public (random-bytes! bs start end level)
-      (for ([i (in-range start end)])
-        (bytes-set! bs i (add1 (random 255)))))
-    (define/public (ok?) #t)
-    (define/public (can-add-entropy?) #f)
-    (define/public (add-entropy . args) (void))
-    ))
-
-(define semirandom (new semirandom-impl%))

@@ -21,7 +21,6 @@
          "catalog.rkt"
          "factory.rkt"
          "common.rkt"
-         "random.rkt"
          "error.rkt")
 (provide
  (contract-out
@@ -50,8 +49,7 @@
   [make-hmac-ctx
    (-> digest/c bytes? digest-ctx?)]
   [generate-hmac-key
-   (->* [digest/c] [#:random (or/c random-impl? #f)]
-        bytes?)]))
+   (-> digest/c bytes?)]))
 (provide -digest-port*) ;; for pkey.rkt
 
 (define digest/c (or/c digest-spec? digest-impl?))
@@ -187,7 +185,6 @@
                (send hctx update buf 0 count)
                (loop)])))))
 
-(define (generate-hmac-key di #:random [rand #f])
+(define (generate-hmac-key di)
   (with-crypto-entry 'generate-hmac-key
-    (let ([rand (or rand (get-random* di))])
-      (random-bytes (digest-size di) rand))))
+    (crypto-random-bytes (digest-size di))))

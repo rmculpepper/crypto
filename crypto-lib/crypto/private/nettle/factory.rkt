@@ -16,13 +16,13 @@
 #lang racket/base
 (require racket/class
          racket/match
+         ffi/unsafe
          "../common/interfaces.rkt"
          "../common/catalog.rkt"
          "../common/common.rkt"
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"
-         "random.rkt"
          "pkey.rkt"
          "kdf.rkt")
 (provide nettle-factory)
@@ -133,12 +133,6 @@
          (new nettle-cipher-impl% (spec spec) (factory this) (nc nc))]
         [_ #f]))
 
-    (define random-impl #f)
-    (define/override (get-random)
-      (unless random-impl
-        (set! random-impl (new nettle-yarrow-impl% (spec 'random) (factory this))))
-      random-impl)
-
     (define/override (get-pk* spec)
       (case spec
         [(rsa) (new nettle-rsa-impl% (factory this))]
@@ -155,6 +149,27 @@
          (let ([di (get-digest di-spec)])
            (and di (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
         [_ #f]))
+
+    ;; ----
+
+    (define random-ctx #f)
+    (define/public (get-random-ctx)
+      (unless random-ctx
+        (set! random-ctx (make-yarrow256-ctx)))
+      (unless (nettle_yarrow256_is_seeded random-ctx)
+        (nettle_yarrow256_seed random-ctx (crypto-random-bytes YARROW256_SEED_FILE_SIZE)))
+      random-ctx)
+
+    (define/private (make-yarrow256-ctx)
+      (define ctx (malloc YARROW256_CTX_SIZE 'atomic-interior))
+      (cpointer-push-tag! ctx yarrow256_ctx-tag)
+      (nettle_yarrow256_init ctx 0 #f)
+      ctx)
+
+    (define/public (refresh-entropy)
+      ;; If random-ctx doesn't exist, it doesn't need reseeding.
+      (when random-ctx
+        (nettle_yarrow256_seed random-ctx (crypto-random-bytes YARROW256_SEED_FILE_SIZE))))
 
     ;; ----
 

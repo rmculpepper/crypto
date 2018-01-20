@@ -15,7 +15,7 @@ cryptographic primitives. Each foreign library is called a
 @emph{cryptography provider} and it has an associated @emph{factory}
 that map cryptographic @emph{algorithm specifiers} to
 @emph{implementations}. A cryptography provider may also export other
-functions---for example, to initialize a random number generator.
+functions---for example, to refresh a random number generator.
 
 Cryptography providers may be used to obtain algorithm implementations
 either explicitly or implicitly. An implementation of a cryptographic
@@ -45,8 +45,7 @@ The initial value is @racket['()].
 
 @defproc[(get-factory [i (or/c digest-impl? digest-ctx?
                                cipher-impl? cipher-ctx?
-                               pk-impl? pk-parameters? pk-key?
-                               random-impl?)])
+                               pk-impl? pk-parameters? pk-key?)])
          crypto-factory?]{
 
 Gets the factory associated with a particular cryptographic algorithm
@@ -100,9 +99,8 @@ lightweight cryptography library. The @tt{libnettle.so.4} foreign
 library is required.
 
 @bold{CSPRNG Initialization} This library creates a Yarrow-256
-instance and seeds it with entropy obtained from the operating system
-via @tt{/dev/urandom} on Unix-like systems or the @tt{RtlGenRandom}
-system call on Windows. The instance does not automatically update its
-entropy pool, so it does @bold{not} enjoy Yarrow's key-compromise
-recovery properties.
+instance and seeds it with entropy obtained from
+@racket[crypto-random-bytes]. The instance does not automatically
+update its entropy pool, so it does @bold{not} enjoy Yarrow's
+key-compromise recovery properties.
 }

@@ -28,7 +28,6 @@
          pk-read-key<%>
          pk-params<%>
          pk-key<%>
-         random-impl<%>
          kdf-impl<%>
 
          crypto-factory?
@@ -39,7 +38,6 @@
          pk-impl?
          pk-parameters?
          pk-key?
-         random-impl?
          kdf-impl?)
 
 ;; ============================================================
@@ -85,7 +83,6 @@
     get-digest  ;; DigestSpec -> digest-impl<%>/#f
     get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
     get-pk      ;; PKSpec -> pk-impl<%>/#f
-    get-random  ;; -> random-impl<%>/#f
     get-pk-reader ;; -> pk-read-key<%>/#f
     get-kdf     ;; KDFSpec -> kdf-impl<%>/#f
     ))
@@ -237,23 +234,6 @@
 (define (pk-impl? x) (is-a? x pk-impl<%>))
 (define (pk-parameters? x) (is-a? x pk-params<%>))
 (define (pk-key? x) (is-a? x pk-key<%>))
-
-;; ============================================================
-;; Randomness
-
-(define random-impl<%>
-  (interface (impl<%>)
-    ;; get-spec          ;; -> 'random
-    random-bytes!        ;; bytes nat nat RandomLevel -> void
-
-    ok?                  ;; -> boolean
-    can-add-entropy?     ;; -> boolean
-    add-entropy          ;; bytes real -> void
-    ))
-
-;; RandomLevel is one of 'strong, 'very-strong.
-
-(define (random-impl? x) (is-a? x random-impl<%>))
 
 ;; ============================================================
 ;; KDFs

@@ -39,4 +39,3 @@ details.
 @include-section["cipher.scrbl"]
 @include-section["pkey.scrbl"]
 @include-section["kdf.scrbl"]
-@include-section["random.scrbl"]

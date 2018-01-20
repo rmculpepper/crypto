@@ -20,14 +20,12 @@
          "private/common/digest.rkt"
          "private/common/cipher.rkt"
          "private/common/pkey.rkt"
-         "private/common/random.rkt"
          "private/common/kdf.rkt"
          "private/common/util.rkt")
 
 (provide (all-from-out "private/common/digest.rkt")
          (all-from-out "private/common/cipher.rkt")
          (all-from-out "private/common/pkey.rkt")
-         (all-from-out "private/common/random.rkt")
          (all-from-out "private/common/kdf.rkt")
          (all-from-out "private/common/util.rkt")
 
@@ -50,9 +48,6 @@
          pk-impl?
          pk-parameters?
          pk-key?
-
-         get-random
-         random-impl?
 
          get-kdf
          kdf-spec?
