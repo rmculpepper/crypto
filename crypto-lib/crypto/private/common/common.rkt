@@ -228,8 +228,7 @@
                         (check-output-range outbuf outstart outend chunk-size)
                         (*crypt partial 0 chunk-size outbuf outstart outend)
                         chunk-size]
-                       [(zero? partlen)
-                        0]
+                       ;; [(zero? partlen) 0] ;; do *crypt-partial anyway (gcrypt ocb needs gcry_cipher_final)
                        [else
                         (or (*crypt-partial partial 0 partlen outbuf outstart outend)
                             (err/partial))])]
@@ -247,8 +246,7 @@
                               (err/partial))
                             (bytes-copy! outbuf outstart tmp 0 pos)
                             pos))]
-                       [(zero? partlen)
-                        0]
+                       ;; [(zero? partlen) 0] ;; do *crypt-partial anyway (gcrypt ocb needs gcry_cipher_final)
                        [else
                         (or (*crypt-partial partial 0 partlen outbuf outstart outend)
                             (err/partial))])])

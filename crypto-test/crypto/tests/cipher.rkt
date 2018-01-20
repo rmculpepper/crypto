@@ -47,9 +47,9 @@
            (eprintf "-  skipping cipher ~e\n" spec))]))
 
 (define (test-cipher ci msg)
-  (case (cadr (send ci get-spec))
-    [(gcm) (test-cipher/ae ci msg)]
-    [else (test-cipher/non-ae ci msg)]))
+  (cond [(cipher-spec-aead? (send ci get-spec))
+         (test-cipher/ae ci msg)]
+        [else (test-cipher/non-ae ci msg)]))
 
 (define (test-cipher/non-ae ci msg)
   (test-case (format "~a roundtrip (~s)" (send ci get-spec) (bytes-length msg))
