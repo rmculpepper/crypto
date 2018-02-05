@@ -22,6 +22,7 @@
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
+         "../common/ufp.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 
@@ -46,121 +47,83 @@
     (define/override (get-block-size) block-size)
     (define/override (get-iv-size) iv-size)
     (define/override (get-chunk-size) block-size)
-    (define/public (is-ae?) (cipher-spec-aead? spec))
 
-    (define/override (new-ctx key iv enc? pad?)
+    (define/override (new-ctx key iv enc? pad? auth-len attached-tag?)
       (check-key-size spec (bytes-length key))
       (check-iv-size spec iv-size iv)
       (let ([ctx (EVP_CIPHER_CTX_new)]
             [pad? (and pad? (cipher-spec-uses-padding? spec))])
         (EVP_CipherInit_ex ctx cipher #f #f enc?)
         (EVP_CIPHER_CTX_set_key_length ctx (bytes-length key))
-        (EVP_CIPHER_CTX_set_padding ctx pad?)
-        (define ivlen (if iv (bytes-length iv) 0))
+        ;; Set auth-len (OCB mode only; other modes don't need)
+        ;; https://www.openssl.org/docs/manmaster/man3/EVP_EncryptInit.html
         (case (cipher-spec-mode spec)
-          [(gcm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_SET_IVLEN ivlen #f)]
-          [(ccm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_CCM_SET_IVLEN ivlen #f)]
+          [(ocb) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_AEAD_SET_TAG auth-len #f)]
+          [else (void)])
+        (when (and auth-len (not (equal? auth-len (cipher-spec-default-auth-size spec))))
+          ;; In OpenSSL 1.0.2g, setting taglen (with null tag) segfaults.
+          ;; FIXME: guard with version check => racket error
+          (define (set-len) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_AEAD_SET_TAG auth-len #f))
+          (case (cipher-spec-mode spec)
+            [(gcm) (when (not enc?) (set-len))]
+            [(ocb) (set-len)]))
+        ;; Set ivlen
+        (case (cipher-spec-mode spec)
+          [(gcm ocb) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_AEAD_SET_IVLEN (bytes-length iv) #f)]
           [else (void)])
         (EVP_CipherInit_ex ctx cipher key iv enc?)
-        (new libcrypto-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?))))
+        ;; Disable libcrypto padding; cipher-ctx% handles automatically (FIXME?)
+        (EVP_CIPHER_CTX_set_padding ctx #f)
+        (new libcrypto-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?)
+             (auth-len auth-len) (attached-tag? attached-tag?))))
     ))
 
-;; Conflicting notes about GCM mode:
-;; - Must set AAD with NULL output buffer; MUST set, even if 0-length (use #"")
-;;   See http://incog-izick.blogspot.com/2011/08/using-openssl-aes-gcm.html
-;; - No, don't, if using EVP_CipherInit_ex
-;;   See http://stackoverflow.com/questions/12153009/
+;; Since 1.0.1d okay to set tag right before DecryptFinal
+;; - https://github.com/openssl/openssl/blob/master/demos/evp/aesgcm.c
+;; - https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption
 
 (define libcrypto-cipher-ctx%
-  (class* ctx-base% (cipher-ctx<%>)
-    (init-field ctx encrypt? pad?)
-    (inherit-field impl)
+  (class cipher-ctx%
+    (init-field ctx)
     (super-new)
+    (inherit-field impl)
+    (inherit get-block-size get-chunk-size)
 
-    ;; State is nat
-    ;;  0 - needs tag set (decrypting)
-    ;;  1 - ready for AAD
-    ;;  2 - AAD done, ready for plaintext
-    ;;  3 - finalized but tag available (encrypting)
-    ;;  4 - closed
-    (define state
-      (cond [(and (not encrypt?) (send impl is-ae?)) 0]
-            [else 1]))
+    (define/public (get-spec) (send impl get-spec))
 
-    (define/private (state-error state-desc)
-      (crypto-error "cipher context sequence error\n  state: ~a" state-desc))
+    (define/override (-do-aad inbuf instart inend)
+      (EVP_CipherUpdate ctx #f (ptr-add inbuf instart) (- inend instart)))
 
-    (define/private (check-state ok-states #:next [new-state #f])
-      (if (memq state ok-states)
-          (when new-state (unless (= state new-state) (set! state new-state)))
-          (case state
-            [(0) (state-error "AE decryption context needs authentication tag")]
-            [(1) (void)]
-            [(2) (state-error "cannot add additionally authenticated data after plaintext")]
-            [(3 4) (err/cipher-closed)])))
+    (define/override (-do-crypt enc? final? inbuf instart inend outbuf)
+      (EVP_CipherUpdate ctx outbuf (ptr-add inbuf instart) (- inend instart)))
 
-    (define block-size (send impl get-block-size))
-    (define chunk-size (send impl get-chunk-size))
-    (define partlen 0)
+    (define/override (-do-encrypt-end auth-len)
+      (define outbuf (make-bytes (get-chunk-size))) ;; to be safe?
+      (define len (or (EVP_CipherFinal_ex ctx outbuf)
+                      (crypto-error "~aencryption failed"
+                                    (if (send impl aead?) "authenticated " ""))))
+      (unless (zero? len) (crypto-error "internal error, EVP_CipherFinal_ex output len = ~s" len))
+      (case (cipher-spec-mode (get-spec))
+        [(gcm ocb) (-get-auth-tag auth-len)]
+        [else #""]))
 
-    (define/public (get-output-size len final?)
-      (get-output-size* len final? partlen block-size chunk-size encrypt? pad?))
+    (define/override (-do-decrypt-end auth-tag)
+      (case (cipher-spec-mode (get-spec))
+        [(gcm ocb) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_AEAD_SET_TAG (bytes-length auth-tag) auth-tag)]
+        [else (void)])
+      (define outbuf (make-bytes (get-chunk-size))) ;; to be safe?
+      (define len (or (EVP_CipherFinal_ex ctx outbuf)
+                      (crypto-error "~adecryption failed"
+                                    (if (send impl aead?) "authenticated " ""))))
+      (unless (zero? len) (crypto-error "internal error, EVP_CipherFinal_ex output len = ~s" len)))
 
-    (define/public (get-encrypt?) encrypt?)
+    (define/private (-get-auth-tag taglen)
+      (define tagbuf (make-bytes taglen))
+      (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_AEAD_GET_TAG taglen tagbuf)
+      tagbuf)
 
-    (define/public (update! inbuf instart inend outbuf outstart outend)
-      (check-state '(1 2) #:next 2)
-      (unless ctx (err/cipher-closed))
-      (check-input-range inbuf instart inend)
-      (check-output-range outbuf outstart outend
-                          (get-output-size (- inend instart) #f))
-      (let ([n (update* inbuf instart inend outbuf outstart outend)])
-        (set! partlen (+ (- partlen n) (- inend instart)))
-        n))
-
-    (define/public (update-AAD inbuf instart inend)
-      (check-state '(1))
-      (unless ctx (err/cipher-closed))
-      (check-input-range inbuf instart inend)
-      (update* inbuf instart inend #f 0 0))
-
-    (define/private (update* inbuf instart inend outbuf outstart outend)
-      (EVP_CipherUpdate ctx (ptr-add outbuf outstart)
-                        (ptr-add inbuf instart)
-                        (- inend instart)))
-
-    (define/public (final! outbuf outstart outend)
-      (check-state '(1 2) #:next 3)
-      (unless ctx (err/cipher-closed))
-      (check-output-range outbuf outstart outend (get-output-size 0 #t))
-      (begin0 (or (EVP_CipherFinal_ex ctx (ptr-add outbuf outstart))
-                  (if (send impl is-ae?)
-                      (crypto-error "authenticated decryption failed")
-                      (crypto-error "decryption failed")))
-        (unless (send impl is-ae?) (close))))
-
-    (define/public (set-auth-tag tag)
-      (check-state '(0) #:next 1)
-      (unless ctx (err/cipher-closed))
-      (case (cipher-spec-mode (send impl get-spec))
-        [(gcm) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_SET_TAG (bytes-length tag) tag)]
-        [else (crypto-error "cannot set authentication tag\n  spec: ~s" (send impl get-spec))]))
-
-    (define/public (get-auth-tag taglen)
-      (unless encrypt? (crypto-error "cannot get authentication tag for decryption context"))
-      (check-state '(3))
-      (unless ctx (err/cipher-closed))
-      (case (cipher-spec-mode (send impl get-spec))
-        [(gcm)
-         (define tagbuf (make-bytes taglen))
-         (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_GCM_GET_TAG taglen tagbuf)
-         tagbuf]
-        [else
-         (crypto-error "cannot get authentication tag\n  spec: ~s" (send impl get-spec))]))
-
-    (define/public (close)
+    (define/override (-close)
       (when ctx
         (EVP_CIPHER_CTX_free ctx)
-        (set! state 4)
         (set! ctx #f)))
     ))

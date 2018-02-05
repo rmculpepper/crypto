@@ -17,6 +17,7 @@
 (require racket/class
          "error.rkt"
          "../rkt/padding.rkt")
+(provide (all-defined-out))
 
 ;; UFP : Update/Finish Processors
 
@@ -73,7 +74,7 @@
 ;; writing (FIN => RES)
 ;;                  type                     actual inst in pipelines
 ;;   chunk        : a => bytes,a          ;; |a| = 1
-;;   add-right    : bytes,a => a          ;; |a| = 0,1
+;;   add-right    : bytes/#f,a => a       ;; |a| = 0,1
 ;;   split-right  : a => bytes,a          ;; |a| = 0,1
 ;;   pad          : bytes,a => bytes,a    ;; |a| = 1
 ;;   unpad        : bytes,a => bytes,a    ;; |a| = 1
@@ -123,7 +124,10 @@
     (init-field update-proc finish-proc)
     (super-new)
     (define/public (update buf start end) (update-proc buf start end))
-    (define/public (finish v) (finish-proc v))))
+    (define/public (finish . a) (apply finish-proc a))
+    (define/public (update/finish buf start end . a)
+      (update buf start end)
+      (send/apply this finish a))))
 
 (define chain-ufp%
   (class* object% (ufp<%>)
@@ -164,8 +168,7 @@
         (unless (zero? Blen)
           (send next update in Bstart (+ Bstart Blen)))
         (bytes-copy! partial partlen in Cstart inend)
-        (set! partlen (+ partlen (- inend Cstart)))
-        (eprintf "Alen = ~s, Blen = ~s, partlen = ~s, partial = ~v\n" Alen Blen partlen partial)))
+        (set! partlen (+ partlen (- inend Cstart)))))
     (define/override (finish a)
       (define res (subbytes partial 0 partlen))
       (set! partlen 0)
@@ -178,13 +181,13 @@
       (define Cstart (+ instart Blen))
       (send next finish (subbytes in Cstart inend) a))))
 
-;; add-right    : bytes,a => a          ;; |a| = 0,1
+;; add-right    : bytes/#f,a => a          ;; |a| = 0,1
 (define add-right-ufp%
   (class chain-ufp%
     (inherit-field next)
     (super-new)
     (define/override (finish buf . a)
-      (send next update buf 0 (bytes-length buf))
+      (when buf (send next update buf 0 (bytes-length buf)))
       (send/apply next finish a))))
 
 ;; split-right  : a => bytes,a          ;; |a| = 0,1
@@ -247,7 +250,7 @@
   (class chain-ufp%
     (inherit-field next)
     (super-new)
-    (define/override (final buf a)
+    (define/override (finish buf a)
       (send next finish (unpad-bytes/pkcs7 buf) a))))
 
 ;; pop          : x,a => a              ;; |a| = 0
@@ -267,7 +270,7 @@
     (inherit-field next)
     (super-new)
     (define/override (finish)
-      (send/apply next finish value))))
+      (send next finish value))))
 
 ;;   auth-encrypt : bytes,#f,a => tag,a   ;; |a| = 0
 ;;   auth-decrypt : bytes,tag,a => #f,a   ;; |a| = 0
@@ -275,15 +278,17 @@
 
 ;; ------------------------------------------------------------
 
+(define (sink-ufp update-proc finish-proc)
+  (new sink-ufp% (update-proc update-proc) (finish-proc finish-proc)))
 (define (chunk-ufp chunk-size next)
   (new chunk-ufp% (chunk-size chunk-size) (next next)))
 (define (add-right-ufp next)
   (new add-right-ufp% (next next)))
-(define (split-right suffix-size next)
+(define (split-right-ufp suffix-size next)
   (new split-right-ufp% (suffix-size suffix-size) (next next)))
-(define (pad block-size next)
+(define (pad-ufp block-size next)
   (new pad-ufp% (block-size block-size) (next next)))
-(define (unpad next)
+(define (unpad-ufp next)
   (new unpad-ufp% (next next)))
 (define (pop-ufp next)
   (new pop-ufp% (next next)))

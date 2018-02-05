@@ -132,6 +132,23 @@
 (define-crypto SSLeay
   (_fun -> _long))
 
+(define (parse-version v)
+  ;; MNNFFPPS
+  (define S (bitwise-bit-field v 0 3))
+  (define P (bitwise-bit-field v 4 11))
+  (define F (bitwise-bit-field v 12 19))
+  (define N (bitwise-bit-field v 20 27))
+  (define M (bitwise-bit-field v 28 31))
+  (values M N F))
+
+(define (openssl-version>=? a b c)
+  (define-values (va vb vc) (parse-version (SSLeay)))
+  (or (>= va a)
+      (and (= va a)
+           (or (>= vb b)
+               (and (= vb b)
+                    (>= vc c))))))
+
 ;; ============================================================
 ;; Bignum
 
@@ -393,14 +410,11 @@
   (_fun _EVP_CIPHER_CTX _bool -> _int)
   #:wrap (err-wrap 'EVP_CIPHER_CTX_set_padding))
 
-(define         EVP_CTRL_GCM_SET_IVLEN          #x9)
-(define         EVP_CTRL_GCM_GET_TAG            #x10)
-(define         EVP_CTRL_GCM_SET_TAG            #x11)
-(define         EVP_CTRL_GCM_SET_IV_FIXED       #x12)
+(define         EVP_CTRL_AEAD_SET_IVLEN         #x9)
+(define         EVP_CTRL_AEAD_GET_TAG           #x10)
+(define         EVP_CTRL_AEAD_SET_TAG           #x11)
+(define         EVP_CTRL_AEAD_SET_IV_FIXED      #x12)
 (define         EVP_CTRL_GCM_IV_GEN             #x13)
-(define         EVP_CTRL_CCM_SET_IVLEN          EVP_CTRL_GCM_SET_IVLEN)
-(define         EVP_CTRL_CCM_GET_TAG            EVP_CTRL_GCM_GET_TAG)
-(define         EVP_CTRL_CCM_SET_TAG            EVP_CTRL_GCM_SET_TAG)
 (define         EVP_CTRL_CCM_SET_L              #x14)
 (define         EVP_CTRL_CCM_SET_MSGLEN         #x15)
 

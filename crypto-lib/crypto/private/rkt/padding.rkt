@@ -45,6 +45,10 @@
            (= (bytes-ref bs i) #x00))
          pad-start)))
 
+(define (pad-bytes/pkcs7 bs block-size)
+  (define padlen (- block-size (bytes-length bs)))
+  (bytes-append bs (make-bytes padlen padlen)))
+
 (define (pad-bytes!/pkcs7 bs pos [end (bytes-length bs)])
   ;; Fill with pad-length
   (let* ([pad-byte (- end pos)])
@@ -57,7 +61,7 @@
     (and (>= pad-start start)
          (for/and ([i (in-range pad-start end)])
            (= (bytes-ref bs i) pad-length))
-         pad-start)))
+         (subbytes bs start pad-start))))
 
 ;; IIUC, PKCS5 padding is same as PKCS7 padding except for 64-bit blocks only.
 (define (pad-bytes!/pkcs5 bs pos [end (bytes-length bs)])

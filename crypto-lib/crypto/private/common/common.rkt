@@ -1,4 +1,4 @@
-;; Copyright 2012-2014 Ryan Culpepper
+;; Copyright 2012-2018 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@
          "interfaces.rkt"
          "error.rkt"
          "factory.rkt"
+         "ufp.rkt"
          "../rkt/padding.rkt")
 (provide impl-base%
          ctx-base%
@@ -34,10 +35,7 @@
          digest-ctx%
          cipher-impl-base%
          multikeylen-cipher-impl%
-         get-output-size*
-         cipher-segment-input
-         whole-chunk-cipher-ctx%
-         AE-whole-chunk-cipher-ctx%
+         cipher-ctx%
          process-input
          get-impl*
          get-spec*
@@ -75,15 +73,20 @@
     (field [sema (make-semaphore 1)])
     (super-new)
 
-    (define/public (with-state #:ok [ok-states #f] #:pre [pre-state #f] #:post [post-state #f]
-                     #:msg [msg #f]
+    (define/public (with-state #:ok [ok-states #f]
+                     #:pre  [pre-state #f]
+                     #:post [post-state #f]
+                     #:msg  [msg #f]
                      proc)
       (call-with-semaphore sema
         (lambda ()
           (when ok-states (unless (memq state ok-states) (bad-state state ok-states msg)))
-          (when pre-state (unless (equal? state pre-state) (set! state pre-state)))
+          (when pre-state (set-state pre-state))
           (begin0 (proc)
-            (when post-state (unless (equal? state post-state) (set! state post-state)))))))
+            (when post-state (set-state post-state))))))
+
+    (define/public (set-state new-state)
+      (unless (equal? state new-state) (set! state new-state)))
 
     (define/public (bad-state state ok-states msg)
       (crypto-error "wrong state\n  state: ~s~a" state (or msg "")))
@@ -211,18 +214,7 @@
 
     (define/public (update src)
       (with-state #:ok '(open)
-        (lambda ()
-          (let loop ([src src])
-            (match src
-              [(? bytes?) (void (-update src 0 (bytes-length src)))]
-              [(bytes-range buf start end) (void (-update buf start end))]
-              [(? input-port?)
-               (process-input src (lambda (buf len) (-update buf 0 len)))]
-              [(? string?)
-               ;; Alternative: could process string in chunks like process-input.
-               ;; Note: open-input-bytes makes copy, so can't just use that.
-               (loop (string->bytes/utf-8 src))]
-              [(? list?) (for ([sub (in-list src)]) (loop sub))])))))
+        (lambda () (process-input src (lambda (buf start end) (-update buf start end))))))
 
     (define/public (final)
       (with-state #:ok '(open) #:post 'closed
@@ -251,6 +243,7 @@
     (define block-size (cipher-spec-block-size spec))
     (define/public (get-block-size) block-size)
 
+    (define/public (aead?) (cipher-spec-aead? spec))
     (define/public (get-iv-size) (cipher-spec-iv-size spec))
     (define/public (get-default-key-size) (cipher-spec-default-key-size spec))
     (define/public (get-key-sizes) (cipher-spec-key-sizes spec))
@@ -266,17 +259,20 @@
     (inherit-field spec)
     (super-new)
 
-    (define/public (get-block-size) (send (cdar impls) get-block-size))
-    (define/public (get-iv-size) (send (cdar impls) get-iv-size))
     (define/public (get-default-key-size) (caar impls))
     (define/public (get-key-sizes) (map car impls))
-    (define/public (get-auth-size) (send (cdar impls) get-auth-size))
-    (define/public (get-chunk-size) (send (cdar impls) get-chunk-size))
 
-    (define/public (new-ctx key iv enc? pad?)
+    (define/private (rep) (cdar impls)) ;; representative impl
+    (define/public (aead?) (send (rep) aead?))
+    (define/public (get-block-size) (send (rep) get-block-size))
+    (define/public (get-iv-size) (send (rep) get-iv-size))
+    (define/public (get-auth-size) (send (rep) get-auth-size))
+    (define/public (get-chunk-size) (send (rep) get-chunk-size))
+
+    (define/public (new-ctx key . args)
       (cond [(assoc (bytes-length key) impls)
              => (lambda (keylen+impl)
-                  (send (cdr keylen+impl) new-ctx key iv enc? pad?))]
+                  (send/apply (cdr keylen+impl) new-ctx key args))]
             [else
              (check-key-size spec (bytes-length key))
              (error 'multikeylen-cipher-impl%
@@ -286,302 +282,231 @@
                     (string-join (map number->string (map car impls)) ", "))]))
     ))
 
-(define whole-chunk-cipher-ctx%
-  (class* ctx-base% (cipher-ctx<%>)
-    (init-field encrypt? pad?)
-    (inherit-field impl)
-    (super-new)
+;; ----------------------------------------
 
-    ;; Underlying impl only accepts whole chunks.
-    ;; First partlen bytes of partial is waiting for rest of chunk.
-    (field [block-size (send impl get-block-size)]
-           [chunk-size (send impl get-chunk-size)]
-           [partlen 0]
-           [partial (make-bytes chunk-size)])
+;; cipher-ctx%
+;; - enforces update-aad -> update -> final state machine
+;; - accepts data from varied input in varied sizes, passes to underlying
+;;   crypt routines in multiples of chunk-size (except last call)
+;; - handles PKCS7 padding
+;; - handles attached authentication tags
+
+(define cipher-ctx%
+  (class* state-ctx% (cipher-ctx<%>)
+    (init-field encrypt? pad? auth-len attached-tag?)
+    ;; auth-len : Nat -- 0 means no tag
+    (inherit-field impl state)
+    (field [auth-tag-out #f]
+           [out (open-output-bytes)])
+    (inherit with-state set-state)
+    (super-new [state 1])
+
+    (set-state (if (send impl aead?) 1 2))
+
+    ;; State is Nat
+    ;; 1 - ready for AAD
+    ;; 2 - AAD done, ready for {plain,cipher}text
+    ;; 3 - closed (but can read auth tag)
+    (define/override (bad-state state ok-states msg)
+      (crypto-error "wrong state\n  state: ~a~a"
+                    (case state
+                      [(1) "ready for AAD or input"]
+                      [(2) "ready for input"]
+                      [(3) "closed"])
+                    msg))
 
     (define/public (get-encrypt?) encrypt?)
+    (define/public (get-block-size) (send impl get-block-size))
+    (define/public (get-chunk-size) (send impl get-chunk-size))
+    (define/public (get-output) (get-output-bytes out #t))
 
-    (define/public (get-output-size len final?)
-      (get-output-size* len final? partlen block-size chunk-size encrypt? pad?))
+    (define/public (update-aad src)
+      (unless (null? src)
+        (with-state #:ok '(1) #:pre 1
+          (lambda ()
+            (process-input src (lambda (buf start end) (-update-aad buf start end)))))))
 
-    (define/public (update! inbuf instart inend outbuf outstart outend)
-      (unless (*open?) (err/cipher-closed))
-      (check-input-range inbuf instart inend)
-      (define-values (prefixlen flush-partial? alignlen)
-        (cipher-segment-input (- inend instart) partlen chunk-size encrypt? pad?))
-      (define aligninstart (+ instart prefixlen))
-      (define aligninend (+ aligninstart alignlen))
-      (define pfxoutlen (if flush-partial? chunk-size 0))
-      (define alignoutstart (+ outstart pfxoutlen))
-      ;; Check output space
-      (check-output-range outbuf outstart outend (+ pfxoutlen alignlen)
-                          ;; FIXME: remove, like eprintf
-                          #:msg (format "  ~s" (list instart inend
-                                                     '/ partlen
-                                                     '/ prefixlen flush-partial? alignlen)))
-      ;; Process partial
-      (when (< instart aligninstart)
-        (bytes-copy! partial partlen inbuf instart aligninstart))
-      (cond [flush-partial?
-             (*crypt partial 0 chunk-size outbuf outstart (+ outstart chunk-size))
-             (bytes-fill! partial 0)
-             (set! partlen 0)]
-            [else
-             (set! partlen (+ partlen prefixlen))])
-      ;; Process aligned
-      (when (< aligninstart aligninend)
-        (*crypt inbuf aligninstart aligninend outbuf alignoutstart (+ alignoutstart alignlen)))
-      ;; Save leftovers
-      (when (< aligninend inend)
-        (bytes-copy! partial 0 inbuf aligninend inend)
-        (set! partlen (- inend aligninend)))
-      ;; Return total *written*
-      (+ pfxoutlen alignlen))
+    (define/public (update src)
+      (with-state #:ok '(1 2) #:post 2
+        (lambda ()
+          (when (member state '(1)) (-finish-aad))
+          (set-state 3)
+          (process-input src (lambda (buf start end) (-update buf start end))))))
 
-    (define/public (final! outbuf outstart outend)
-      (unless (*open?) (err/cipher-closed))
-      (begin0
-          (cond [encrypt?
-                 (cond [pad?
-                        (pad-bytes!/pkcs7 partial partlen)
-                        (check-output-range outbuf outstart outend chunk-size)
-                        (*crypt partial 0 chunk-size outbuf outstart outend)
-                        chunk-size]
-                       ;; [(zero? partlen) 0] ;; do *crypt-partial anyway (gcrypt ocb needs gcry_cipher_final)
-                       [else
-                        (or (*crypt-partial partial 0 partlen outbuf outstart outend)
-                            (err/partial))])]
-                [else ;; decrypting
-                 (cond [pad?
-                        ;; Don't know actual output size until after decypted &
-                        ;; de-padded, so require whole chunk of room.
-                        (check-output-range outbuf outstart outend chunk-size)
-                        (unless (= partlen chunk-size)
-                          (err/partial))
-                        (let ([tmp (make-bytes chunk-size)])
-                          (*crypt partial 0 chunk-size tmp 0 chunk-size)
-                          (let ([pos (unpad-bytes/pkcs7 tmp)])
-                            (unless pos
-                              (err/partial))
-                            (bytes-copy! outbuf outstart tmp 0 pos)
-                            pos))]
-                       ;; [(zero? partlen) 0] ;; do *crypt-partial anyway (gcrypt ocb needs gcry_cipher_final)
-                       [else
-                        (or (*crypt-partial partial 0 partlen outbuf outstart outend)
-                            (err/partial))])])
-        (*after-final)))
+    (define/public (final tag)
+      (cond [encrypt?
+             (when tag
+               (crypto-error "cannot set authentication tag for encryption context"))]
+            [attached-tag? ;; decrypt w/ attached tag
+             (when tag
+               (crypto-error "cannot set authentication tag for decryption context with attached tag"))]
+            [else ;; decrypt w/ detached tag
+             (let ([tag (or tag #"")])
+               (unless (= (bytes-length tag) auth-len)
+                 (crypto-error "wrong size for authentication tag\n  expected: ~s\n  given: ~s"
+                               auth-len (bytes-length tag))))])
+      (with-state #:ok '(1 2) #:post 3
+        (lambda ()
+          (when (member state '(1)) (-finish-aad))
+          (set-state 3)
+          (begin0 (-final (if encrypt? #f (or tag #"")))
+            (-close)))))
 
-    ;; *crypt-partial : ... -> nat or #f
-    ;; encrypt partial final chunk (eg for CTR mode)
-    ;; returns number of bytes or #f to indicate refusal to handle partial chunk
-    ;; only called if pad? is #f, (- inend instart) < chunk-size
-    ;; Must do own check-output-range!
-    (define/public (*crypt-partial inbuf instart inend outbuf outstart outend)
-      #f)
+    (define/public (get-auth-tag)
+      (cond [encrypt?
+             ;; -final sets auth-tag-out for encryption context
+             ;; #"" for non-AEAD cipher
+             (with-state #:ok '(3)
+               (lambda () auth-tag-out))]
+            [else ;; decrypt
+             (crypto-error "cannot get authentication tag for decryption context")]))
 
-    (define/private (err/partial)
-      (crypto-error "partial chunk (~a)" (if encrypt? "encrypting" "decrypting")))
+    ;; ----------------------------------------
 
-    (define/public (*after-final)
-      (*close))
+    ;; -update-aad : Bytes Nat Nat -> Void
+    (define/public (-update-aad buf start end)
+      (send aad-ufp update buf start end))
 
-    (define/public (close)
-      (*close))
+    ;; -finish-aad : -> Void
+    (define/public (-finish-aad)
+      (send aad-ufp finish 'ignored))
 
-    ;; Methods to implement in subclass:
+    ;; -update : Bytes Nat Nat -> Void
+    (define/public (-update buf start end)
+      (send crypt-ufp update buf start end))
 
-    ;; *crypt : inbuf instart inend outbuf outstart outend -> void
-    ;; encrypt/decrypt whole number of chunks
-    (abstract *crypt)
+    ;; -final : #f/Bytes -> Void
+    (define/public (-final tag)
+      (send crypt-ufp finish tag))
 
-    ;; *open? : -> boolean
-    (abstract *open?)
+    ;; -close : -> Void
+    (define/public (-close) (void))
 
-    ;; *close : -> void
-    (abstract *close)
+    ;; -make-crypt-sink : -> UFP[#f/AuthTag => ]
+    (define/public (-make-crypt-sink)
+      (sink-ufp (lambda (buf start end) (write-bytes buf out start end))
+                (lambda (result) (set! auth-tag-out result))))
+
+    ;; -make-aad-sink : -> UFP[#f => ]
+    (define (-make-aad-sink)
+      (define (update inbuf instart inend) (-do-aad inbuf instart inend))
+      (define (finish _ignored) (void))
+      (sink-ufp update finish))
+
+    (abstract -do-aad) ;; Bytes Nat Nat -> Void
+
+    ;; -make-crypt-ufp : Boolean UFP -> UFP[Bytes,#f/AuthTag => AuthTag/#f]
+    (define/private (-make-crypt-ufp enc? next)
+      (define (update inbuf instart inend)
+        ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
+        (define outlen0 (+ (- inend instart) (get-block-size)))
+        (define outbuf (make-bytes outlen0))
+        (define outlen (-do-crypt enc? #f inbuf instart inend outbuf))
+        (unless (= outlen (- inend instart))
+          (crypto-error "internal error, outlen = ~s, inlen = ~s" outlen (- inend instart)))
+        (send next update outbuf 0 outlen))
+      (define (finish partial auth-tag)
+        ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
+        (define outlen0 (* 2 (get-chunk-size)))
+        (define outbuf (make-bytes outlen0))
+        (define outlen (-do-crypt enc? #t partial 0 (bytes-length partial) outbuf))
+        (unless (= outlen (bytes-length partial))
+          (crypto-error "internal error, outlen = ~s, partial = ~s" outlen (bytes-length partial)))
+        (send next update outbuf 0 outlen)
+        (cond [enc?
+               (send next finish (-do-encrypt-end auth-len))]
+              [else
+               (unless (= (bytes-length auth-tag) auth-len)
+                 (crypto-error "authentication tag wrong size\n  expected: ~s\n  given: ~s"
+                               auth-len (bytes-length auth-tag)))
+               (-do-decrypt-end auth-tag)
+               (send next finish #f)]))
+      (sink-ufp update finish))
+
+    (abstract -do-crypt) ;; Enc? Final? Bytes Nat Nat Bytes -> Nat
+    (abstract -do-encrypt-end) ;; Nat -> Tag      -- fetch auth tag
+    (abstract -do-decrypt-end) ;; Nat Tag -> Void -- check auth tag
+
+    ;; ----------------------------------------
+    ;; Initialization
+
+    ;; It's most convenient if we know the auth-length up front. That
+    ;; simplifies the creation of the split-right-ufp for decrypting with
+    ;; attached tag.
+
+    (define aad-ufp
+      ;; update-aad
+      ;;   source -> chunk -> add-right -> update-aad
+      ;;          #f       buf,#f       #f
+      (let* ([ufp (-make-aad-sink)]
+             [ufp (add-right-ufp ufp)]
+             [ufp (chunk-ufp (get-chunk-size) ufp)])
+        ufp))
+
+    (define crypt-ufp
+      (cond [encrypt?
+             ;; encrypt (detached tag) =
+             ;;   source -> chunk -> pad  -> auth-encrypt -> sink
+             ;;          #f       buf,#f  buf,#f          tag
+             ;;
+             ;; encrypt/attached-tag =
+             ;;   source -> chunk -> pad  -> auth-encrypt -> add-right -> push #f -> sink
+             ;;          #f       buf,#f  buf,#f          tag          ()         #f
+             (let* ([ufp (-make-crypt-sink)]
+                    [ufp (if attached-tag? (add-right-ufp (push-ufp #f ufp)) ufp)]
+                    [ufp (-make-crypt-ufp #t ufp)]
+                    [ufp (if pad? (pad-ufp (get-block-size) ufp) ufp)]
+                    [ufp (chunk-ufp (get-chunk-size) ufp)])
+               ufp)]
+            [else ;; decrypt
+             ;; decrypt (detached tag) =
+             ;;   source -> chunk -> auth-decrypt -> split-right -> unpad -> add-right -> sink
+             ;;          tag      buf,tag         #f             buf,#f   buf,#f       #f
+             ;;
+             ;; decrypt/attached-tag = 
+             ;;   source -> pop -> split-right -> chunk -> pad  -> auth-decrypt -> (...see above)
+             ;;          #""    ()             tag      buf,tag buf,tag         #f
+             (let* ([ufp (-make-crypt-sink)]
+                    [ufp (cond [pad?
+                                (let* ([ufp (add-right-ufp ufp)]
+                                       [ufp (unpad-ufp ufp)]
+                                       [ufp (split-right-ufp (get-block-size) ufp)])
+                                  ufp)]
+                               [else ufp])]
+                    [ufp (-make-crypt-ufp #f ufp)]
+                    [ufp (chunk-ufp (get-chunk-size) ufp)]
+                    ;; FIXME: need to delay until we have auth-len ...
+                    [ufp (if (and attached-tag? (positive? auth-len))
+                             (pop-ufp (split-right-ufp auth-len ufp))
+                             ufp)])
+               ufp)]))
     ))
-
-(define AE-whole-chunk-cipher-ctx%
-  (class whole-chunk-cipher-ctx%
-    (inherit-field encrypt? pad? impl block-size chunk-size partlen partial)
-    (super-new)
-
-    (define AE? (cipher-spec-aead? (send impl get-spec)))
-
-    ;; State is nat
-    ;;  0 - needs tag set (decrypting)
-    ;;  1 - ready for AAD
-    ;;  2 - AAD done, ready for plaintext
-    ;;  3 - finalized but tag available (encrypting)
-    ;;  4 - closed
-    (field [state (if (and (not encrypt?) AE?) 0 1)])
-
-    (define/private (state-error state-desc)
-      (crypto-error "cipher context sequence error\n  state: ~a" state-desc))
-
-    (define/private (check-state ok-states #:next [new-state #f])
-      (if (memq state ok-states)
-          (when new-state (unless (= state new-state) (set! state new-state)))
-          (case state
-            [(0) (state-error "AE decryption context needs authentication tag")]
-            [(1) (void)]
-            [(2) (state-error "cannot add additionally authenticated data after plaintext")]
-            [(3 4) (err/cipher-closed)])))
-
-    ;; ----
-
-    (define/override (update! inbuf instart inend outbuf outstart outend)
-      (check-flush-AAD)
-      (check-state '(1 2) #:next 2)
-      (super update! inbuf instart inend outbuf outstart outend))
-
-    (define/public (update-AAD inbuf instart inend)
-      (check-state '(1))
-      (define-values (prefixlen flush-partial? alignlen)
-        (cipher-segment-input (- inend instart) partlen chunk-size #t #f))
-      (define aligninstart (+ instart prefixlen))
-      (define aligninend (+ aligninstart alignlen))
-      (define pfxoutlen (if flush-partial? chunk-size 0))
-      ;; Process partial
-      (when (< instart aligninstart)
-        (bytes-copy! partial partlen inbuf instart aligninstart))
-      (cond [flush-partial?
-             (*aad partial 0 chunk-size)
-             (bytes-fill! partial 0)
-             (set! partlen 0)]
-            [else
-             (set! partlen (+ partlen prefixlen))])
-      ;; Process aligned
-      (when (< aligninstart aligninend)
-        (*aad inbuf aligninstart aligninend))
-      ;; Save leftovers
-      (when (< aligninend inend)
-        (bytes-copy! partial 0 inbuf aligninend inend)
-        (set! partlen (- inend aligninend)))
-      (void))
-
-    (define/override (final! outbuf outstart outend)
-      (check-flush-AAD)
-      (check-state '(1 2) #:next 3)
-      (super final! outbuf outstart outend))
-
-    (define/public (set-auth-tag tag)
-      (check-state '(0) #:next 1)
-      (*set-auth-tag tag))
-
-    (define/public (get-auth-tag taglen)
-      (unless encrypt?
-        (crypto-error "cannot get authentication tag for decryption context"))
-      (check-state '(3))
-      (*get-auth-tag taglen))
-
-    (define/override (*after-final)
-      (unless AE? (*close)))
-
-    (define/override (*close)
-      (begin0 (super *close)
-        (set! state 4)))
-
-    (define/private (check-flush-AAD)
-      (when (and (= state 1) (not (zero? partlen)))
-        ;; flush AAD from partial
-        (*aad partial 0 partlen)
-        (set! partlen 0)))
-
-    ;; *aad : bytes nat nat -> void
-    (abstract *aad)
-
-    ;; *set-auth-tag : bytes -> void
-    (abstract *set-auth-tag)
-
-    ;; *get-auth-tag : nat -> bytes
-    (abstract *get-auth-tag)
-    ))
-
-
-;; get-output-size* : ... -> nat
-(define (get-output-size* inlen final? partlen block-size chunk-size encrypt? pad?)
-  (define-values (prefixlen flush-partial? alignlen)
-    (cipher-segment-input inlen partlen chunk-size encrypt? pad?))
-  (define pfxoutlen (if flush-partial? chunk-size 0))
-  (define new-partlen
-    (cond [(or flush-partial? (< (+ prefixlen alignlen) inlen))
-           ;; flushed or skipped because empty
-           (- inlen prefixlen alignlen)]
-          [else (+ partlen prefixlen)]))
-  (define for-update (+ pfxoutlen alignlen))
-  (define for-final
-    (cond [(not final?)
-           0]
-          [pad?
-           ;; If pad?, assume chunk-size = block-size.
-           ;; If encrypting:
-           ;;   - new-partlen < chunk-size; no reason to buffer whole chunk when encrypting
-           ;;   - result is new-partlen padded up to chunk-size, so chunk-size
-           ;; If decrypting:
-           ;;   - if new-partlen is full block, might de-pad to up to full block (chunk-size)
-           ;;   - if partial, will fail to de-pad anyway
-           chunk-size]
-          [else ;; not pad?
-           ;; If block cipher:
-           ;;   - needs 0 bytes if new-partlen is 0
-           ;;   - fails to de-pad otherwise, but block-size to be safe
-           ;; If stream cipher:
-           ;;   - needs new-partlen bytes
-           (if (= new-partlen 0)
-               0
-               (max new-partlen block-size))]))
-  (+ for-update for-final))
-
-;; Divide an input buffer of length inlen into segments:
-;;  - a prefix to fill a partial-buffer
-;;    with a flag to indicate whether the partial-buffer can be emptied,
-;;  - a chunk-multiple segment to process
-;;  - (implicit) a leftover segment to put in the partial-buffer (overwriting start)
-(define (cipher-segment-input inlen partlen chunk-size encrypt? pad?)
-  ;; total = total material available
-  (define total (+ partlen inlen))
-  ;; First try to fill partial... except if was empty or full,
-  ;; skip and go straight to aligned.
-  ;; prefixlen = part of inlen to fill partial
-  (define prefixlen
-    (cond [(= partlen 0) 0]
-          [else (min inlen (- chunk-size partlen))]))
-  ;; Complication: when decrypting with padding, can't output
-  ;; decrypted block until first byte of next block is seen, else
-  ;; might miss ill-padded data.
-  (define flush-partial?
-    (and (positive? partlen)
-         (if (or encrypt? (not pad?))
-             (>= total chunk-size)
-             (> total chunk-size))))
-  ;; Then do aligned chunks: [alignstart, alignend) from in buffer
-  ;; alignstart = start of inlen to process aligned
-  (define alignstart prefixlen)
-  (define alignend0 (- inlen (remainder (- inlen alignstart) chunk-size)))
-  ;; Complication: like above
-  (define alignend1
-    (if (or encrypt? (not pad?))
-        alignend0
-        (if (> inlen alignend0)
-            alignend0
-            (- alignend0 chunk-size))))
-  ;; alignend = end of inlen to process aligned
-  (define alignend (max alignstart alignend1))
-  (values prefixlen flush-partial? (- alignend alignstart)))
 
 ;; ============================================================
 ;; Input
 
-(define DEFAULT-CHUNK 1000)
+;; process-input : Input (Bytes Nat Nat -> Void) -> Void
+(define (process-input src process)
+  (let loop ([src src])
+    (match src
+      [(? bytes?) (process src 0 (bytes-length src))]
+      [(bytes-range buf start end) (process buf start end)]
+      [(? input-port?)
+       (process-input-port src process)]
+      [(? string?)
+       ;; Alternative: could process string in chunks like process-input.
+       ;; Note: open-input-bytes makes copy, so can't just use that.
+       (loop (string->bytes/utf-8 src))]
+      [(? list?) (for ([sub (in-list src)]) (loop sub))])))
 
-;; process-input : InputPort (Bytes Nat -> Void) -> Void
-(define (process-input in process #:chunk [chunk-size DEFAULT-CHUNK])
+;; process-input-port : InputPort (Bytes Nat Nat -> Void) -> Void
+(define DEFAULT-CHUNK 1000)
+(define (process-input-port in process #:chunk [chunk-size DEFAULT-CHUNK])
   (define buf (make-bytes chunk-size))
   (let loop ()
     (define len (read-bytes! buf in))
     (unless (eof-object? len)
-      (process buf len)
+      (process buf 0 len)
       (loop))))
 
 ;; ============================================================

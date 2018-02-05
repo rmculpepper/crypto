@@ -154,22 +154,23 @@
 
 ;; block-mode-aead? : Symbol -> Boolean
 (define (block-mode-aead? mode)
-  (and (block-mode-default-auth-size mode) #t))
+  (positive? (block-mode-default-auth-size mode)))
 
-;; block-mode-default-auth-size : Symbol -> Nat/#f
+;; block-mode-default-auth-size : Symbol -> Nat
 (define (block-mode-default-auth-size mode)
   (case mode
     [(gcm ocb eax) 16]
-    [else #f]))
+    [else 0]))
 
 ;; block-mode-auth-size-ok? : Symbol Nat -> Boolean
 (define (block-mode-auth-size-ok? mode size)
   (case mode
     [(gcm) (or (<= 12 size 16) (= size 8) (= size 4))]
     [(ocb eax) (<= 1 size 16)]
-    [else #f]))
+    [else (= size 0)]))
 
 ;; block-mode-block-size-ok? : Symbol Nat -> Boolean
+;; Is the block mode compatible with ciphers of the given block size?
 (define (block-mode-block-size-ok? mode block-size)
   (case mode
     ;; EAX claims to be block-size agnostic, but nettle restricts to 128-bit block ciphers
@@ -186,7 +187,7 @@
     [(gcm)         '(12 #s(varsize 1 16 1))] ;; actual upper bound much higher
     [(ocb)         '(12 #s(varsize 0 15 1))] ;; "no more than 120 bits"
     [(eax)         '(12 #s(varsize 0 16 1))] ;; actually unrestricted
-    [else #f]))
+    [else (crypto-error "internal error, unknown block mode: ~e" mode)]))
 
 ;; block-mode-default-iv-size : Symbol Nat -> Nat
 (define (block-mode-default-iv-size mode block-size)
@@ -194,7 +195,7 @@
     [(ecb) 0]
     [(cbc ofb cfb ctr) block-size]
     [(gcm ocb eax) 12]
-    [else #f]))
+    [else (crypto-error "internal error, unknown block mode: ~e" mode)]))
 
 ;; block-mode-iv-size-ok? : Symbol Nat Nat -> Boolean
 (define (block-mode-iv-size-ok? mode block-size size)
@@ -237,20 +238,24 @@
     [(chacha20-poly1305 chacha20-poly1305/8) #t]
     [else #f]))
 
-;; stream-cipher-default-auth-size : Symbol -> Nat/#f
+;; stream-cipher-default-auth-size : Symbol -> Nat
 (define (stream-cipher-default-auth-size x)
   (case x
     [(chacha20-poly1305 chachc20-poly1305/8) 16]
-    [else #f]))
+    [else 0]))
 
-;; stream-cipher-default-iv-size : Symbol -> Nat/#f
+;; stream-cipher-auth-size-ok? : Symbol Nat -> Boolean
+(define (stream-cipher-auth-size-ok? cipher size)
+  (= (stream-cipher-default-auth-size cipher) size))
+
+;; stream-cipher-default-iv-size : Symbol -> Nat
 (define (stream-cipher-default-iv-size cipher)
   (cond [(hash-ref known-stream-ciphers cipher #f) => car]
-        [else #f]))
+        [else (crypto-error "internal error, unknown stream cipher: ~e" cipher)]))
 
 ;; stream-cipher-iv-size-ok? : Symbol Nat -> Boolean
 (define (stream-cipher-iv-size-ok? cipher size)
-  (= (or (stream-cipher-default-iv-size cipher) 0) size))
+  (= (stream-cipher-default-iv-size cipher) size))
 
 
 ;; ============================================================
@@ -305,6 +310,13 @@
      (stream-cipher-default-auth-size cipher-name)]
     [(list (? block-cipher-name? cipher-name) (? block-mode? mode))
      (block-mode-default-auth-size mode)]))
+
+(define (cipher-spec-auth-size-ok? cipher-spec size)
+  (match cipher-spec
+    [(list (? stream-cipher-name? cipher) 'stream)
+     (stream-cipher-auth-size-ok? cipher size)]
+    [(list (? block-cipher-name?) (? block-mode? mode))
+     (block-mode-auth-size-ok? mode size)]))
 
 (define (cipher-spec-block-size cipher-spec)
   (match cipher-spec

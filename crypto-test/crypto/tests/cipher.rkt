@@ -1,4 +1,4 @@
-;; Copyright 2012-2014 Ryan Culpepper
+;; Copyright 2012-2018 Ryan Culpepper
 ;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
@@ -23,8 +23,7 @@
          crypto/private/common/catalog
          crypto/private/common/util
          "util.rkt")
-(provide test-ciphers
-         test-ciphers-agree)
+(provide (all-defined-out))
 
 (define (test-ciphers factory)
   (for* ([name (in-hash-keys known-block-ciphers)]
@@ -47,30 +46,29 @@
            (eprintf "-  skipping cipher ~e\n" spec))]))
 
 (define (test-cipher ci msg)
-  (cond [(cipher-spec-aead? (send ci get-spec))
-         (test-cipher/ae ci msg)]
-        [else (test-cipher/non-ae ci msg)]))
+  (test-cipher/attached ci msg)
+  (test-cipher/detached ci msg))
 
-(define (test-cipher/non-ae ci msg)
+(define (test-cipher/attached ci msg)
   (test-case (format "~a roundtrip (~s)" (send ci get-spec) (bytes-length msg))
     (define key (generate-cipher-key ci))
     (define iv (generate-cipher-iv ci))
-    (define ciphertext (encrypt ci key iv msg))
-    (check-equal? (decrypt ci key iv ciphertext) msg)
 
-    (check-equal? (encrypt ci key iv (open-input-bytes msg))
-                  ciphertext)
-    (check-equal? (decrypt ci key iv (open-input-bytes ciphertext))
-                  msg)
+    (define ciphertext (encrypt ci key iv msg))
+    (check-equal? (encrypt ci key iv (open-input-bytes msg)) ciphertext)
+
+    (check-equal? (decrypt ci key iv ciphertext) msg)
+    (check-equal? (decrypt ci key iv (open-input-bytes ciphertext)) msg)
 
     (let ([cctx (make-encrypt-ctx ci key iv)])
       (check-equal? (bytes-append
                      (apply bytes-append
                             (for/list ([inb (in-bytes msg)])
                               (cipher-update cctx (bytes inb))))
-                     (cipher-final cctx))
+                     (cipher-final cctx)
+                     (or (cipher-get-auth-tag cctx) #""))
                     ciphertext))
-    (let ([dctx (make-decrypt-ctx ci key iv)])
+    (let ([dctx (make-decrypt-ctx ci key iv #:auth-attached? #t)])
       (check-equal? (bytes-append
                      (apply bytes-append
                             (for/list ([inb (in-bytes ciphertext)])
@@ -79,23 +77,28 @@
                     msg))
 
     ;; Other keys produce different output, can't decrypt
-    (when (positive? (bytes-length ciphertext))
+    (when (positive? (bytes-length msg))
       (define key2 (generate-cipher-key ci))
       (check-not-equal? (encrypt ci key2 iv msg) ciphertext)
       (check-not-equal? (with-handlers ([values values]) (decrypt ci key2 iv ciphertext))
                         msg))
 
     ;; If IV, different IV produces different output, can't decrypt
-    (when (and (positive? (bytes-length ciphertext))
+    (when (and (positive? (bytes-length msg))
                (positive? (cipher-iv-size ci)))
       (define iv2 (generate-cipher-iv ci))
       (check-not-equal? (encrypt ci key iv2 msg) ciphertext)
       (check-not-equal? (with-handlers ([values values]) (decrypt ci key iv2 ciphertext))
                         msg))
+
+    (when (cipher-aead? ci)
+      (for ([aad (in-list '(() #"" #"abc" #"abcdef123456"))])
+        (define ct (encrypt ci key iv msg #:AAD aad))
+        (check-equal? (decrypt ci key iv ct #:AAD aad) msg)))
     ))
 
-(define (test-cipher/ae ci msg)
-  (test-case (format "~a roundtrip (AE, ~s)" (send ci get-spec) (bytes-length msg))
+(define (test-cipher/detached ci msg)
+  (test-case (format "~a roundtrip (detached, ~s)" (send ci get-spec) (bytes-length msg))
     (define key (generate-cipher-key ci))
     (define iv (generate-cipher-iv ci))
 
@@ -105,36 +108,38 @@
     (let-values ([(c2 at2) (encrypt/auth ci key iv (open-input-bytes msg))])
       (check-equal? c2 ciphertext)
       (check-equal? at2 auth-tag))
-    (check-equal? (decrypt/auth ci key iv (open-input-bytes ciphertext) #:auth-tag auth-tag)
-                  msg)
+    (check-equal? (decrypt/auth ci key iv (open-input-bytes ciphertext) #:auth-tag auth-tag) msg)
 
     (let ([cctx (make-encrypt-ctx ci key iv)])
-      (define cparts (for/list ([inb (in-bytes msg)])
-                       (cipher-update cctx (bytes inb))))
-      (define-values (last-cpart at2) (cipher-final/tag cctx))
-      (check-equal? (bytes-append (apply bytes-append cparts) last-cpart) ciphertext)
+      (define cparts (append (for/list ([inb (in-bytes msg)])
+                               (cipher-update cctx (bytes inb)))
+                             (list (cipher-final cctx))))
+      (define at2 (cipher-get-auth-tag cctx))
+      (check-equal? (apply bytes-append cparts) ciphertext)
       (check-equal? at2 auth-tag))
 
-    (let ([dctx (make-decrypt-ctx ci key iv #:auth-tag auth-tag)])
+    (let ([dctx (make-decrypt-ctx ci key iv)])
       (check-equal? (bytes-append
                      (apply bytes-append
                             (for/list ([inb (in-bytes ciphertext)])
                               (cipher-update dctx (bytes inb))))
-                     (cipher-final dctx))
+                     (cipher-final dctx auth-tag))
                     msg))
 
-    (for ([aad (in-list '(#f #"" #"abc" #"abcdef123456"))])
-      (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg #:AAD aad))
-      (check-equal? (decrypt/auth ci key iv ciphertext #:AAD aad #:auth-tag auth-tag) msg))
+    (check-equal? (decrypt ci key iv (list ciphertext auth-tag)) msg)
 
-    (when (positive? (bytes-length ciphertext))
-      (define key2 (generate-cipher-key ci))
-      (define iv2 (generate-cipher-iv ci))
-      (define auth-tag2 (semirandom-bytes (bytes-length auth-tag)))
-      ;; Other key/iv/auth-tag fails to authenticate
-      (check-exn exn:fail? (lambda () (decrypt/auth ci key2 iv ciphertext #:auth-tag auth-tag)))
-      (check-exn exn:fail? (lambda () (decrypt/auth ci key iv2 ciphertext #:auth-tag auth-tag)))
-      (check-exn exn:fail? (lambda () (decrypt/auth ci key iv ciphertext #:auth-tag auth-tag2))))
+    (when (cipher-aead? ci)
+      (for ([aad (in-list '(() #"" #"abc" #"abcdef123456"))])
+        (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg #:AAD aad))
+        (check-equal? (decrypt/auth ci key iv ciphertext #:AAD aad #:auth-tag auth-tag) msg))
+      (when (positive? (bytes-length ciphertext))
+        (define key2 (generate-cipher-key ci))
+        (define iv2 (generate-cipher-iv ci))
+        (define auth-tag2 (semirandom-bytes (bytes-length auth-tag)))
+        ;; Other key/iv/auth-tag fails to authenticate
+        (check-exn exn:fail? (lambda () (decrypt/auth ci key2 iv ciphertext #:auth-tag auth-tag)))
+        (check-exn exn:fail? (lambda () (decrypt/auth ci key iv2 ciphertext #:auth-tag auth-tag)))
+        (check-exn exn:fail? (lambda () (decrypt/auth ci key iv ciphertext #:auth-tag auth-tag2)))))
     ))
 
 ;; ----------------------------------------

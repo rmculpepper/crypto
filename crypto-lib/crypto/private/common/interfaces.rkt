@@ -157,32 +157,28 @@
 (define cipher-impl<%>
   (interface (impl<%>)
     ;; get-spec    ;; -> CipherSpec
-    get-block-size ;; -> nat
-    get-iv-size    ;; -> nat
-    get-default-key-size ;; -> nat
-    get-key-sizes  ;; -> (U (listof nat) variable?)
-    get-auth-size  ;; -> nat
-    get-chunk-size ;; -> nat
+    get-block-size ;; -> Nat (1 for stream)
+    get-chunk-size ;; -> Nat (must be multiple of block-size)
+    get-iv-size    ;; -> Nat
+    get-default-key-size ;; -> Nat
+    get-key-sizes  ;; -> (U (listof Nat) varsize?)
+    get-auth-size  ;; -> Nat
+    aead?          ;; -> Boolean
 
-    new-ctx         ;; bytes bytes/#f boolean PadMode -> cipher-ctx<%>
-                    ;; key   iv       enc?    pad
+    new-ctx         ;; Bytes Bytes/#f Bool Pad Nat    Bool -> cipher-ctx<%>
+                    ;; key   iv       enc? pad taglen attached?
     ))
-
-;; Some disadvantages to current cipher update! and final! methods:
-;;  - client has to know how much output to expect (output buffer free space)
-;;  - not all impls produce output at same rate
-;;    - eg openssl command-line tool doesn't produce output until final! (???)
-;;    - eg gcrypt accepts only multiples of blocks (???)
 
 (define cipher-ctx<%>
   (interface (ctx<%>)
+    ;; Sends {ciper,plain}text to given output port.
+    ;; AEAD: auth tag length is set at ctx construction;
+    ;; decrypt final takes auth tag (encrypt takes #f)
     get-encrypt? ;; -> boolean
-    update!  ;; bytes nat nat bytes nat nat -> nat
-    final!   ;; bytes nat nat -> nat
-    close    ;; -> void
-    ;; update-AAD ;; bytes nat nat -> void
-    ;; get-auth-tag ;; -> bytes/#f
-    get-output-size ;; nat boolean -> nat
+    update-aad ;; Input -> Void
+    update     ;; Input -> Void
+    final      ;; Bytes/#f -> Void
+    get-auth-tag ;; -> Bytes/#f
     ))
 
 (define (cipher-impl? x) (is-a? x cipher-impl<%>))

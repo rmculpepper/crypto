@@ -36,7 +36,7 @@
     (define chunk-size (gcry_cipher_get_algo_blklen cipher))
     (define/override (get-chunk-size) chunk-size)
 
-    (define/override (new-ctx key iv enc? pad?)
+    (define/override (new-ctx key iv enc? pad? auth-len attached-tag?)
       (define iv-size (get-iv-size))
       (check-key-size spec (bytes-length key))
       (check-iv-size spec iv-size iv)
@@ -47,62 +47,44 @@
           (gcry_cipher_setiv ctx iv (bytes-length iv)))
         (when (or (= mode GCRY_CIPHER_MODE_CTR))
           (gcry_cipher_setctr ctx iv (bytes-length iv)))
-        (new gcrypt-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?))))
+        (new gcrypt-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?)
+             (auth-len auth-len) (attached-tag? attached-tag?))))
     ))
 
 (define gcrypt-cipher-ctx%
-  (class* AE-whole-chunk-cipher-ctx% (cipher-ctx<%>)
-    (inherit-field impl encrypt? pad?)
+  (class cipher-ctx%
     (init-field ctx)
     (super-new)
+    (inherit-field impl encrypt?)
+    (inherit get-block-size)
 
-    (define spec (send impl get-spec))
-    (define auth-tag #f)
+    (define/public (get-spec) (send impl get-spec))
 
-    (define/override (*crypt inbuf instart inend outbuf outstart outend)
-      (let ([op (if encrypt? gcry_cipher_encrypt gcry_cipher_decrypt)])
-        (op ctx
-            (ptr-add outbuf outstart) (- outend outstart)
-            (ptr-add inbuf instart) (- inend instart))))
-
-    (define/override (*crypt-partial inbuf instart inend outbuf outstart outend)
-      (case (cipher-spec-mode spec)
-        [(ctr ofb cfb gcm ocb stream)
-         (check-output-range outbuf outstart outend (- inend instart))
-         (gcry_cipher_final ctx)
-         (*crypt inbuf instart inend outbuf outstart outend)
-         (- inend instart)]
-        [else #f]))
-
-    (define/override (*open?)
-      (and ctx #t))
-
-    (define/override (*close)
+    (define/override (-close)
       (when ctx
         (gcry_cipher_close ctx)
         (set! ctx #f)))
 
-    (define/override (*after-final)
-      (dynamic-wind void
-                    (lambda ()
-                      (when auth-tag
-                        (define actual-AT (*get-auth-tag (bytes-length auth-tag)))
-                        (unless (crypto-bytes=? auth-tag actual-AT)
-                          (crypto-error "authenticated decryption failed"))))
-                    (lambda () (super *after-final))))
+    (define/override (-do-aad inbuf instart inend)
+      (gcry_cipher_authenticate ctx (ptr-add inbuf instart) (- inend instart)))
 
-    (define/override (*aad inbuf instart inend)
-      (cond [(cipher-spec-aead? spec)
-             (gcry_cipher_authenticate ctx (ptr-add inbuf instart) (- inend instart))]
-            [else (crypto-error "not an AEAD cipher\n  cipher: ~e" (send impl get-spec))]))
+    (define/override (-do-crypt enc? final? inbuf instart inend outbuf)
+      (when final? (gcry_cipher_final ctx))
+      (define outlen (bytes-length outbuf))
+      (if encrypt?
+          (gcry_cipher_encrypt ctx outbuf outlen (ptr-add inbuf instart) (- inend instart))
+          (gcry_cipher_decrypt ctx outbuf outlen (ptr-add inbuf instart) (- inend instart)))
+      (- inend instart))
 
-    (define/override (*set-auth-tag tag)
-      (set! auth-tag tag))
-
-    (define/override (*get-auth-tag taglen)
-      (define tag (make-bytes taglen))
-      (cond [(cipher-spec-aead? spec)
-             (gcry_cipher_gettag ctx tag taglen)
+    (define/override (-do-encrypt-end auth-len)
+      (cond [(positive? auth-len)
+             (define tag (make-bytes auth-len))
+             (gcry_cipher_gettag ctx tag auth-len)
              tag]
-            [else (crypto-error "not an AEAD cipher\n  cipher: ~e" (send impl get-spec))]))
+            [else #""]))
+
+    (define/override (-do-decrypt-end auth-tag)
+      (when (send impl aead?)
+        (unless (= (gcry_cipher_checktag ctx auth-tag (bytes-length auth-tag)) GPG_ERR_NO_ERROR)
+          (crypto-error "authenticated decryption failed"))))
     ))
