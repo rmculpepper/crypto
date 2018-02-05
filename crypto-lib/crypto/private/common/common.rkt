@@ -214,7 +214,7 @@
 
     (define/public (update src)
       (with-state #:ok '(open)
-        (lambda () (process-input src (lambda (buf start end) (-update buf start end))))))
+        (lambda () (void (process-input src (lambda (buf start end) (-update buf start end)))))))
 
     (define/public (final)
       (with-state #:ok '(open) #:post 'closed
