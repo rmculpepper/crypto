@@ -83,33 +83,29 @@
 (define msg #"I am the walrus.")
 (define badmsg #"I am the egg nog.")
 
-(define (sign-pad-ok? key pad)
-  (case pad
-    [(pkcs1-v1.5) #t]
-    [(pss) (memq (send (get-factory key) get-name) '(libcrypto #;gcrypt nettle))]
-    [(pss*) (memq (send (get-factory key) get-name) '(libcrypto))]))
-
 (define (test-pk-sign key pubkey)
   (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
   (for* ([pad (if rsa? '(pkcs1-v1.5 pss pss*) '(#f))])
-    (define pad-ok? (and (sign-pad-ok? key pad) (sign-pad-ok? pubkey pad)))
+    (define pad-ok? (and (pk-can-sign? key pad) (pk-can-sign? pubkey pad)))
     (unless pad-ok?
-      (eprintf "  -skipping pad = ~v\n" pad))
+      (eprintf "  -skipping sign w/ pad = ~v\n" pad))
     (when pad-ok?
-      (eprintf "  +testing pad = ~v\n" pad)
       (for ([di '(sha1 sha256)])
-        (define di* (get-digest di (get-factory key)))
-        (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
-        (define sig2 (digest/sign key di msg #:pad pad))
-        (check-true (pk-verify-digest key di (digest di* msg) sig1 #:pad pad) "pvd key sig1")
-        (check-true (pk-verify-digest key di (digest di* msg) sig2 #:pad pad) "pvd key sig2")
-        (check-true (pk-verify-digest pubkey di (digest di* msg) sig1 #:pad pad) "pvd pubkey sig1")
-        (check-true (pk-verify-digest pubkey di (digest di* msg) sig2 #:pad pad) "pvd pubkey sig2")
-        (check-true (digest/verify key di msg sig1 #:pad pad) "d/v key sig1")
-        (check-true (digest/verify key di msg sig2 #:pad pad) "d/v key sig2")
-        (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
-        (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
-        (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")))))
+        (cond [(and (pk-can-sign? key pad di) (pk-can-sign? pubkey pad di))
+               (eprintf "  +testing sign w/ pad = ~v, digest = ~v\n" pad di)
+               (define di* (get-digest di (get-factory key)))
+               (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
+               (define sig2 (digest/sign key di msg #:pad pad))
+               (check-true (pk-verify-digest key di (digest di* msg) sig1 #:pad pad) "pvd key sig1")
+               (check-true (pk-verify-digest key di (digest di* msg) sig2 #:pad pad) "pvd key sig2")
+               (check-true (pk-verify-digest pubkey di (digest di* msg) sig1 #:pad pad) "pvd pubkey sig1")
+               (check-true (pk-verify-digest pubkey di (digest di* msg) sig2 #:pad pad) "pvd pubkey sig2")
+               (check-true (digest/verify key di msg sig1 #:pad pad) "d/v key sig1")
+               (check-true (digest/verify key di msg sig2 #:pad pad) "d/v key sig2")
+               (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
+               (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
+               (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")]
+              [else (eprintf "  -skipping sign w/ pad = ~v, digest = ~v\n" pad di)])))))
 
 (define (encrypt-pad-ok? key pad)
   (case pad
@@ -118,11 +114,13 @@
 
 (define (test-pk-encrypt key pubkey)
   (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
-  (for ([pad (if rsa? '(pkcs1-v1.5 oaep) '(#f))]
-        #:when (and (encrypt-pad-ok? key pad) (encrypt-pad-ok? pubkey pad)))
-    (define skey (semirandom-bytes 16))
-    (define wkey (pk-encrypt pubkey skey #:pad pad))
-    (check-equal? (pk-decrypt key wkey #:pad pad) skey "pk-decrypt")))
+  (for ([pad (if rsa? '(pkcs1-v1.5 oaep) '(#f))])
+    (cond [(and (pk-can-encrypt? key pad) (pk-can-encrypt? pubkey pad))
+           (eprintf "  +testing encrypt w/ pad = ~v\n" pad)
+           (define skey (semirandom-bytes 16))
+           (define wkey (pk-encrypt pubkey skey #:pad pad))
+           (check-equal? (pk-decrypt key wkey #:pad pad) skey "pk-decrypt")]
+          [else (eprintf "  -skipping encrypt w/ pad = ~v\n" pad)])))
 
 (define (test-pk-key-agree key1 pubkey1)
   (define params (pk-key->parameters key1))

@@ -29,7 +29,8 @@
   (for* ([name (in-hash-keys known-block-ciphers)]
          [mode known-block-modes])
     (define spec (list name mode))
-    (test-cipher/spec factory spec))
+    (when (cipher-spec? spec)
+      (test-cipher/spec factory spec)))
   (for ([name (in-hash-keys known-stream-ciphers)])
     (define spec (list name 'stream))
     (test-cipher/spec factory spec)))
@@ -37,8 +38,7 @@
 (define (test-cipher/spec factory spec)
   (define ci (send factory get-cipher spec))
   (cond [ci
-         (when #t
-           (eprintf "+  testing ~e\n" spec))
+         (eprintf "+  testing ~e\n" spec)
          (for ([in plaintexts])
            (test-cipher ci in))]
         [else
@@ -148,7 +148,8 @@
   (for* ([name (in-hash-keys known-block-ciphers)]
          [mode known-block-modes])
     (define spec (list name mode))
-    (test-cipher-agreement spec factories))
+    (when (cipher-spec? spec)
+      (test-cipher-agreement spec factories)))
   (for ([name (in-hash-keys known-stream-ciphers)])
     (define spec (list name 'stream))
     (test-cipher-agreement spec factories)))
