@@ -262,12 +262,12 @@ function @racket[di], or @racket[#f] if the signature is invalid.
 @deftogether[[
 @defproc[(digest/sign [pk private-key?]
                       [di (or/c digest-spec? digest-impl?)]
-                      [input (or/c bytes? string? input-port?)]
+                      [input input/c]
                       [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
          bytes?]
 @defproc[(digest/verify [pk pk-key?]
                         [di (or/c digest-spec? digest-impl?)]
-                        [input (or/c bytes? string? input-port?)]
+                        [input input/c]
                         [sig bytes?]
                         [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
          boolean?]

@@ -65,11 +65,11 @@
         [#:pad sign-pad/c]
         boolean?)]
   [digest/sign
-   (->* [private-key? (or/c digest-spec? digest-impl?) (or/c bytes? string? input-port?)]
+   (->* [private-key? (or/c digest-spec? digest-impl?) input/c]
         [#:pad sign-pad/c]
         bytes?)]
   [digest/verify
-   (->* [pk-key? (or/c digest-spec? digest-impl?) (or/c bytes? string? input-port?) bytes?]
+   (->* [pk-key? (or/c digest-spec? digest-impl?) input/c bytes?]
         [#:pad sign-pad/c]
         boolean?)]
 
