@@ -181,8 +181,8 @@
   (interface (impl<%>)
     generate-key    ;; GenKeySpec -> pk-key<%>
     generate-params ;; GenParamSpec -> pk-params<%>
-    can-key-agree?  ;; -> boolean
-    can-sign?       ;; -> boolean
+    can-key-agree?  ;; Symbol/#f -> boolean
+    can-sign?       ;; Symbol/#f DigestSpec/#f -> boolean
     can-encrypt?    ;; -> boolean
     has-params?     ;; -> boolean
     ))

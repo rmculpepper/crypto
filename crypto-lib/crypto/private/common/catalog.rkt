@@ -365,14 +365,23 @@
            [dsa . (sign params)]
            [dh  . (key-agree params)]
            [ec  . (sign key-agree params)]))
+(define rsa-sign-pads '(pkcs1-v1.5 pss pss* #f))
+(define rsa-enc-pads '(pkcs1-v1.5 oeap #f))
 
 (define (pk-spec? x)
   (and (hash-ref known-pk x #f) #t))
 
-(define (pk-spec-can-sign? pk)
-  (and (memq 'sign (hash-ref known-pk pk '())) #t))
-(define (pk-spec-can-encrypt? pk)
-  (and (memq 'encrypt (hash-ref known-pk pk '())) #t))
+;; for can-sign?, can-encrypt?: pad=#f means "at all?"
+(define (pk-spec-can-sign? pk pad)
+  (case pk
+    [(rsa)    (and (memq pad rsa-sign-pads) #t)]
+    [(dsa ec) (and (memq pad '(#f)) #t)]
+    [else #f]))
+(define (pk-spec-can-encrypt? pk pad)
+  (case pk
+    [(rsa) (and (memq pad rsa-enc-pads) #t)]
+    [else #f]))
+
 (define (pk-spec-can-key-agree? pk)
   (and (memq 'key-agree (hash-ref known-pk pk '())) #t))
 (define (pk-spec-has-parameters? pk)

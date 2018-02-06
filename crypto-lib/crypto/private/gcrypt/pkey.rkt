@@ -219,8 +219,8 @@
       (err/no-direct-keygen spec))
     (define/public (generate-params config)
       (err/no-params spec))
-    (define/public (can-encrypt?) #f)
-    (define/public (can-sign?) #f)
+    (define/public (can-encrypt? pad) #f)
+    (define/public (can-sign? pad dspec) #f)
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
 
@@ -233,6 +233,9 @@
         (or (gcry_sexp_find_token result "private-key")
             (crypto-error "failed to generate private key component")))
       (new key-class (impl this) (pub pub) (priv priv)))
+
+    (define/public (-known-digest? dspec)
+      (or (not dspec) (and (send factory get-digest dspec) #t)))
     ))
 
 (define gcrypt-pk-key%
@@ -257,7 +260,7 @@
                    (gcry_sexp->bytes (get-field pub other)))))
 
     (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
+      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
       (unless priv (err/sign-requires-private))
       (check-digest digest digest-spec)
       (check-sig-pad pad)
@@ -269,7 +272,7 @@
       result)
 
     (define/public (verify digest digest-spec pad sig)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
+      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
       (check-digest digest digest-spec)
       (check-sig-pad pad)
       (define data-sexp (sign-make-data-sexp digest digest-spec pad))
@@ -310,11 +313,12 @@
 (define gcrypt-rsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit *generate-key)
+    (inherit -known-digest? *generate-key)
     (super-new (spec 'rsa))
 
-    (define/override (can-encrypt?) #t)
-    (define/override (can-sign?) #t)
+    (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
+    (define/override (can-sign? pad dspec)
+      (and (memq pad '(#f pkcs1-v1.5)) (-known-digest? dspec)))
 
     (define/override (generate-key config)
       (check-keygen-spec config allowed-rsa-keygen)
@@ -420,7 +424,6 @@
                        sig))
 
     (define/override (encrypt data pad)
-      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (define padding (check-enc-padding pad))
       (define data-sexp
         (gcry_sexp_build "(data (flags %s) (value %b))"
@@ -440,7 +443,6 @@
       enc-data)
 
     (define/override (decrypt data pad)
-      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (unless priv (err/decrypt-requires-private))
       (define padding (check-enc-padding pad))
       (define enc-sexp
@@ -474,11 +476,11 @@
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit *generate-key)
+    (inherit -known-digest? *generate-key)
     (super-new (spec 'dsa))
 
-    (define/override (can-encrypt?) #f)
-    (define/override (can-sign?) #t)
+    (define/override (can-sign? pad dspec)
+      (and (memq pad '(#f)) (-known-digest? dspec)))
 
     (define/override (generate-key config)
       (check-keygen-spec config allowed-dsa-keygen)
@@ -572,11 +574,11 @@
 (define gcrypt-ec-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit *generate-key)
-    (super-new (spec 'dsa))
+    (inherit -known-digest? *generate-key)
+    (super-new (spec 'ec))
 
-    (define/override (can-encrypt?) #f)
-    (define/override (can-sign?) #t)
+    (define/override (can-sign? pad dspec)
+      (and (memq pad '(#f)) (-known-digest? dspec)))
 
     (define/override (generate-key config)
       (check-keygen-spec config allowed-ec-keygen)
@@ -623,7 +625,7 @@
                   'privateKey (hasheq 'version 1
                                       'privateKey (mpi->base256 (get-mpi priv "d"))
                                       'publicKey (mpi->base256 (get-mpi priv "q")))))]
-        [else (err/key-format 'dsa (is-private?) fmt)]))
+        [else (err/key-format 'ec (is-private?) fmt)]))
 
     (define/private (get-mpi sexp tag)
       (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
@@ -639,7 +641,7 @@
 
     (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
-        (crypto-error "DSA padding mode not supported\n  padding: ~e" pad)))
+        (crypto-error "EC padding mode not supported\n  padding: ~e" pad)))
 
     (define/override (verify-make-sig-sexp sig-der)
       (match (bytes->asn1/DER DSA-Sig-Val sig-der)

@@ -28,9 +28,11 @@
  public-only-key?
  (contract-out
   [pk-can-sign?
-   (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
+   (->* [(or/c pk-spec? pk-impl? pk-key?)]
+        [(or/c symbol? #f) (or/c symbol? #f)]
+        boolean?)]
   [pk-can-encrypt?
-   (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
+   (->* [(or/c pk-spec? pk-impl? pk-key?)] [(or/c symbol? #f)] boolean?)]
   [pk-can-key-agree?
    (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
   [pk-has-parameters?
@@ -119,26 +121,22 @@
 (define (public-only-key? x)
   (and (is-a? x pk-key<%>) (not (send x is-private?))))
 
-(define (pk-can-sign? pki)
+(define (pk-can-sign? pki [pad #f] [dspec #f])
   (with-crypto-entry 'pk-can-sign?
-    (cond [(pk-spec? pki)
-           (pk-spec-can-sign? pki)]
-          [else (send (get-impl* pki) can-sign?)])))
-(define (pk-can-encrypt? pki)
+    (cond [(pk-spec? pki) (pk-spec-can-sign? pki pad)] ;; no dspec!
+          [else (and (send (get-impl* pki) can-sign? pad dspec) #t)])))
+(define (pk-can-encrypt? pki [pad #f])
   (with-crypto-entry 'pk-can-encrypt?
-    (cond [(pk-spec? pki)
-           (pk-spec-can-encrypt? pki)]
-          [else (send (get-impl* pki) can-encrypt?)])))
+    (cond [(pk-spec? pki) (pk-spec-can-encrypt? pki)]
+          [else (and (send (get-impl* pki) can-encrypt? pad) #t)])))
 (define (pk-can-key-agree? pki)
   (with-crypto-entry 'pk-can-key-agree?
-    (cond [(pk-spec? pki)
-           (pk-spec-can-key-agree? pki)]
-          [else (send (get-impl* pki) can-key-agree?)])))
+    (cond [(pk-spec? pki) (pk-spec-can-key-agree? pki)]
+          [else (and (send (get-impl* pki) can-key-agree?) #t)])))
 (define (pk-has-parameters? pki)
   (with-crypto-entry 'pk-has-parameters?
-    (cond [(pk-spec? pki)
-           (pk-spec-has-parameters? pki)]
-          [else (send (get-impl* pki) has-params?)])))
+    (cond [(pk-spec? pki) (pk-spec-has-parameters? pki)]
+          [else (and (send (get-impl* pki) has-params?) #t)])))
 
 (define (pk-key->parameters pk)
   (with-crypto-entry 'pk-key->parameters

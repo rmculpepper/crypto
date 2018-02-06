@@ -146,7 +146,7 @@ NIST P-192 disappeared!).
 
 (define libcrypto-pk-impl%
   (class* impl-base% (pk-impl<%>)
-    (inherit-field spec)
+    (inherit-field spec factory)
     (super-new)
 
     (abstract pktype)
@@ -166,10 +166,13 @@ NIST P-192 disappeared!).
       (err/no-direct-keygen spec))
     (define/public (generate-params config)
       (err/no-params spec))
-    (define/public (can-encrypt?) #f)
-    (define/public (can-sign?) #f)
+    (define/public (can-encrypt? pad) #f)
+    (define/public (can-sign? pad dspec) #f)
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
+
+    (define/public (-known-digest? dspec)
+      (or (not dspec) (and (send factory get-digest dspec) #t)))
     ))
 
 ;; ============================================================
@@ -181,11 +184,13 @@ NIST P-192 disappeared!).
 (define libcrypto-rsa-impl%
   (class libcrypto-pk-impl%
     (inherit-field spec)
+    (inherit -known-digest?)
     (super-new (spec 'rsa))
 
     (define/override (pktype) EVP_PKEY_RSA)
-    (define/override (can-encrypt?) #t)
-    (define/override (can-sign?) #t)
+    (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
+    (define/override (can-sign? pad dspec) ;; FIXME: check digest compat
+      (and (memq pad '(#f pkcs1-v1.5 pss pss*)) (-known-digest? dspec)))
 
     (define/override (*write-key private? fmt evp)
       (cond [(and (eq? fmt 'RSAPrivateKey) private?)
@@ -258,10 +263,12 @@ NIST P-192 disappeared!).
 (define libcrypto-dsa-impl%
   (class libcrypto-pk-impl%
     (inherit-field spec)
+    (inherit -known-digest?)
     (super-new (spec 'dsa))
 
     (define/override (pktype) EVP_PKEY_DSA)
-    (define/override (can-sign?) #t)
+    (define/override (can-sign? pad dspec)
+      (and (memq pad '(#f)) (-known-digest? dspec)))
     (define/override (has-params?) #t)
 
     (define/override (*write-key private? fmt evp)
@@ -399,10 +406,12 @@ NIST P-192 disappeared!).
 (define libcrypto-ec-impl%
   (class libcrypto-pk-impl%
     (inherit-field spec)
+    (inherit -known-digest?)
     (super-new (spec 'ec))
 
     (define/override (pktype) EVP_PKEY_EC)
-    (define/override (can-sign?) #t)
+    (define/override (can-sign? pad dspec)
+      (and (memq pad '(#f)) (-known-digest? dspec)))
     (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
 
@@ -537,7 +546,7 @@ NIST P-192 disappeared!).
            (EVP_PKEY_cmp evp (get-field evp other))))
 
     (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
+      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
       (unless private? (err/sign-requires-private))
       (define di (send (send impl get-factory) get-digest digest-spec))
       (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
@@ -552,7 +561,7 @@ NIST P-192 disappeared!).
       (shrink-bytes sigbuf siglen2))
 
     (define/public (verify digest digest-spec pad sig)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
+      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
       (define di (send (send impl get-factory) get-digest digest-spec))
       (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
       (define ctx (EVP_PKEY_CTX_new evp))
@@ -563,11 +572,11 @@ NIST P-192 disappeared!).
         (EVP_PKEY_CTX_free ctx)))
 
     (define/public (encrypt buf pad)
-      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
+      (unless (send impl can-encrypt? pad) (err/no-encrypt (send impl get-spec)))
       (*crypt buf pad EVP_PKEY_encrypt_init EVP_PKEY_encrypt))
 
     (define/public (decrypt buf pad)
-      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
+      (unless (send impl can-encrypt? pad) (err/no-encrypt (send impl get-spec)))
       (unless private? (err/decrypt-requires-private))
       (*crypt buf pad EVP_PKEY_decrypt_init EVP_PKEY_decrypt))
 

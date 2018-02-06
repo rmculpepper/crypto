@@ -169,8 +169,8 @@
       (err/no-direct-keygen spec))
     (define/public (generate-params config)
       (err/no-params spec))
-    (define/public (can-encrypt?) #f)
-    (define/public (can-sign?) #f)
+    (define/public (can-encrypt? pad) #f)
+    (define/public (can-sign? pad dspec) #f)
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
 
@@ -190,8 +190,13 @@
     (inherit get-random-ctx)
     (super-new (spec 'rsa))
 
-    (define/override (can-encrypt?) #t)
-    (define/override (can-sign?) #t)
+    (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5)))
+    (define/override (can-sign? pad dspec)
+      (case pad
+        [(pkcs1-v1.5) (memq dspec '(#f md5 sha1 sha256 sha512))]
+        [(pss) (memq dspec '(#f sha256 sha384 sha512))]
+        [(#f) #t]
+        [else #f]))
 
     (define/override (generate-key config)
       (check-keygen-spec config allowed-rsa-keygen)
@@ -261,7 +266,6 @@
                   (rsa_public_key_struct-e (get-field pub other)))))
 
     (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
       (unless priv (err/sign-requires-private))
       (check-digest digest digest-spec)
       (define randctx (send impl get-random-ctx))
@@ -280,8 +284,8 @@
            (define salt (crypto-random-bytes saltlen))
            (case digest-spec
              [(sha256) (nettle_rsa_pss_sha256_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
-             [(sha384) (nettle_rsa_pss_sha256_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
-             [(sha384) (nettle_rsa_pss_sha256_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
+             [(sha384) (nettle_rsa_pss_sha384_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
+             [(sha512) (nettle_rsa_pss_sha512_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
           [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
       (unless signed-ok? (crypto-error "RSA signing failed"))
@@ -300,7 +304,6 @@
                     op digest-spec (or pad 'pkcs1-v1.5)))
 
     (define/public (verify digest digest-spec pad sig)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
       (check-digest digest digest-spec)
       (define sigz (bin->mpz sig))
       (define verified-ok?
@@ -323,7 +326,6 @@
       verified-ok?)
 
     (define/public (encrypt buf pad)
-      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (case pad
         [(pkcs1-v1.5 #f)
          (define enc-z (new-mpz))
@@ -333,7 +335,6 @@
         [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
 
     (define/public (decrypt buf pad)
-      (unless (send impl can-encrypt?) (err/no-encrypt (send impl get-spec)))
       (unless priv (err/decrypt-requires-private))
       (case pad
         [(pkcs1-v1.5 #f)
@@ -364,8 +365,8 @@
     (inherit get-random-ctx)
     (super-new (spec 'dsa))
 
-    (define/override (can-encrypt?) #f)
-    (define/override (can-sign?) #t)
+    (define/override (can-sign? pad dspec)
+      (and (memq pad '(#f)) (memq dspec '(#f sha1 sha256))))
 
     (define/override (generate-key config)
       (check-keygen-spec config allowed-dsa-keygen)
@@ -439,7 +440,6 @@
                   (dsa_public_key_struct-y (get-field pub other)))))
 
     (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
       (unless priv (err/sign-requires-private))
       (check-digest digest digest-spec)
       (define sign-fun
@@ -477,7 +477,6 @@
          digest-spec (digest-spec-size digest-spec) digest)))
 
     (define/public (verify digest digest-spec pad sig-der)
-      (unless (send impl can-sign?) (err/no-sign (send impl get-spec)))
       (check-digest digest digest-spec)
       (define verify-fun
         (case digest-spec
