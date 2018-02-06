@@ -58,6 +58,7 @@
 
 (define impl<%>
   (interface ()
+    get-info    ;; -> *Info
     get-spec    ;; -> *Spec
     get-factory ;; -> factory<%>
     ))
@@ -126,9 +127,7 @@
 ;; Digests
 
 (define digest-impl<%>
-  (interface (impl<%>)
-    get-size       ;; -> Nat
-    get-block-size ;; -> Nat
+  (interface (impl<%> digest-info<%>)
     new-ctx        ;; -> digest-ctx<%>
     new-hmac-ctx   ;; Bytes -> digest-ctx<%>
     digest         ;; Input -> Bytes
@@ -155,16 +154,7 @@
 ;; Maybe support more padding modes in future?
 
 (define cipher-impl<%>
-  (interface (impl<%>)
-    ;; get-spec    ;; -> CipherSpec
-    get-block-size ;; -> Nat (1 for stream)
-    get-chunk-size ;; -> Nat (must be multiple of block-size)
-    get-iv-size    ;; -> Nat
-    get-default-key-size ;; -> Nat
-    get-key-sizes  ;; -> (U (listof Nat) varsize?)
-    get-auth-size  ;; -> Nat
-    aead?          ;; -> Boolean
-
+  (interface (impl<%> cipher-info<%>)
     new-ctx         ;; Bytes Bytes/#f Bool Pad Nat    Bool -> cipher-ctx<%>
                     ;; key   iv       enc? pad taglen attached?
     ))

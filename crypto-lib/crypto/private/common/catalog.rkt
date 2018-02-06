@@ -17,66 +17,79 @@
 (require racket/string
          racket/match
          racket/list
+         racket/class
          "error.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================
 ;; Digests
 
+(define digest-info<%>
+  (interface ()
+    get-spec        ;; -> DigestSpec
+    get-size        ;; -> Nat
+    get-block-size  ;; -> Nat
+    ))
+
+(define digest-info%
+  (class* object% (digest-info<%>)
+    (init-field spec size block-size max-key-len)
+    (super-new)
+    (define/public (get-spec) spec)
+    (define/public (get-size) size)
+    (define/public (get-block-size) block-size)
+    (define/public (get-max-key-len) max-key-len)))
+
 (define known-digests
-  '#hasheq(;; symbol  ->   [Hash  Block [MaxKeyLen]]   -- sizes in bytes
-           [md2         .  [ 16   16 ]]
-           [md4         .  [ 16   64 ]]
-           [md5         .  [ 16   64 ]]
-           [ripemd160   .  [ 20   64 ]]
-           [tiger1      .  [ 24   64 ]]
-           [tiger2      .  [ 24   64 ]]
-           [whirlpool   .  [ 64   64 ]] ;; Note: 3 versions, W-0 (2000), W-T (2001), W (2003)
-           [sha0        .  [ 20   64 ]]
-           [sha1        .  [ 20   64 ]]
-           [sha224      .  [ 28   64 ]]
-           [sha256      .  [ 32   64 ]]
-           [sha384      .  [ 48   128]]
-           [sha512      .  [ 64   128]]
-           [sha3-224    .  [ 28   144]]
-           [sha3-256    .  [ 32   136]]
-           [sha3-384    .  [ 48   104]]
-           [sha3-512    .  [ 64   72]]
-
-           ;; the following take keys
-           [blake2b-512 .  [ 64   128  64]] ;; blake2b up to 64 bytes
-           [blake2b-384 .  [ 48   128  64]]
-           [blake2b-256 .  [ 32   128  64]]
-           [blake2b-160 .  [ 20   128  64]]
-           [blake2s-256 .  [ 32   64   32]] ;; blake2s up to 32 bytes
-           [blake2s-224 .  [ 28   64   32]]
-           [blake2s-160 .  [ 20   64   32]]
-           [blake2s-128 .  [ 16   64   32]]
-
-           ;; the following are XOFs (extensible output functions) -- put #f for output size
-           [shake128    .  [ #f   168]]
-           [shake256    .  [ #f   136]]
-           ))
+  (let ()
+    (define (info spec size block-size [max-key-len #f])
+      (new digest-info% (spec spec) (size size) (block-size block-size) (max-key-len max-key-len)))
+    (define all
+      (list (info 'md2         16  16)
+            (info 'md4         16  64)
+            (info 'md5         16  64)
+            (info 'ripemd160   20  64)
+            (info 'tiger1      24  64)
+            (info 'tiger2      24  64)
+            (info 'whirlpool   64  64) ;; Note: 3 versions, W-0 (2000), W-T (2001), W (2003)
+            (info 'sha0        20  64)
+            (info 'sha1        20  64)
+            (info 'sha224      28  64)
+            (info 'sha256      32  64)
+            (info 'sha384      48  128)
+            (info 'sha512      64  128)
+            (info 'sha3-224    28  144)
+            (info 'sha3-256    32  136)
+            (info 'sha3-384    48  104)
+            (info 'sha3-512    64  72)
+            ;; the following take keys
+            (info 'blake2b-512 64  128  64) ;; blake2b up to 64 bytes
+            (info 'blake2b-384 48  128  64)
+            (info 'blake2b-256 32  128  64)
+            (info 'blake2b-160 20  128  64)
+            (info 'blake2s-256 32  64   32) ;; blake2s up to 32 bytes
+            (info 'blake2s-224 28  64   32)
+            (info 'blake2s-160 20  64   32)
+            (info 'blake2s-128 16  64   32)
+            ;; the following are XOFs (extensible output functions) -- put #f for output size
+            (info 'shake128    #f  168)
+            (info 'shake256    #f  136)))
+    (for/hasheq ([di (in-list all)])
+      (values (send di get-spec) di))))
 
 ;; A DigestSpec is a symbol in domain of known-digests.
 
 (define (digest-spec? x)
   (and (hash-ref known-digests x #f) #t))
 
-(define (digest-spec-size spec)
-  (match (hash-ref known-digests spec #f)
-    [(list* size block-size _) size]
-    [_ #f]))
+(define (digest-spec->info di)
+  (or (hash-ref known-digests di #f)
+      (error 'digest-spec->info "unknown digest\n  spec: ~e" di)))
 
-(define (digest-spec-block-size spec)
-  (match (hash-ref known-digests spec #f)
-    [(list* size block-size _) block-size]
-    [_ #f]))
-
-(define (digest-spec-max-key-size spec)
-  (match (hash-ref known-digests spec #f)
-    [(list size block-size max-key-size) max-key-size]
-    [else #f]))
+(define (digest-spec-size ds)
+  (send (digest-spec->info ds) get-size))
+(define (digest-spec-block-size ds)
+  (send (digest-spec->info ds) get-block-size))
 
 ;; ============================================================
 
@@ -98,42 +111,155 @@
     [(? list? sizes) sizes]
     [(varsize min max step) (range min (add1 max) step)]))
 
+(define (size-set-default ss dmin)
+  (if (size-set-contains? ss dmin)
+      dmin
+      (match ss
+        [(? list? ss)
+         (or (for/or ([n (in-list ss)] #:when (>= n dmin)) n)
+             (apply max ss))]
+        [(varsize min max step)
+         (or (for/or ([n (in-range min (add1 max) step)] #:when (>= n dmin)) n)
+             max)])))
+
+;; ============================================================
+;; Cipher Info
+
+(define cipher-info<%>
+  (interface ()
+    get-cipher-name ;; -> Symbol
+    get-mode        ;; -> (U BlockMode 'stream)
+    get-spec        ;; -> CipherSpec
+    get-type        ;; -> (U 'block 'stream)
+    aead?           ;; -> Boolean
+    get-block-size  ;; -> Nat  -- 1 for stream cipher
+    get-chunk-size  ;; -> Nat
+    get-key-size    ;; -> Nat
+    get-key-sizes   ;; -> SizeSet
+    key-size-ok?    ;; Nat -> Boolean
+    get-iv-size     ;; -> Nat
+    iv-size-ok?     ;; Nat -> Boolean
+    get-auth-size   ;; -> SizeSet
+    auth-size-ok?   ;; Nat -> Boolean
+    uses-padding?   ;; -> Boolean
+    ))
+
+(define DEFAULT-KEY-SIZE 16) ;; 128 bits
+
+;; check-key-size : cipher-info Nat -> Void
+(define (check-key-size cinfo size)
+  (unless (send cinfo key-size-ok? size)
+    (crypto-error "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed: ~a"
+                  (send cinfo get-spec) size
+                  (match (send cinfo get-key-sizes)
+                    [(? list? allowed)
+                     (string-join (map number->string allowed ", "))]
+                    [(varsize min max step)
+                     (format "from ~a to ~a in multiples of ~a" min max step)]))))
+
 ;; ============================================================
 ;; Block Ciphers and Modes
 
+(define block-cipher-info%
+  (class* object% (cipher-info<%>)
+    (init-field bci mode)
+    (super-new)
+    (define spec (list (get-cipher-name) (get-mode)))
+    (define/public (get-cipher-name) (send bci get-name))
+    (define/public (get-mode) mode)
+    (define/public (get-spec) spec)
+    (define/public (get-type)
+      (case mode
+        [(ecb cbc) 'block]
+        [(ofb cfb ctr gcm ocb eax) 'stream]))
+    (define/public (aead?)
+      (positive? (get-auth-size)))
+    (define/public (get-block-size)
+      (case (get-type) [(stream) 1] [else (send bci get-block-size)]))
+    (define/public (get-chunk-size) (send bci get-block-size))
+    (define/public (get-key-size) (size-set-default (get-key-sizes) DEFAULT-KEY-SIZE))
+    (define/public (get-key-sizes) (send bci get-key-sizes))
+    (define/public (key-size-ok? size) (send bci key-size-ok? size))
+    (define/public (get-iv-size)
+      (case mode
+        [(ecb)             0]
+        [(cbc ofb cfb ctr) (get-chunk-size)]
+        [(gcm ocb eax)     12]
+        [else (crypto-error "internal error, unknown block mode: ~e" mode)]))
+    (define/public (iv-size-ok? size)
+      (case mode
+        [(ecb)         (= size 0)]
+        [(cbc ofb cfb) (= size (get-chunk-size))]
+        [(ctr)         (= size (get-chunk-size))]
+        [(gcm)         (<= 1 size 16)] ;; actual upper bound much higher
+        [(ocb)         (<= 0 size 15)] ;; "no more than 120 bits"
+        [(eax)         (<= 0 size 16)] ;; actually unrestricted
+        [else #f]))
+    (define/public (get-auth-size)
+      (case mode [(gcm ocb eax) 16] [else 0]))
+    (define/public (auth-size-ok? size)
+      (case mode
+        [(gcm) (or (<= 12 size 16) (= size 8) (= size 4))]
+        [(ocb eax) (<= 1 size 16)]
+        [else (= size 0)]))
+    (define/public (uses-padding?) (eq? (get-type) 'block))
+    ))
+
+;; ----------------------------------------
+
+(define block-algo-info<%>
+  (interface ()
+    get-name        ;; -> Symbol
+    get-block-size  ;; -> Nat
+    get-key-sizes   ;; -> SizeSet
+    key-size-ok?    ;; Nat -> Boolean
+    mode-ok?        ;; BlockMode -> Boolean
+    ))
+
+(define block-algo-info%
+  (class* object% (block-algo-info<%>)
+    (init-field name block-size key-sizes)
+    (super-new)
+    (define/public (get-name) name)
+    (define/public (get-block-size) block-size)
+    (define/public (get-key-sizes) key-sizes)
+    (define/public (key-size-ok? size) (size-set-contains? key-sizes size))
+    (define/public (mode-ok? mode) (block-mode-block-size-ok? mode block-size))))
+
 (define known-block-ciphers
-  '#hasheq(;; symbol  -> (Block AllowedKeys)   -- sizes in bytes
-           [aes        .  [ 16    (16 24 32)]]
-           [des        .  [ 8     (8)]]      ;; key expressed as 8 bytes w/ parity bits
-           [des-ede2   .  [ 8     (16)]]     ;; key expressed as 16 bytes w/ parity bits
-           [des-ede3   .  [ 8     (24)]]     ;; key expressed as 24 bytes w/ parity bits
-           [blowfish   .  [ 8     #s(varsize 4 56 1)]]
-           [cast128    .  [ 8     #s(varsize 5 16 1)]]
-           [camellia   .  [ 16    (16 24 32)]]
-           [serpent    .  [ 16    #s(varsize 0 32 1)]]
-           [twofish    .  [ 16    #s(varsize 8 32 1)]]
-           [idea       .  [ 8     (16)]]
-           ;; [rc5        .  [ 8     #s(varsize 0 255 1)]]
-           ;; [rc5-64     .  [ 16    #s(varsize 0 255 1)]]
-           ;; [rc6-64     .  [ 32    #s(varsize 0 255 1)]]
-           ;; [cast256    .  [ 16    #s(varsize 16 32 4)]]
-           ;; [rc6        .  [ 16    #s(varsize 0 255 1)]]
-           ;; [mars       .  [ 16    #s(varsize 16 56 4)]] ;; aka Mars-2 ???
-           ))
+  (let ()
+    (define (info name block-size key-sizes)
+      (new block-algo-info% (name name) (block-size block-size) (key-sizes key-sizes)))
+    (define all
+      (list (info 'aes      16   '(16 24 32))
+            (info 'des       8   '(8))      ;; key 8 bytes w/ parity bits
+            (info 'des-ede2  8   '(16))     ;; key 16 bytes w/ parity bits
+            (info 'des-ede3  8   '(24))     ;; key 24 bytes w/ parity bits
+            (info 'blowfish  8   '#s(varsize 4 56 1))
+            (info 'cast128   8   '#s(varsize 5 16 1))
+            (info 'camellia 16   '(16 24 32))
+            (info 'serpent  16   '#s(varsize 0 32 1))
+            (info 'twofish  16   '#s(varsize 8 32 1))
+            (info 'idea      8   '(16))
+            #|
+            (info 'rc5       8   '#s(varsize 0 255 1))
+            (info 'rc5-64   16   '#s(varsize 0 255 1))
+            (info 'rc6-64   32   '#s(varsize 0 255 1))
+            (info 'cast256  16   '#s(varsize 16 32 4))
+            (info 'rc6      16   '#s(varsize 0 255 1))
+            (info 'mars     16   '#s(varsize 16 56 4)) ;; aka Mars-2 ???
+            |#))
+    (for/hasheq ([bci (in-list all)])
+      (values (send bci get-name) bci))))
 
 ;; block-cipher-name? : Any -> Boolean
 (define (block-cipher-name? x)
   (and (hash-ref known-block-ciphers x #f) #t))
 
-;; block-cipher-block-size : Symbol -> Nat/#f
-(define (block-cipher-block-size x)
-  (cond [(hash-ref known-block-ciphers x #f) => car]
-        [else #f]))
+(define (block-cipher-name->info name)
+  (hash-ref known-block-ciphers name #f))
 
-;; block-cipher-key-sizes : Symbol -> SizeSet
-(define (block-cipher-key-sizes x)
-  (cond [(hash-ref known-block-ciphers x #f) => cadr]
-        [else #f]))
+;; ----------------------------------------
 
 ;; Block modes are complicated; some modes are defined only for
 ;; 128-bit block ciphers; others have variable-length IVs/nonces or
@@ -145,30 +271,6 @@
 (define (block-mode? x)
   (and (memq x known-block-modes) #t))
 
-;; block-mode-type : Any -> (U 'block 'stream #f)
-(define (block-mode-type mode)
-  (case mode
-    [(ecb cbc) 'block]
-    [(ofb cfb ctr gcm ocb eax) 'stream]
-    [else #f]))
-
-;; block-mode-aead? : Symbol -> Boolean
-(define (block-mode-aead? mode)
-  (positive? (block-mode-default-auth-size mode)))
-
-;; block-mode-default-auth-size : Symbol -> Nat
-(define (block-mode-default-auth-size mode)
-  (case mode
-    [(gcm ocb eax) 16]
-    [else 0]))
-
-;; block-mode-auth-size-ok? : Symbol Nat -> Boolean
-(define (block-mode-auth-size-ok? mode size)
-  (case mode
-    [(gcm) (or (<= 12 size 16) (= size 8) (= size 4))]
-    [(ocb eax) (<= 1 size 16)]
-    [else (= size 0)]))
-
 ;; block-mode-block-size-ok? : Symbol Nat -> Boolean
 ;; Is the block mode compatible with ciphers of the given block size?
 (define (block-mode-block-size-ok? mode block-size)
@@ -177,86 +279,52 @@
     [(gcm ocb eax) (= block-size 16)]
     [else #t]))
 
-;; block-mode-iv-sizes : Symbol Nat -> Nat or (list Nat SizeSet)
-;; Returns recommended and allowed IV/nonce/counter sizes.
-(define (block-mode-iv-sizes mode block-size)
-  (case mode
-    [(ecb)         0]
-    [(cbc ofb cfb) block-size]
-    [(ctr)         block-size]
-    [(gcm)         '(12 #s(varsize 1 16 1))] ;; actual upper bound much higher
-    [(ocb)         '(12 #s(varsize 0 15 1))] ;; "no more than 120 bits"
-    [(eax)         '(12 #s(varsize 0 16 1))] ;; actually unrestricted
-    [else (crypto-error "internal error, unknown block mode: ~e" mode)]))
-
-;; block-mode-default-iv-size : Symbol Nat -> Nat
-(define (block-mode-default-iv-size mode block-size)
-  (case mode
-    [(ecb) 0]
-    [(cbc ofb cfb ctr) block-size]
-    [(gcm ocb eax) 12]
-    [else (crypto-error "internal error, unknown block mode: ~e" mode)]))
-
-;; block-mode-iv-size-ok? : Symbol Nat Nat -> Boolean
-(define (block-mode-iv-size-ok? mode block-size size)
-  (case mode
-    [(ecb)         (= size 0)]
-    [(cbc ofb cfb) (= size block-size)]
-    [(ctr)         (= size block-size)]
-    [(gcm)         (<= 1 size 16)] ;; actual upper bound much higher
-    [(ocb)         (<= 0 size 15)] ;; "no more than 120 bits"
-    [(eax)         (<= 0 size 16)] ;; actually unrestricted
-    [else #f]))
-
 ;; ============================================================
 ;; Stream Ciphers
 
+(define stream-cipher-info%
+  (class* object% (cipher-info<%>)
+    (init-field name chunk-size ivlen key-sizes auth-len)
+    (super-new)
+    (define/public (get-cipher-name) name)
+    (define/public (get-mode) 'stream)
+    (define/public (get-spec) (list (get-cipher-name) 'stream))
+    (define/public (get-type) 'stream)
+    (define/public (aead?) (positive? (get-auth-size)))
+    (define/public (get-block-size) 1)
+    (define/public (get-chunk-size) chunk-size)
+    (define/public (get-key-size) (size-set-default key-sizes DEFAULT-KEY-SIZE))
+    (define/public (get-key-sizes) key-sizes)
+    (define/public (key-size-ok? size) (size-set-contains? key-sizes size))
+    (define/public (get-iv-size) ivlen)
+    (define/public (iv-size-ok? size) (= size ivlen))
+    (define/public (get-auth-size) auth-len)
+    (define/public (auth-size-ok? size) (= size (get-auth-size)))
+    (define/public (uses-padding?) #f)))
+
 (define known-stream-ciphers
-  '#hasheq(;; symbol  ->  [IV  AllowedKeys ]      -- sizes in bytes
-           [rc4        .  [ 0  #s(varsize 5 256 1)]]
-           ;; original Salsa20 uses 64-bit nonce + 64-bit counter; IETF version uses 96/32 split instead
-           [salsa20    .  [ 8  (32)]]
-           [salsa20r8  .  [ 8  (32)]]
-           [salsa20r12 .  [ 8  (32)]]
-           [chacha20   .  [ 8  (32)]]
-           [chacha20-poly1305   . [ 12 (32)]] ;; 96-bit nonce (IETF)
-           ;; [chacha20-poly1305/8 . [ 8  (32)]] ;; 64-bit nonce (original)
-           ))
+  (let ()
+    (define (info name chunk-size ivlen key-sizes auth-len)
+      (new stream-cipher-info% (name name) (chunk-size chunk-size) (ivlen ivlen)
+           (key-sizes key-sizes) (auth-len auth-len)))
+    (define all
+      (list (info 'rc4                    1  0  '#s(varsize 5 256 1) 0)
+            ;; original Salsa20 uses 64-bit nonce + 64-bit counter; IETF version uses 96/32 split instead
+            (info 'salsa20               64  8  '(32) 0)
+            (info 'salsa20r8             64  8  '(32) 0)
+            (info 'salsa20r12            64  8  '(32) 0)
+            (info 'chacha20              64  8  '(32) 0)
+            (info 'chacha20-poly1305     64 12  '(32) 16) ;; 96-bit nonce (IETF)
+            (info 'chacha20-poly1305/8   64 12  '(32) 16))) ;; 64-bit nonce (original)
+    (for/hasheq ([sci (in-list all)])
+      (values (send sci get-cipher-name) sci))))
 
 ;; stream-cipher-name? : Any -> Boolean
 (define (stream-cipher-name? x)
   (and (hash-ref known-stream-ciphers x #f) #t))
 
-;; stream-cipher-key-sizes : Symbol -> SizeSet
-(define (stream-cipher-key-sizes x)
-  (cond [(hash-ref known-stream-ciphers x #f) => cadr]
-        [else #f]))
-
-;; stream-cipher-aead? : Symbol -> Boolean
-(define (stream-cipher-aead? x)
-  (case x
-    [(chacha20-poly1305 chacha20-poly1305/8) #t]
-    [else #f]))
-
-;; stream-cipher-default-auth-size : Symbol -> Nat
-(define (stream-cipher-default-auth-size x)
-  (case x
-    [(chacha20-poly1305 chachc20-poly1305/8) 16]
-    [else 0]))
-
-;; stream-cipher-auth-size-ok? : Symbol Nat -> Boolean
-(define (stream-cipher-auth-size-ok? cipher size)
-  (= (stream-cipher-default-auth-size cipher) size))
-
-;; stream-cipher-default-iv-size : Symbol -> Nat
-(define (stream-cipher-default-iv-size cipher)
-  (cond [(hash-ref known-stream-ciphers cipher #f) => car]
-        [else (crypto-error "internal error, unknown stream cipher: ~e" cipher)]))
-
-;; stream-cipher-iv-size-ok? : Symbol Nat -> Boolean
-(define (stream-cipher-iv-size-ok? cipher size)
-  (= (stream-cipher-default-iv-size cipher) size))
-
+(define (stream-cipher-name->info x)
+  (hash-ref known-stream-ciphers x #f))
 
 ;; ============================================================
 ;; Cipher Specs
@@ -268,89 +336,27 @@
 ;; StreamCipherName is a symbol in the domain of known-stream-ciphers.
 
 (define (cipher-spec? x)
-  (match x
-    [(list (? stream-cipher-name?) 'stream) #t]
-    [(list (? block-cipher-name? cipher) (? block-mode? mode))
-     (block-mode-block-size-ok? mode (block-cipher-block-size cipher))]
-    [_ #f]))
+  (and (pair? x) (cipher-spec->info x) #t))
 
 (define (cipher-spec-mode x) (cadr x))
 (define (cipher-spec-algo x) (car x))
 
-;; ----------------------------------------
+;; cipher-spec-table : Hash[ CipherSpec => CipherInfo ]
+(define cipher-spec-table (make-weak-hash))
 
-(define (cipher-spec-key-sizes cipher-spec)
-  (match cipher-spec
-    [(list (? stream-cipher-name? cipher-name) 'stream)
-     (stream-cipher-key-sizes cipher-name)]
-    [(list (? block-cipher-name? cipher-name) (? block-mode? mode))
-     (block-cipher-key-sizes cipher-name)]))
-
-(define MIN-DEFAULT-KEY-SIZE (quotient 128 8))
-
-(define (cipher-spec-default-key-size cipher-spec)
-  (define allowed (cipher-spec-key-sizes cipher-spec))
-  (cond [(size-set-contains? allowed MIN-DEFAULT-KEY-SIZE)
-         MIN-DEFAULT-KEY-SIZE]
-        [(list? allowed)
-         (or (for/or ([size (in-list allowed)] #:when (>= size MIN-DEFAULT-KEY-SIZE)) size)
-             (apply max allowed))]
-        [else (error 'cipher-spec-default-key-size "internal error, variable key sizes")]))
-
-(define (cipher-spec-aead? cipher-spec)
-  (match cipher-spec
-    [(list cipher-name 'stream)
-     (stream-cipher-aead? cipher-name)]
-    [(list cipher-name (? block-mode? mode))
-     (block-mode-aead? mode)]))
-
-(define (cipher-spec-default-auth-size cipher-spec)
-  (match cipher-spec
-    [(list (? stream-cipher-name? cipher-name) 'stream)
-     (stream-cipher-default-auth-size cipher-name)]
-    [(list (? block-cipher-name? cipher-name) (? block-mode? mode))
-     (block-mode-default-auth-size mode)]))
-
-(define (cipher-spec-auth-size-ok? cipher-spec size)
-  (match cipher-spec
-    [(list (? stream-cipher-name? cipher) 'stream)
-     (stream-cipher-auth-size-ok? cipher size)]
-    [(list (? block-cipher-name?) (? block-mode? mode))
-     (block-mode-auth-size-ok? mode size)]))
-
-(define (cipher-spec-block-size cipher-spec)
-  (match cipher-spec
-    [(list (? stream-cipher-name?) 'stream) 1]
-    [(list (? block-cipher-name? cipher-name) (? block-mode? mode))
-     (case (block-mode-type mode)
-       [(stream) 1]
-       [(block) (block-cipher-block-size cipher-name)])]))
-
-(define (cipher-spec-iv-size cipher-spec)
-  (match cipher-spec
-    [(list (? stream-cipher-name? cipher-name) 'stream)
-     (stream-cipher-default-iv-size cipher-name)]
-    [(list (? block-cipher-name? cipher-name) (? block-mode? mode))
-     (block-mode-default-iv-size mode (block-cipher-block-size cipher-name))]))
-
-(define (cipher-spec-key-size-ok? cipher-spec key-size)
-  (size-set-contains? (cipher-spec-key-sizes cipher-spec) key-size))
-
-(define (check-key-size cipher-spec key-size)
-  (define allowed (cipher-spec-key-sizes cipher-spec))
-  (unless (size-set-contains? allowed key-size)
-    (crypto-error "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed: ~a"
-                  cipher-spec key-size
-                  (match allowed
-                    [(? list?) (string-join (map number->string allowed ", "))]
-                    [(varsize min max step) (format "from ~a to ~a in multiples of ~a" min max step)]))))
-
-;; cipher-spec-uses-padding? : CipherSpec -> Boolean
-(define (cipher-spec-uses-padding? spec)
-  (match spec
-    [(list (? stream-cipher-name?) 'stream) #f]
-    [(list (? block-cipher-name?) (? block-mode? mode))
-     (eq? (block-mode-type mode) 'block)]))
+(define (cipher-spec->info spec)
+  (define (get-info)
+    (match spec
+      [(list (? symbol? cipher) 'stream)
+       (stream-cipher-name->info cipher)]
+      [(list (? symbol? cipher) (? block-mode? mode))
+       (define bci (block-cipher-name->info cipher))
+       (and bci (send bci mode-ok? mode)
+            (new block-cipher-info% (bci bci) (mode mode)))]
+      [_ #f]))
+  (cond [(hash-ref cipher-spec-table spec #f) => values]
+        [(get-info) => (lambda (ci) (hash-set! cipher-spec-table (send ci get-spec) ci) ci)]
+        [else #f]))
 
 ;; ============================================================
 ;; PK

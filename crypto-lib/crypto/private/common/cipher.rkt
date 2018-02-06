@@ -107,39 +107,34 @@
          (or (get-cipher o) (err/missing-cipher o))]
         [else (get-impl* o)]))
 
+(define (-get-info o)
+  (cond [(cipher-spec? o) (cipher-spec->info o)]
+        [else (get-impl* o)]))
+
 ;; Defer to impl when avail to support unknown ciphers
 ;; or impl-dependent limits.
 
 (define (cipher-default-key-size o)
   (with-crypto-entry 'cipher-default-key-size
-    (cond [(list? o) (cipher-spec-default-key-size o)]
-          [else (send (get-impl* o) get-default-key-size)])))
+    (send (-get-info o) get-key-size)))
 (define (cipher-key-sizes o)
   (with-crypto-entry 'cipher-key-sizes
-    (size-set->list
-     (cond [(list? o) (cipher-spec-key-sizes o)]
-           [else (send (get-impl* o) get-key-sizes)]))))
+    (size-set->list (send (-get-info o) get-key-sizes))))
 (define (cipher-block-size o)
   (with-crypto-entry 'cipher-block-size
-    (cond [(list? o) (cipher-spec-block-size o)]
-          [else (send (get-impl* o) get-block-size)])))
-(define (cipher-iv-size o)
-  (with-crypto-entry 'cipher-iv-size
-    (cond [(list? o) (cipher-spec-iv-size o)]
-          [else (send (get-impl* o) get-iv-size)])))
-
-(define (cipher-aead? o)
-  (with-crypto-entry 'cipher-auth-size
-    (cond [(list? o) (cipher-spec-aead? o)]
-          [else (send (get-impl* o) aead?)])))
-(define (cipher-default-auth-size o)
-  (with-crypto-entry 'cipher-auth-size
-    (cond [(list? o) (cipher-spec-default-auth-size o)]
-          [else (send (get-impl* o) get-auth-size)])))
-
+    (send (-get-info o) get-block-size)))
 (define (cipher-chunk-size o)
   (with-crypto-entry 'cipher-chunk-size
-    (send (get-impl* o) get-chunk-size)))
+    (send (-get-info o) get-chunk-size)))
+(define (cipher-iv-size o)
+  (with-crypto-entry 'cipher-iv-size
+    (send (-get-info o) get-iv-size)))
+(define (cipher-aead? o)
+  (with-crypto-entry 'cipher-aead?
+    (send (-get-info o) aead?)))
+(define (cipher-default-auth-size o)
+  (with-crypto-entry 'cipher-default-auth-size
+    (send (-get-info o) get-auth-size)))
 
 ;; ----
 
@@ -168,11 +163,11 @@
         [auth-size (-check-auth-size ci auth-size)])
     (send ci new-ctx key (or iv #"") #f pad auth-size auth-attached?)))
 (define (-check-auth-size ci size)
-  (define spec (if (cipher-spec? ci) ci (send ci get-spec)))
-  (let ([size (or size (cipher-default-auth-size spec))])
-    (unless (cipher-spec-auth-size-ok? spec (or size 0))
+  (let* ([ci (-get-info ci)]
+         [size (or size (send ci get-auth-size))])
+    (unless (send ci auth-size-ok? size)
       (crypto-error "invalid authentication tag size for cipher\n  cipher: ~s\n  size: ~e"
-                    spec size))
+                    (send ci get-spec) size))
     size))
 
 (define (cipher-update-AAD c inp)

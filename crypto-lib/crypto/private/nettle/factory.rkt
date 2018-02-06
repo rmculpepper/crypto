@@ -94,7 +94,8 @@
 
     (define/override (get-name) 'nettle)
 
-    (define/override (get-digest* spec)
+    (define/override (-get-digest info)
+      (define spec (send info get-spec))
       (cond [(assq spec digests)
              => (lambda (entry)
                   (let ([algid (cadr entry)])
@@ -102,20 +103,21 @@
                            => (lambda (entry)
                                 (let ([nh (cadr entry)])
                                   (new nettle-digest-impl%
-                                       (spec spec)
+                                       (info info)
                                        (factory this)
                                        (nh nh))))]
                           [else #f])))]
             [else #f]))
 
-    (define/override (get-cipher* spec)
+    (define/override (-get-cipher info)
+      (define spec (send info get-spec))
       (define (alg->cipher alg)
         (cond [(string? alg)
-               (get-nc spec alg)]
+               (get-nc info alg)]
               [else
                (for/list ([keylen+algid (in-list alg)])
                  (cons (quotient (car keylen+algid) 8)
-                       (get-nc spec (cadr keylen+algid))))]))
+                       (get-nc info (cadr keylen+algid))))]))
       (or (match (assq (cipher-spec-algo spec) block-ciphers)
             [(list _ gcm-ok? alg)
              (and (memq (cipher-spec-mode spec) block-modes)
@@ -127,10 +129,10 @@
              (alg->cipher alg)]
             [_ #f])))
 
-    (define/private (get-nc spec algid)
+    (define/private (get-nc info algid)
       (match (assoc algid nettle-all-ciphers)
         [(list _ nc)
-         (new nettle-cipher-impl% (spec spec) (factory this) (nc nc))]
+         (new nettle-cipher-impl% (info info) (factory this) (nc nc))]
         [_ #f]))
 
     (define/override (get-pk* spec)

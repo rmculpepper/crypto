@@ -142,22 +142,24 @@
          (values (string->number major) (string->number minor))]
         [_ (values 0 0)]))
 
-    (define/override (get-digest* spec)
+    (define/override (-get-digest info)
+      (define spec (send info get-spec))
       (match (assq spec digests)
         [(list _ algid blocksize)
          (and (gcry_md_test_algo algid)
               (new gcrypt-digest-impl%
-                   (spec spec)
+                   (info info)
                    (factory this)
                    (md algid)
                    (blocksize blocksize)))]
         [_ #f]))
 
-    (define/override (get-cipher* spec)
+    (define/override (-get-cipher info)
+      (define spec (send info get-spec))
       (define (algid->cipher algid mode-id)
         (and (gcry_cipher_test_algo algid)
              (new gcrypt-cipher-impl%
-                  (spec spec)
+                  (info info)
                   (factory this)
                   (cipher algid)
                   (mode mode-id))))

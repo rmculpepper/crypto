@@ -38,6 +38,7 @@
          cipher-ctx%
          process-input
          get-impl*
+         get-info*
          get-spec*
          get-factory*
          shrink-bytes
@@ -55,7 +56,16 @@
 (define impl-base%
   (class* object% (impl<%>)
     (init-field spec factory)
+    (define/public (get-info) #f)
     (define/public (get-spec) spec)
+    (define/public (get-factory) factory)
+    (super-new)))
+
+(define info-impl-base%
+  (class* object% (impl<%>)
+    (init-field info factory)
+    (define/public (get-info) info)
+    (define/public (get-spec) (send info get-spec))
     (define/public (get-factory) factory)
     (super-new)))
 
@@ -103,39 +113,45 @@
 
     (define/public (get-name) #f)
 
-    ;; digest-table : hasheq[DigestSpec => DigestImpl/'none]
-    (define digest-table (make-hasheq))
-    ;; cipher-table : hash[CipherSpec => CipherImpl/'none]
+    ;; Only cache successful lookups to keep table size bounded.
+
+    ;; digest-table : hash[DigestSpec => DigestImpl]
+    (define digest-table (make-hash))
+    ;; cipher-table : hash[CipherSpec => CipherImpl]
     (define cipher-table (make-hash))
-    ;; pk-table : hasheq[PKSpec => PKImpl/'none]
-    (define pk-table (make-hasheq))
+    ;; pk-table : hash[PKSpec => PKImpl]
+    (define pk-table (make-hash))
 
     (define/public (get-digest spec)
-      (cond [(hash-ref digest-table spec #f)
-             => (lambda (impl/none)
-                  (and (digest-impl? impl/none) impl/none))]
-            [else
-             (let ([di (get-digest* spec)])
-               (hash-set! digest-table spec (or di 'none))
-               di)]))
+      (cond [(hash-ref digest-table spec #f) => values]
+            [(digest-spec->info spec)
+             => (lambda (info)
+                  (cond [(-get-digest info)
+                         => (lambda (di) (hash-set! digest-table spec di) di)]
+                        [else #f]))]
+            [else #f]))
+
+    ;; -get-digest : digest-info -> (U #f digest-impl)
+    (define/public (-get-digest info) #f)
 
     (define/public (get-cipher spec)
-      (cond [(hash-ref cipher-table spec #f)
-             => (lambda (impl/none)
-                  (and (cipher-impl? impl/none) impl/none))]
-            [else
-             (let* ([ci/s (get-cipher* spec)]
-                    [ci (cond [(list? ci/s)
-                               (and (pair? ci/s)
-                                    (andmap cdr ci/s)
-                                    (new multikeylen-cipher-impl%
-                                         (spec spec)
-                                         (factory this)
-                                         (impls ci/s)))]
-                              [(cipher-impl? ci/s) ci/s]
-                              [else #f])])
-               (hash-set! cipher-table spec (or ci 'none))
-               ci)]))
+      (cond [(hash-ref cipher-table spec #f) => values]
+            [(cipher-spec->info spec)
+             => (lambda (info)
+                  (cond [(-get-cipher0 info)
+                         => (lambda (ci) (hash-set! cipher-table spec ci) ci)]
+                        [else #f]))]
+            [else #f]))
+
+    (define/public (-get-cipher0 info)
+      (define ci (-get-cipher info))
+      (cond [(cipher-impl? ci) ci]
+            [(and (list? ci) (pair? ci) (andmap cdr ci))
+             (new multikeylen-cipher-impl% (info info) (factory this) (impls ci))]
+            [else #f]))
+
+    ;; -get-cipher : cipher-info -> (U #f cipher-impl (listof (cons Nat cipher-impl)))
+    (define/public (-get-cipher) #f)
 
     (define/public (get-pk spec)
       (cond [(hash-ref pk-table spec #f)
@@ -147,11 +163,7 @@
                pki)]))
 
     (define/public (get-pk-reader) #f)  ; -> pk-read-key<%>
-
-    (define/public (get-digest* spec) #f) ;; -> (U #f DigestImpl)
-    (define/public (get-cipher* spec) #f) ;; -> (U #f CipherImpl (listof (cons nat CipherImpl)))
     (define/public (get-pk* spec) #f)   ;; -> (U #f DigestIpl
-
     (define/public (get-kdf spec) #f)
     ))
 
@@ -159,24 +171,26 @@
 ;; Digest
 
 (define digest-impl%
-  (class* impl-base% (digest-impl<%>)
-    (super-new)
+  (class* info-impl-base% (digest-impl<%>)
+    (inherit-field info)
     (inherit get-spec)
+    (super-new)
 
-    (define/public (get-size) (digest-spec-size (get-spec)))
-    (define/public (get-block-size) (digest-spec-block-size (get-spec)))
+    ;; Info methods
+    (define/public (get-size) (send info get-size))
+    (define/public (get-block-size) (send info get-block-size))
 
     (define/public (sanity-check #:size [size #f] #:block-size [block-size #f])
-      ;; Use digest-spec-{block-,}size directly so that subclasses can
-      ;; override get-size and get-block-size with faster versions.
+      ;; Use info::get-{block-,}size directly so that subclasses can
+      ;; override get-size and get-block-size.
       (when size
-        (unless (= size (digest-spec-size (get-spec)))
+        (unless (= size (send info get-size))
           (crypto-error "internal error in digest ~v size: expected ~s but got ~s"
-                        (get-spec) (digest-spec-size (get-spec)) size)))
+                        (get-spec) (send info get-size) size)))
       (when block-size
-        (unless (= block-size (digest-spec-block-size (get-spec)))
+        (unless (= block-size (send info get-block-size))
           (crypto-error "internal error in digest ~v block size: expected ~s but got ~s"
-                        (get-spec) (digest-spec-block-size (get-spec)) block-size))))
+                        (get-spec) (send info get-block-size) block-size))))
 
     (abstract new-ctx)        ;; -> digest-ctx<%>
     (abstract new-hmac-ctx)   ;; Bytes -> digest-ctx<%>
@@ -206,7 +220,6 @@
   (class* (state-mixin ctx-base%) (digest-ctx<%>)
     (super-new [state 'open])
     (inherit get-impl with-state)
-    (define/public (get-size) (send (get-impl) get-size))
 
     (define/public (digest src)
       (update src)
@@ -219,7 +232,7 @@
     (define/public (final)
       (with-state #:ok '(open) #:post 'closed
         (lambda ()
-          (define dest (make-bytes (get-size)))
+          (define dest (make-bytes (send (get-impl) get-size)))
           (-final! dest)
           dest)))
 
@@ -235,51 +248,58 @@
 ;; Cipher
 
 (define cipher-impl-base%
-  (class* impl-base% (cipher-impl<%>)
-    (inherit-field spec)
+  (class* info-impl-base% (cipher-impl<%>)
+    (inherit-field info)
+    (inherit get-spec)
     (super-new)
 
-    ;; cache block-size; used often to calculate space needed
-    (define block-size (cipher-spec-block-size spec))
-    (define/public (get-block-size) block-size)
+    ;; Info methods
+    (define/public (get-cipher-name) (send info get-cipher-name))
+    (define/public (get-mode) (send info get-mode))
+    (define/public (get-type) (send info get-type))
+    (define/public (aead?) (send info aead?))
+    (define/public (get-block-size) (send info get-block-size))
+    (define/public (get-chunk-size) (send info get-chunk-size))
+    (define/public (get-key-size) (send info get-key-size))
+    (define/public (get-key-sizes) (send info get-key-sizes))
+    (define/public (key-size-ok? size) (send info key-size-ok? size))
+    (define/public (get-iv-size) (send info get-iv-size))
+    (define/public (iv-size-ok? size) (send info iv-size-ok? size))
+    (define/public (get-auth-size) (send info get-auth-size))
+    (define/public (auth-size-ok? size) (send info auth-size-ok? size))
+    (define/public (uses-padding?) (send info uses-padding?))
 
-    (define/public (aead?) (cipher-spec-aead? spec))
-    (define/public (get-iv-size) (cipher-spec-iv-size spec))
-    (define/public (get-default-key-size) (cipher-spec-default-key-size spec))
-    (define/public (get-key-sizes) (cipher-spec-key-sizes spec))
-    (define/public (get-auth-size) (cipher-spec-default-auth-size spec))
+    (define/public (new-ctx key iv enc? pad? auth-len attached-tag?)
+      (check-key-size info (bytes-length key))
+      (check-iv-size (get-spec) (get-iv-size) iv)
+      (let ([pad? (and pad? (uses-padding?))])
+        (-new-ctx key iv enc? pad? auth-len attached-tag?)))
 
-    (abstract get-chunk-size)
-    (abstract new-ctx)
+    (abstract -new-ctx)
     ))
 
 (define multikeylen-cipher-impl%
-  (class* impl-base% (cipher-impl<%>)
+  (class cipher-impl-base%
     (init-field impls) ;; (nonempty-listof (cons nat cipher-impl%))
-    (inherit-field spec)
+    (inherit-field info)
+    (inherit get-spec)
     (super-new)
 
-    (define/public (get-default-key-size) (caar impls))
-    (define/public (get-key-sizes) (map car impls))
+    (define/override (get-key-size) (caar impls))
+    (define/override (get-key-sizes) (map car impls))
 
-    (define/private (rep) (cdar impls)) ;; representative impl
-    (define/public (aead?) (send (rep) aead?))
-    (define/public (get-block-size) (send (rep) get-block-size))
-    (define/public (get-iv-size) (send (rep) get-iv-size))
-    (define/public (get-auth-size) (send (rep) get-auth-size))
-    (define/public (get-chunk-size) (send (rep) get-chunk-size))
-
-    (define/public (new-ctx key . args)
+    (define/override (new-ctx key . args)
       (cond [(assoc (bytes-length key) impls)
              => (lambda (keylen+impl)
                   (send/apply (cdr keylen+impl) new-ctx key args))]
             [else
-             (check-key-size spec (bytes-length key))
+             (check-key-size info (bytes-length key))
              (error 'multikeylen-cipher-impl%
                     (string-append "internal error: no implementation for key length"
                                    "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")
-                    spec (bytes-length key)
+                    (get-spec) (bytes-length key)
                     (string-join (map number->string (map car impls)) ", "))]))
+    (define/override (-new-ctx . args) (crypto-error "internal error, unreachable"))
     ))
 
 ;; ----------------------------------------
@@ -513,34 +533,31 @@
 
 (define (get-impl* src0 [fail-ok? #f])
   (let loop ([src src0])
-    (cond [(is-a? src impl<%>)
-           src]
+    (cond [(is-a? src impl<%>) src]
           [(is-a? src ctx<%>)
            (loop (send src get-impl))]
-          [fail-ok?
-           #f]
-          [else
-           (crypto-error "internal error: cannot get impl\n  from: ~e" src0)])))
+          [fail-ok? #f]
+          [else (crypto-error "internal error: cannot get impl\n  from: ~e" src0)])))
 
 (define (get-spec* src [fail-ok? #f])
-  (cond [(or (symbol? src) (list? src))
-         src]
+  (cond [(or (symbol? src) (pair? src)) src]
         [(get-impl* src #t)
          => (lambda (i) (send i get-spec))]
-        [fail-ok?
-         #f]
-        [else
-         (crypto-error "internal error: cannot get spec\n  from: ~e" src)]))
+        [fail-ok? #f]
+        [else (crypto-error "internal error: cannot get spec\n  from: ~e" src)]))
+
+(define (get-info* src [fail-ok? #f])
+  (cond [(get-impl* src #t)
+         => (lambda (i) (send i get-spec))]
+        [fail-ok? #f]
+        [else (crypto-error "internal error: cannot get info\n  from: ~e" src)]))
 
 (define (get-factory* src [fail-ok? #f])
-  (cond [(is-a? src factory<%>)
-         src]
+  (cond [(is-a? src factory<%>) src]
         [(get-impl* src #t)
          => (lambda (i) (send i get-factory))]
-        [fail-ok?
-         #f]
-        [else
-         (crypto-error "internal error: cannot get factory\n  from: ~e" src)]))
+        [fail-ok? #f]
+        [else (crypto-error "internal error: cannot get factory\n  from: ~e" src)]))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))

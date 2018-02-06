@@ -38,18 +38,14 @@
 (define nettle-cipher-impl%
   (class* cipher-impl-base% (cipher-impl<%>)
     (init-field nc)
-    (inherit-field spec)
     (inherit get-iv-size)
     (super-new)
 
     (define chunk-size (nettle-cipher-block-size nc))
     (define/override (get-chunk-size) chunk-size)
 
-    (define/override (new-ctx key iv enc? pad? auth-len attached-tag?)
-      (check-key-size spec (bytes-length key))
-      (check-iv-size spec (get-iv-size) iv)
-      (let* ([pad? (and pad? (cipher-spec-uses-padding? spec))]
-             [ctx (new nettle-cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?)
+    (define/override (-new-ctx key iv enc? pad? auth-len attached-tag?)
+      (let* ([ctx (new nettle-cipher-ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?)
                        (auth-len auth-len) (attached-tag? attached-tag?))])
         (send ctx set-key+iv key iv)
         ctx))
@@ -65,12 +61,11 @@
     (define/public (get-spec) (send impl get-spec))
 
     ;; FIXME: reconcile padding and stream ciphers (raise error?)
-    (define mode (cipher-spec-mode (get-spec)))
+    (define mode (send impl get-mode))
     (define ctx (make-ctx (nettle-cipher-context-size nc)))
     (define super-key (case mode [(gcm) (make-gcm_key)] [(eax) (make-eax_key)] [else #f]))
     (define super-ctx (case mode [(gcm) (make-gcm_ctx)] [(eax) (make-eax_ctx)] [else #f]))
     (define iv (make-bytes (send impl get-iv-size)))
-    (define auth-tag #f)
 
     (define/public (set-key+iv key iv*)
       (when (positive? (bytes-length iv))
@@ -92,7 +87,6 @@
     (define/override (-close)
       (set! super-key #f)
       (set! super-ctx #f)
-      (set! auth-tag #f)
       (set! ctx #f)
       (set! iv #f))
 

@@ -27,7 +27,7 @@
     (init-field md) ;; int
     (init blocksize)
     (super-new)
-    (inherit get-spec get-size get-block-size sanity-check)
+    (inherit get-size sanity-check)
 
     (sanity-check #:size (gcry_md_get_algo_dlen md) #:block-size blocksize)
 

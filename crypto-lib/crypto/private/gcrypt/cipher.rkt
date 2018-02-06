@@ -27,21 +27,18 @@
 (define gcrypt-cipher-impl%
   (class* cipher-impl-base% (cipher-impl<%>)
     (init-field cipher mode)
-    (inherit-field spec)
-    (inherit get-iv-size)
+    (inherit-field info)
+    (inherit get-spec get-iv-size)
     (super-new)
 
-    (define/override (get-default-key-size) (gcry_cipher_get_algo_keylen cipher))
+    (define/override (get-key-size) (gcry_cipher_get_algo_keylen cipher))
 
     (define chunk-size (gcry_cipher_get_algo_blklen cipher))
     (define/override (get-chunk-size) chunk-size)
 
-    (define/override (new-ctx key iv enc? pad? auth-len attached-tag?)
+    (define/override (-new-ctx key iv enc? pad? auth-len attached-tag?)
       (define iv-size (get-iv-size))
-      (check-key-size spec (bytes-length key))
-      (check-iv-size spec iv-size iv)
-      (let ([ctx (gcry_cipher_open cipher mode 0)]
-            [pad? (and pad? (cipher-spec-uses-padding? spec))])
+      (let ([ctx (gcry_cipher_open cipher mode 0)])
         (gcry_cipher_setkey ctx key (bytes-length key))
         (when (positive? iv-size)
           (gcry_cipher_setiv ctx iv (bytes-length iv)))

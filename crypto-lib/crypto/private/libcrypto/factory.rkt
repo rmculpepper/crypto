@@ -69,34 +69,37 @@
 
     (define/override (get-name) 'libcrypto)
 
-    (define/override (get-digest* spec)
-      (let* ([name-string (hash-ref libcrypto-digests spec #f)]
+    (define/override (-get-digest info)
+      (let* ([spec (send info get-spec)]
+             [name-string (hash-ref libcrypto-digests spec #f)]
              [evp (and name-string (EVP_get_digestbyname name-string))])
-        (and evp (new libcrypto-digest-impl% (spec spec) (factory this) (md evp)))))
+        (and evp (new libcrypto-digest-impl% (info info) (factory this) (md evp)))))
 
-    (define/override (get-cipher* spec)
-      (match spec
-        [(list (? symbol? name-sym) 'stream)
-         (match (assq name-sym libcrypto-ciphers)
-           [(list name-sym '(stream) #f name-string)
-            (make-cipher spec (EVP_get_cipherbyname name-string))]
+    (define/override (-get-cipher info)
+      (define cipher-name (send info get-cipher-name))
+      (define mode (send info get-mode))
+      (case mode
+        [(stream)
+         (match (assq cipher-name libcrypto-ciphers)
+           [(list _ '(stream) #f name-string)
+            (make-cipher info (EVP_get_cipherbyname name-string))]
            [_ #f])]
-        [(list (? symbol? name-sym) (? symbol? mode))
-         (match (assq name-sym libcrypto-ciphers)
-           [(list name-sym modes keys name-string)
+        [else
+         (match (assq cipher-name libcrypto-ciphers)
+           [(list _ modes keys name-string)
             (and (memq mode modes)
                  (cond [keys
                         (for/list ([key (in-list keys)])
                           (define s (format "~a-~a-~a" name-string key mode))
                           (cons (quotient key 8)
-                                (make-cipher spec (EVP_get_cipherbyname s))))]
+                                (make-cipher info (EVP_get_cipherbyname s))))]
                        [else
                         (define s (format "~a-~a" name-string mode))
-                        (make-cipher spec (EVP_get_cipherbyname s))]))]
+                        (make-cipher info (EVP_get_cipherbyname s))]))]
            [_ #f])]))
 
-    (define/private (make-cipher spec evp)
-      (and evp (new libcrypto-cipher-impl% (spec spec) (factory this) (cipher evp))))
+    (define/private (make-cipher info evp)
+      (and evp (new libcrypto-cipher-impl% (info info) (factory this) (cipher evp))))
 
     ;; ----
 

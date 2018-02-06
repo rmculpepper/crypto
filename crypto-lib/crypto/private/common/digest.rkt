@@ -63,10 +63,10 @@
 
 (define (digest-size o)
   (with-crypto-entry 'digest-size
-    (digest-spec-size (get-spec* o))))
+    (send (get-info* o) get-size)))
 (define (digest-block-size o)
   (with-crypto-entry 'digest-block-size
-    (digest-spec-block-size (get-spec* o))))
+    (send (get-info* o) get-block-size)))
 
 ;; ----
 
