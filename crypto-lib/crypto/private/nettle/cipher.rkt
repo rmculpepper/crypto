@@ -38,11 +38,12 @@
 (define nettle-cipher-impl%
   (class* cipher-impl-base% (cipher-impl<%>)
     (init-field nc)
-    (inherit get-mode)
+    (inherit get-mode sanity-check)
     (super-new)
 
     (define chunk-size (nettle-cipher-block-size nc))
     (define/override (get-chunk-size) chunk-size)
+    (sanity-check #:chunk-size chunk-size)
 
     (define/override (-new-ctx key iv enc? pad? auth-len attached-tag?)
       (define ctx%
