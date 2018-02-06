@@ -237,12 +237,8 @@
     (inherit-field next)
     (super-new)
     (define/override (finish buf a)
-      (define buf-to-pad
-        (cond [(< (bytes-length buf) block-size) buf]
-              [else ;; buf is full block
-               (send next update buf 0 block-size)
-               #""]))
-      (send next finish (pad-bytes/pkcs7 buf-to-pad block-size) a))))
+      ;; Note: if buf is whole block, pads to 2 whole blocks.. problem?
+      (send next finish (pad-bytes/pkcs7 buf block-size) a))))
 
 ;; unpad        : bytes,a => bytes,a    ;; |a| = 1
 ;; Check and remove PKCS7 padding

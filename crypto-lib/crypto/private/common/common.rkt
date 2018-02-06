@@ -24,8 +24,7 @@
          "interfaces.rkt"
          "error.rkt"
          "factory.rkt"
-         "ufp.rkt"
-         "../rkt/padding.rkt")
+         "ufp.rkt")
 (provide impl-base%
          ctx-base%
          state-mixin

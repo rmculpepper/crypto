@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -14,6 +14,7 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
+(require "../common/error.rkt")
 (provide (all-defined-out))
 
 ;; References:
@@ -22,79 +23,28 @@
 ;; http://tools.ietf.org/html/rfc5246#page-22
 ;; http://tools.ietf.org/html/rfc5652#section-6.3
 
-;; FIXME: add checks
-;;  - pos < end
-;;  - pad-byte < 256 (when applicable)
+;; pad-bytes/pkcs7 : Bytes Nat -> Bytes
+;; PRE: 0 < block-size < 256
+(define (pad-bytes/pkcs7 buf block-size)
+  (define padlen
+    ;; if buf already block-multiple, must add whole block of padding
+    (let ([part (remainder (bytes-length buf) block-size)])
+      (- block-size part)))
+  (bytes-append buf (make-bytes padlen padlen)))
 
-;; pad-bytes!/X : bytes nat nat -> void
-;; unpad-bytes/X : bytes nat nat -> nat/#f
-;;   where result nat is start of padding, result #f means padding ill-formed
+;; unpad-bytes/pkcs7 : Bytes -> Bytes
+(define (unpad-bytes/pkcs7 buf)
+  (define buflen (bytes-length buf))
+  (when (zero? buflen) (crypto-error "bad PKCS7 padding"))
+  (define pad-length (bytes-ref buf (sub1 buflen)))
+  (define pad-start (- buflen pad-length))
+  (unless (and (>= pad-start 0)
+               (for/and ([i (in-range pad-start buflen)])
+                 (= (bytes-ref buf i) pad-length)))
+    (crypto-error "bad PKCS7 padding"))
+  (subbytes buf 0 pad-start))
 
-(define (pad-bytes!/ansix923 bs pos [end (bytes-length bs)])
-  ;; Zeros, then pad-length for final byte
-  (let* ([pad-byte (- end pos)])
-    (for ([i (in-range pos (sub1 end))])
-      (bytes-set! bs i 0))
-    (bytes-set! bs (sub1 end) pad-byte)))
-
-(define (unpad-bytes/ansix923 bs [start 0] [end (bytes-length bs)])
-  (let* ([pad-length (bytes-ref bs (sub1 end))]
-         [pad-start (- end pad-length)])
-    (and (>= pad-start start)
-         (for/and ([i (in-range pad-start (sub1 end))])
-           (= (bytes-ref bs i) #x00))
-         pad-start)))
-
-(define (pad-bytes/pkcs7 bs block-size)
-  (define padlen (- block-size (bytes-length bs)))
-  (bytes-append bs (make-bytes padlen padlen)))
-
-(define (pad-bytes!/pkcs7 bs pos [end (bytes-length bs)])
-  ;; Fill with pad-length
-  (let* ([pad-byte (- end pos)])
-    (for ([i (in-range pos end)])
-      (bytes-set! bs i pad-byte))))
-
-(define (unpad-bytes/pkcs7 bs [start 0] [end (bytes-length bs)])
-  (let* ([pad-length (bytes-ref bs (sub1 end))]
-         [pad-start (- end pad-length)])
-    (and (>= pad-start start)
-         (for/and ([i (in-range pad-start end)])
-           (= (bytes-ref bs i) pad-length))
-         (subbytes bs start pad-start))))
-
-;; IIUC, PKCS5 padding is same as PKCS7 padding except for 64-bit blocks only.
-(define (pad-bytes!/pkcs5 bs pos [end (bytes-length bs)])
-  (pad-bytes!/pkcs7 bs pos end))
-(define (unpad-bytes/pkcs5 bs [start 0] [end (bytes-length bs)])
-  (unpad-bytes/pkcs7 bs start end))
-
-(define (pad-bytes!/iso/iec-7816-4 bs pos [end (bytes-length bs)])
-  ;; One byte of #x80, then fill with zeroes
-  (bytes-set! bs pos #x80)
-  (for ([i (in-range (add1 pos) end)])
-    (bytes-set! bs i #x00)))
-
-(define (unpad-bytes/iso/iec-7816-4 bs [start 0] [end (bytes-length bs)])
-  (let loop ([i (sub1 end)])
-    (and (>= i start)
-         (case (bytes-ref bs i)
-           ((#x00) (loop (sub1 i)))
-           ((#x80) i)
-           (else #f)))))
-
-(define (pad-bytes!/tls bs pos [end (bytes-length bs)])
-  ;; Fill with (pad-length - 1)--because a record contains a separate final
-  ;; pad-length field that is not considered part of padding.
-  ;; So technically this function adds both padding and a pad-length field.
-  (let* ([pad-byte (sub1 (- end pos))])
-    (for ([i (in-range pos end)])
-      (bytes-set! bs i pad-byte))))
-
-(define (unpad-bytes/tls bs [start 0] [end (bytes-length bs)])
-  (let* ([pad-byte (add1 (bytes-ref bs (sub1 end)))]
-         [pad-start (- end (add1 pad-byte))])
-    (and (>= pad-start start)
-         (for/and ([i (in-range pad-start end)])
-           (= (bytes-ref bs i) pad-byte))
-         pad-start)))
+;; Other kinds of padding, for reference
+;; - ansix923: zeros, then pad-length for final byte
+;; - pkcs5: IIUC, same as pkcs7 except for 64-bit blocks only
+;; - iso/iec-7816-4: one byte of #x80, then zeros
