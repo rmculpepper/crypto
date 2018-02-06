@@ -80,11 +80,10 @@
 ;; A DigestSpec is a symbol in domain of known-digests.
 
 (define (digest-spec? x)
-  (and (hash-ref known-digests x #f) #t))
+  (and (symbol? x) (hash-ref known-digests x #f) #t))
 
 (define (digest-spec->info di)
-  (or (hash-ref known-digests di #f)
-      (error 'digest-spec->info "unknown digest\n  spec: ~e" di)))
+  (hash-ref known-digests di #f))
 
 (define (digest-spec-size ds)
   (send (digest-spec->info ds) get-size))
