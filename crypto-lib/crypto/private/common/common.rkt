@@ -268,6 +268,23 @@
     (define/public (auth-size-ok? size) (send info auth-size-ok? size))
     (define/public (uses-padding?) (send info uses-padding?))
 
+    (define/public (sanity-check #:block-size [block-size #f]
+                                 #:chunk-size [chunk-size #f]
+                                 #:iv-size [iv-size #f])
+      (when block-size
+        (unless (= block-size (send info get-block-size))
+          (crypto-error "internal error in cipher ~v block-size expected ~s but got ~s"
+                        (get-spec) (send info get-block-size) block-size)))
+      (when chunk-size
+        (unless (= chunk-size (send info get-chunk-size))
+          (crypto-error "internal error in cipher ~v chunk-size expected ~s but got ~s"
+                        (get-spec) (send info get-chunk-size) chunk-size)))
+      (when iv-size
+        (unless (iv-size-ok? iv-size)
+          (crypto-error "internal error in cipher ~v iv-size ~s not ok"
+                        (get-spec) iv-size)))
+      (void))
+
     (define/public (new-ctx key iv enc? pad? auth-len attached-tag?)
       (check-key-size info (bytes-length key))
       (check-iv-size (get-spec) (get-iv-size) iv)

@@ -30,20 +30,14 @@
   (class* cipher-impl-base% (cipher-impl<%>)
     (init-field cipher) ;; EVP_CIPHER
     (inherit-field info)
-    (inherit get-spec get-mode get-auth-size uses-padding?)
+    (inherit get-spec get-mode sanity-check get-auth-size uses-padding?)
     (super-new)
     (define-values (block-size key-size iv-size)
       (match (ptr-ref cipher (_list-struct _int _int _int _int))
         [(list _ size keylen ivlen)
          (values size keylen ivlen)]))
-    (let ()
-      (define (check what got expected)
-        (unless (= got expected)
-          (error 'cipher-impl%
-                 "internal error: inconsistent ~a\n  cipher: ~e\n  expected: ~e\n  got: ~e"
-                 what (get-spec) expected got)))
-      (check "block size" block-size (send info get-block-size))
-      (check "IV size" iv-size (send info get-iv-size)))
+    (sanity-check #:block-size block-size
+                  #:iv-size iv-size)
 
     (define/override (get-block-size) block-size)
     (define/override (get-iv-size) iv-size)
