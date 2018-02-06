@@ -35,6 +35,7 @@
          cipher-impl-base%
          multikeylen-cipher-impl%
          cipher-ctx%
+         pk-key-base%
          process-input
          get-impl*
          get-info*
@@ -516,6 +517,87 @@
                              (pop-ufp (split-right-ufp auth-len ufp))
                              ufp)])
                ufp)]))
+    ))
+
+;; ============================================================
+;; PK
+
+(define pk-key-base%
+  (class* ctx-base% (pk-key<%>)
+    (inherit-field impl)
+    (super-new)
+
+    (define/public (get-spec) (send impl get-spec))
+
+    (abstract is-private?)
+    (abstract get-public-key)
+    (abstract write-key)
+    (abstract equal-to-key?)
+
+    (define/public (get-params)
+      (crypto-error "key parameters not supported"))
+
+    ;; ----
+
+    (define/public (sign digest digest-spec pad)
+      (-check-sign pad digest-spec)
+      (unless (is-private?)
+        (crypto-error "signing requires private key"))
+      (-check-digest-size digest digest-spec)
+      (-sign digest digest-spec pad))
+
+    (define/public (verify digest digest-spec pad sig)
+      (-check-sign pad digest-spec)
+      (-check-digest-size digest digest-spec)
+      (-verify digest digest-spec pad sig))
+
+    (define/private (-check-sign pad digest-spec)
+      (unless (send impl can-sign? #f #f)
+        (crypto-error "sign/verify not supported\n  algorithm: ~e" (get-spec)))
+      (unless (send impl can-sign? pad digest-spec)
+        (crypto-error "sign/verify not supported\n  algorithm: ~e\n  padding: ~e\n  digest: ~e"
+                      (get-spec) pad digest-spec)))
+
+    (define/private (-check-digest-size digest digest-spec)
+      (unless (= (bytes-length digest) (digest-spec-size digest-spec))
+        (crypto-error "wrong size for digest\n  digest: ~e\n  expected:  ~s\n  got: ~s"
+                      digest-spec (digest-spec-size digest-spec) (bytes-length digest))))
+
+    (define/public (-sign digest digest-spec pad) (err/no-impl))
+    (define/public (-verify digest digest-spec pad sig) (err/no-impl))
+
+    ;; ----
+
+    (define/public (encrypt buf pad)
+      (-check-encrypt pad)
+      (-encrypt buf pad))
+    (define/public (decrypt buf pad)
+      (-check-encrypt pad)
+      (unless (is-private?)
+        (crypto-error "decryption requires private key"))
+      (-decrypt buf pad))
+
+    (define/public (compute-secret peer-pubkey)
+      (-check-key-agree)
+      (-compute-secret peer-pubkey))
+
+    (define/private (-check-encrypt pad)
+      (unless (send impl can-encrypt? #f)
+        (crypto-error "encrypt/decrypt not supported\n  algorithm: ~e" (get-spec)))
+      (unless (send impl can-encrypt? pad)
+        (crypto-error "encrypt/decrypt not supported\n  algorithm: ~e\n  padding: ~e"
+                      (get-spec) pad)))
+
+    (define/public (-encrypt buf pad) (err/no-impl))
+    (define/public (-decrypt buf pad) (err/no-impl))
+
+    ;; ----
+
+    (define/private (-check-key-agree)
+      (unless (send impl can-key-agree?)
+        (crypto-error "key agreement not supported\n  algorithm: ~e" (get-spec))))
+
+    (define/public (-compute-secret peer-pubkey) (err/no-impl))
     ))
 
 ;; ============================================================

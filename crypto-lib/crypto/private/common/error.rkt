@@ -23,21 +23,14 @@
          check-input-range
          check-output-range
 
-         err/digest-closed
-         err/cipher-closed
+         err/no-impl
          check-iv-size
-         err/bad-iv
          err/key-format
          err/params-format
          err/bad-signature-pad
          err/bad-encrypt-pad
          err/no-direct-keygen
-         err/no-sign
-         err/no-encrypt
-         err/no-key-agree
          err/no-params
-         err/sign-requires-private
-         err/decrypt-requires-private
          err/missing-digest
          err/missing-cipher
          err/missing-pk
@@ -58,10 +51,8 @@
 
 ;; ----
 
-(define (err/digest-closed)
-  (crypto-error "digest context is closed"))
-(define (err/cipher-closed)
-  (crypto-error "cipher context is closed"))
+(define (err/no-impl)
+  (crypto-error "internal error: unimplemented"))
 
 (define (check-iv-size spec iv-size iv)
   (unless (= (if (bytes? iv) (bytes-length iv) 0) iv-size)
@@ -94,19 +85,8 @@
                   "  algorithm: ~e")
    spec))
 
-(define (err/no-sign spec)
-  (crypto-error "signature operations not supported\n  algorithm: ~e" spec))
-(define (err/no-encrypt spec)
-  (crypto-error "encryption operations not supported\n  algorithm: ~e" spec))
-(define (err/no-key-agree spec)
-  (crypto-error "key agreement not supported\n  algorithm: ~e" spec))
 (define (err/no-params spec)
   (crypto-error "algorithm does not have parameters\n  algorithm: ~e" spec))
-
-(define (err/sign-requires-private)
-  (crypto-error "signing requires private key"))
-(define (err/decrypt-requires-private)
-  (crypto-error "decryption requires private key"))
 
 (define (err/missing-digest spec)
   (crypto-error "could not get digest implementation\n  digest spec: ~e" spec))

@@ -518,36 +518,34 @@ NIST P-192 disappeared!).
 ;; ============================================================
 
 (define libcrypto-pk-key%
-  (class* ctx-base% (pk-key<%>)
+  (class pk-key-base%
     (init-field evp private?)
     (inherit-field impl)
     (super-new)
 
-    (define/public (is-private?) private?)
+    (define/override (is-private?) private?)
 
-    (define/public (get-public-key)
+    (define/override (get-public-key)
       (define outlen (i2d_PUBKEY evp #f))
       (define outbuf (make-bytes outlen))
       (define outlen2 (i2d_PUBKEY evp outbuf))
       (define pub-evp (d2i_PUBKEY outbuf outlen2))
       (new libcrypto-pk-key% (impl impl) (evp pub-evp) (private? #f)))
 
-    (define/public (get-params)
+    (define/override (get-params)
       ;; Note: EVP_PKEY_copy_parameters doesn't work! (Probably used
       ;; to copy params from cert to key).  We treat keys as read-only
       ;; once created, so safe to share evp.
       (new libcrypto-pk-params% (impl impl) (evp evp)))
 
-    (define/public (write-key fmt)
+    (define/override (write-key fmt)
       (send impl *write-key private? fmt evp))
 
-    (define/public (equal-to-key? other)
+    (define/override (equal-to-key? other)
       (and (is-a? other libcrypto-pk-key%)
            (EVP_PKEY_cmp evp (get-field evp other))))
 
-    (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
-      (unless private? (err/sign-requires-private))
+    (define/override (-sign digest digest-spec pad)
       (define di (send (send impl get-factory) get-digest digest-spec))
       (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
       (define ctx (EVP_PKEY_CTX_new evp))
@@ -560,8 +558,7 @@ NIST P-192 disappeared!).
       (EVP_PKEY_CTX_free ctx)
       (shrink-bytes sigbuf siglen2))
 
-    (define/public (verify digest digest-spec pad sig)
-      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
+    (define/override (-verify digest digest-spec pad sig)
       (define di (send (send impl get-factory) get-digest digest-spec))
       (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
       (define ctx (EVP_PKEY_CTX_new evp))
@@ -571,13 +568,10 @@ NIST P-192 disappeared!).
       (begin0 (EVP_PKEY_verify ctx sig (bytes-length sig) digest (bytes-length digest))
         (EVP_PKEY_CTX_free ctx)))
 
-    (define/public (encrypt buf pad)
-      (unless (send impl can-encrypt? pad) (err/no-encrypt (send impl get-spec)))
+    (define/override (-encrypt buf pad)
       (*crypt buf pad EVP_PKEY_encrypt_init EVP_PKEY_encrypt))
 
-    (define/public (decrypt buf pad)
-      (unless (send impl can-encrypt? pad) (err/no-encrypt (send impl get-spec)))
-      (unless private? (err/decrypt-requires-private))
+    (define/override (-decrypt buf pad)
       (*crypt buf pad EVP_PKEY_decrypt_init EVP_PKEY_decrypt))
 
     (define/private (*crypt buf pad EVP_*crypt_init EVP_*crypt)
@@ -590,8 +584,7 @@ NIST P-192 disappeared!).
       (EVP_PKEY_CTX_free ctx)
       (shrink-bytes outbuf outlen2))
 
-    (define/public (compute-secret peer-pubkey0)
-      (unless (send impl can-key-agree?) (err/no-key-agree (send impl get-spec)))
+    (define/override (-compute-secret peer-pubkey0)
       (define peer-pubkey
         (cond [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
                     (eq? (send peer-pubkey0 get-impl) impl))

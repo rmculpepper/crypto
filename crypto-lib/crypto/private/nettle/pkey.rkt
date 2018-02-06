@@ -211,20 +211,17 @@
     ))
 
 (define nettle-rsa-key%
-  (class* ctx-base% (pk-key<%>)
+  (class pk-key-base%
     (init-field pub priv)
     (inherit-field impl)
     (super-new)
 
-    (define/public (is-private?) (and priv #t))
+    (define/override (is-private?) (and priv #t))
 
-    (define/public (get-public-key)
+    (define/override (get-public-key)
       (if priv (new nettle-rsa-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/public (get-params)
-      (crypto-error "key parameters not supported"))
-
-    (define/public (write-key fmt)
+    (define/override (write-key fmt)
       (case fmt
         [(SubjectPublicKeyInfo)
          (asn1->bytes/DER
@@ -256,7 +253,7 @@
               'exponent2 (mpz->integer (rsa_private_key_struct-b priv))
               'coefficient (mpz->integer (rsa_private_key_struct-c priv))))
 
-    (define/public (equal-to-key? other)
+    (define/override (equal-to-key? other)
       (and (is-a? other nettle-rsa-key%)
            (= (rsa_public_key_struct-size pub)
               (rsa_public_key_struct-size (get-field pub other)))
@@ -265,9 +262,7 @@
            (mpz=? (rsa_public_key_struct-e pub)
                   (rsa_public_key_struct-e (get-field pub other)))))
 
-    (define/public (sign digest digest-spec pad)
-      (unless priv (err/sign-requires-private))
-      (check-digest digest digest-spec)
+    (define/override (-sign digest digest-spec pad)
       (define randctx (send impl get-random-ctx))
       (define sigz (new-mpz))
       (define signed-ok?
@@ -291,20 +286,12 @@
       (unless signed-ok? (crypto-error "RSA signing failed"))
       (mpz->bin sigz))
 
-    (define/private (check-digest digest digest-spec)
-      (unless (= (bytes-length digest)
-                 (digest-spec-size digest-spec))
-        (crypto-error
-         "digest wrong size\n  digest algorithm: ~s\n  expected size:  ~s\n  digest: ~e"
-         digest-spec (digest-spec-size digest-spec) digest)))
-
     (define/private (nosupport/digest+pad op digest-spec pad)
       (crypto-error (string-append "RSA ~a not supported for digest and padding combination"
                                    "\n  digest algorithm: ~s\n  padding: ~s")
                     op digest-spec (or pad 'pkcs1-v1.5)))
 
-    (define/public (verify digest digest-spec pad sig)
-      (check-digest digest digest-spec)
+    (define/override (-verify digest digest-spec pad sig)
       (define sigz (bin->mpz sig))
       (define verified-ok?
         (case pad
@@ -325,7 +312,7 @@
           [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
       verified-ok?)
 
-    (define/public (encrypt buf pad)
+    (define/override (-encrypt buf pad)
       (case pad
         [(pkcs1-v1.5 #f)
          (define enc-z (new-mpz))
@@ -334,8 +321,7 @@
          (mpz->bin enc-z)]
         [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
 
-    (define/public (decrypt buf pad)
-      (unless priv (err/decrypt-requires-private))
+    (define/override (-decrypt buf pad)
       (case pad
         [(pkcs1-v1.5 #f)
          (define randctx (send impl get-random-ctx))
@@ -346,9 +332,6 @@
            (crypto-error "RSA decryption failed"))
          (shrink-bytes dec-buf dec-size)]
         [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
-
-    (define/public (compute-secret peer-pubkey0)
-      (crypto-error "not supported"))
     ))
 
 ;; ============================================================
@@ -381,20 +364,17 @@
     ))
 
 (define nettle-dsa-key%
-  (class* ctx-base% (pk-key<%>)
+  (class pk-key-base%
     (init-field pub priv)
     (inherit-field impl)
     (super-new)
 
-    (define/public (is-private?) (and priv #t))
+    (define/override (is-private?) (and priv #t))
 
-    (define/public (get-public-key)
+    (define/override (get-public-key)
       (if priv (new nettle-dsa-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/public (get-params)
-      (crypto-error "key parameters not supported"))
-
-    (define/public (write-key fmt)
+    (define/override (write-key fmt)
       (case fmt
         [(SubjectPublicKeyInfo)
          (asn1->bytes/DER
@@ -428,7 +408,7 @@
                 (mpz->integer (dsa_private_key_struct-x priv))))]
         [else (err/key-format 'dsa (is-private?) fmt)]))
 
-    (define/public (equal-to-key? other)
+    (define/override (equal-to-key? other)
       (and (is-a? other nettle-dsa-key%)
            (mpz=? (dsa_public_key_struct-p pub)
                   (dsa_public_key_struct-p (get-field pub other)))
@@ -439,9 +419,7 @@
            (mpz=? (dsa_public_key_struct-y pub)
                   (dsa_public_key_struct-y (get-field pub other)))))
 
-    (define/public (sign digest digest-spec pad)
-      (unless priv (err/sign-requires-private))
-      (check-digest digest digest-spec)
+    (define/override (-sign digest digest-spec pad)
       (define sign-fun
         (case digest-spec
           [(sha1) nettle_dsa_sha1_sign_digest]
@@ -469,15 +447,7 @@
          sig]
         [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
 
-    (define/private (check-digest digest digest-spec)
-      (unless (= (bytes-length digest)
-                 (digest-spec-size digest-spec))
-        (crypto-error
-         "digest wrong size\n  digest algorithm: ~s\n  expected size:  ~s\n  digest: ~e"
-         digest-spec (digest-spec-size digest-spec) digest)))
-
-    (define/public (verify digest digest-spec pad sig-der)
-      (check-digest digest digest-spec)
+    (define/override (-verify digest digest-spec pad sig-der)
       (define verify-fun
         (case digest-spec
           [(sha1) nettle_dsa_sha1_verify_digest]
@@ -489,13 +459,4 @@
         (crypto-error "DSA padding not supported\n  padding: ~s" pad))
       (define sig (der->dsa_signature sig-der))
       (verify-fun pub digest sig))
-
-    (define/public (encrypt buf pad)
-      (err/no-encrypt (send impl get-spec)))
-
-    (define/public (decrypt buf pad)
-      (err/no-encrypt (send impl get-spec)))
-
-    (define/public (compute-secret peer-pubkey0)
-      (crypto-error "not supported"))
     ))

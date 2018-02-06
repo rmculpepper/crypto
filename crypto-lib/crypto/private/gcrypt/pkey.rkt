@@ -239,30 +239,25 @@
     ))
 
 (define gcrypt-pk-key%
-  (class* ctx-base% (pk-key<%>)
+  (class pk-key-base%
     (init-field pub priv)
     (inherit-field impl)
     (super-new)
 
-    (define/public (is-private?) (and priv #t))
+    (define/override (is-private?) (and priv #t))
 
-    (define/public (get-public-key)
+    (define/override (get-public-key)
       (if priv (new this% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/public (get-params)
+    (define/override (get-params)
       (crypto-error "key parameters not supported"))
 
-    (abstract write-key)
-
-    (define/public (equal-to-key? other)
+    (define/override (equal-to-key? other)
       (and (is-a? other gcrypt-pk-key%)
            (equal? (gcry_sexp->bytes pub)
                    (gcry_sexp->bytes (get-field pub other)))))
 
-    (define/public (sign digest digest-spec pad)
-      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
-      (unless priv (err/sign-requires-private))
-      (check-digest digest digest-spec)
+    (define/override (-sign digest digest-spec pad)
       (check-sig-pad pad)
       (define data-sexp (sign-make-data-sexp digest digest-spec pad))
       (define sig-sexp (gcry_pk_sign data-sexp priv))
@@ -271,9 +266,7 @@
       (gcry_sexp_release data-sexp)
       result)
 
-    (define/public (verify digest digest-spec pad sig)
-      (unless (send impl can-sign? #f #f) (err/no-sign (send impl get-spec)))
-      (check-digest digest digest-spec)
+    (define/override (-verify digest digest-spec pad sig)
       (check-sig-pad pad)
       (define data-sexp (sign-make-data-sexp digest digest-spec pad))
       (define sig-sexp (verify-make-sig-sexp sig))
@@ -286,22 +279,6 @@
               sign-unpack-sig-sexp
               verify-make-sig-sexp
               check-sig-pad)
-
-    (define/private (check-digest digest digest-spec)
-      (unless (= (bytes-length digest)
-                 (digest-spec-size digest-spec))
-        (crypto-error
-         "digest wrong size\n  digest algorithm: ~s\n  expected size:  ~s\n  digest: ~e"
-         digest-spec (digest-spec-size digest-spec) digest)))
-
-    (define/public (encrypt buf pad)
-      (err/no-encrypt (send impl get-spec)))
-
-    (define/public (decrypt buf pad)
-      (err/no-encrypt (send impl get-spec)))
-
-    (define/public (compute-secret peer-pubkey0)
-      (crypto-error "not supported"))
     ))
 
 ;; ============================================================
@@ -423,7 +400,7 @@
                        (cast (bytes-length sig) _uintptr _pointer)
                        sig))
 
-    (define/override (encrypt data pad)
+    (define/override (-encrypt data pad)
       (define padding (check-enc-padding pad))
       (define data-sexp
         (gcry_sexp_build "(data (flags %s) (value %b))"
@@ -442,8 +419,7 @@
       (gcry_sexp_release data-sexp)
       enc-data)
 
-    (define/override (decrypt data pad)
-      (unless priv (err/decrypt-requires-private))
+    (define/override (-decrypt data pad)
       (define padding (check-enc-padding pad))
       (define enc-sexp
         (gcry_sexp_build "(enc-val (flags %s) (rsa (a %M)))"
@@ -595,9 +571,6 @@
     (inherit is-private?)
     (super-new)
 
-    (eprintf "d = ~s\n" (mpi->base256 (get-mpi priv "d")))
-    (eprintf "q = ~s\n" (mpi->base256 (get-mpi priv "q")))
-
     (define/override (write-key fmt)
       (define (get-data sexp tag)
         (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
@@ -650,5 +623,3 @@
          (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
         [_ (crypto-error "signature is not well-formed")]))
     ))
-
-;; ============================================================
