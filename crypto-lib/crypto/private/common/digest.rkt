@@ -61,12 +61,16 @@
          (or (get-digest o) (err/missing-digest o))]
         [else (get-impl* o)]))
 
+(define (-get-info o)
+  (cond [(digest-spec? o) (digest-spec->info o)]
+        [else (get-info* o)]))
+
 (define (digest-size o)
   (with-crypto-entry 'digest-size
-    (send (get-info* o) get-size)))
+    (send (-get-info o) get-size)))
 (define (digest-block-size o)
   (with-crypto-entry 'digest-block-size
-    (send (get-info* o) get-block-size)))
+    (send (-get-info o) get-block-size)))
 
 ;; ----
 
