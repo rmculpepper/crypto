@@ -602,7 +602,7 @@
      k)))
 
 (define new-dsa_private_key
-  ((allocator nettle_rsa_private_key_clear)
+  ((allocator nettle_dsa_private_key_clear)
    (lambda ()
      (define k (malloc _dsa_private_key_struct 'atomic-interior))
      (cpointer-push-tag! k mpz_struct-tag) ;; FIXME: why necessary???
