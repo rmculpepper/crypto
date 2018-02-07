@@ -175,7 +175,7 @@
 
     ;; ----
 
-    (define/public (print-info)
+    (define/override (print-info)
       (printf "Library info:\n")
       (printf " Version: ~s.~s\n" (or (nettle_version_major) '?) (or (nettle_version_minor) '?))
       (printf "Available digests:\n")

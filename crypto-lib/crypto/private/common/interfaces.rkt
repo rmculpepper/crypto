@@ -108,6 +108,7 @@
 
 (define factory<%>
   (interface ()
+    print-info  ;; -> Void
     #|
     all-digests        ;; -> (listof digest-impl<%>)
     all-ciphers        ;; -> (listof cipher-impl<%>)

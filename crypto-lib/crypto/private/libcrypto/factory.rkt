@@ -125,9 +125,9 @@
 
     ;; ----
 
-    (define/public (print-info)
+    (define/override (print-info)
       (printf "Library info:\n")
-      (printf " SSLeay() = ~x\n" (SSLeay))
+      (printf " SSLeay() = #x~x\n" (SSLeay))
       (printf " SSLEAY_VERSION: ~s\n" (SSLeay_version SSLEAY_VERSION))
       (printf " SSLEAY_BUILT_ON: ~s\n" (SSLeay_version SSLEAY_BUILT_ON))
       (printf "Available digests:\n")

@@ -206,7 +206,7 @@
 
     ;; ----
 
-    (define/public (print-info)
+    (define/override (print-info)
       (printf "Library info:\n")
       (printf " version: ~s\n" (gcry_check_version #f))
       (printf "Available digests:\n")
@@ -215,7 +215,7 @@
           (printf " ~v\n" digest)))
       (printf "Available ciphers:\n")
       (for ([ciphers (list block-ciphers stream-ciphers)]
-            [modes   (list block-modes   '(stream))])
+            [modes   (list block-modes   '((stream)))])
         (for ([cipher (map car ciphers)])
           (for ([mode (map car modes)])
             (when (get-cipher (list cipher mode))
