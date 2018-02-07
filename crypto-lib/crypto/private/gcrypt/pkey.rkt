@@ -20,6 +20,7 @@
          asn1
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/pk-common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
@@ -35,123 +36,36 @@
 (define (mpi->int mpi) (base256->unsigned (mpi->base256 mpi)))
 
 (define gcrypt-read-key%
-  (class* impl-base% (pk-read-key<%>)
+  (class pk-read-key-base%
     (inherit-field factory)
     (super-new (spec 'gcrypt-read-key))
 
-    (define/public (read-key sk fmt)
-      (define (check-bytes)
-        (unless (bytes? sk)
-          (crypto-error "bad value for key format\n  format: ~e\n  expected: ~s\n  got: ~e"
-                        fmt 'bytes? sk)))
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (check-bytes)
-         (match (bytes->asn1/DER SubjectPublicKeyInfo sk)
-           ;; Note: decode w/ type checks some well-formedness properties
-           [(hash-table ['algorithm alg] ['subjectPublicKey subjectPublicKey])
-            (define alg-oid (hash-ref alg 'algorithm))
-            (define params (hash-ref alg 'parameters #f))
-            (cond [(equal? alg-oid rsaEncryption)
-                   (match subjectPublicKey
-                     [(hash-table ['modulus modulus] ['publicExponent publicExponent])
-                      (define pub (make-rsa-public-key modulus publicExponent))
-                      (define impl (send factory get-pk 'rsa))
-                      (new gcrypt-rsa-key% (impl impl) (pub pub) (priv #f))])]
-                  [(equal? alg-oid id-dsa)
-                   (match params
-                     [(hash-table ['p p] ['q q] ['g g])
-                      (define pub (make-dsa-public-key p q g subjectPublicKey))
-                      (define impl (send factory get-pk 'dsa))
-                      (new gcrypt-dsa-key% (impl impl) (pub pub) (priv #f))])]
-                  ;; GCrypt has no DH support.
-                  [(equal? alg-oid id-ecPublicKey)
-                   (match params
-                     [`(namedCurve ,curve-oid)
-                      (cond [(curve-oid->name curve-oid)
-                             => (lambda (curve-name)
-                                  (define pub (make-ec-public-key curve-name subjectPublicKey))
-                                  (define impl (send factory get-pk 'ec))
-                                  (new gcrypt-ec-key% (impl impl) (pub pub) (priv #f)))]
-                            [else #f])]
-                     [_ #f])]
-                  [else #f])]
-           [_ #f])]
-        [(PrivateKeyInfo)
-         (check-bytes)
-         (match (bytes->asn1/DER PrivateKeyInfo sk)
-           [(hash-table ['version version]
-                        ['privateKeyAlgorithm alg]
-                        ['privateKey privateKey])
-            (define alg-oid (hash-ref alg 'algorithm))
-            (define alg-params (hash-ref alg 'parameters #f))
-            (cond [(equal? alg-oid rsaEncryption)
-                   (RSAPrivateKey->key privateKey)]
-                  [(equal? alg-oid id-dsa)
-                   (match alg-params
-                     [(hash-table ['p p] ['q q] ['g g])
-                      (define y  ;; g^x mod p
-                        (let ([y (gcry_mpi_new)])
-                          (gcry_mpi_powm y (int->mpi g) (int->mpi privateKey) (int->mpi p))
-                          (mpi->int y)))
-                      (define pub (make-dsa-public-key p q g y))
-                      (define priv (make-dsa-private-key p q g y privateKey))
-                      (define impl (send factory get-pk 'dsa))
-                      (new gcrypt-dsa-key% (impl impl) (pub pub) (priv priv))])]
-                  [(equal? alg-oid id-ecPublicKey)
-                   (define curve
-                     (match alg-params
-                       [`(namedCurve ,curve-oid) (curve-oid->name curve-oid)]))
-                   (match privateKey
-                     [(hash-table ['version 1]
-                                  ['privateKey privkey]
-                                  ['publicKey pubkey])
-                      ;; FIXME: recover q if publicKey field not present
-                      ;;  -- grr, gcrypt doesn't seem to provide point<->bytes
-                      ;;     support
-                      (define q pubkey)
-                      (define pub (make-ec-public-key curve q))
-                      (define priv (make-ec-private-key curve q privkey))
-                      (define impl (send factory get-pk 'ec))
-                      (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv))]
-                     [_ #f])]
-                  [else #f])]
-           [_ #f])]
-        [(RSAPrivateKey)
-         (check-bytes)
-         (RSAPrivateKey->key (bytes->asn1/DER RSAPrivateKey sk))]
-        [else #f]))
+    ;; ---- RSA ----
 
-    (define/private (RSAPrivateKey->key privateKey)
-      (match privateKey
-        [(hash-table ['version 0] ;; support only two-prime keys
-                     ['modulus n]
-                     ['publicExponent e]
-                     ['privateExponent d]
-                     ['prime1 p]
-                     ['prime2 q]
-                     ['exponent1 dp]     ;; e * dp = 1 mod (p-1)
-                     ['exponent2 dq]     ;; e * dq = 1 mod (q-1)
-                     ['coefficient qInv]);; q * c = 1 mod p
-         ;; Note: gcrypt requires q < p (swap if needed)
-         (define-values (p* q* qInv*)
-           (cond [(< p q)
-                  (values p q qInv)]
-                 [else
-                  (define qInv*-mpi (gcry_mpi_new))
-                  (or (gcry_mpi_invm qInv*-mpi (int->mpi q) (int->mpi p))
-                      (crypto-error "failed to calculate qInv"))
-                  (values q p (mpi->int qInv*-mpi))]))
-         (define pub (make-rsa-public-key n e))
-         (define priv (make-rsa-private-key n e d p* q* qInv*))
-         (define impl (send factory get-pk 'rsa))
-         (new gcrypt-rsa-key% (impl impl) (pub pub) (priv priv))]
-        [_ #f]))
+    (define/override (-make-pub-rsa n e)
+      (define pub (make-rsa-public-key n e))
+      (define impl (send factory get-pk 'rsa))
+      (new gcrypt-rsa-key% (impl impl) (pub pub) (priv #f)))
 
     (define/private (make-rsa-public-key n e)
       (gcry_sexp_build "(public-key (rsa %S %S))"
                        (gcry_sexp_build "(n %M)" (int->mpi n))
                        (gcry_sexp_build "(e %M)" (int->mpi e))))
+
+    (define/override (-make-priv-rsa n e d p q dp dq qInv)
+      ;; Note: gcrypt requires q < p (swap if needed)
+      (define-values (p* q* qInv*)
+        (cond [(< p q)
+               (values p q qInv)]
+              [else
+               (define qInv*-mpi (gcry_mpi_new))
+               (or (gcry_mpi_invm qInv*-mpi (int->mpi q) (int->mpi p))
+                   (crypto-error "failed to calculate qInv"))
+               (values q p (mpi->int qInv*-mpi))]))
+      (define pub (make-rsa-public-key n e))
+      (define priv (make-rsa-private-key n e d p* q* qInv*))
+      (define impl (send factory get-pk 'rsa))
+      (new gcrypt-rsa-key% (impl impl) (pub pub) (priv priv)))
 
     (define/private (make-rsa-private-key n e d p q u)
       (define priv
@@ -165,12 +79,30 @@
       ;; FIXME: (gcry_pk_testkey ....)
       priv)
 
+    ;; ---- DSA ----
+
+    (define/override (-make-pub-dsa p q g y)
+      (define pub (make-dsa-public-key p q g y))
+      (define impl (send factory get-pk 'dsa))
+      (new gcrypt-dsa-key% (impl impl) (pub pub) (priv #f)))
+
     (define/private (make-dsa-public-key p q g y)
       (gcry_sexp_build "(public-key (dsa %S %S %S %S))"
                        (gcry_sexp_build "(p %M)" (int->mpi p))
                        (gcry_sexp_build "(q %M)" (int->mpi q))
                        (gcry_sexp_build "(g %M)" (int->mpi g))
                        (gcry_sexp_build "(y %M)" (int->mpi y))))
+
+    (define/override (-make-priv-dsa p q g y0 x)
+      (define y  ;; g^x mod p
+        (or y0
+            (let ([y (gcry_mpi_new)])
+              (gcry_mpi_powm y (int->mpi g) (int->mpi x) (int->mpi p))
+              (mpi->int y))))
+      (define pub (make-dsa-public-key p q g y))
+      (define priv (make-dsa-private-key p q g y x))
+      (define impl (send factory get-pk 'dsa))
+      (new gcrypt-dsa-key% (impl impl) (pub pub) (priv priv)))
 
     (define/private (make-dsa-private-key p q g y x)
       (define priv
@@ -183,17 +115,38 @@
       ;; FIXME: (gcry_pk_testkey ...)
       priv)
 
+    ;; ---- EC ----
+
+    (define/override (-make-pub-ec curve-oid q)
+      (cond [(curve-oid->name curve-oid)
+             => (lambda (curve-name)
+                  (define pub (make-ec-public-key curve-name q))
+                  (define impl (send factory get-pk 'ec))
+                  (new gcrypt-ec-key% (impl impl) (pub pub) (priv #f)))]
+            [else #f]))
+
     (define/private (make-ec-public-key curve q)
       (gcry_sexp_build "(public-key (ecc %S %S))"
                        (gcry_sexp_build/%b "(curve %b)" curve)
-                       (gcry_sexp_build/%b "(q %b)" q)))
+                       (gcry_sexp_build/%b "(q %M)" (int->mpi q))))
+
+    (define/override (-make-priv-ec curve-oid q d)
+      ;; FIXME: recover q if publicKey field not present
+      ;;  -- grr, gcrypt doesn't seem to provide point<->bytes support
+      (cond [(curve-oid->name curve-oid)
+             => (lambda (curve-name)
+                  (define pub (make-ec-public-key curve-name q))
+                  (define priv (make-ec-private-key curve-name q d))
+                  (define impl (send factory get-pk 'ec))
+                  (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv)))]
+            [else #f]))
 
     (define/private (make-ec-private-key curve q d)
       (define priv
         (gcry_sexp_build "(private-key (ecc %S %S %S))"
                          (gcry_sexp_build/%b "(curve %b)" curve)
-                         (gcry_sexp_build/%b "(q %b)" q)
-                         (gcry_sexp_build    "(d %M)" (base256->mpi d))))
+                         (gcry_sexp_build/%b "(q %M)" (int->mpi q))
+                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
       ;; FIXME: (gcry_pk_testkey ....)
       priv)
 
@@ -205,7 +158,7 @@
       (and (memq name-sym gcrypt-curve-names)
            (string->bytes/latin-1 (symbol->string name-sym))))
 
-    (define/public (read-params sp) #f)
+    (define/override (read-params sp) #f)
     ))
 
 ;; ============================================================
