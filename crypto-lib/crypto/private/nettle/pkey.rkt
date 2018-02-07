@@ -1,4 +1,4 @@
-;; Copyright 2014 Ryan Culpepper
+;; Copyright 2014-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -20,6 +20,7 @@
          racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/pk-common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
@@ -39,123 +40,69 @@
 ;; ============================================================
 
 (define nettle-read-key%
-  (class* impl-base% (pk-read-key<%>)
+  (class pk-read-key-base%
     (inherit-field factory)
-    (super-new (spec 'nettle-read-key))
+    (super-new (spec 'gcrypt-read-key))
 
-    (define/public (read-key sk fmt)
-      (define (check-bytes)
-        (unless (bytes? sk)
-          (crypto-error "bad value for key format\n  format: ~e\n  expected: ~s\n  got: ~e"
-                        fmt 'bytes? sk)))
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (check-bytes)
-         (match (bytes->asn1/DER SubjectPublicKeyInfo sk)
-           ;; Note: decode w/ type checks some well-formedness properties
-           [(hash-table ['algorithm alg] ['subjectPublicKey subjectPublicKey])
-            (define alg-oid (hash-ref alg 'algorithm))
-            (define params (hash-ref alg 'parameters #f))
-            (cond [(equal? alg-oid rsaEncryption)
-                   (match subjectPublicKey
-                     [(hash-table ['modulus modulus] ['publicExponent publicExponent])
-                      (define pub (new-rsa_public_key))
-                      (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz modulus))
-                      (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz publicExponent))
-                      (unless (nettle_rsa_public_key_prepare pub)
-                        (crypto-error "bad public key"))
-                      (define impl (send factory get-pk 'rsa))
-                      (new nettle-rsa-key% (impl impl) (pub pub) (priv #f))])]
-                  [(equal? alg-oid id-dsa)
-                   (match params
-                     [(hash-table ['p p] ['q q] ['g g])
-                      (define pub (new-dsa_public_key))
-                      (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
-                      (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
-                      (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
-                      (__gmpz_set (dsa_public_key_struct-y pub) (integer->mpz subjectPublicKey))
-                      (define impl (send factory get-pk 'dsa))
-                      (new nettle-dsa-key% (impl impl) (pub pub) (priv #f))])]
-                  ;; Nettle has no DH support.
-                  ;; EC support not yet bound.
-                  [else #f])]
-           [_ #f])]
-        [(PrivateKeyInfo)
-         (check-bytes)
-         (match (bytes->asn1/DER PrivateKeyInfo sk)
-           [(hash-table ['version version]
-                        ['privateKeyAlgorithm alg]
-                        ['privateKey privateKey])
-            (define alg-oid (hash-ref alg 'algorithm))
-            (define alg-params (hash-ref alg 'parameters #f))
-            (cond [(equal? alg-oid rsaEncryption)
-                   (RSAPrivateKey->key privateKey)]
-                  [(equal? alg-oid id-dsa)
-                   (match alg-params
-                     [(hash-table ['p p] ['q q] ['g g])
-                      (define pub (new-dsa_public_key))
-                      (define priv (new-dsa_private_key))
-                      (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
-                      (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
-                      (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
-                      (__gmpz_set (dsa_private_key_struct-x priv) (integer->mpz privateKey))
-                      ;; Must recompute public key, y = g^x mod p.
-                      (__gmpz_powm (dsa_public_key_struct-y pub)
-                                   (dsa_public_key_struct-g pub)
-                                   (dsa_private_key_struct-x priv)
-                                   (dsa_public_key_struct-p pub))
-                      (define impl (send factory get-pk 'dsa))
-                      (new nettle-dsa-key% (impl impl) (pub pub) (priv priv))])]
-                  [else #f])]
-           [_ #f])]
-        [(RSAPrivateKey)
-         (check-bytes)
-         (RSAPrivateKey->key (bytes->asn1/DER RSAPrivateKey sk))]
-        [(DSAPrivateKey)
-         (match (bytes->asn1/DER (SEQUENCE-OF INTEGER) sk)
-           [(list 0 p q g y x) ;; FIXME!!!
-            (define pub (new-dsa_public_key))
-            (define priv (new-dsa_private_key))
-            (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
-            (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
-            (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
-            (__gmpz_set (dsa_public_key_struct-y pub) (integer->mpz y))
-            (__gmpz_set (dsa_private_key_struct-x priv) (integer->mpz x))
-            (define impl (send factory get-pk 'dsa))
-            (new nettle-dsa-key% (impl impl) (pub pub) (priv priv))]
-           [_ #f])]
-        [else #f]))
+    ;; ---- RSA ----
 
-    (define/private (RSAPrivateKey->key v)
-      (match v
-        [(hash-table ['version 0] ;; support only two-prime keys
-                     ['modulus n]
-                     ['publicExponent e]
-                     ['privateExponent d]
-                     ['prime1 p]
-                     ['prime2 q]
-                     ['exponent1 a]
-                     ['exponent2 b]
-                     ['coefficient c])
-         (define pub (new-rsa_public_key))
-         (define priv (new-rsa_private_key))
-         (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
-         (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
-         (__gmpz_set (rsa_private_key_struct-d priv) (integer->mpz d))
-         (__gmpz_set (rsa_private_key_struct-p priv) (integer->mpz p))
-         (__gmpz_set (rsa_private_key_struct-q priv) (integer->mpz q))
-         (__gmpz_set (rsa_private_key_struct-a priv) (integer->mpz a))
-         (__gmpz_set (rsa_private_key_struct-b priv) (integer->mpz b))
-         (__gmpz_set (rsa_private_key_struct-c priv) (integer->mpz c))
-         (unless (nettle_rsa_public_key_prepare pub)
-           (crypto-error "bad public key"))
-         (unless (nettle_rsa_private_key_prepare priv)
-           (crypto-error "bad private key"))
-         (define impl (send factory get-pk 'rsa))
-         (new nettle-rsa-key% (impl impl) (pub pub) (priv priv))]
-        [_ #f]))
+    (define/override (-make-pub-rsa n e)
+      (define pub (new-rsa_public_key))
+      (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
+      (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
+      (unless (nettle_rsa_public_key_prepare pub) (crypto-error "bad public key"))
+      (define impl (send factory get-pk 'rsa))
+      (new nettle-rsa-key% (impl impl) (pub pub) (priv #f)))
 
-    (define/public (read-params sp) #f)
+    (define/override (-make-priv-rsa n e d p q dp dq qInv)
+      (define pub (new-rsa_public_key))
+      (define priv (new-rsa_private_key))
+      (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
+      (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
+      (__gmpz_set (rsa_private_key_struct-d priv) (integer->mpz d))
+      (__gmpz_set (rsa_private_key_struct-p priv) (integer->mpz p))
+      (__gmpz_set (rsa_private_key_struct-q priv) (integer->mpz q))
+      (__gmpz_set (rsa_private_key_struct-a priv) (integer->mpz dp))
+      (__gmpz_set (rsa_private_key_struct-b priv) (integer->mpz dq))
+      (__gmpz_set (rsa_private_key_struct-c priv) (integer->mpz qInv))
+      (unless (nettle_rsa_public_key_prepare pub)
+        (crypto-error "bad public key"))
+      (unless (nettle_rsa_private_key_prepare priv)
+        (crypto-error "bad private key"))
+      (define impl (send factory get-pk 'rsa))
+      (new nettle-rsa-key% (impl impl) (pub pub) (priv priv)))
+
+    ;; ---- DSA ----
+
+    (define/override (-make-pub-dsa p q g y)
+      (define pub (new-dsa_public_key))
+      (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
+      (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
+      (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
+      (__gmpz_set (dsa_public_key_struct-y pub) (integer->mpz y))
+      (define impl (send factory get-pk 'dsa))
+      (new nettle-dsa-key% (impl impl) (pub pub) (priv #f)))
+
+    (define/override (-make-priv-dsa p q g y x)
+      (define pub (new-dsa_public_key))
+      (define priv (new-dsa_private_key))
+      (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
+      (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
+      (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
+      (__gmpz_set (dsa_private_key_struct-x priv) (integer->mpz x))
+      (if y
+          (__gmpz_set (dsa_public_key_struct-y priv) (integer->mpz y))
+          ;; else must recompute public key, y = g^x mod p
+          (__gmpz_powm (dsa_public_key_struct-y pub)
+                       (dsa_public_key_struct-g pub)
+                       (dsa_private_key_struct-x priv)
+                       (dsa_public_key_struct-p pub)))
+      (define impl (send factory get-pk 'dsa))
+      (new nettle-dsa-key% (impl impl) (pub pub) (priv priv)))
+
+    ;; ----
+
+    (define/override (read-params sp) #f)
     ))
 
 ;; ============================================================
