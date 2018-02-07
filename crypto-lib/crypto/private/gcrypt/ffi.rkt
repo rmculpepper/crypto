@@ -516,7 +516,7 @@
 
 (define-gcrypt gcry_pk_genkey
   (_fun (params) ::
-        (result : (_ptr o _gcry_sexp))
+        (result : (_ptr o _gcry_sexp/null))
         (params : _gcry_sexp)
         -> (status : _gcry_error)
         -> (values status result))

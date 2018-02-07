@@ -178,7 +178,9 @@
     (define/public (has-params?) #f)
 
     (define/public (*generate-key keygen-sexp key-class)
-      (define result (gcry_pk_genkey keygen-sexp))
+      (define result
+        (or (gcry_pk_genkey keygen-sexp)
+            (crypto-error "failed to generate key")))
       (define pub
         (or (gcry_sexp_find_token result "public-key")
             (crypto-error "failed to generate public key component")))
@@ -530,7 +532,6 @@
         (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
         (gcry_sexp_nth_data tag-sexp 1))
       (define (get-key-params sexp)
-        ;; (eprintf "sexp = ~e\n" (gcry_sexp->bytes sexp))
         (define curve (string->symbol (bytes->string/utf-8 (get-data sexp "curve"))))
         (cond [(assq curve known-curves) => (lambda (e) (list 'namedCurve (cdr e)))]
               [else (crypto-error "unknown curve name\n  curve: ~e" curve)]))
