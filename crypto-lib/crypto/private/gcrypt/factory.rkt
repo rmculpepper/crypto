@@ -206,22 +206,38 @@
 
     ;; ----
 
+    (define/override (info key)
+      (case key
+        [(version) (gcry_check_version #f)]
+        [(all-digests)
+         (for/list ([di (map car digests)] #:when (get-digest di)) di)]
+        [(all-ciphers)
+         (for/list ([ciphers (list block-ciphers stream-ciphers)]
+                    [modes   (list block-modes   '((stream)))]
+                    #:when #t
+                    [cipher (map car ciphers)]
+                    #:when #t
+                    [mode (map car modes)]
+                    #:when #t
+                    [cspec (in-value (list cipher mode))]
+                    #:when (get-cipher cspec))
+           cspec)]
+        [(all-pks) '(rsa dsa)]
+        [else (super info key)]))
+
     (define/override (print-info)
       (printf "Library info:\n")
       (printf " version: ~s\n" (gcry_check_version #f))
       (printf "Available digests:\n")
-      (for ([digest (map car digests)])
-        (when (get-digest digest)
-          (printf " ~v\n" digest)))
+      (for ([di (in-list (info 'all-digests))])
+        (printf " ~v\n" di))
       (printf "Available ciphers:\n")
-      (for ([ciphers (list block-ciphers stream-ciphers)]
-            [modes   (list block-modes   '((stream)))])
-        (for ([cipher (map car ciphers)])
-          (for ([mode (map car modes)])
-            (when (get-cipher (list cipher mode))
-              (printf " ~v\n" (list cipher mode))))))
-      #|
+      (for ([ci (in-list (info 'all-ciphers))])
+        (printf " ~v\n" ci))
       (printf "Available PK:\n")
+      (for ([pk (in-list (info 'all-pks))])
+        (printf " ~v\n" pk))
+      #|
       (printf "Available EC named curves:\n")
       |#
       (printf "Available KDFs:\n")

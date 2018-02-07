@@ -108,6 +108,7 @@
 
 (define factory<%>
   (interface ()
+    info        ;; Symbol -> Any
     print-info  ;; -> Void
     #|
     all-digests        ;; -> (listof digest-impl<%>)

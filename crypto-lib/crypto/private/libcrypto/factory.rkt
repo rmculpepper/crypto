@@ -125,23 +125,33 @@
 
     ;; ----
 
+    (define/override (info key)
+      (case key
+        [(version) (SSLeay_version SSLEAY_VERSION)]
+        [(all-digests)
+         (for/list ([di (in-hash-keys libcrypto-digests)] #:when (get-digest di)) di)]
+        [(all-ciphers)
+         (for*/list ([cipher-entry (in-list libcrypto-ciphers)]
+                     [mode (in-list (cadr cipher-entry))]
+                     [cspec (in-value (list (car cipher-entry) mode))]
+                     #:when (get-cipher cspec))
+           cspec)]
+        [(all-pks) '(rsa dsa dh ec)]
+        [else (super info key)]))
+
     (define/override (print-info)
       (printf "Library info:\n")
       (printf " SSLeay() = #x~x\n" (SSLeay))
-      (printf " SSLEAY_VERSION: ~s\n" (SSLeay_version SSLEAY_VERSION))
+      (printf " SSLEAY_VERSION: ~s\n" (info 'version))
       (printf " SSLEAY_BUILT_ON: ~s\n" (SSLeay_version SSLEAY_BUILT_ON))
       (printf "Available digests:\n")
-      (for ([digest (in-hash-keys libcrypto-digests)])
-        (when (get-digest digest)
-          (printf " ~v\n" digest)))
+      (for ([di (in-list (info 'all-digests))])
+        (printf " ~v\n" di))
       (printf "Available ciphers:\n")
-      (for ([cipher-entry (in-list libcrypto-ciphers)])
-        (define cipher (car cipher-entry))
-        (for ([mode (in-list (cadr cipher-entry))])
-          (when (get-cipher (list cipher mode))
-            (printf " ~v\n" (list cipher mode)))))
+      (for ([ci (in-list (info 'all-ciphers))])
+        (printf " ~v\n" ci))
       (printf "Available PK:\n")
-      (for ([pk '(rsa dsa dh ec)])
+      (for ([pk (in-list (info 'all-pks))])
         (printf " ~v\n" pk))
       (printf "Available EC named curves:\n")
       (let ([curve-names (make-hash)])

@@ -175,23 +175,36 @@
 
     ;; ----
 
+    (define/override (info key)
+      (case key
+        [(version) (format "~s.~s" (or (nettle_version_major) '?) (or (nettle_version_minor) '?))]
+        [(all-digests)
+         (for/list ([di (map car digests)] #:when (get-digest di)) di)]
+        [(all-ciphers)
+         (append
+          (for*/list ([cipher (map car block-ciphers)]
+                      [mode (in-list block-modes)]
+                      [cspec (in-value (list cipher mode))]
+                      #:when (get-cipher cspec))
+            cspec)
+          (for*/list ([cipher (map car stream-ciphers)]
+                      [cspec (in-value (list cipher 'stream))]
+                      #:when (get-cipher cspec))
+            cspec))]
+        [(all-pks) '(rsa dsa)]
+        [else (super info key)]))
+
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " Version: ~s.~s\n" (or (nettle_version_major) '?) (or (nettle_version_minor) '?))
+      (printf " Version: ~v\n" (info 'version))
       (printf "Available digests:\n")
-      (for ([digest (map car digests)])
-        (when (get-digest digest)
-          (printf " ~v\n" digest)))
+      (for ([di (in-list (info 'all-digests))])
+        (printf " ~v\n" di))
       (printf "Available ciphers:\n")
-      (for ([cipher (map car block-ciphers)])
-        (for ([mode (in-list block-modes)])
-          (when (get-cipher (list cipher mode))
-            (printf " ~v\n" (list cipher mode)))))
-      (for ([cipher (map car stream-ciphers)])
-        (when (get-cipher (list cipher 'stream))
-          (printf " ~v\n" (list cipher 'stream))))
+      (for ([ci (in-list (info 'all-ciphers))])
+        (printf " ~v\n" ci))
       (printf "Available PK:\n")
-      (for ([pk '(rsa dsa)])
+      (for ([pk (in-list (info 'all-pks))])
         ;; FIXME: check impl avail???
         (printf " ~v\n" pk))
       #|

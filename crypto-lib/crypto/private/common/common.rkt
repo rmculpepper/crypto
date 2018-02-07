@@ -112,6 +112,7 @@
     (super-new)
 
     (define/public (get-name) #f)
+    (define/public (info key) #f)
     (define/public (print-info) (void))
 
     ;; Only cache successful lookups to keep table size bounded.
