@@ -81,6 +81,10 @@ Returns the size in bytes of the digest's internal block size. This
 information is usually not needed by applications, but some
 constructions (such as HMAC) are defined in terms of a digest
 function's block size.
+
+@examples[#:eval the-eval
+(digest-block-size 'sha1)
+]
 }
 
 @defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
@@ -128,6 +132,13 @@ key length @cite{HMAC}.
 Creates a digest context for the digest function represented by
 @racket[di]. A digest context can be incrementally updated with
 message data.
+
+@examples[#:eval the-eval
+(define dctx (make-digest-ctx 'sha1))
+(digest-update dctx "Hello ")
+(digest-update dctx "world!")
+(digest-final dctx)
+]
 }
 
 @defproc[(digest-ctx? [v any/c]) boolean?]{

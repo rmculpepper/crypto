@@ -5,6 +5,7 @@
           (for-label racket/base
                      racket/contract
                      racket/match
+                     racket/random
                      crypto
                      crypto/libcrypto))
 
@@ -78,19 +79,40 @@ and the cipher mode (see @racket[cipher-spec?] for details).
 (encrypt '(aes ctr) skey iv "Hello world!")
 ]
 
-Of course, using an all-zero IV is usually a very bad idea. (Using the
-same key and IV to encrypt two plaintexts in CTR mode compromises both
-plaintexts!) This library provides a function to generate a random IV
-of the right size:
+Of course, using an all-zero IV is usually a very bad idea. You can
+generate a random IV of the right size (if a random IV is
+appropriate), or you can get the IV size and construct one yourself:
 
 @interaction[#:eval the-eval
 (define iv (generate-cipher-iv '(aes ctr)))
 iv
+(cipher-iv-size '(aes ctr))
 ]
 
 There are also functions to generate session keys, HMAC keys,
 etc. These functions use @racket[crypto-random-bytes], a
 cryptographically strong source of randomness.
+
+When an @tech{authenticated encryption} (AEAD) cipher, such as
+AES-GCM, is used with @racket[encrypt] or @racket[decrypt], the
+authentication tag is automatically appended to (or taken from) the
+end of the cipher text, respectively. AEAD ciphers also support
+@emph{additionally authenticated data}, passed with the @racket[#:AAD]
+keyword.
+
+@interaction[#:eval the-eval
+(define key (generate-cipher-key '(aes gcm)))
+(define iv (generate-cipher-iv '(aes gcm)))
+(define ct (encrypt '(aes gcm) key iv #"Nevermore!" #:AAD #"quoth the raven"))
+(decrypt '(aes gcm) key iv ct #:AAD #"quoth the raven")
+]
+
+If authentication fails at the end of decryption, an exception is
+raised:
+
+@interaction[#:eval the-eval
+(decrypt '(aes gcm) key iv ct #:AAD #"said the bird")
+]
 
 In addition to ``all-at-once'' operations like @racket[digest] and
 @racket[encrypt], this library also supports algorithm contexts for
@@ -119,8 +141,9 @@ containing only the public components can be obtained with the
 (define pubkey (pk-key->public-only-key privkey))
 ]
 
-RSA keys support both signing and encryption (although recommended
-practice is to use separate keypairs for each operation). 
+RSA keys support both signing and encryption. Other PK cryptosystems
+may support different operations; for example, DSA supports signing
+but not encryption, and DH only supports key agreement.
 
 PK signature algorithms are limited in the amount of data they can
 sign directly, so the message is first processed with a digest

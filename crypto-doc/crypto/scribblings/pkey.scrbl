@@ -281,7 +281,7 @@ Computes or verifies signature of the @racket[di] message digest of
 
 @section[#:tag "pk-encrypt"]{PK Encryption}
 
-In PK encryption, the sender uses the public key of the intented
+In PK encryption, the sender uses the public key of the intended
 receiver to encrypt a message; the receiver decrypts the message with
 the receiver's own private key. Only short messages can be directly
 encrypted using PK cryptosystems (limits are generally proportional to
@@ -386,10 +386,9 @@ private key.}
 @racket[pk], which must be a DSA private key, in a non-standard format
 used by OpenSSL.}}
 
-@item{@racket['ECPrivateKey] --- DER-encoded ECPrivateKey @cite{SEC1}
+@;{@item{@racket['ECPrivateKey] --- DER-encoded ECPrivateKey @cite{SEC1}
 representation of @racket[pk], which must be an EC private key. Only
-keys using named curves are supported.}
-
+keys using named curves are supported.}}
 ]
 
 More formats may be added in future versions of this library.

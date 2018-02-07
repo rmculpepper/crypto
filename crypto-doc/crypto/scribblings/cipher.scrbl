@@ -63,6 +63,10 @@ Note that the key length is not considered part of the cipher
 specifier; it is determined implicitly from the key provided to
 @racket[encrypt], @racket[make-encrypt-ctx], etc.
 
+The CCM block mode is not supported because of its burdensome
+requirements: it requires the message and AAD lengths to be known in
+advance.
+
 Future versions of this library may add more ciphers to the lists
 above and other forms of cipher specifiers.
 }
@@ -127,10 +131,11 @@ cipher.
 @defproc[(cipher-iv-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
          exact-nonnegative-integer?]{
 
-Returns the size in bytes of the IV (initialization vector) used by
-the cipher. Returns @racket[0] if the cipher does not use an IV.
+Returns the size in bytes of the @deftech{initialization vector} (IV)
+used by the cipher. Returns @racket[0] if the cipher does not use an
+IV.
 
-This library uses a broad interpretation of the term ``IV''; for
+This library uses a broad interpretation of the term ``IV''. For
 example, if @racket[ci] is a block cipher in CTR mode, this function
 returns the size of the counter.
 
@@ -146,8 +151,14 @@ returns the size of the counter.
 @defproc[(cipher-aead? [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)]) boolean?]{
 
 Returns @racket[#t] if @racket[ci] is an @tech{authenticated
-encryption} cipher, @racket[#f] otherwise. See @racket[encrypt/auth]
+encryption} cipher, @racket[#f] otherwise. See @racket[encrypt]
 for more details.
+
+An @deftech{authenticated encryption} cipher (with @emph{additionally
+authenticated data}, AEAD) produces an @deftech{authentication tag} in
+addition to the ciphertext. An AEAD cipher provides both
+confidentiality and integrity, whereas a non-AEAD cipher only provides
+confidentiality.
 
 @examples[#:eval the-eval
 (cipher-aead? '(aes ctr))
@@ -195,38 +206,46 @@ The random bytes are generated with @racket[crypto-random-bytes].
 @defproc[(encrypt [ci (or/c cipher-spec? cipher-impl?)]
                   [key bytes?]
                   [iv (or/c bytes? #f)]
-                  [input (or/c bytes? string? input-port?)]
+                  [input input/c]
+                  [#:aad additional-authenticated-data input/c #""]
+                  [#:auth-size auth-size exact-nonnegative-integer?
+                               (cipher-default-auth-size ci)]
                   [#:pad pad-mode boolean? #t])
          bytes?]
 @defproc[(decrypt [ci (or/c cipher-spec? cipher-impl?)]
                   [key bytes?]
                   [iv (or/c bytes? #f)]
                   [input (or/c bytes? input-port?)]
+                  [#:aad additional-authenticated-data input/c #""]
+                  [#:auth-size auth-size exact-nonnegative-integer?
+                               (cipher-default-auth-size ci)]
                   [#:pad pad-mode boolean? #t])
          bytes?]
 ]]{
 
 Encrypt or decrypt, respectively, using the secret @racket[key],
-initialization vector @racket[iv], and padding mode @racket[pad-mode].
-This @racket[iv] argument is the IV for CBC mode, the initial counter
-for CTR mode, etc.
+@tech{initialization vector} @racket[iv], and padding mode
+@racket[pad-mode].  See @racket[input/c] for accepted values of
+@racket[input] and @racket[additional-authenticated-data] and the
+rules of their conversion to bytes.
 
-If @racket[input] is a string, it is converted to bytes using
-@racket[string->bytes/utf-8]. If @racket[input] is an input port, its
-contents are read and processed unil an @racket[eof], but the port is
-not closed.
+If @racket[ci] is a block cipher and if @racket[pad-mode] is
+@racket[#t], then the input is padded using PKCS#7 padding during
+decryption, and the padding is checked and removed during decryption;
+otherwise if @racket[pad-mode] is @racket[#f], then the input is not
+padded, and its length must by divisible by @racket[ci]'s block
+size. If @racket[ci] is a stream cipher (including block ciphers using
+a stream mode), @racket[pad] is ignored and no padding is
+added. Future versions of this library may support additional kinds of
+padding.
 
-If @racket[pad-mode] is @racket[#t] and @racket[ci] is a block cipher,
-then the input is padded using PKCS#7 padding during decryption, and
-the padding is checked and removed during decryption. If @racket[_n]
-bytes of padding are needed, then @racket[_n] copies of the byte
-@racket[_n] are appended to the end of the input. If the input already
-ended at the end of a block, an entire block of padding is added.  If
-@racket[pad-mode] is @racket[#f], then the input is not padded, and
-its length must by divisible by @racket[ci]'s block size. If
-@racket[ci] is a stream cipher (including block ciphers using a stream
-mode), no padding is added in either case. Future versions of this
-library may support additional kinds of padding.
+If @racket[ci] is an @tech{authenticated encryption} (AEAD) cipher,
+the @tech{authentication tag} it produces is @emph{attached} to the
+ciphertext. That is, @racket[encrypt] appends the authentication tag
+to the end of the ciphertext, and @racket[decrypt] extracts the
+authentication tag from the end of the ciphertext. The
+@racket[auth-size] argument controls the length of the authentication
+tag. If authenticated decryption fails, an exception is raised.
 
 @examples[#:eval the-eval
 (define key (generate-cipher-key '(aes ctr)))
@@ -241,31 +260,30 @@ ciphertext
 @defproc[(encrypt/auth [ci (or/c cipher-spec? cipher-impl?)]
                        [key bytes?]
                        [iv (or/c bytes? #f)]
-                       [input (or/c bytes? string? input-port?)]
-                       [#:pad pad-mode boolean? #t]
-                       [#:AAD additional-auth-data (or/c bytes? #f) #f]
-                       [#:auth-size auth-size (or/c exact-nonnegative-integer? #f)
-                                    (cipher-default-auth-size ci)])
-         (values bytes? (or/c bytes? #f))]
+                       [input input/c]
+                       [#:AAD additional-authenticated-data input/c #""]
+                       [#:auth-size auth-size exact-nonnegative-integer?
+                                    (cipher-default-auth-size ci)]
+                       [#:pad pad-mode boolean? #t])
+         (values bytes? bytes?)]
 @defproc[(decrypt/auth [ci (or/c cipher-spec? cipher-impl?)]
                        [key bytes?]
                        [iv (or/c bytes? #f)]
                        [input (or/c bytes? input-port?)]
-                       [#:pad pad-mode boolean? #t]
-                       [#:AAD additional-auth-data (or/c bytes? #f) #f]
-                       [#:auth-tag auth-tag bytes? #f])
+                       [#:AAD additional-authenticated-data input/c #""]
+                       [#:auth-tag auth-tag bytes? #""]
+                       [#:pad pad-mode boolean? #t])
          bytes?]
 ]]{
 
-Like @racket[encrypt] and @racket[decrypt], respectively, except for
-@deftech{authenticated encryption} modes such as GCM. The
-@racket[encrypt/auth] function produces an @deftech{authentication
-tag} of length @racket[auth-size] for the
-@racket[additional-auth-data] and the @racket[input]. If
-@racket[auth-size] is @racket[#f], the authentication tag is not
-retrieved. The @racket[decrypt/auth] function raises an exception if
-the given @racket[auth-tag] does not match the
-@racket[additional-auth-data] and the @racket[input].
+Like @racket[encrypt] and @racket[decrypt], respectively, but the
+authentication tag is @emph{detached} from the ciphertext. That is,
+@racket[encrypt/auth] produces two values consisting of the ciphertext
+and authentication tag, and @racket[decrypt/auth] takes the ciphertext
+and authentication tag as distinct arguments.
+
+If @racket[ci] is not an AEAD cipher, the authentication tag is always
+@racket[#""].
 
 @examples[#:eval the-eval
 (define key (generate-cipher-key '(aes gcm)))
@@ -277,52 +295,30 @@ the given @racket[auth-tag] does not match the
 ]
 }
 
-@deftogether[[
-@defproc[(encrypt-write [ci (or/c cipher-spec? cipher-impl?)]
-                        [key bytes?]
-                        [iv (or/c bytes? #f)]
-                        [input (or/c bytes? string? input-port?)]
-                        [out output-port? (current-output-port)]
-                        [#:pad pad-mode boolean? #t])
-         exact-nonnegative-integer?]
-@defproc[(decrypt-write [ci (or/c cipher-spec? cipher-impl?)]
-                        [key bytes?]
-                        [iv (or/c bytes? #f)]
-                        [input (or/c bytes? input-port?)]
-                        [out output-port? (current-output-port)]
-                        [#:pad pad-mode boolean? #t])
-         exact-nonnegative-integer?]
-]]{
-
-Like @racket[encrypt] and @racket[decrypt], respectively, except that
-the encrypted or decrypted output is written to @racket[out], and the
-number of bytes written is returned.
-}
-
-
 @section{Low-level Cipher Operations}
 
 @deftogether[[
 @defproc[(make-encrypt-ctx [ci (or/c cipher-spec? cipher-impl?)]
                            [key bytes?]
                            [iv (or/c bytes? #f)]
+                           [#:auth-size auth-size exact-nonnegative-integer?
+                                        (cipher-default-auth-size ci)]
+                           [#:auth-attached? auth-attached? boolean? #t]
                            [#:pad pad-mode boolean? #t])
          encrypt-ctx?]
 @defproc[(make-decrypt-ctx [ci (or/c cipher-spec? cipher-impl?)]
                            [key bytes?]
                            [iv (or/c bytes? #f)]
-                           [#:pad pad-mode boolean? #t]
-                           [#:auth-tag auth-tag (or/c bytes? #f) #f])
+                           [#:auth-size auth-size exact-nonnegative-integer?
+                                        (cipher-default-auth-size ci)]
+                           [#:auth-attached? auth-attached? boolean? #t]
+                           [#:pad pad-mode boolean? #t])
          decrypt-ctx?]
 ]]{
 
 Returns a new cipher context for encryption or decryption,
 respectively, using the given secret @racket[key], initialization
 vector @racket[iv], and padding mode @racket[pad-mode].
-
-The @racket[auth-tag] is used for
-@tech[#:key "authenticated encryption"]{authenticated decryption}; 
-see @racket[decrypt/auth].
 }
 
 @defproc[(cipher-ctx? [v any/c]) boolean?]{
@@ -343,32 +339,29 @@ or decryption, respectively; otherwise, returns @racket[#f].
 }
 
 @defproc[(cipher-update [cctx cipher-ctx?]
-                        [input bytes?]
-                        [start exact-nonnegative-integer? 0]
-                        [end exact-nonnegative-integer? (bytes-length input)])
+                        [input input/c])
          bytes?]{
 
-Processes @racket[(subbytes input start end)] with the cipher context
-@racket[cctx], returning the newly available encrypted or decrypted
-output. The output may be larger or smaller than the input, because
-incomplete blocks are internally buffered by @racket[cctx].
+Processes @racket[input] with the cipher context @racket[cctx],
+returning the newly available encrypted or decrypted output. The
+output may be larger or smaller than the input, because incomplete
+blocks are internally buffered by @racket[cctx].
 }
 
 @defproc[(cipher-update-AAD [cctx cipher-ctx?]
-                            [input bytes?]
-                            [start exact-nonnegative-integer? 0]
-                            [end exact-nonnegative-integer? (bytes-length input)])
+                            [input input/c])
          void?]{
 
-Processes @racket[(subbytes input start end)] as additional
-authenticated data to the cipher context @racket[cctx]. Must be called
-before any calls to @racket[cipher-update].
+Processes @racket[input] as additional authenticated data to the
+cipher context @racket[cctx]. Must be called before any calls to
+@racket[cipher-update].
 
-If @racket[cctx] is not a context for @tech[#:key "authenticated encryption"]{
-authenticated encryption or decryption}, an exception is raised.
+If @racket[cctx] is not a context for @tech[#:key "authenticated
+encryption"]{authenticated encryption or decryption}, an exception is
+raised.
 }
 
-@defproc[(cipher-final [cctx cipher-ctx?])
+@defproc[(cipher-final [cctx cipher-ctx?] [auth-tag (or/c bytes? #f)])
          bytes?]{
 
 Processes any remaining input buffered by @racket[cctx], applies or
@@ -376,22 +369,24 @@ checks and removes padding if appropriate, and returns the newly
 available output.
 
 If @racket[cctx] is an @tech[#:key "authenticated encryption"]{
-authenticated decryption} context, then the function
-raises an exception if the @tech{authentication tag} does not match. See also
-@racket[decrypt/auth].
+authenticated decryption} context in @emph{detached} mode (that is,
+created with @racket[#:auth-attached? #f]), then @racket[auth-tag] is
+checked against the decryption's final @tech{authentication tag} and
+an exception is raised if they do not match.
 
-If @racket[cctx] is an @tech{authenticated encryption} context, use
-@racket[cipher-final/tag] instead.
+Otherwise---if the @racket[cctx] is an encryption context, or a
+decryption context for a non-AEAD cipher, or a decryption context for
+an AEAD cipher in @emph{attached} mode---@racket[auth-tag] must be
+@racket[#f] or else an exception is raised.
 }
 
-@defproc[(cipher-final/tag [cctx encrypt-ctx?]
-                           [#:auth-size auth-size exact-nonnegative-integer?
-                                        (cipher-default-auth-size cctx)])
-         (values bytes? bytes?)]{
+@defproc[(cipher-get-auth-tag [cctx cipher-ctx?])
+         bytes?]{
 
-Like @racket[cipher-final], but also return an @tech{authentication tag}. The
-@racket[cctx] argument must be an @tech{authenticated encryption}
-context. See also @racket[encrypt/auth].
+If @racket[cctx] is an encryption context, retrieves the
+authentication code. For a non-AEAD cipher, the authentication code is
+always @racket[#""]. If called before @racket[cipher-final], an
+exception is raised.
 }
 
 @(close-eval the-eval)

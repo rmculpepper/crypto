@@ -9,14 +9,13 @@
                      crypto/nettle
                      crypto/gcrypt))
 
-@title[#:tag "factory"]{Cryptography Providers}
+@title[#:tag "factory"]{Cryptography Factories}
 
 This library relies on foreign libraries for the implementations of
 cryptographic primitives. Each foreign library is called a
 @emph{cryptography provider} and it has an associated @emph{factory}
 that map cryptographic @emph{algorithm specifiers} to
-@emph{implementations}. A cryptography provider may also export other
-functions---for example, to refresh a random number generator.
+@emph{implementations}.
 
 Cryptography providers may be used to obtain algorithm implementations
 either explicitly or implicitly. An implementation of a cryptographic
@@ -50,13 +49,12 @@ The initial value is @racket['()].
          crypto-factory?]{
 
 Gets the factory associated with a particular cryptographic algorithm
-implementation.
+implementation or context.
 }
 
 @;{----------------------------------------}
 
-
-@section{Libcrypto (OpenSSL)}
+@section[#:tag "libcrypto-factory"]{Libcrypto (OpenSSL)}
 
 @defmodule[crypto/libcrypto]
 
@@ -73,7 +71,7 @@ its CSPRNG using entropy obtained from the operating system
 described here}).
 }
 
-@section{GCrypt}
+@section[#:tag "gcrypt-factory"]{GCrypt}
 
 @defmodule[crypto/gcrypt]
 
@@ -82,13 +80,13 @@ described here}).
 Factory for
 @hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt}, a
 cryptography library from the GNU project, originally part of GnuPG.
-The @tt{libgcrypt.so.11} foreign library is required.
+The @tt{libgcrypt.so.20} foreign library is required.
 
 @bold{CSPRNG Initialization} The libgcrypt library seems to perform
 some default CSPRNG initialization, but I don't know the details.
 }
 
-@section{Nettle}
+@section[#:tag "nettle-factory"]{Nettle}
 
 @defmodule[crypto/nettle]
 
@@ -96,8 +94,8 @@ some default CSPRNG initialization, but I don't know the details.
 
 Factory for
 @hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle}, a
-lightweight cryptography library. The @tt{libnettle.so.4} foreign
-library is required.
+lightweight cryptography library. The @tt{libnettle.so.6} and
+@tt{libhogweed.so.4} foreign libraries is required.
 
 @bold{CSPRNG Initialization} This library creates a Yarrow-256
 instance and seeds it with entropy obtained from
