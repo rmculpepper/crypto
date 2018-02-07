@@ -146,11 +146,11 @@
 ;; make-{en,de}crypt-ctx : ... -> cipher-ctx
 ;; auth-tag-size : Nat/#f -- #f means default tag size for cipher
 (define (make-encrypt-ctx ci key iv #:pad [pad? #t]
-                          #:auth-size [auth-size #f] #:auth-attached? [auth-attached? #f])
+                          #:auth-size [auth-size #f] #:auth-attached? [auth-attached? #t])
   (with-crypto-entry 'make-encrypt-ctx
     (-encrypt-ctx ci key iv pad? auth-size auth-attached?)))
 (define (make-decrypt-ctx ci key iv #:pad [pad? #t]
-                          #:auth-size [auth-size #f] #:auth-attached? [auth-attached? #f])
+                          #:auth-size [auth-size #f] #:auth-attached? [auth-attached? #t])
   (with-crypto-entry 'make-decrypt-ctx
     (-decrypt-ctx ci key iv pad? auth-size auth-attached?)))
 

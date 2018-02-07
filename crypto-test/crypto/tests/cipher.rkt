@@ -60,7 +60,7 @@
     (check-equal? (decrypt ci key iv ciphertext) msg)
     (check-equal? (decrypt ci key iv (open-input-bytes ciphertext)) msg)
 
-    (let ([cctx (make-encrypt-ctx ci key iv)])
+    (let ([cctx (make-encrypt-ctx ci key iv #:auth-attached? #f)])
       (check-equal? (bytes-append
                      (apply bytes-append
                             (for/list ([inb (in-bytes msg)])
@@ -110,7 +110,7 @@
       (check-equal? at2 auth-tag))
     (check-equal? (decrypt/auth ci key iv (open-input-bytes ciphertext) #:auth-tag auth-tag) msg)
 
-    (let ([cctx (make-encrypt-ctx ci key iv)])
+    (let ([cctx (make-encrypt-ctx ci key iv #:auth-attached? #f)])
       (define cparts (append (for/list ([inb (in-bytes msg)])
                                (cipher-update cctx (bytes inb)))
                              (list (cipher-final cctx))))
@@ -118,7 +118,7 @@
       (check-equal? (apply bytes-append cparts) ciphertext)
       (check-equal? at2 auth-tag))
 
-    (let ([dctx (make-decrypt-ctx ci key iv)])
+    (let ([dctx (make-decrypt-ctx ci key iv #:auth-attached? #f)])
       (check-equal? (bytes-append
                      (apply bytes-append
                             (for/list ([inb (in-bytes ciphertext)])
