@@ -531,11 +531,19 @@
 
     (abstract is-private?)
     (abstract get-public-key)
-    (abstract write-key)
     (abstract equal-to-key?)
 
     (define/public (get-params)
       (crypto-error "key parameters not supported"))
+
+    (define/public (write-key fmt)
+      (cond [(or (eq? fmt 'SubjectPublicKeyInfo) (not (is-private?)))
+             (-write-public-key fmt)]
+            [else
+             (-write-private-key fmt)]))
+
+    (define/public (-write-public-key fmt) #f)
+    (define/public (-write-private-key fmt) #f)
 
     ;; ----
 

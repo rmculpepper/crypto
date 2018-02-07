@@ -35,6 +35,17 @@
 (define (int->mpi n)   (base256->mpi (unsigned->base256 n)))
 (define (mpi->int mpi) (base256->unsigned (mpi->base256 mpi)))
 
+(define (sexp-get-mpi outersexp outertag tag)
+  (define sexp (gcry_sexp_find_token outersexp outertag))
+  (define tag-sexp (gcry_sexp_find_token sexp tag))
+  (gcry_sexp_nth_mpi tag-sexp 1))
+(define (sexp-get-data outersexp outertag tag)
+  (define sexp (gcry_sexp_find_token outersexp outertag))
+  (define tag-sexp (gcry_sexp_find_token sexp tag))
+  (gcry_sexp_nth_data tag-sexp 1))
+(define (sexp-get-int outersexp outertag tag)
+  (mpi->int (sexp-get-mpi outersexp outertag tag)))
+
 (define gcrypt-read-key%
   (class pk-read-key-base%
     (inherit-field factory)
@@ -270,32 +281,31 @@
     (inherit is-private?)
     (super-new)
 
-    (define/override (write-key fmt)
-      (define (get-mpi sexp tag)
-        (define rsa-sexp (gcry_sexp_find_token sexp "rsa"))
-        (define tag-sexp (gcry_sexp_find_token rsa-sexp tag))
-        (gcry_sexp_nth_mpi tag-sexp 1))
-      (cond [(is-private?)
-             (define n-mpi (get-mpi priv "n"))
-             (define e-mpi (get-mpi priv "e"))
-             (define d-mpi (get-mpi priv "d"))
-             (define p-mpi (get-mpi priv "p"))
-             (define q-mpi (get-mpi priv "q"))
-             (define tmp (gcry_mpi_new))
-             (define dp-mpi (gcry_mpi_new))
-             (gcry_mpi_sub_ui tmp p-mpi 1)
-             (or (gcry_mpi_invm dp-mpi e-mpi tmp)
-                 (crypto-error "failed to calculate dP"))
-             (define dq-mpi (gcry_mpi_new))
-             (gcry_mpi_sub_ui tmp q-mpi 1)
-             (or (gcry_mpi_invm dq-mpi e-mpi tmp)
-                 (crypto-error "failed to calculate dQ"))
-             (define qInv-mpi (gcry_mpi_new))
-             (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
-                 (crypto-error "failed to calculate qInv"))
-             (apply encode-priv-rsa fmt
-                    (map mpi->int (list n-mpi e-mpi d-mpi p-mpi q-mpi dp-mpi dq-mpi qInv-mpi)))]
-            [else (encode-pub-rsa fmt (mpi->int (get-mpi pub "n")) (mpi->int (get-mpi pub "e")))]))
+    (define/override (-write-private-key fmt)
+      (define (get-mpi tag) (sexp-get-mpi priv "rsa" tag))
+      (define n-mpi (get-mpi "n"))
+      (define e-mpi (get-mpi "e"))
+      (define d-mpi (get-mpi "d"))
+      (define p-mpi (get-mpi "p"))
+      (define q-mpi (get-mpi "q"))
+      (define tmp (gcry_mpi_new))
+      (define dp-mpi (gcry_mpi_new))
+      (gcry_mpi_sub_ui tmp p-mpi 1)
+      (or (gcry_mpi_invm dp-mpi e-mpi tmp)
+          (crypto-error "failed to calculate dP"))
+      (define dq-mpi (gcry_mpi_new))
+      (gcry_mpi_sub_ui tmp q-mpi 1)
+      (or (gcry_mpi_invm dq-mpi e-mpi tmp)
+          (crypto-error "failed to calculate dQ"))
+      (define qInv-mpi (gcry_mpi_new))
+      (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
+          (crypto-error "failed to calculate qInv"))
+      (apply encode-priv-rsa fmt
+             (map mpi->int (list n-mpi e-mpi d-mpi p-mpi q-mpi dp-mpi dq-mpi qInv-mpi))))
+
+    (define/override (-write-public-key fmt)
+      (define (get-int tag) (sexp-get-int pub "rsa" tag))
+      (encode-pub-rsa fmt (get-int "n") (get-int "e")))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (define padding (check-sig-pad pad))
@@ -401,17 +411,13 @@
     (inherit is-private?)
     (super-new)
 
-    (define/override (write-key fmt)
-      (define (get-mpi sexp tag)
-        (define dsa-sexp (gcry_sexp_find_token sexp "dsa"))
-        (define tag-sexp (gcry_sexp_find_token dsa-sexp tag))
-        (gcry_sexp_nth_mpi tag-sexp 1))
-      (cond [(is-private?)
-             (define (get-int tag) (mpi->int (get-mpi priv tag)))
-             (apply encode-priv-dsa fmt (map get-int '("p" "q" "g" "y" "x")))]
-            [else
-             (define (get-int tag) (mpi->int (get-mpi pub tag)))
-             (apply encode-pub-dsa fmt (map get-int '("p" "q" "g" "y")))]))
+    (define/override (-write-private-key fmt)
+      (define (get-int tag) (sexp-get-int priv "dsa" tag))
+      (apply encode-priv-dsa fmt (map get-int '("p" "q" "g" "y" "x"))))
+
+    (define/override (-write-public-key fmt)
+      (define (get-int tag) (sexp-get-int pub "dsa" tag))
+      (apply encode-pub-dsa fmt (map get-int '("p" "q" "g" "y"))))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (gcry_sexp_build "(data (flags raw) (value %M))"
@@ -481,27 +487,19 @@
     (inherit is-private?)
     (super-new)
 
-    (define/override (write-key fmt)
-      (define (get-data sexp tag)
-        (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
-        (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
-        (gcry_sexp_nth_data tag-sexp 1))
-      (define (get-mpi sexp tag)
-        (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
-        (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
-        (gcry_sexp_nth_mpi tag-sexp 1))
-      (define (get-curve-oid sexp)
-        (define curve (string->symbol (bytes->string/utf-8 (get-data sexp "curve"))))
-        (cond [(assq curve known-curves) => cdr] [else #f]))
-      (cond [(is-private?)
-             (define curve-oid (get-curve-oid priv))
-             (and curve-oid
-                  (encode-priv-ec fmt curve-oid (mpi->int (get-mpi priv "q"))
-                                  (mpi->int (get-mpi priv "d"))))]
-            [else
-             (define curve-oid (get-curve-oid pub))
-             (and curve-oid
-                  (encode-pub-ec fmt curve-oid (mpi->int (get-mpi pub "q"))))]))
+    (define/override (-write-private-key fmt)
+      (define (get-int tag) (sexp-get-int priv "ecc" tag))
+      (define curve-oid (get-curve-oid priv))
+      (and curve-oid (encode-priv-ec fmt curve-oid (get-int "q") (get-int "d"))))
+
+    (define/override (-write-public-key fmt)
+      (define (get-int tag) (sexp-get-int pub "ecc" tag))
+      (define curve-oid (get-curve-oid pub))
+      (and curve-oid (encode-pub-ec fmt curve-oid (get-int "q"))))
+
+    (define/private (get-curve-oid sexp)
+      (define curve (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "curve"))))
+      (cond [(assq curve known-curves) => cdr] [else #f]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (gcry_sexp_build "(data (flags raw) (value %M))"

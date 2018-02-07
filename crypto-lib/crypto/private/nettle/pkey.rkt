@@ -168,37 +168,21 @@
     (define/override (get-public-key)
       (if priv (new nettle-rsa-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (write-key fmt)
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (asn1->bytes/DER
-          SubjectPublicKeyInfo
-          (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
-                  'subjectPublicKey
-                  (hasheq 'modulus (mpz->integer (rsa_public_key_struct-n pub))
-                          'publicExponent (mpz->integer (rsa_public_key_struct-e pub)))))]
-        [(PrivateKeyInfo)
-         (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (asn1->bytes/DER
-          PrivateKeyInfo
-          (hasheq 'version 0
-                  'privateKeyAlgorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
-                  'privateKey (get-RSAPrivateKey)))]
-        [(RSAPrivateKey)
-         (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (asn1->bytes/DER RSAPrivateKey (get-RSAPrivateKey))]
-        [else (err/key-format 'rsa (is-private?) fmt)]))
+    (define/override (-write-private-key fmt)
+      (encode-priv-rsa fmt
+                       (mpz->integer (rsa_public_key_struct-n pub))
+                       (mpz->integer (rsa_public_key_struct-e pub))
+                       (mpz->integer (rsa_private_key_struct-d priv))
+                       (mpz->integer (rsa_private_key_struct-p priv))
+                       (mpz->integer (rsa_private_key_struct-q priv))
+                       (mpz->integer (rsa_private_key_struct-a priv))
+                       (mpz->integer (rsa_private_key_struct-b priv))
+                       (mpz->integer (rsa_private_key_struct-c priv))))
 
-    (define/private (get-RSAPrivateKey)
-      (hasheq 'version 0
-              'modulus (mpz->integer (rsa_public_key_struct-n pub))
-              'publicExponent (mpz->integer (rsa_public_key_struct-e pub))
-              'privateExponent (mpz->integer (rsa_private_key_struct-d priv))
-              'prime1 (mpz->integer (rsa_private_key_struct-p priv))
-              'prime2 (mpz->integer (rsa_private_key_struct-q priv))
-              'exponent1 (mpz->integer (rsa_private_key_struct-a priv))
-              'exponent2 (mpz->integer (rsa_private_key_struct-b priv))
-              'coefficient (mpz->integer (rsa_private_key_struct-c priv))))
+    (define/override (-write-public-key fmt)
+      (encode-pub-rsa fmt
+                      (mpz->integer (rsa_public_key_struct-n pub))
+                      (mpz->integer (rsa_public_key_struct-e pub))))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-rsa-key%)
@@ -321,39 +305,20 @@
     (define/override (get-public-key)
       (if priv (new nettle-dsa-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (write-key fmt)
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (asn1->bytes/DER
-          SubjectPublicKeyInfo
-          (hasheq 'algorithm
-                  (hasheq 'algorithm id-dsa
-                          'parameters (hasheq 'p (mpz->integer (dsa_public_key_struct-p pub))
-                                              'q (mpz->integer (dsa_public_key_struct-q pub))
-                                              'g (mpz->integer (dsa_public_key_struct-g pub))))
-                  'subjectPublicKey (mpz->integer (dsa_public_key_struct-y pub))))]
-        [(PrivateKeyInfo)
-         (unless (is-private?) (err/key-format 'dsa #f fmt))
-         (asn1->bytes/DER
-          PrivateKeyInfo
-          (hasheq 'version 0
-                  'privateKeyAlgorithm
-                  (hasheq 'algorithm id-dsa
-                          'parameters (hasheq 'p (mpz->integer (dsa_public_key_struct-p pub))
-                                              'q (mpz->integer (dsa_public_key_struct-q pub))
-                                              'g (mpz->integer (dsa_public_key_struct-g pub))))
-                  'privateKey (mpz->integer (dsa_private_key_struct-x priv))))]
-        [(DSAPrivateKey)
-         (unless (is-private?) (err/key-format 'dsa #f fmt))
-         (asn1->bytes/DER
-          (SEQUENCE-OF INTEGER)
-          (list 0 ;; FIXME ???
-                (mpz->integer (dsa_public_key_struct-p pub))
-                (mpz->integer (dsa_public_key_struct-q pub))
-                (mpz->integer (dsa_public_key_struct-g pub))
-                (mpz->integer (dsa_public_key_struct-y pub))
-                (mpz->integer (dsa_private_key_struct-x priv))))]
-        [else (err/key-format 'dsa (is-private?) fmt)]))
+    (define/override (-write-public-key fmt)
+      (encode-pub-dsa fmt
+                      (mpz->integer (dsa_public_key_struct-p pub))
+                      (mpz->integer (dsa_public_key_struct-q pub))
+                      (mpz->integer (dsa_public_key_struct-g pub))
+                      (mpz->integer (dsa_public_key_struct-y pub))))
+
+    (define/override (-write-private-key fmt)
+      (encode-priv-dsa fmt
+                       (mpz->integer (dsa_public_key_struct-p pub))
+                       (mpz->integer (dsa_public_key_struct-q pub))
+                       (mpz->integer (dsa_public_key_struct-g pub))
+                       (mpz->integer (dsa_public_key_struct-y pub))
+                       (mpz->integer (dsa_private_key_struct-x priv))))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-dsa-key%)
