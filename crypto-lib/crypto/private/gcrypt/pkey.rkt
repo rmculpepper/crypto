@@ -1,4 +1,4 @@
-;; Copyright 2013 Ryan Culpepper
+;; Copyright 2013-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -275,56 +275,27 @@
         (define rsa-sexp (gcry_sexp_find_token sexp "rsa"))
         (define tag-sexp (gcry_sexp_find_token rsa-sexp tag))
         (gcry_sexp_nth_mpi tag-sexp 1))
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (asn1->bytes/DER
-          SubjectPublicKeyInfo
-          (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
-                  'subjectPublicKey (hasheq 'modulus (mpi->int (get-mpi pub "n"))
-                                            'publicExponent (mpi->int (get-mpi pub "e")))))]
-        [(PrivateKeyInfo)
-         (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (asn1->bytes/DER
-          PrivateKeyInfo
-          (hasheq 'version 0
-                  'privateKeyAlgorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
-                  'privateKey (get-RSAPrivateKey priv)))]
-        [(RSAPrivateKey)
-         (unless (is-private?) (err/key-format 'rsa #f fmt))
-         (asn1->bytes/DER RSAPrivateKey (get-RSAPrivateKey priv))]
-        [else (err/key-format 'rsa (is-private?) fmt)]))
-
-    (define/private (get-RSAPrivateKey priv)
-      (define (get-mpi sexp tag)
-        (define rsa-sexp (gcry_sexp_find_token sexp "rsa"))
-        (define tag-sexp (gcry_sexp_find_token rsa-sexp tag))
-        (gcry_sexp_nth_mpi tag-sexp 1))
-      (define n-mpi (get-mpi priv "n"))
-      (define e-mpi (get-mpi priv "e"))
-      (define d-mpi (get-mpi priv "d"))
-      (define p-mpi (get-mpi priv "p"))
-      (define q-mpi (get-mpi priv "q"))
-      (define tmp (gcry_mpi_new))
-      (define dp-mpi (gcry_mpi_new))
-      (gcry_mpi_sub_ui tmp p-mpi 1)
-      (or (gcry_mpi_invm dp-mpi e-mpi tmp)
-          (crypto-error "failed to calculate dP"))
-      (define dq-mpi (gcry_mpi_new))
-      (gcry_mpi_sub_ui tmp q-mpi 1)
-      (or (gcry_mpi_invm dq-mpi e-mpi tmp)
-          (crypto-error "failed to calculate dQ"))
-      (define qInv-mpi (gcry_mpi_new))
-      (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
-          (crypto-error "failed to calculate qInv"))
-      (hasheq 'version 0
-              'modulus (mpi->int n-mpi)
-              'publicExponent (mpi->int e-mpi)
-              'privateExponent (mpi->int d-mpi)
-              'prime1 (mpi->int p-mpi)
-              'prime2 (mpi->int q-mpi)
-              'exponent1 (mpi->int dp-mpi)
-              'exponent2 (mpi->int dq-mpi)
-              'coefficient (mpi->int qInv-mpi)))
+      (cond [(is-private?)
+             (define n-mpi (get-mpi priv "n"))
+             (define e-mpi (get-mpi priv "e"))
+             (define d-mpi (get-mpi priv "d"))
+             (define p-mpi (get-mpi priv "p"))
+             (define q-mpi (get-mpi priv "q"))
+             (define tmp (gcry_mpi_new))
+             (define dp-mpi (gcry_mpi_new))
+             (gcry_mpi_sub_ui tmp p-mpi 1)
+             (or (gcry_mpi_invm dp-mpi e-mpi tmp)
+                 (crypto-error "failed to calculate dP"))
+             (define dq-mpi (gcry_mpi_new))
+             (gcry_mpi_sub_ui tmp q-mpi 1)
+             (or (gcry_mpi_invm dq-mpi e-mpi tmp)
+                 (crypto-error "failed to calculate dQ"))
+             (define qInv-mpi (gcry_mpi_new))
+             (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
+                 (crypto-error "failed to calculate qInv"))
+             (apply encode-priv-rsa fmt
+                    (map mpi->int (list n-mpi e-mpi d-mpi p-mpi q-mpi dp-mpi dq-mpi qInv-mpi)))]
+            [else (encode-pub-rsa fmt (mpi->int (get-mpi pub "n")) (mpi->int (get-mpi pub "e")))]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (define padding (check-sig-pad pad))
@@ -435,28 +406,12 @@
         (define dsa-sexp (gcry_sexp_find_token sexp "dsa"))
         (define tag-sexp (gcry_sexp_find_token dsa-sexp tag))
         (gcry_sexp_nth_mpi tag-sexp 1))
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (asn1->bytes/DER
-          SubjectPublicKeyInfo
-          (hasheq 'algorithm
-                  (hasheq 'algorithm id-dsa
-                          'parameters (hasheq 'p (mpi->int (get-mpi pub "p"))
-                                              'q (mpi->int (get-mpi pub "q"))
-                                              'g (mpi->int (get-mpi pub "g"))))
-                  'subjectPublicKey (mpi->int (get-mpi pub "y"))))]
-        [(PrivateKeyInfo)
-         (unless (is-private?) (err/key-format 'dsa #f fmt))
-         (asn1->bytes/DER
-          PrivateKeyInfo
-          (hasheq 'version 0
-                  'privateKeyAlgorithm
-                  (hasheq 'algorithm id-dsa
-                          'parameters (hasheq 'p (mpi->int (get-mpi priv "p"))
-                                              'q (mpi->int (get-mpi priv "q"))
-                                              'g (mpi->int (get-mpi priv "g"))))
-                  'privateKey (mpi->int (get-mpi priv "x"))))]
-        [else (err/key-format 'dsa (is-private?) fmt)]))
+      (cond [(is-private?)
+             (define (get-int tag) (mpi->int (get-mpi priv tag)))
+             (apply encode-priv-dsa fmt (map get-int '("p" "q" "g" "y" "x")))]
+            [else
+             (define (get-int tag) (mpi->int (get-mpi pub tag)))
+             (apply encode-pub-dsa fmt (map get-int '("p" "q" "g" "y")))]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (gcry_sexp_build "(data (flags raw) (value %M))"
@@ -531,33 +486,22 @@
         (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
         (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
         (gcry_sexp_nth_data tag-sexp 1))
-      (define (get-key-params sexp)
+      (define (get-mpi sexp tag)
+        (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
+        (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
+        (gcry_sexp_nth_mpi tag-sexp 1))
+      (define (get-curve-oid sexp)
         (define curve (string->symbol (bytes->string/utf-8 (get-data sexp "curve"))))
-        (cond [(assq curve known-curves) => (lambda (e) (list 'namedCurve (cdr e)))]
-              [else (crypto-error "unknown curve name\n  curve: ~e" curve)]))
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (asn1->bytes/DER
-          SubjectPublicKeyInfo
-          (hasheq 'algorithm (hasheq 'algorithm id-ecPublicKey
-                                     'parameters (get-key-params pub))
-                  'subjectPublicKey (get-data pub "q")))]
-        [(PrivateKeyInfo)
-         (unless (is-private?) (err/key-format 'ec #f fmt))
-         (asn1->bytes/DER
-          PrivateKeyInfo
-          (hasheq 'version 0
-                  'privateKeyAlgorithm (hasheq 'algorithm id-ecPublicKey
-                                               'parameters (get-key-params priv))
-                  'privateKey (hasheq 'version 1
-                                      'privateKey (mpi->base256 (get-mpi priv "d"))
-                                      'publicKey (mpi->base256 (get-mpi priv "q")))))]
-        [else (err/key-format 'ec (is-private?) fmt)]))
-
-    (define/private (get-mpi sexp tag)
-      (define ec-sexp (gcry_sexp_find_token sexp "ecc"))
-      (define tag-sexp (gcry_sexp_find_token ec-sexp tag))
-      (gcry_sexp_nth_mpi tag-sexp 1))
+        (cond [(assq curve known-curves) => cdr] [else #f]))
+      (cond [(is-private?)
+             (define curve-oid (get-curve-oid priv))
+             (and curve-oid
+                  (encode-priv-ec fmt curve-oid (mpi->int (get-mpi priv "q"))
+                                  (mpi->int (get-mpi priv "d"))))]
+            [else
+             (define curve-oid (get-curve-oid pub))
+             (and curve-oid
+                  (encode-pub-ec fmt curve-oid (mpi->int (get-mpi pub "q"))))]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (gcry_sexp_build "(data (flags raw) (value %M))"
