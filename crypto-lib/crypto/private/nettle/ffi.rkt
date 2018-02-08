@@ -685,3 +685,78 @@
         (p-bits : _uint) ;; eg, 2048
         (q-bits : _uint) ;; 256
         -> _bool))
+
+;; ----
+
+(define ec-ok?
+  (and libhogweed
+       (get-ffi-obj "nettle_ecc_point_init" libhogweed _fpointer (lambda () #f))
+       #t))
+
+(define-cstruct _ecc_point_struct ([ecc _pointer] [p _pointer])
+  #:malloc-mode 'atomic-interior)
+(define-cstruct _ecc_scalar_struct ([ecc _pointer] [p _pointer])
+  #:malloc-mode 'atomic-interior)
+
+(define-cpointer-type _ecc_curve)
+(define _ecc_point _ecc_point_struct-pointer)
+(define _ecc_scalar _ecc_scalar_struct-pointer)
+
+(define-nettleHW nettle_ecc_point_clear (_fun _ecc_point -> _void))
+(define-nettleHW nettle_ecc_point_init (_fun _ecc_point _ecc_curve -> _void))
+
+(define new-ecc_point
+  ((allocator nettle_ecc_point_clear)
+   (lambda (ecc)
+     (define p (make-ecc_point_struct ecc #f))
+     (nettle_ecc_point_init p ecc)
+     p)))
+
+(define-nettleHW nettle_ecc_point_set (_fun _ecc_point _mpz_t _mpz_t -> _int)) ;; 0 = err
+(define-nettleHW nettle_ecc_point_get (_fun _ecc_point _mpz_t _mpz_t -> _void))
+
+(define-nettleHW nettle_ecc_scalar_clear (_fun _ecc_scalar -> _void))
+(define-nettleHW nettle_ecc_scalar_init (_fun _ecc_scalar _ecc_curve -> _void))
+
+(define new-ecc_scalar
+  ((allocator nettle_ecc_scalar_clear)
+   (lambda (ecc)
+     (define s (make-ecc_scalar_struct ecc #f))
+     (nettle_ecc_scalar_init s ecc)
+     s)))
+
+(define-nettleHW nettle_ecc_scalar_set (_fun _ecc_scalar _mpz_t -> _int)) ;; 0=err
+(define-nettleHW nettle_ecc_scalar_get (_fun _ecc_scalar _mpz_t -> _void))
+
+(define-nettleHW nettle_ecc_scalar_random
+  (_fun _ecc_scalar _pointer (_fpointer = yarrow_random) -> _void))
+
+(define-nettleHW nettle_ecc_point_mul (_fun _ecc_point _ecc_scalar _ecc_point -> _void))
+(define-nettleHW nettle_ecc_point_mul_g (_fun _ecc_point _ecc_scalar -> _void))
+
+(define-nettleHW nettle_get_secp_192r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
+(define-nettleHW nettle_get_secp_224r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
+(define-nettleHW nettle_get_secp_256r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
+(define-nettleHW nettle_get_secp_384r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
+(define-nettleHW nettle_get_secp_521r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
+
+(define-nettleHW nettle_ecdsa_sign
+  (_fun (key randctx digest sig) ::
+        (key : _ecc_scalar)
+        (randctx : _pointer)
+        (_fpointer = yarrow_random)
+        (_size = (bytes-length digest))
+        (digest : _bytes)
+        (sig : _dsa_signature)
+        -> _void))
+
+(define-nettleHW nettle_ecdsa_verify
+  (_fun (pubkey digest sig) ::
+        (pubkey : _ecc_point)
+        (_size = (bytes-length digest))
+        (digest : _bytes)
+        (sig : _dsa_signature)
+        -> _bool))
+
+(define-nettleHW nettle_ecdsa_generate_keypair
+  (_fun _ecc_point _ecc_scalar _pointer (_fpointer = yarrow_random) -> _void))

@@ -139,6 +139,7 @@
       (case spec
         [(rsa) (and rsa-ok? (new nettle-rsa-impl% (factory this)))]
         [(dsa) (and dsa-ok? (new nettle-dsa-impl% (factory this)))]
+        [(ec) (and ec-ok? (new nettle-ec-impl% (factory this)))]
         [else #f]))
 
     (define nettle-read-key (new nettle-read-key% (factory this)))

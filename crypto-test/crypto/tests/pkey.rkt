@@ -48,7 +48,8 @@
         (eprintf "-  cannot read ~s (~a)\n" (cadr key-sexpr) factory-name)))
     (when key
       (when #t
-        (eprintf "+  testing ~s (~a)\n" (cadr key-sexpr) factory-name))
+        (eprintf "+  testing ~s (~a)\n" (cadr key-sexpr) factory-name)
+        (eprintf " + self-test (~a => ~a)\n" factory-name factory-name))
       (test-case (format "~a ~a ~a" factory-name (car key-sexpr) (cadr key-sexpr))
         ;; Can convert to pubkey, can serialize and deserialize
         (check-pred private-key? key)
@@ -62,11 +63,12 @@
             (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
         (unless pubkey*
           (when #t
-            (eprintf " - cannot read public key for ~s (~s)\n"
+            (eprintf " - cannot read public key for ~s (~a)\n"
                      (cadr key-sexpr) (send pub-factory get-name))))
         (when pubkey*
           (when #t
-            (eprintf " + cross-testing with ~s\n" (send pub-factory get-name)))
+            (eprintf " + cross-testing (~a => ~a)\n"
+                     factory-name (send pub-factory get-name)))
           ;; (check public-key=? pubkey pubkey*) ;; FIXME?
           (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name)
                              (car key-sexpr) (cadr key-sexpr))

@@ -277,7 +277,8 @@
 ;; ec-point->bytes : Nat Nat -> Bytes
 (define (ec-point->bytes mlen x y)
   ;; no compression, assumes valid, assumes not infinity/zero point
-  (bytes-append (bytes #x04) (integer->bytes x mlen #f #f) (integer->bytes y mlen #f #f)))
+  ;; (eprintf "encode\n mlen=~v\n x=~v\n y=~v\n" mlen x y)
+  (bytes-append (bytes #x04) (integer->bytes x mlen #f #t) (integer->bytes y mlen #f #t)))
 
 ;; bytes->ec-point : Bytes -> (cons Nat Nat)
 (define (bytes->ec-point buf)
@@ -288,8 +289,10 @@
     [(#x04) ;; uncompressed point
      (unless (odd? buflen) (bad))
      (define len (quotient (sub1 (bytes-length buf)) 2))
-     (cons (bytes->integer buf #f #f 1 (+ 1 len))
-           (bytes->integer buf #f #f (+ 1 len) (+ 1 len len)))]
+     (define x (bytes->integer buf #f #t 1 (+ 1 len)))
+     (define y (bytes->integer buf #f #t (+ 1 len) (+ 1 len len)))
+     ;; (eprintf "decode\n mlen=~v\n x=~v\n y=~v\n" len x y)
+     (cons x y)]
     [else (bad)]))
 
 ;; curve-oid->name : OID -> Symbol/#f
@@ -300,4 +303,4 @@
 
 ;; curve-name->oid : Symbol -> OID/#f
 (define (curve-name->oid name)
-  (cond [(assq known-curves name) => cdr] [else #f]))
+  (cond [(assq name known-curves) => cdr] [else #f]))

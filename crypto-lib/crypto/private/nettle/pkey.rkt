@@ -100,6 +100,45 @@
       (define impl (send factory get-pk 'dsa))
       (new nettle-dsa-key% (impl impl) (pub pub) (priv priv)))
 
+    ;; ---- EC ----
+
+    (define/override (-make-pub-ec curve-oid qB)
+      (define ecc (curve-oid->ecc curve-oid))
+      (define pub (and ecc (make-ec-public-key ecc qB)))
+      (cond [(and ecc pub)
+             (define impl (send factory get-pk 'ec))
+             (new nettle-ec-key% (impl impl) (pub pub) (priv #f))]
+            [else #f]))
+
+    (define/override (-make-priv-ec curve-oid qB d)
+      (define ecc (curve-oid->ecc curve-oid))
+      (define pub (and ecc (make-ec-public-key ecc qB)))
+      (cond [(and ecc pub)
+             (define priv (new-ecc_scalar ecc))
+             (nettle_ecc_scalar_set priv (integer->mpz d))
+             (define impl (send factory get-pk 'ec))
+             (new nettle-ec-key% (impl impl) (pub pub) (priv priv))]
+            [else #f]))
+
+    (define/private (make-ec-public-key ecc qB)
+      (cond [(bytes->ec-point qB)
+             => (lambda (x+y)
+                  (define x (integer->mpz (car x+y)))
+                  (define y (integer->mpz (cdr x+y)))
+                  (define pub (new-ecc_point ecc))
+                  (nettle_ecc_point_set pub x y)
+                  pub)]
+            [else #f]))
+
+    (define/private (curve-oid->ecc curve-oid)
+      (case (curve-oid->name curve-oid)
+        [(secp192r1) (nettle_get_secp_192r1)]
+        [(secp224r1) (nettle_get_secp_224r1)]
+        [(secp256r1) (nettle_get_secp_256r1)]
+        [(secp384r1) (nettle_get_secp_384r1)]
+        [(secp521r1) (nettle_get_secp_521r1)]
+        [else #f]))
+
     ;; ----
 
     (define/override (read-params sp) #f)
@@ -344,21 +383,6 @@
           (crypto-error "DSA signing failed"))
       (dsa_signature->der sig))
 
-    (define/private (dsa_signature->der sig)
-      (asn1->bytes/DER DSA-Sig-Val
-       (hasheq 'r (mpz->integer (dsa_signature_struct-r sig))
-               's (mpz->integer (dsa_signature_struct-s sig)))))
-
-    (define/private (der->dsa_signature der)
-      (match (bytes->asn1/DER DSA-Sig-Val der)
-        [(hash-table ['r (? exact-nonnegative-integer? r)]
-                     ['s (? exact-nonnegative-integer? s)])
-         (define sig (new-dsa_signature))
-         (__gmpz_set (dsa_signature_struct-r sig) (integer->mpz r))
-         (__gmpz_set (dsa_signature_struct-s sig) (integer->mpz s))
-         sig]
-        [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
-
     (define/override (-verify digest digest-spec pad sig-der)
       (define verify-fun
         (case digest-spec
@@ -372,3 +396,114 @@
       (define sig (der->dsa_signature sig-der))
       (verify-fun pub digest sig))
     ))
+
+(define (dsa_signature->der sig)
+  (asn1->bytes/DER DSA-Sig-Val
+    (hasheq 'r (mpz->integer (dsa_signature_struct-r sig))
+            's (mpz->integer (dsa_signature_struct-s sig)))))
+
+(define (der->dsa_signature der)
+  (match (bytes->asn1/DER DSA-Sig-Val der)
+    [(hash-table ['r (? exact-nonnegative-integer? r)]
+                 ['s (? exact-nonnegative-integer? s)])
+     (define sig (new-dsa_signature))
+     (__gmpz_set (dsa_signature_struct-r sig) (integer->mpz r))
+     (__gmpz_set (dsa_signature_struct-s sig) (integer->mpz s))
+     sig]
+    [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
+
+;; ============================================================
+
+(define nettle-ec-impl%
+  (class nettle-pk-impl%
+    (inherit-field spec factory)
+    (inherit get-random-ctx)
+    (super-new (spec 'ec))
+
+    (define/override (can-sign? pad dspec) (memq pad '(#f)))
+    ;; (define/override (generate-key config) ...) ;; FIXME
+    ))
+
+(define nettle-ec-key%
+  (class pk-key-base%
+    (init-field pub priv)
+    (inherit-field impl)
+    (super-new)
+
+    (define/override (is-private?) (and priv #t))
+
+    (define/override (get-public-key)
+      (if priv (new nettle-ec-key% (impl impl) (pub pub) (priv #f)) this))
+
+    (define/override (-write-private-key fmt) (-write-key fmt))
+    (define/override (-write-public-key fmt) (-write-key fmt))
+
+    (define/private (-write-key fmt)
+      (define ecc (ecc_point_struct-ecc pub))
+      (define curve-oid (ecc->curve-oid ecc))
+      (define mlen (ecc->mlen ecc))
+      (define qB
+        (let ([xz (new-mpz)] [yz (new-mpz)])
+          (nettle_ecc_point_get pub xz yz)
+          (ec-point->bytes mlen (mpz->integer xz) (mpz->integer yz))))
+      (cond [priv
+             (define dz (new-mpz))
+             (nettle_ecc_scalar_get priv dz)
+             (encode-priv-ec fmt curve-oid qB (mpz->integer dz))]
+            [else
+             (encode-pub-ec fmt curve-oid qB)]))
+
+    (define/override (equal-to-key? other)
+      (and (is-a? other nettle-ec-key%)
+           (ecc_point=? pub (get-field pub other))))
+
+    (define/override (-sign digest digest-spec pad)
+      (define randctx (send impl get-random-ctx))
+      (define sig (new-dsa_signature))
+      (nettle_ecdsa_sign priv randctx digest sig)
+      (dsa_signature->der sig))
+
+    (define/override (-verify digest digest-spec pad sig-der)
+      (define sig (der->dsa_signature sig-der))
+      (nettle_ecdsa_verify pub digest sig))
+    ))
+
+(define (ecc_point=? a b)
+  (and (ptr-equal? (ecc_point_struct-ecc a) (ecc_point_struct-ecc b))
+       (let ([ax (new-mpz)] [ay (new-mpz)]
+             [bx (new-mpz)] [by (new-mpz)])
+         (nettle_ecc_point_get a ax ay)
+         (nettle_ecc_point_get b bx by)
+         (and (mpz=? ax bx)
+              (mpz=? ay by)))))
+
+(define (ecc_scalar=? a b)
+  (and (ptr-equal? (ecc_scalar_struct-ecc a) (ecc_scalar_struct-ecc b))
+       (let ([az (new-mpz)] [bz (new-mpz)])
+         (nettle_ecc_scalar_get a az)
+         (nettle_ecc_scalar_get b bz)
+         (mpz=? az bz))))
+
+(define (ecc->curve-name ecc)
+  (cond
+    [(ptr-equal? ecc (nettle_get_secp_192r1)) 'secp192r1]
+    [(ptr-equal? ecc (nettle_get_secp_224r1)) 'secp224r1]
+    [(ptr-equal? ecc (nettle_get_secp_256r1)) 'secp256r1]
+    [(ptr-equal? ecc (nettle_get_secp_384r1)) 'secp384r1]
+    [(ptr-equal? ecc (nettle_get_secp_521r1)) 'secp521r1]
+    [else #f]))
+
+(define (ecc->curve-oid ecc)
+  (define curve-name (ecc->curve-name ecc))
+  (and curve-name (curve-name->oid curve-name)))
+
+(define (ecc->mlen ecc)
+  (define curve-name (ecc->curve-name ecc))
+  (define (f n) (quotient (+ n 7) 8)) ;; = ceil(n/8)
+  (case curve-name
+    [(secp192r1) (f 192)]
+    [(secp224r1) (f 224)]
+    [(secp256r1) (f 256)]
+    [(secp384r1) (f 384)]
+    [(secp521r1) (f 521)]
+    [else #f]))
