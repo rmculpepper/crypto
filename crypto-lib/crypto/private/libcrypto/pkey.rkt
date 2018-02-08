@@ -586,10 +586,12 @@ NIST P-192 disappeared!).
 
     (define/override (-compute-secret peer-pubkey0)
       (define peer-pubkey
-        (cond [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
+        (cond [(bytes? peer-pubkey0)
+               (send impl *convert-peer-pubkey evp peer-pubkey0)]
+              [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
                     (eq? (send peer-pubkey0 get-impl) impl))
                (get-field evp peer-pubkey0)]
-              [else (send impl *convert-peer-pubkey evp peer-pubkey0)]))
+              [else (crypto-error "internal error, bad peer public key")]))
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_derive_init ctx)
       (EVP_PKEY_derive_set_peer ctx peer-pubkey)

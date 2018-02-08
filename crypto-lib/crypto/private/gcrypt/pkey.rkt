@@ -87,7 +87,7 @@
                          (gcry_sexp_build "(p %M)" (int->mpi p))
                          (gcry_sexp_build "(q %M)" (int->mpi q))
                          (gcry_sexp_build "(u %M)" (int->mpi u))))
-      ;; FIXME: (gcry_pk_testkey ....)
+      (gcry_pk_testkey priv)
       priv)
 
     ;; ---- DSA ----
@@ -123,7 +123,7 @@
                          (gcry_sexp_build "(g %M)" (int->mpi g))
                          (gcry_sexp_build "(y %M)" (int->mpi y))
                          (gcry_sexp_build "(x %M)" (int->mpi x))))
-      ;; FIXME: (gcry_pk_testkey ...)
+      (gcry_pk_testkey priv)
       priv)
 
     ;; ---- EC ----
@@ -136,29 +136,29 @@
                   (new gcrypt-ec-key% (impl impl) (pub pub) (priv #f)))]
             [else #f]))
 
-    (define/private (make-ec-public-key curve q)
+    (define/private (make-ec-public-key curve qB)
       (gcry_sexp_build "(public-key (ecc %S %S))"
                        (gcry_sexp_build/%b "(curve %b)" curve)
-                       (gcry_sexp_build/%b "(q %M)" (int->mpi q))))
+                       (gcry_sexp_build/%b "(q %b)" qB)))
 
-    (define/override (-make-priv-ec curve-oid q d)
+    (define/override (-make-priv-ec curve-oid qB d)
       ;; FIXME: recover q if publicKey field not present
       ;;  -- grr, gcrypt doesn't seem to provide point<->bytes support
       (cond [(curve-oid->name curve-oid)
              => (lambda (curve-name)
-                  (define pub (make-ec-public-key curve-name q))
-                  (define priv (make-ec-private-key curve-name q d))
+                  (define pub (make-ec-public-key curve-name qB))
+                  (define priv (make-ec-private-key curve-name qB d))
                   (define impl (send factory get-pk 'ec))
                   (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv)))]
             [else #f]))
 
-    (define/private (make-ec-private-key curve q d)
+    (define/private (make-ec-private-key curve qB d)
       (define priv
         (gcry_sexp_build "(private-key (ecc %S %S %S))"
                          (gcry_sexp_build/%b "(curve %b)" curve)
-                         (gcry_sexp_build/%b "(q %M)" (int->mpi q))
+                         (gcry_sexp_build/%b "(q %b)" qB)
                          (gcry_sexp_build    "(d %M)" (int->mpi d))))
-      ;; FIXME: (gcry_pk_testkey ....)
+      (gcry_pk_testkey priv)
       priv)
 
     (define/private (curve-oid->name oid)
@@ -488,17 +488,20 @@
     (super-new)
 
     (define/override (-write-private-key fmt)
-      (define (get-int tag) (sexp-get-int priv "ecc" tag))
       (define curve-oid (get-curve-oid priv))
-      (and curve-oid (encode-priv-ec fmt curve-oid (get-int "q") (get-int "d"))))
+      (and curve-oid
+           (let ([qB (sexp-get-data priv "ecc" "q")]
+                 [d (sexp-get-int priv "ecc" "d")])
+             (encode-priv-ec fmt curve-oid qB d))))
 
     (define/override (-write-public-key fmt)
-      (define (get-int tag) (sexp-get-int pub "ecc" tag))
       (define curve-oid (get-curve-oid pub))
-      (and curve-oid (encode-pub-ec fmt curve-oid (get-int "q"))))
+      (and curve-oid
+           (let ([qB (sexp-get-data pub "ecc" "q")])
+             (encode-pub-ec fmt curve-oid qB))))
 
     (define/private (get-curve-oid sexp)
-      (define curve (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "curve"))))
+      (define curve (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
       (cond [(assq curve known-curves) => cdr] [else #f]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)

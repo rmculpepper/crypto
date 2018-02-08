@@ -194,33 +194,43 @@ References:
 
 (define ECPoint OCTET-STRING)
 
-(define ansi-X9-62 (OID (iso 1) (member-body 2) (us 840) 10045))
-(define id-publicKeyType (build-OID ansi-X9-62 (keyType 2)))
-(define id-ecPublicKey (build-OID id-publicKeyType 1))
+(define certicom (OID (iso 1) (identifier-organization 3) (certicom 132)))
+(define ansi-X9-62 (OID (iso 1) (member-body 2) (us 840) (ansi-X9-62 10045)))
 
-;; Curves from RFC 5480: http://www.ietf.org/rfc/rfc5480.txt
+;;(define id-publicKeyType (build-OID ansi-X9-62 (keyType 2)))
+(define id-ecPublicKey (build-OID ansi-X9-62 (keyType 2) (ecPublicKey 1)))
+
 (define known-curves
   (list
-   (cons 'secp192r1 (OID (iso 1) (member-body 2) (us 840) (ansi-X9-62 10045) (curves 3) (prime 1) 1))
-   (cons 'sect163k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 1))
-   (cons 'sect163r2 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 15))
-   (cons 'secp224r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 33))
-   (cons 'sect233k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 26))
-   (cons 'sect233r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 27))
-   (cons 'secp256r1 (OID (iso 1) (member-body 2) (us 840) (ansi-X9-62 10045) (curves 3) (prime 1) 7))
-   (cons 'sect283k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 16))
-   (cons 'sect283r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 17))
-   (cons 'secp384r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 34))
-   (cons 'sect409k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 36))
-   (cons 'sect409r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 37))
-   (cons 'secp521r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 35))
-   (cons 'sect571k1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 38))
-   (cons 'sect571r1 (OID (iso 1) (identified-organization 3) (certicom 132) (curve 0) 39))))
+   ;; Curves from RFC 5480 (http://www.ietf.org/rfc/rfc5480.txt)
+   ;; and SEC2 (http://www.secg.org/sec2-v2.pdf)
+   ;; -- Prime-order fields --
+   (cons 'secp192k1 (build-OID certicom (curve 0) 31))
+   (cons 'secp192r1 (build-OID ansi-X9-62 (curves 3) (prime 1) 1))
+   (cons 'secp224k1 (build-OID certicom (curve 0) 32))
+   (cons 'secp224r1 (build-OID certicom (curve 0) 33))
+   (cons 'secp256k1 (build-OID certicom (curve 0) 10))
+   (cons 'secp256r1 (build-OID ansi-X9-62 (curves 3) (prime 1) 7))
+   (cons 'secp384r1 (build-OID certicom (curve 0) 34))
+   (cons 'secp521r1 (build-OID certicom (curve 0) 35))
+   ;; -- Characteristic 2 fields --
+   (cons 'sect163k1 (build-OID certicom (curve 0) 1))
+   (cons 'sect163r1 (build-OID certicom (curve 0) 2))
+   (cons 'sect163r2 (build-OID certicom (curve 0) 15))
+   (cons 'sect233k1 (build-OID certicom (curve 0) 26))
+   (cons 'sect233r1 (build-OID certicom (curve 0) 27))
+   (cons 'sect239k1 (build-OID certicom (curve 0) 3))
+   (cons 'sect283k1 (build-OID certicom (curve 0) 16))
+   (cons 'sect283r1 (build-OID certicom (curve 0) 17))
+   (cons 'sect409k1 (build-OID certicom (curve 0) 36))
+   (cons 'sect409r1 (build-OID certicom (curve 0) 37))
+   (cons 'sect571k1 (build-OID certicom (curve 0) 38))
+   (cons 'sect571r1 (build-OID certicom (curve 0) 39))
+   ))
 
 ;; -- Named Elliptic Curves in ANSI X9.62.
-(define ellipticCurve (build-OID ansi-X9-62 (curves 3)))
-(define c-TwoCurve (build-OID ellipticCurve (characteristicTwo 0)))
-(define primeCurve (build-OID ellipticCurve (prime 1)))
+(define c-TwoCurve (build-OID ansi-X9-62 (curves 3) (characteristicTwo 0)))
+(define primeCurve (build-OID ansi-X9-62 (curves 3) (prime 1)))
 (define more-known-curves
   (list (cons 'c2pnb163v1 (build-OID c-TwoCurve  1))
         (cons 'c2pnb163v2 (build-OID c-TwoCurve  2))
@@ -303,8 +313,8 @@ References:
         ;; DH: PKIX says use dhpublicnumber; OpenSSL uses PKCS#3 OID
         (list dhpublicnumber  DomainParameters DHPublicKey)
         (list dhKeyAgreement  DHParameter      DHPublicKey)
-        ;; ECPoint octets are bit-string contents
-        (list id-ecPublicKey  EcpkParameters   ECPoint)))
+        ;; Special case!: the bitstring's octets are ECPoint, not a BER-encoding of ECPoint
+        (list id-ecPublicKey  EcpkParameters   #f)))
 
 ;; for PKCS #8 PrivateKeyInfo
 (define known-private-key-formats

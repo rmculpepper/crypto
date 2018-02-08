@@ -17,6 +17,7 @@
 (require racket/class
          racket/match
          asn1
+         binaryio/integer
          "interfaces.rkt"
          "common.rkt"
          "error.rkt"
@@ -121,7 +122,7 @@
     (define/public (-decode-pub-ec params subjectPublicKey)
       (match params
         [`(namedCurve ,curve-oid)
-         (-make-pub-ec curve-oid (base256->unsigned subjectPublicKey))]
+         (-make-pub-ec curve-oid subjectPublicKey)]
         [_ #f]))
 
     (define (-decode-priv-ec alg-params privateKey)
@@ -129,12 +130,12 @@
         [`(namedCurve ,curve-oid)
          (match privateKey
            [(hash-table ['version 1] ['privateKey xB] ['publicKey qB])
-            (-make-priv-ec curve-oid (base256->unsigned qB) (base256->unsigned xB))]
+            (-make-priv-ec curve-oid qB (base256->unsigned xB))]
            [_ #f])]
         [_ #f]))
 
-    (define/public (-make-pub-ec curve-oid q) #f)
-    (define/public (-make-priv-ec curve-oid q x) #f)
+    (define/public (-make-pub-ec curve-oid qB) #f)
+    (define/public (-make-priv-ec curve-oid qB x) #f)
 
     ;; ----------------------------------------
 
@@ -241,20 +242,20 @@
 
 ;; ---- EC ----
 
-(define (encode-pub-ec fmt curve-oid q)
+(define (encode-pub-ec fmt curve-oid qB)
   (case fmt
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm id-ecPublicKey
                                  'parameters (list 'namedCurve curve-oid))
-              'subjectPublicKey (unsigned->base256 q)))]
+              'subjectPublicKey qB))]
     [else #f]))
 
-(define (encode-priv-ec fmt curve-oid q d)
+(define (encode-priv-ec fmt curve-oid qB d)
   (case fmt
     [(SubjectPublicKeyInfo)
-     (encode-pub-ec fmt curve-oid q)]
+     (encode-pub-ec fmt curve-oid qB)]
     [(PrivateKeyInfo)
      (asn1->bytes/DER
       PrivateKeyInfo
@@ -263,5 +264,40 @@
                                            'parameters (list 'namedCurve curve-oid))
               'privateKey (hasheq 'version 1
                                   'privateKey (unsigned->base256 d)
-                                  'publicKey (unsigned->base256 q))))]
+                                  'publicKey qB)))]
     [else #f]))
+
+;; EC public key = ECPoint = octet string
+;; EC private key = unsigned integer
+
+;; Reference: SEC1 Section 2.3
+;; We assume no compression, valid, not infinity, prime field.
+;; mlen = ceil(bitlen(p) / 8), where q is the field in question.
+
+;; ec-point->bytes : Nat Nat -> Bytes
+(define (ec-point->bytes mlen x y)
+  ;; no compression, assumes valid, assumes not infinity/zero point
+  (bytes-append (bytes #x04) (integer->bytes x mlen #f #f) (integer->bytes y mlen #f #f)))
+
+;; bytes->ec-point : Bytes -> (cons Nat Nat)
+(define (bytes->ec-point buf)
+  (define (bad) (crypto-error "failed to parse ECPoint"))
+  (define buflen (bytes-length buf))
+  (unless (> buflen 0) (bad))
+  (case (bytes-ref buf 0)
+    [(#x04) ;; uncompressed point
+     (unless (odd? buflen) (bad))
+     (define len (quotient (sub1 (bytes-length buf)) 2))
+     (cons (bytes->integer buf #f #f 1 (+ 1 len))
+           (bytes->integer buf #f #f (+ 1 len) (+ 1 len len)))]
+    [else (bad)]))
+
+;; curve-oid->name : OID -> Symbol/#f
+(define (curve-oid->name oid)
+  (for/first ([entry (in-list known-curves)]
+              #:when (equal? (cdr entry) oid))
+    (car entry)))
+
+;; curve-name->oid : Symbol -> OID/#f
+(define (curve-name->oid name)
+  (cond [(assq known-curves name) => cdr] [else #f]))

@@ -470,6 +470,10 @@
 
 ;; ----
 
+(define-gcrypt gcry_pk_testkey
+  (_fun _gcry_sexp -> _gcry_error)
+  #:wrap check)
+
 (define-gcrypt gcry_pk_encrypt
   (_fun (data pubkey) ::
         (result : (_ptr o _gcry_sexp/null))

@@ -589,6 +589,9 @@
 
     (define/public (compute-secret peer-pubkey)
       (-check-key-agree)
+      (when (pk-key? peer-pubkey)
+        (unless (eq? (send peer-pubkey get-impl) impl)
+          (crypto-error "peer key has different implementation")))
       (-compute-secret peer-pubkey))
 
     (define/private (-check-encrypt pad)
