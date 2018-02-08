@@ -370,8 +370,8 @@
 (define-nettle nettle_pbkdf2
   (_fun (mac_ctx update_func digest_func digest_size iterations salt out) ::
         (mac_ctx : _HASH_CTX) ;; 3 * digest_size !
-        (update_func : _fpointer)
-        (digest_func : _fpointer)
+        (update_func : _fpointer) ;; Note: hmac udpate func, not hash update func!
+        (digest_func : _fpointer) ;; ditto
         (digest_size : _size)
         (iterations : _uint)
         (salt_length : _size = (bytes-length salt))
@@ -379,6 +379,28 @@
         (outlen : _size = (bytes-length out))
         (out : _bytes)
         -> _void))
+
+(define-nettle nettle_pbkdf2_hmac_sha1
+  (_fun (key salt iters outlen) ::
+        (_size = (bytes-length key))
+        (key : _bytes)
+        (iters : _uint)
+        (_size = (bytes-length salt))
+        (salt : _bytes)
+        (outlen : _size)
+        (out : _bytes = (make-bytes outlen))
+        -> _void -> out))
+
+(define-nettle nettle_pbkdf2_hmac_sha256
+  (_fun (key salt iters outlen) ::
+        (_size = (bytes-length key))
+        (key : _bytes)
+        (iters : _uint)
+        (_size = (bytes-length salt))
+        (salt : _bytes)
+        (outlen : _size)
+        (out : _bytes = (make-bytes outlen))
+        -> _void -> out))
 
 ;; ----
 

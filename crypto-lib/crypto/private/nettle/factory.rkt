@@ -149,7 +149,8 @@
       (match spec
         [(list 'pbkdf2 'hmac di-spec)
          (let ([di (get-digest di-spec)])
-           (and di (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+           (and di (memq di-spec '(sha1 sha256))
+                (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
         [_ #f]))
 
     ;; ----
@@ -215,9 +216,11 @@
       (printf "Available EC named curves:\n")
       |#
       (printf "Available KDFs:\n")
-      (printf " `(pbkdf hmac ,DIGEST)  ;; for all digests listed above\n")
+      (for ([di (in-list (info 'all-digests))])
+        (define kdfspec `(pbkdf2 hmac ,di))
+        (when (get-kdf kdfspec)
+          (printf " ~v\n" kdfspec)))
       (void))
-
     ))
 
 (define nettle-factory (new nettle-factory%))

@@ -19,18 +19,21 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
-         "../rkt/pbkdf2.rkt")
+         "ffi.rkt")
 (provide nettle-pbkdf2-impl%)
 
-;; Nettle's pbkdf2 function needs hmac_<digest>_{update,digest} functions;
-;; not feasible (or at least not easy). So use Racket pbkdf2 instead.
+;; Nettle's general pbkdf2 function needs hmac_<digest>_{update,digest} functions;
+;; not feasible (or at least not easy).
 
 (define nettle-pbkdf2-impl%
   (class* impl-base% (kdf-impl<%>)
     (init-field di)
     (super-new)
     (define/public (kdf params pass salt)
-      (define iterations (cadr (assq 'iterations params)))
+      (define iters (cadr (assq 'iterations params)))
       (define key-size (cadr (assq 'key-size params)))
-      (pbkdf2*-hmac di pass salt iterations key-size))
+      (case (send di get-spec)
+        [(sha1) (nettle_pbkdf2_hmac_sha1 pass salt iters key-size)]
+        [(sha256) (nettle_pbkdf2_hmac_sha256 pass salt iters key-size)]
+        [else #f]))
     ))
