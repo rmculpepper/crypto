@@ -40,8 +40,8 @@ A KDF specifier is one of the following:
 function from PKCS#5 @cite{PKCS5} using HMAC of @racket[_digest-spec]
 (see @racket[digest-spec?]).}
 
-@item{@racket['bcrypt] --- bcrypt, based on Blowfish with a modified
-key schedule @cite{bcrypt}}
+@;{@item{@racket['bcrypt] --- bcrypt, based on Blowfish with a modified
+key schedule @cite{bcrypt}}}
 
 @item{@racket['scrypt] --- scrypt, with work factors for both time and
 memory @cite{scrypt}}
@@ -88,8 +88,8 @@ The following parameters are recognized for @racket[(list 'pbkdf2
 @racket[_key-size] bytes}
 ]
 
-In 2000 PKCS#5 recommended a minimum of 1000 iterations; the iteration
-count should be exponentially larger today.
+In 2000 PKCS#5 @cite["PKCS5"] recommended a minimum of 1000
+iterations; the iteration count should be exponentially larger today.
 
 The following parameters are recognized for @racket['scrypt]:
 
@@ -101,9 +101,9 @@ The following parameters are recognized for @racket['scrypt]:
 @racket[_key-size] bytes}
 ]
 
-The scrypt paper (2009) used parameters such as 2@superscript{14} to
-2@superscript{20} for @racket[_N], 1 for @racket[_p], and 8 for
-@racket[_r].
+In 2009 the original scrypt paper @cite["scrypt"] used parameters such
+as 2@superscript{14} to 2@superscript{20} for @racket[_N], 1 for
+@racket[_p], and 8 for @racket[_r].
 
 @examples[#:eval the-eval
 (kdf '(pbkdf2 hmac sha256)
@@ -113,23 +113,37 @@ The scrypt paper (2009) used parameters such as 2@superscript{14} to
 ]
 }
 
-@defproc[(pbkdf2-hmac [pass bytes?]
+@defproc[(pbkdf2-hmac [di digest-spec?]
+                      [pass bytes?]
                       [salt bytes?]
-                      [#:digest di digest-spec?]
                       [#:iterations iterations exact-positive-integer?]
                       [#:key-size key-size exact-positive-integer?
                                   (digest-size di)])
          bytes?]{
 
-Finds an implementation of PBKDF2-HMAC-@racket[di] and uses it to
-derive a key of @racket[key-size] bytes from @racket[pass] and
-@racket[salt]. The @racket[iterations] argument controls the amount of
-work done. In 2000 PKCS#5 recommended a minimum of 1000 iterations;
-the iteration count should be exponentially larger today.
+Finds an implementation of PBKDF2-HMAC-@racket[di] using
+@racket[(crypto-factories)] and uses it to derive a key of
+@racket[key-size] bytes from @racket[pass] and @racket[salt]. The
+@racket[iterations] argument controls the amount of work done.
 
 @examples[#:eval the-eval
-(pbkdf2-hmac #"I am the walrus" #"abcd" #:digest 'sha256 #:iterations 100000)
+(pbkdf2-hmac 'sha256 #"I am the walrus" #"abcd" #:iterations 100000)
 ]
+}
+
+@defproc[(scrypt [pass bytes?]
+                 [salt bytes?]
+                 [#:N N exact-positive-integer?]
+                 [#:p p exact-positive-integer? 1]
+                 [#:r r exact-positive-integer? 8]
+                 [#:key-size key-size exact-positive-integer? 32])
+         bytes?]{
+
+Finds an implementation of scrypt @cite["scrypt"] using
+@racket[(crypto-factories)] and uses it to derive a key of
+@racket[key-size] bytes from @racket[pass] and @racket[salt]. The
+@racket[N] parameter specifies the cost factor (affecting both CPU and
+memory resources).
 }
 
 

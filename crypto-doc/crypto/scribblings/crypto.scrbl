@@ -38,5 +38,5 @@ details.
 @include-section["digest.scrbl"]
 @include-section["cipher.scrbl"]
 @include-section["pkey.scrbl"]
-@;@include-section["kdf.scrbl"]
+@include-section["kdf.scrbl"]
 @include-section["misc.scrbl"]

@@ -31,18 +31,17 @@
         [(listof (list/c symbol? any/c))]
         bytes?)]
   [pbkdf2-hmac
-   (->* [bytes?
-         bytes?
-         #:digest digest-spec?
-         #:iterations exact-positive-integer?]
+   (->* [digest-spec? bytes? bytes? #:iterations exact-positive-integer?]
         [#:key-size exact-positive-integer?]
         bytes?)]
+  #|
   [bcrypt
    (->* [bytes?
          bytes?
          #:cost exact-positive-integer?]
         []
         bytes?)]
+  |#
   [scrypt
    (->* [bytes?
          bytes?
@@ -62,19 +61,20 @@
     (let ([k (-get-impl k)])
       (send k kdf params pass salt))))
 
-(define (pbkdf2-hmac pass salt
-                     #:digest di
+(define (pbkdf2-hmac di pass salt
                      #:iterations iterations
                      #:key-size [key-size (digest-size di)])
   (with-crypto-entry 'pbkdf2-hmac
     (let ([k (-get-impl `(pbkdf2 hmac ,di))])
       (send k kdf `((iterations ,iterations) (key-size ,key-size)) pass salt))))
 
+#|
 (define (bcrypt pass salt
                 #:cost cost)
   (with-crypto-entry 'bcrypt
     (let ([k (-get-impl 'bcrypt)])
       (send k kdf `((cost ,cost)) pass salt))))
+|#
 
 (define (scrypt pass salt
                 #:N N
