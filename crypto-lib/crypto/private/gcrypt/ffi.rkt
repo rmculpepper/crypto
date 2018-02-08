@@ -20,10 +20,12 @@
          ffi/unsafe/atomic)
 (provide (protect-out (all-defined-out)))
 
-(define libgcrypt (ffi-lib "libgcrypt" '(#f "20")))
+(define libgcrypt (ffi-lib "libgcrypt" '(#f "20") #:fail (lambda () #f)))
 
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)
+
+(define gcrypt-ok? (and libgcrypt #t))
 
 ;; ----
 
@@ -60,7 +62,7 @@
 
 (define-gcrypt gcry_check_version
   (_fun _bytes -> _string/utf-8)
-  #:fail (lambda () void))
+  #:fail (lambda () (lambda _ #f)))
 
 (define GCRYCTL_ENABLE_QUICK_RANDOM 44)
 (define-gcrypt gcry_control
@@ -161,7 +163,9 @@
   (_fun _int _int _pointer _pointer -> _gcry_error))
 
 (define (gcry_md_test_algo a)
-  (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f)))
+  (if gcrypt-ok?
+      (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f))
+      #f))
 
 (define GCRY_KDF_PBKDF2 34) ;; really PBKDF2-HMAC-<digest>
 (define GCRY_KDF_SCRYPT 48) ;; since v1.6
@@ -278,7 +282,9 @@
   (_fun _int _int _pointer _pointer -> _gcry_error))
 
 (define (gcry_cipher_test_algo a)
-  (zero? (gcry_cipher_algo_info a GCRYCTL_TEST_ALGO #f #f)))
+  (if gcrypt-ok?
+      (zero? (gcry_cipher_algo_info a GCRYCTL_TEST_ALGO #f #f))
+      #f))
 
 (define-gcrypt gcry_cipher_final
   (_fun _gcry_cipher_hd (_int = GCRYCTL_FINALIZE) (_pointer = #f) (_size = 0) -> _gcry_error)

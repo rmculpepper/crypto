@@ -19,7 +19,9 @@
          ffi/unsafe/define)
 (provide (protect-out (all-defined-out)))
 
-(define-ffi-definer define-gmp (ffi-lib "libgmp"))
+(define libgmp (ffi-lib "libgmp" #:fail (lambda () #f)))
+(define-ffi-definer define-gmp libgmp
+  #:default-make-fail make-not-available)
 
 (define-cstruct _mpz_struct
   ([alloc _int]

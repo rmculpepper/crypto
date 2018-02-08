@@ -89,7 +89,7 @@
 
 (define nettle-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest get-cipher)
+    (inherit get-digest get-cipher get-pk)
     (super-new)
 
     (define/override (get-name) 'nettle)
@@ -137,8 +137,8 @@
 
     (define/override (get-pk* spec)
       (case spec
-        [(rsa) (new nettle-rsa-impl% (factory this))]
-        [(dsa) (new nettle-dsa-impl% (factory this))]
+        [(rsa) (and rsa-ok? (new nettle-rsa-impl% (factory this)))]
+        [(dsa) (and dsa-ok? (new nettle-dsa-impl% (factory this)))]
         [else #f]))
 
     (define nettle-read-key (new nettle-read-key% (factory this)))
@@ -177,7 +177,8 @@
 
     (define/override (info key)
       (case key
-        [(version) (format "~s.~s" (or (nettle_version_major) '?) (or (nettle_version_minor) '?))]
+        [(version)
+         (and nettle-ok? (format "~s.~s" (nettle_version_major) (nettle_version_minor)))]
         [(all-digests)
          (for/list ([di (map car digests)] #:when (get-digest di)) di)]
         [(all-ciphers)
@@ -191,7 +192,10 @@
                       [cspec (in-value (list cipher 'stream))]
                       #:when (get-cipher cspec))
             cspec))]
-        [(all-pks) '(rsa dsa)]
+        [(all-pks)
+         (for/list ([pk (in-list '(rsa dsa))]
+                    #:when (get-pk pk))
+           pk)]
         [else (super info key)]))
 
     (define/override (print-info)

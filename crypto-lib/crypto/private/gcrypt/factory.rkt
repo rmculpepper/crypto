@@ -137,7 +137,7 @@
     ;; get-version : -> (values Nat Nat)
     (define/private (get-version)
       ;; Note: returns (values 0 0) if can't parse version.
-      (match (regexp-match #rx"^([0-9]+)\\.([0-9]+)\\.([0-9]+)$" (gcry_check_version #f))
+      (match (regexp-match #rx"^([0-9]+)\\.([0-9]+)\\.([0-9]+)$" (or (gcry_check_version #f) ""))
         [(list _ major minor _)
          (values (string->number major) (string->number minor))]
         [_ (values 0 0)]))
@@ -222,7 +222,8 @@
                     [cspec (in-value (list cipher mode))]
                     #:when (get-cipher cspec))
            cspec)]
-        [(all-pks) '(rsa dsa)]
+        [(all-pks)
+         (for/list ([pk (in-list '(rsa dsa))] #:when gcrypt-ok?) pk)]
         [else (super info key)]))
 
     (define/override (print-info)

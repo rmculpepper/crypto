@@ -21,13 +21,15 @@
          "../gmp/ffi.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libnettle (ffi-lib "libnettle" '("6" #f)))
+(define libnettle (ffi-lib "libnettle" '("6" #f) #:fail (lambda () #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
 
-(define-nettle nettle_version_major (_fun -> _int) #:fail (lambda () (lambda () #f)))
-(define-nettle nettle_version_minor (_fun -> _int) #:fail (lambda () (lambda () #f)))
+(define nettle-ok? (and libnettle #t))
+
+(define-nettle nettle_version_major (_fun -> _int))
+(define-nettle nettle_version_minor (_fun -> _int))
 
 ;; ----
 
@@ -50,12 +52,12 @@
    [digest       _nettle_hash_digest_func]))
 
 ;; struct nettle_hash *nettle_hashes[], array terminated by NULL
-(define nettle_hashes (ffi-obj #"nettle_hashes" libnettle))
+(define nettle_hashes (and libnettle (ffi-obj #"nettle_hashes" libnettle)))
 
 (define nettle-regular-hashes
   (let ([ptr nettle_hashes])
     (let loop ([i 0])
-      (let ([next (ptr-ref ptr _nettle_hash-pointer/null i)])
+      (let ([next (and ptr (ptr-ref ptr _nettle_hash-pointer/null i))])
         (if next
             (cons (list (nettle_hash-name next) next)
                   (loop (add1 i)))
@@ -64,7 +66,7 @@
 (define nettle-more-hashes
   (filter values
           (map (lambda (name)
-                 (let ([obj (get-ffi-obj name libnettle _nettle_hash)])
+                 (let ([obj (get-ffi-obj name libnettle _nettle_hash (lambda () #f))])
                    (and obj (list (nettle_hash-name obj) obj))))
                '(#"nettle_sha3_224"
                  #"nettle_sha3_256"
@@ -139,12 +141,12 @@
   (cond [(assq key (nettle-cipher-extras nc)) => cadr] [else #f]))
 
 ;; struct nettle_cipher *nettle_ciphers[], array terminated by NULL
-(define nettle_ciphers (ffi-obj #"nettle_ciphers" libnettle))
+(define nettle_ciphers (and libnettle (ffi-obj #"nettle_ciphers" libnettle)))
 
 (define nettle-regular-ciphers
   (let ([ptr nettle_ciphers])
     (let loop ([i 0])
-      (let ([next (ptr-ref ptr _nettle_cipher-pointer/null i)])
+      (let ([next (and ptr (ptr-ref ptr _nettle_cipher-pointer/null i))])
         (if next
             (cons (nettle-cipher (nettle_cipher-name next)
                                  (nettle_cipher-context_size next)
@@ -423,8 +425,19 @@
 
 ;; ----
 
-(define-ffi-definer define-nettleHW (ffi-lib "libhogweed" '("4" #f))
+(define libhogweed (ffi-lib "libhogweed" '("4" #f) #:fail (lambda () #f)))
+(define-ffi-definer define-nettleHW libhogweed
   #:default-make-fail make-not-available)
+
+(define rsa-ok?
+  (and libhogweed
+       (get-ffi-obj "nettle_rsa_public_key_init" libhogweed _fpointer (lambda () #f))
+       #t))
+
+(define dsa-ok?
+  (and libhogweed
+       (get-ffi-obj "nettle_dsa_public_key_init" libhogweed _fpointer (lambda () #f))
+       #t))
 
 (define-cstruct _rsa_public_key_struct
   ([size _uint]  ;; size of modulo in octets, also size in sigs
