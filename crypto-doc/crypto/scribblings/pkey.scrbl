@@ -483,5 +483,5 @@ found that accepts @racket[fmt], an exception is raised.
 
 @bib-entry[#:key "SEC1"
            #:title "SEC 1: Elliptic Curve Cryptography"
-           #:url "http://www.secg.org/download/aid-780/sec1-v2.pdf"]
+           #:url "http://www.secg.org/sec1-v2.pdf"]
 ]
