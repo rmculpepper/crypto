@@ -46,6 +46,10 @@ key schedule @cite{bcrypt}}}
 @item{@racket['scrypt] --- scrypt, with work factors for both time and
 memory @cite{scrypt}}
 
+@item{@racket['argon2d], @racket['argon2i], @racket['argon2id] ---
+variants of Argon2, designed primarily for password hashing
+@cite["Argon2" "PHC"]}
+
 ]
 }
 
@@ -104,6 +108,16 @@ The following parameters are recognized for @racket['scrypt]:
 In 2009 the original scrypt paper @cite["scrypt"] used parameters such
 as 2@superscript{14} to 2@superscript{20} for @racket[_N], 1 for
 @racket[_p], and 8 for @racket[_r].
+
+The following parameters are recognized for @racket['argon2d],
+@racket['argon2i], and @racket['argon2id]:
+
+@itemlist[
+@item{@racket[(list 't _t)] --- the time cost}
+@item{@racket[(list 'm _m)] --- the memory cost}
+@item{@racket[(list 'p _p)] --- the parallelism}
+@item{@racket[(list 'key-size _key-size)] -- the size of the output}
+]
 
 @examples[#:eval the-eval
 (kdf '(pbkdf2 hmac sha256)
@@ -178,4 +192,12 @@ memory resources).
            #:author "Colin Percival"
            #:url "http://www.tarsnap.com/scrypt.html"]
 
+@bib-entry[#:key "Argon2"
+           #:title "Argon2: the memory-hard function for password hashing and other applications"
+           #:author "Alex Biryukov, Daniel Dinu, and Dmitry Khovratovich"
+           #:url "https://github.com/P-H-C/phc-winner-argon2/blob/master/argon2-specs.pdf"]
+
+@bib-entry[#:key "PHC"
+           #:title "Password Hashing Competition"
+           #:url "https://password-hashing.net/"]
 ]

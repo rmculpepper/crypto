@@ -103,3 +103,16 @@ instance and seeds it with entropy obtained from
 update its entropy pool, so it does @bold{not} enjoy Yarrow's
 key-compromise recovery properties.
 }
+
+@section[#:tag "argon2-factory"]{Argon2}
+
+@defmodule[crypto/argon2]
+
+@defthing[argon2-factory crypto-factory?]{
+
+Factory for
+@hyperlink["https://github.com/P-H-C/phc-winner-argon2"]{Argon2}, a
+tiny library implementing the Argon2 password hashing (and key
+derivation) function. The @tt{libargon2.so.1} foreign library is
+required.
+}

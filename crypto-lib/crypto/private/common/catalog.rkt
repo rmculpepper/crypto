@@ -392,8 +392,7 @@
 
 (define (kdf-spec? x)
   (match x
-    ['bcrypt #t]
-    ['scrypt #t]
+    [(? symbol?) (and (memq x '(bcrypt scrypt argon2d argon2i argon2id)) #t)]
     [(list 'pbkdf2 'hmac di)
      (digest-spec? di)]
     [_ #f]))
