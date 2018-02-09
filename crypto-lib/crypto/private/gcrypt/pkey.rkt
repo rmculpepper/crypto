@@ -505,8 +505,20 @@
       (cond [(assq curve known-curves) => cdr] [else #f]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
-      (gcry_sexp_build "(data (flags raw) (value %M))"
-                       (base256->mpi digest)))
+      ;; When the digest is larger than the bits of the EC field, gcrypt is
+      ;; *supposed* to truncate it, but it doesn't seem to work. The gcrypt
+      ;; source code seems to want to do the right thing (_gcry_ecc_ecdsa_sign
+      ;; calls _gcry_dsa_normalize_hash), but it just doesn't work (that is, it
+      ;; works when gcrypt both signs and verifies, but it doesn't interoperate
+      ;; with libcrypto or nettle). I've tried
+      ;;  - using %b to insert the data
+      ;;  - using %M with an mpi created using gcry_mpi_set_opaque_copy
+      ;; and neither worked. So let's try pre-truncating long data.
+      (define qbits (gcry_pk_get_nbits pub))
+      (define digest* (if (> (* 8 (bytes-length digest)) qbits)
+                          (subbytes digest 0 (quotient (+ qbits 7) 8))
+                          digest))
+      (gcry_sexp_build "(data (flags raw) (value %M))" (base256->mpi digest*)))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
       (unpack-sig-sexp sig-sexp "ecdsa"))

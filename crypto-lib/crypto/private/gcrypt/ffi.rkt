@@ -349,6 +349,9 @@
         -> (values status nwrote))
   #:wrap check2)
 
+(define-gcrypt gcry_mpi_set_opaque_copy
+  (_fun _gcry_mpi _pointer _uint -> _gcry_mpi))
+
 (define (base256->mpi buf)
   (gcry_mpi_scan GCRYMPI_FMT_USG buf))
 
@@ -521,7 +524,7 @@
                   (values status #f)]))
   #:wrap check2)
 
-(define-gcrypt gcry_pk_nbits
+(define-gcrypt gcry_pk_get_nbits
   (_fun _gcry_sexp -> _uint))
 
 (define-gcrypt gcry_pk_genkey
