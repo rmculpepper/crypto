@@ -27,12 +27,12 @@
          "pkey.rkt")
 (provide make-factory-tests)
 
-(define (make-factory-tests name factory)
-  (when #t (eprintf ">>> Testing ~a\n" name))
-  (test-suite name
+(define (make-factory-tests factory)
+  (when #t (eprintf ">>> Testing ~a\n" (send factory get-name)))
+  (test-suite (format "~a" (send factory get-name))
     (test-suite "digests" (test-digests factory))
     (test-suite "ciphers" (test-ciphers factory))
-    (test-suite "pkey"    (test-pk factory name))
+    (test-suite "pkey"    (test-pk factory))
     ))
 
 (module+ main
@@ -41,9 +41,9 @@
 
   (run-tests
    (test-suite "crypto tests"
-     (make-factory-tests "libcrypto" libcrypto-factory)
-     (make-factory-tests "gcrypt" gcrypt-factory)
-     (make-factory-tests "nettle" nettle-factory)
+     (make-factory-tests libcrypto-factory)
+     (make-factory-tests gcrypt-factory)
+     (make-factory-tests nettle-factory)
      (when #t (eprintf ">>> Digest agreement\n"))
      (test-suite "digest agreement"
        (test-digests-agree all-factories))
@@ -52,7 +52,7 @@
        (test-ciphers-agree all-factories))
      (when #t (eprintf ">>> PKey agreement\n"))
      (test-suite "pkey agreement"
-       (test-pk libcrypto-factory "libcrypto" all-factories)
-       (test-pk gcrypt-factory "gcrypt" all-factories)
-       (test-pk nettle-factory "nettle" all-factories))
+       (test-pk libcrypto-factory all-factories)
+       (test-pk gcrypt-factory all-factories)
+       (test-pk nettle-factory all-factories))
      )))
