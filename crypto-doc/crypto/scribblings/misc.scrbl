@@ -45,4 +45,29 @@ Equivalent to @racket[(subbytes bs start end)] if @racket[bs] is not
 subsequently mutated, but avoids making a copy.
 }
 
+@section[#:tag "quirks"]{Cryptography Provider Quirks}
+
+@section[#:tag "libcrypto-quirks"]{Libcrypto Quirks}
+
+PSS padding for RSA signatures is, in principle, parameterized by the
+salt length. A standard choice is the length of the digest to be
+signed. By default, libcrypto uses the maximum possible salt length
+when signing and infers the salt length when verifying, as documented
+for @hyperlink["https://www.openssl.org/docs/manmaster/man3/EVP_PKEY_CTX_set_rsa_pss_saltlen.html"]{EVP_PKEY_CTX_set_rsa_pss_saltlen}.
+See also @hyperlink["https://crypto.stackexchange.com/questions/1217/rsa-pss-salt-size"]{this
+discussion}. Unfortunately, other libraries do not directly support this behavior and it is nontrivial to work around it.
+Thus for greater compatibility, this library defines @racket['pss]
+padding to use the digest length and @racket['pss*] to be the
+libcrypto-specific behavior.
+
+
+@section[#:tag "gcrypt-quirks"]{GCrypt Quirks}
+
+If ECDSA is used with a digest longer than the bit-length of the
+curve, gcrypt either fails to correctly truncate the digest or
+otherwise handles it by default in a way incompatible with libcrypto
+and nettle. Consequently, this library truncates the digest before
+passing it to gcrypt for signing.
+
+
 @(close-eval the-eval)
