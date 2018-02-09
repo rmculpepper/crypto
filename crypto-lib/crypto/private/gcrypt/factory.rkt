@@ -223,7 +223,7 @@
                     #:when (get-cipher cspec))
            cspec)]
         [(all-pks)
-         (for/list ([pk (in-list '(rsa dsa))] #:when gcrypt-ok?) pk)]
+         (for/list ([pk (in-list '(rsa dsa ec))] #:when gcrypt-ok?) pk)]
         [else (super info key)]))
 
     (define/override (print-info)

@@ -195,7 +195,7 @@
                       #:when (get-cipher cspec))
             cspec))]
         [(all-pks)
-         (for/list ([pk (in-list '(rsa dsa))]
+         (for/list ([pk (in-list '(rsa dsa ec))]
                     #:when (get-pk pk))
            pk)]
         [else (super info key)]))
