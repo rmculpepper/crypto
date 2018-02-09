@@ -224,6 +224,7 @@
            cspec)]
         [(all-pks)
          (for/list ([pk (in-list '(rsa dsa ec))] #:when gcrypt-ok?) pk)]
+        [(all-curves) gcrypt-curves]
         [else (super info key)]))
 
     (define/override (print-info)
@@ -238,9 +239,9 @@
       (printf "Available PK:\n")
       (for ([pk (in-list (info 'all-pks))])
         (printf " ~v\n" pk))
-      #|
       (printf "Available EC named curves:\n")
-      |#
+      (for ([curve (in-list gcrypt-curves)])
+        (printf " ~v\n" curve))
       (printf "Available KDFs:\n")
       (let-values ([(major minor) (get-version)])
         ;; PBKDF2 available since 1.5
@@ -251,7 +252,6 @@
           (when (>= minor 6)
             (printf " 'scrypt\n"))))
       (void))
-
     ))
 
 (define gcrypt-factory (new gcrypt-factory%))

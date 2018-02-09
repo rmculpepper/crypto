@@ -734,11 +734,19 @@
 (define-nettleHW nettle_ecc_point_mul (_fun _ecc_point _ecc_scalar _ecc_point -> _void))
 (define-nettleHW nettle_ecc_point_mul_g (_fun _ecc_point _ecc_scalar -> _void))
 
-(define-nettleHW nettle_get_secp_192r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
-(define-nettleHW nettle_get_secp_224r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
-(define-nettleHW nettle_get_secp_256r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
-(define-nettleHW nettle_get_secp_384r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
-(define-nettleHW nettle_get_secp_521r1 (_fun -> _ecc_curve) #:fail (lambda () #f))
+(define-nettleHW nettle_get_secp_192r1 (_fun -> _ecc_curve) #:fail (lambda () (lambda () #f)))
+(define-nettleHW nettle_get_secp_224r1 (_fun -> _ecc_curve) #:fail (lambda () (lambda () #f)))
+(define-nettleHW nettle_get_secp_256r1 (_fun -> _ecc_curve) #:fail (lambda () (lambda () #f)))
+(define-nettleHW nettle_get_secp_384r1 (_fun -> _ecc_curve) #:fail (lambda () (lambda () #f)))
+(define-nettleHW nettle_get_secp_521r1 (_fun -> _ecc_curve) #:fail (lambda () (lambda () #f)))
+
+(define nettle-curves
+  (filter cadr
+          `([secp192r1 ,(nettle_get_secp_192r1)]
+            [secp224r1 ,(nettle_get_secp_224r1)]
+            [secp256r1 ,(nettle_get_secp_256r1)]
+            [secp384r1 ,(nettle_get_secp_384r1)]
+            [secp521r1 ,(nettle_get_secp_521r1)])))
 
 (define-nettleHW nettle_ecdsa_sign
   (_fun (key randctx digest sig) ::

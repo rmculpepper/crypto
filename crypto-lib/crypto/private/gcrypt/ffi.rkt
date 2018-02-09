@@ -531,3 +531,24 @@
         -> (status : _gcry_error)
         -> (values status result))
   #:wrap (compose (allocator gcry_sexp_release) check2))
+
+(define GCRY_PK_RSA   1)   ;; RSA
+(define GCRY_PK_DSA   17)  ;; Digital Signature Algorithm
+(define GCRY_PK_ECC   18)  ;; Generic ECC
+(define GCRY_PK_ELG   20)  ;; Elgamal
+(define GCRY_PK_ECDSA 301) ;; (only for external use)
+(define GCRY_PK_ECDH  302) ;; (only for external use)
+(define GCRY_PK_EDDSA 303) ;; (only for external use)
+
+;; Returns NULL for unknown curve
+(define-gcrypt gcry_pk_get_param
+  (_fun _int _bytes -> _gcry_sexp/null)
+  #:c-id gcry_pk_get_param)
+
+(define-gcrypt gcry-curve-ok?
+  (_fun (_int = GCRY_PK_ECC) _symbol -> (r : _gcry_sexp/null) -> (and r #t))
+  #:c-id gcry_pk_get_param
+  #:fail (lambda () (lambda (c) #f)))
+
+(define gcrypt-curves
+  (filter gcry-curve-ok? '(secp192r1 secp224r1 secp256r1 secp384r1 secp521r1)))

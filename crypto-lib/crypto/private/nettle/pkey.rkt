@@ -130,15 +130,6 @@
                   pub)]
             [else #f]))
 
-    (define/private (curve-oid->ecc curve-oid)
-      (case (curve-oid->name curve-oid)
-        [(secp192r1) (nettle_get_secp_192r1)]
-        [(secp224r1) (nettle_get_secp_224r1)]
-        [(secp256r1) (nettle_get_secp_256r1)]
-        [(secp384r1) (nettle_get_secp_384r1)]
-        [(secp521r1) (nettle_get_secp_521r1)]
-        [else #f]))
-
     ;; ----
 
     (define/override (read-params sp) #f)
@@ -485,13 +476,8 @@
          (mpz=? az bz))))
 
 (define (ecc->curve-name ecc)
-  (cond
-    [(ptr-equal? ecc (nettle_get_secp_192r1)) 'secp192r1]
-    [(ptr-equal? ecc (nettle_get_secp_224r1)) 'secp224r1]
-    [(ptr-equal? ecc (nettle_get_secp_256r1)) 'secp256r1]
-    [(ptr-equal? ecc (nettle_get_secp_384r1)) 'secp384r1]
-    [(ptr-equal? ecc (nettle_get_secp_521r1)) 'secp521r1]
-    [else #f]))
+  (for/first ([e (in-list nettle-curves)] #:when (ptr-equal? ecc (cadr e)))
+    (car e)))
 
 (define (ecc->curve-oid ecc)
   (define curve-name (ecc->curve-name ecc))
@@ -507,3 +493,9 @@
     [(secp384r1) (f 384)]
     [(secp521r1) (f 521)]
     [else #f]))
+
+(define (curve-name->ecc curve-name)
+  (cond [(assq curve-name nettle-curves) => cadr] [else #f]))
+
+(define (curve-oid->ecc curve-oid)
+  (curve-name->ecc (curve-oid->name curve-oid)))

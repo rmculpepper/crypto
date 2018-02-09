@@ -83,7 +83,6 @@
     ;; "arctwo40", "arctwo64", "arctwo128"
     ))
 
-(define stream-modes '(stream)) ;; FIXME: poly1305 (but only for chacha20)
 
 ;; ----------------------------------------
 
@@ -198,6 +197,8 @@
          (for/list ([pk (in-list '(rsa dsa ec))]
                     #:when (get-pk pk))
            pk)]
+        [(all-curves)
+         (map car nettle-curves)]
         [else (super info key)]))
 
     (define/override (print-info)
@@ -213,9 +214,9 @@
       (for ([pk (in-list (info 'all-pks))])
         ;; FIXME: check impl avail???
         (printf " ~v\n" pk))
-      #|
       (printf "Available EC named curves:\n")
-      |#
+      (for ([curve-name (in-list (info 'all-curves))])
+        (printf " ~v\n" curve-name))
       (printf "Available KDFs:\n")
       (for ([di (in-list (info 'all-digests))])
         (define kdfspec `(pbkdf2 hmac ,di))
