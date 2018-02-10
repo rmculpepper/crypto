@@ -15,11 +15,13 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require racket/list)
+(require racket/list
+         racket/class)
 (provide crypto-entry-point
          with-crypto-entry
          crypto-who
          crypto-error
+         internal-error
 
          err/no-impl
          err/bad-signature-pad
@@ -39,18 +41,22 @@
 (define (crypto-error fmt . args)
   (apply error (crypto-who) fmt args))
 
+(define (internal-error fmt . args)
+  (apply error (crypto-who) (string-append "internal error: " fmt) args))
+
 ;; ----
 
 (define (err/no-impl)
   (crypto-error "internal error: unimplemented"))
 
-(define (err/bad-*-pad kind spec pad)
-  (crypto-error "bad ~a padding mode\n  algorithm: ~e\n  padding mode: ~e"
-                kind spec pad))
-(define (err/bad-signature-pad spec pad)
-  (err/bad-*-pad "signature" spec pad))
-(define (err/bad-encrypt-pad spec pad)
-  (err/bad-*-pad "encryption" spec pad))
+(define (err/bad-*-pad kind impl pad)
+  (define factory (send impl get-factory))
+  (crypto-error "~a padding not supported\n  key: ~a ~a\n  padding: ~e"
+                kind (send impl get-spec) (send factory get-name) pad))
+(define (err/bad-signature-pad impl pad)
+  (err/bad-*-pad 'signature impl pad))
+(define (err/bad-encrypt-pad impl pad)
+  (err/bad-*-pad 'encryption impl pad))
 
 (define (err/missing-digest spec)
   (crypto-error "could not get digest implementation\n  digest: ~e" spec))

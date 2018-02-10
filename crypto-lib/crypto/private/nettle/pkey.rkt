@@ -233,7 +233,7 @@
              [(sha512) (nettle_rsa_sha512_sign_digest_tr pub priv randctx digest sigz)]
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
           [(pss)
-           (unless pss-ok? (crypto-error "RSA padding not supported\n  padding: ~e" pad))
+           (unless pss-ok? (err/bad-signature-pad impl pad))
            (define saltlen (digest-spec-size digest-spec))
            (define salt (crypto-random-bytes saltlen))
            (case digest-spec
@@ -241,13 +241,13 @@
              [(sha384) (nettle_rsa_pss_sha384_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
              [(sha512) (nettle_rsa_pss_sha512_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
-          [else (crypto-error "RSA padding not supported\n  padding: ~e" pad)]))
+          [else (err/bad-signature-pad impl pad)]))
       (unless signed-ok? (crypto-error "RSA signing failed"))
       (mpz->bin sigz))
 
     (define/private (nosupport/digest+pad op digest-spec pad)
       (crypto-error (string-append "RSA ~a not supported for digest and padding combination"
-                                   "\n  digest algorithm: ~s\n  padding: ~s")
+                                   "\n  digest: ~s\n  padding: ~s")
                     op digest-spec (or pad 'pkcs1-v1.5)))
 
     (define/override (-verify digest digest-spec pad sig)
@@ -262,14 +262,14 @@
              [(sha512) (nettle_rsa_sha512_verify_digest pub digest sigz)]
              [else (nosupport/digest+pad "verification" digest-spec pad)])]
           [(pss)
-           (unless pss-ok? (crypto-error "RSA padding not supported\n  padding: ~e" pad))
+           (unless pss-ok? (err/bad-signature-pad impl pad))
            (define saltlen (digest-spec-size digest-spec))
            (case digest-spec
              [(sha256) (nettle_rsa_pss_sha256_verify_digest pub saltlen digest sigz)]
              [(sha384) (nettle_rsa_pss_sha384_verify_digest pub saltlen digest sigz)]
              [(sha512) (nettle_rsa_pss_sha512_verify_digest pub saltlen digest sigz)]
              [else (nosupport/digest+pad "verification" digest-spec pad)])]
-          [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
+          [else (err/bad-signature-pad impl pad)]))
       verified-ok?)
 
     (define/override (-encrypt buf pad)
@@ -279,7 +279,7 @@
          (or (nettle_rsa_encrypt pub (send impl get-random-ctx) buf enc-z)
              (crypto-error "RSA encyption failed"))
          (mpz->bin enc-z)]
-        [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
+        [else (err/bad-encrypt-pad impl pad)]))
 
     (define/override (-decrypt buf pad)
       (case pad
@@ -291,7 +291,7 @@
          (unless dec-size
            (crypto-error "RSA decryption failed"))
          (shrink-bytes dec-buf dec-size)]
-        [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
+        [else (err/bad-encrypt-pad impl pad)]))
     ))
 
 ;; ============================================================

@@ -206,9 +206,6 @@
     (define/override (get-public-key)
       (if priv (new this% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (get-params)
-      (crypto-error "key parameters not supported"))
-
     (define/override (equal-to-key? other)
       (and (is-a? other gcrypt-pk-key%)
            (equal? (gcry_sexp->bytes pub)
@@ -320,7 +317,7 @@
         ;;   gcrypt 1.7 adds option to set salt length, but still no max/auto support
         ;; [(pss) #"pss"]
         [(pkcs1-v1.5 #f) #"pkcs1"]
-        [else (crypto-error "RSA padding mode not supported\n  padding: ~e" pad)]))
+        [else (err/bad-signature-pad impl pad)]))
 
     (define/override (verify-make-sig-sexp sig)
       (gcry_sexp_build "(sig-val (rsa (s %b)))"
@@ -364,7 +361,7 @@
       (case pad
         [(#f oaep) #"oaep"]
         [(pkcs1-v1.5) #"pkcs1"]
-        [else (crypto-error "RSA padding mode not supported\n  padding: ~e" pad)]))
+        [else (err/bad-encrypt-pad impl pad)]))
     ))
 
 
@@ -419,7 +416,7 @@
 
     (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
-        (crypto-error "DSA padding mode not supported\n  padding: ~e" pad)))
+        (err/bad-signature-pad impl pad)))
 
     (define/override (verify-make-sig-sexp sig-der)
       (match (bytes->asn1/DER DSA-Sig-Val sig-der)
@@ -525,7 +522,7 @@
 
     (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
-        (crypto-error "EC padding mode not supported\n  padding: ~e" pad)))
+        (err/bad-signature-pad impl pad)))
 
     (define/override (verify-make-sig-sexp sig-der)
       (match (bytes->asn1/DER DSA-Sig-Val sig-der)

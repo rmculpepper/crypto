@@ -236,14 +236,14 @@ NIST P-192 disappeared!).
         [(pss*)
          (EVP_PKEY_CTX_set_rsa_padding ctx RSA_PKCS1_PSS_PADDING)
          (when sign? (EVP_PKEY_CTX_set_rsa_pss_saltlen ctx saltlen))]
-        [else (err/bad-signature-pad spec pad)]))
+        [else (err/bad-signature-pad this pad)]))
 
     (define/public (*set-encrypt-padding ctx pad)
       (EVP_PKEY_CTX_set_rsa_padding ctx
         (case pad
           [(pkcs1-v1.5) RSA_PKCS1_PADDING]
           [(oaep #f)  RSA_PKCS1_OAEP_PADDING]
-          [else (err/bad-encrypt-pad spec pad)])))
+          [else (err/bad-encrypt-pad this pad)])))
     ))
 
 ;; ----
@@ -317,7 +317,7 @@ NIST P-192 disappeared!).
     (define/public (*set-sign-padding ctx pad saltlen sign?)
       (case pad
         [(#f) (void)]
-        [else (err/bad-signature-pad spec pad)]))
+        [else (err/bad-signature-pad this pad)]))
     ))
 
 ;; ----
@@ -484,7 +484,7 @@ NIST P-192 disappeared!).
     (define/public (*set-sign-padding ctx pad saltlen sign?)
       (case pad
         [(#f) (void)]
-        [else (err/bad-signature-pad spec pad)]))
+        [else (err/bad-signature-pad this pad)]))
     ))
 
 ;; ============================================================
