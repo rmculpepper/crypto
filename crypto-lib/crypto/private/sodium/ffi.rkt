@@ -123,7 +123,7 @@
 (define chacha20poly1305-record
   (and crypto_aead_chacha20poly1305_encrypt_detached
        crypto_aead_chacha20poly1305_decrypt_detached
-       (aeadcipher '(chacha20-poly1305/8 stream)
+       (aeadcipher '(chacha20-poly1305/iv8 stream)
                    crypto_aead_chacha20poly1305_KEYBYTES
                    crypto_aead_chacha20poly1305_NPUBBYTES
                    crypto_aead_chacha20poly1305_ABYTES

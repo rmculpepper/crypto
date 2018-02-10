@@ -303,7 +303,7 @@
             (info 'salsa20r12            64  8  '(32) 0)
             (info 'chacha20              64  8  '(32) 0)
             (info 'chacha20-poly1305     64 12  '(32) 16) ;; 96-bit nonce (IETF)
-            (info 'chacha20-poly1305/8   64  8  '(32) 16) ;; 64-bit nonce (original)
+            (info 'chacha20-poly1305/iv8 64  8  '(32) 16) ;; 64-bit nonce (original)
             (info 'xchacha20-poly1305    64 24  '(32) 16)))
     (for/hasheq ([sci (in-list all)])
       (values (send sci get-cipher-name) sci))))
