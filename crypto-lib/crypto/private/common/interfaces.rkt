@@ -191,14 +191,14 @@
 
 (define pk-read-key<%>
   (interface (impl<%>)
-    read-key        ;; SerializedKey KeyFormat -> pk-key<%>/#f
-    read-params     ;; SerializedParams ParamsFormat -> pk-params<%>/#f
+    read-key        ;; Datum KeyFormat -> pk-key<%>/#f
+    read-params     ;; Datum ParamsFormat -> pk-params<%>/#f
     ))
 
 (define pk-params<%>
   (interface (ctx<%>)
     generate-key    ;; GenKeySpec -> pk-key<%>
-    write-params    ;; ParamsFormat -> SerializedParams
+    write-params    ;; ParamsFormat -> Datum
     ))
 
 (define pk-key<%>
@@ -207,7 +207,7 @@
     get-public-key          ;; -> pk-key<%>
     get-params              ;; -> pk-params<%> or #f
 
-    write-key       ;; KeyFormat -> SerializedKey
+    write-key       ;; KeyFormat -> Datum
     equal-to-key?   ;; pk-key<%> -> boolean
 
     sign            ;; bytes DigestSpec Padding -> bytes

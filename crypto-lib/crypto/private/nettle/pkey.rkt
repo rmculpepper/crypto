@@ -382,20 +382,13 @@
     (define/override (get-public-key)
       (if priv (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f)) this))
 
-    (define/override (-write-public-key fmt)
-      (encode-pub-dsa fmt
-                      (mpz->integer (dsa_params_struct-p params))
-                      (mpz->integer (dsa_params_struct-q params))
-                      (mpz->integer (dsa_params_struct-g params))
-                      (mpz->integer pub)))
-
-    (define/override (-write-private-key fmt)
-      (encode-priv-dsa fmt
-                       (mpz->integer (dsa_params_struct-p params))
-                       (mpz->integer (dsa_params_struct-q params))
-                       (mpz->integer (dsa_params_struct-g params))
-                       (mpz->integer pub)
-                       (mpz->integer priv)))
+    (define/override (-write-key fmt)
+      (define p (mpz->integer (dsa_params_struct-p params)))
+      (define q (mpz->integer (dsa_params_struct-q params)))
+      (define g (mpz->integer (dsa_params_struct-g params)))
+      (define y (mpz->integer pub))
+      (cond [priv (let ([x (mpz->integer priv)]) (encode-priv-dsa fmt p q g y x))]
+            [else (encode-pub-dsa fmt p q g y)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-dsa-key%)
@@ -468,10 +461,7 @@
     (define/override (get-public-key)
       (if priv (new nettle-ec-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-private-key fmt) (-write-key fmt))
-    (define/override (-write-public-key fmt) (-write-key fmt))
-
-    (define/private (-write-key fmt)
+    (define/override (-write-key fmt)
       (define ecc (ecc_point_struct-ecc pub))
       (define curve-oid (ecc->curve-oid ecc))
       (define mlen (ecc->mlen ecc))

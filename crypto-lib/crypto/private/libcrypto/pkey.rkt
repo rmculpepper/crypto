@@ -156,11 +156,11 @@ NIST P-192 disappeared!).
         [(SubjectPublicKeyInfo)
          (i2d i2d_PUBKEY evp)]
         [(PrivateKeyInfo)
-         (unless private?
-           (err/key-format spec private? fmt))
-         (define p8 (EVP_PKEY2PKCS8 evp))
-         (i2d i2d_PKCS8_PRIV_KEY_INFO p8)]
-        [else (err/key-format spec private? fmt)]))
+         (cond [private?
+                (define p8 (EVP_PKEY2PKCS8 evp))
+                (i2d i2d_PKCS8_PRIV_KEY_INFO p8)]
+               [else #f])]
+        [else #f]))
 
     (define/public (-known-digest? dspec)
       (or (not dspec) (and (send factory get-digest dspec) #t)))

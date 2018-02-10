@@ -572,11 +572,14 @@
       (crypto-error "key parameters not supported"))
 
     (define/public (write-key fmt)
+      (or (-write-key fmt)
+          (crypto-error "key format not supported\n  format: ~e\n  key: ~a ~a key"
+                        fmt (get-spec) (if (is-private?) "private" "public"))))
+    (define/public (-write-key fmt)
       (cond [(or (eq? fmt 'SubjectPublicKeyInfo) (not (is-private?)))
              (-write-public-key fmt)]
             [else
              (-write-private-key fmt)]))
-
     (define/public (-write-public-key fmt) #f)
     (define/public (-write-private-key fmt) #f)
 

@@ -22,7 +22,6 @@
          crypto-error
 
          err/no-impl
-         err/key-format
          err/params-format
          err/bad-signature-pad
          err/bad-encrypt-pad
@@ -46,9 +45,6 @@
 (define (err/no-impl)
   (crypto-error "internal error: unimplemented"))
 
-(define (err/key-format spec private? fmt)
-  (crypto-error "key format not supported\n  key type: ~a ~a key\n  format: ~e"
-                spec (if private? "private" "public") fmt))
 (define (err/params-format spec fmt)
   (crypto-error "parameters format not supported\n  algorithm: ~a\n  format: ~e"
                 spec fmt))
