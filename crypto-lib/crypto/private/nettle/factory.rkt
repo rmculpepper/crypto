@@ -69,9 +69,7 @@
                  [192 "twofish192"]
                  [256 "twofish256"])]))
 
-(define block-modes `(ecb cbc ctr
-                      ,@(if nettle_gcm_set_key '(gcm) '())
-                      ,@(if nettle_eax_set_key '(eax) '())))
+(define block-modes `(ecb cbc ctr ,@(if gcm-ok? '(gcm) '()) ,@(if eax-ok? '(eax) '())))
 
 (define stream-ciphers
   `(;;[Name String/([KeySize String] ...)]
@@ -118,9 +116,9 @@
                  (cons (quotient (car keylen+algid) 8)
                        (get-nc info (cadr keylen+algid))))]))
       (or (match (assq (cipher-spec-algo spec) block-ciphers)
-            [(list _ gcm-ok? alg)
+            [(list _ gcm/eax-ok? alg)
              (and (memq (cipher-spec-mode spec) block-modes)
-                  (if (memq (cipher-spec-mode spec) '(gcm eax)) gcm-ok? #t)
+                  (if (memq (cipher-spec-mode spec) '(gcm eax)) gcm/eax-ok? #t)
                   (alg->cipher alg))]
             [_ #f])
           (match (assq (cipher-spec-algo spec) stream-ciphers)

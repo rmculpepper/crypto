@@ -171,7 +171,7 @@
     (define/override (can-sign? pad dspec)
       (case pad
         [(pkcs1-v1.5) (memq dspec '(#f md5 sha1 sha256 sha512))]
-        [(pss) (memq dspec '(#f sha256 sha384 sha512))]
+        [(pss) (and pss-ok? (memq dspec '(#f sha256 sha384 sha512)))]
         [(#f) #t]
         [else #f]))
 
@@ -236,6 +236,7 @@
              [(sha512) (nettle_rsa_sha512_sign_digest_tr pub priv randctx digest sigz)]
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
           [(pss)
+           (unless pss-ok? (crypto-error "RSA padding not supported\n  padding: ~e" pad))
            (define saltlen (digest-spec-size digest-spec))
            (define salt (crypto-random-bytes saltlen))
            (case digest-spec
@@ -243,7 +244,7 @@
              [(sha384) (nettle_rsa_pss_sha384_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
              [(sha512) (nettle_rsa_pss_sha512_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
-          [else (crypto-error "RSA padding not supported\n  padding: ~s" pad)]))
+          [else (crypto-error "RSA padding not supported\n  padding: ~e" pad)]))
       (unless signed-ok? (crypto-error "RSA signing failed"))
       (mpz->bin sigz))
 
@@ -264,6 +265,7 @@
              [(sha512) (nettle_rsa_sha512_verify_digest pub digest sigz)]
              [else (nosupport/digest+pad "verification" digest-spec pad)])]
           [(pss)
+           (unless pss-ok? (crypto-error "RSA padding not supported\n  padding: ~e" pad))
            (define saltlen (digest-spec-size digest-spec))
            (case digest-spec
              [(sha256) (nettle_rsa_pss_sha256_verify_digest pub saltlen digest sigz)]

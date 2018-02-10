@@ -31,6 +31,9 @@
 (define-nettle nettle_version_major (_fun -> _int))
 (define-nettle nettle_version_minor (_fun -> _int))
 
+(define (get-ok? fun-name)
+  (and libnettle (get-ffi-obj fun-name libnettle _fpointer (lambda () #f)) #t))
+
 ;; ----
 
 (define-cpointer-type _HASH_CTX)
@@ -169,11 +172,11 @@
 (define BLOWFISH_BLOCK_SIZE 8)
 (define BLOWFISH_KEY_SIZE 16) ;; reasonable default
 (define-nettle nettle_blowfish_set_key _nettle_set_key/len_func)
-(define-nettle nettle_blowfish_encrypt _nettle_crypt_func #:fail (lambda () #f))
-(define-nettle nettle_blowfish_decrypt _nettle_crypt_func #:fail (lambda () #f))
+(define-nettle nettle_blowfish_encrypt _nettle_crypt_func)
+(define-nettle nettle_blowfish_decrypt _nettle_crypt_func)
 
 (define blowfish-cipher
-  (and nettle_blowfish_encrypt
+  (and (get-ok? #"nettle_blowfish_encrypt")
        (nettle-cipher "blowfish"
                       BLOWFISH_CONTEXT_SIZE BLOWFISH_BLOCK_SIZE BLOWFISH_KEY_SIZE
                       nettle_blowfish_set_key nettle_blowfish_set_key
@@ -190,11 +193,11 @@
 (define SALSA20_IV_SIZE 8)
 (define-nettle nettle_salsa20_set_key _nettle_set_key/len_func)
 (define-nettle nettle_salsa20_set_nonce _nettle_set_iv/nonce_func)
-(define-nettle nettle_salsa20_crypt _nettle_crypt_func #:fail (lambda () #f))
-(define-nettle nettle_salsa20r12_crypt _nettle_crypt_func #:fail (lambda () #f))
+(define-nettle nettle_salsa20_crypt _nettle_crypt_func)
+(define-nettle nettle_salsa20r12_crypt _nettle_crypt_func)
 
 (define salsa20-cipher
-  (and nettle_salsa20_crypt
+  (and (get-ok? #"nettle_salsa20_crypt")
        (nettle-cipher "salsa20"
                       SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
                       nettle_salsa20_set_key nettle_salsa20_set_key
@@ -204,7 +207,7 @@
                       `((set-iv ,nettle_salsa20_set_nonce)))))
 
 (define salsa20r12-cipher
-  (and nettle_salsa20r12_crypt
+  (and (get-ok? #"nettle_salsa20r12_crypt")
        (nettle-cipher "salsa20r12"
                       SALSA20_CONTEXT_SIZE SALSA20_BLOCK_SIZE SALSA20_KEY_SIZE
                       nettle_salsa20_set_key nettle_salsa20_set_key
@@ -221,10 +224,10 @@
 (define-nettle nettle_chacha_set_key _nettle_set_key_func)
 (define-nettle nettle_chacha_set_nonce _nettle_set_iv/nonce_func)
 (define-nettle nettle_chacha_set_nonce96 _nettle_set_iv/nonce_func)
-(define-nettle nettle_chacha_crypt _nettle_crypt_func #:fail (lambda () #f))
+(define-nettle nettle_chacha_crypt _nettle_crypt_func)
 
 (define chacha-cipher
-  (and nettle_chacha_crypt
+  (and (get-ok? #"nettle_chacha_crypt")
        (nettle-cipher "chacha"
                       CHACHA_CONTEXT_SIZE CHACHA_BLOCK_SIZE CHACHA_KEY_SIZE
                       nettle_chacha_set_key nettle_chacha_set_key
@@ -258,12 +261,12 @@
 (define-nettle nettle_chacha_poly1305_set_key _nettle_set_key_func)
 (define-nettle nettle_chacha_poly1305_set_nonce _nettle_set_iv/nonce_func)
 (define-nettle nettle_chacha_poly1305_update (_fun _CIPHER_CTX _size _pointer -> _void))
-(define-nettle nettle_chacha_poly1305_encrypt _nettle_crypt_func #:fail (lambda () #f))
-(define-nettle nettle_chacha_poly1305_decrypt _nettle_crypt_func #:fail (lambda () #f))
+(define-nettle nettle_chacha_poly1305_encrypt _nettle_crypt_func)
+(define-nettle nettle_chacha_poly1305_decrypt _nettle_crypt_func)
 (define-nettle nettle_chacha_poly1305_digest (_fun _CIPHER_CTX _size _pointer -> _void))
 
 (define chacha-poly1305-cipher
-  (and nettle_chacha_poly1305_encrypt
+  (and (get-ok? #"nettle_chacha_poly1305_encrypt")
        (nettle-cipher "chacha-poly1305"
                       CHACHA_POLY1305_CONTEXT_SIZE CHACHA_POLY1305_BLOCK_SIZE CHACHA_POLY1305_KEY_SIZE
                       nettle_chacha_poly1305_set_key nettle_chacha_poly1305_set_key
@@ -325,9 +328,10 @@
 (define-cpointer-type _eax_key)
 (define-cpointer-type _eax_ctx)
 
+(define eax-ok? (get-ok? #"nettle_eax_set_key"))
+
 (define-nettle nettle_eax_set_key
-  (_fun _eax_key _CIPHER_CTX _nettle_crypt_func -> _void)
-  #:fail (lambda () #f))
+  (_fun _eax_key _CIPHER_CTX _nettle_crypt_func -> _void))
 (define-nettle nettle_eax_set_nonce
   (_fun _eax_ctx _eax_key _CIPHER_CTX _nettle_crypt_func _size _pointer -> _void))
 (define-nettle nettle_eax_update
@@ -347,13 +351,13 @@
 ;; gcm_ctx = { 3 * gcm_block ; 2 * uint64 }
 (define GCM_KEY_SIZE (* GCM_BLOCK_SIZE (expt 2 GCM_TABLE_BITS)))
 (define GCM_CTX_SIZE (+ (* 3 GCM_BLOCK_SIZE) (* 2 (ctype-sizeof _uint64))))
-
 (define-cpointer-type _gcm_key)
 (define-cpointer-type _gcm_ctx)
 
+(define gcm-ok? (get-ok? #"nettle_gcm_set_key"))
+
 (define-nettle nettle_gcm_set_key
-  (_fun _gcm_key _CIPHER_CTX _nettle_crypt_func -> _void)
-  #:fail (lambda () #f))
+  (_fun _gcm_key _CIPHER_CTX _nettle_crypt_func -> _void))
 (define-nettle nettle_gcm_set_iv
   (_fun _gcm_ctx _gcm_key _size _pointer -> _void))
 (define-nettle nettle_gcm_update
@@ -451,15 +455,11 @@
 (define-ffi-definer define-nettleHW libhogweed
   #:default-make-fail make-not-available)
 
-(define rsa-ok?
-  (and libhogweed
-       (get-ffi-obj "nettle_rsa_public_key_init" libhogweed _fpointer (lambda () #f))
-       #t))
+(define (get-hw-ok? fun)
+  (and libhogweed (get-ffi-obj fun libhogweed _fpointer (lambda () #f)) #t))
 
-(define dsa-ok?
-  (and libhogweed
-       (get-ffi-obj "nettle_dsa_public_key_init" libhogweed _fpointer (lambda () #f))
-       #t))
+(define rsa-ok? (get-hw-ok? #"nettle_rsa_public_key_init"))
+(define dsa-ok? (get-hw-ok? #"nettle_dsa_public_key_init"))
 
 (define-cstruct _rsa_public_key_struct
   ([size _uint]  ;; size of modulo in octets, also size in sigs
@@ -519,14 +519,20 @@
 (define sign-digest-type
   (_fun _rsa_public_key _rsa_private_key _pointer (_fpointer = yarrow_random)
         _bytes _mpz_t -> _bool))
+(define (((make-sign-fallback f)) pub priv randctx digest sig) (f priv digest sig))
 
 ;; timing-resistant functions added in Nettle 3.2
-(define-nettleHW nettle_rsa_md5_sign_digest_tr sign-digest-type)
-(define-nettleHW nettle_rsa_sha1_sign_digest_tr sign-digest-type)
-(define-nettleHW nettle_rsa_sha256_sign_digest_tr sign-digest-type)
-(define-nettleHW nettle_rsa_sha512_sign_digest_tr sign-digest-type)
+(define-nettleHW nettle_rsa_md5_sign_digest_tr sign-digest-type
+  #:fail (make-sign-fallback nettle_rsa_md5_sign_digest))
+(define-nettleHW nettle_rsa_sha1_sign_digest_tr sign-digest-type
+  #:fail (make-sign-fallback nettle_rsa_sha1_sign_digest))
+(define-nettleHW nettle_rsa_sha256_sign_digest_tr sign-digest-type
+  #:fail (make-sign-fallback nettle_rsa_sha256_sign_digest))
+(define-nettleHW nettle_rsa_sha512_sign_digest_tr sign-digest-type
+  #:fail (make-sign-fallback nettle_rsa_sha512_sign_digest))
 
 ;; PSS functions added in Nettle 3.4
+(define pss-ok? (get-hw-ok? #"nettle_rsa_pss_sha256_sign_digest_tr"))
 (define pss-sign-digest-type
   (_fun _rsa_public_key _rsa_private_key _pointer (_fpointer = yarrow_random)
         _size _bytes _bytes _mpz_t -> _bool))
@@ -688,11 +694,6 @@
 
 ;; ----
 
-(define ec-ok?
-  (and libhogweed
-       (get-ffi-obj "nettle_ecc_point_init" libhogweed _fpointer (lambda () #f))
-       #t))
-
 (define-cstruct _ecc_point_struct ([ecc _pointer] [p _pointer])
   #:malloc-mode 'atomic-interior)
 (define-cstruct _ecc_scalar_struct ([ecc _pointer] [p _pointer])
@@ -747,6 +748,8 @@
             [secp256r1 ,(nettle_get_secp_256r1)]
             [secp384r1 ,(nettle_get_secp_384r1)]
             [secp521r1 ,(nettle_get_secp_521r1)])))
+
+(define ec-ok? (and (get-hw-ok? #"nettle_ecc_point_init") (pair? nettle-curves)))
 
 (define-nettleHW nettle_ecdsa_sign
   (_fun (key randctx digest sig) ::
