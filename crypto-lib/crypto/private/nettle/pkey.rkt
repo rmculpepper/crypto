@@ -52,7 +52,7 @@
       (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
       (unless (nettle_rsa_public_key_prepare pub) (crypto-error "bad public key"))
       (define impl (send factory get-pk 'rsa))
-      (new nettle-rsa-key% (impl impl) (pub pub) (priv #f)))
+      (and impl (new nettle-rsa-key% (impl impl) (pub pub) (priv #f))))
 
     (define/override (-make-priv-rsa n e d p q dp dq qInv)
       (define pub (new-rsa_public_key))
@@ -70,18 +70,18 @@
       (unless (nettle_rsa_private_key_prepare priv)
         (crypto-error "bad private key"))
       (define impl (send factory get-pk 'rsa))
-      (new nettle-rsa-key% (impl impl) (pub pub) (priv priv)))
+      (and impl (new nettle-rsa-key% (impl impl) (pub pub) (priv priv))))
 
     ;; ---- DSA ----
 
     (define/override (-make-pub-dsa p q g y)
-      (define params (-make-params-dsa p q g))
+      (define params (-params-dsa p q g))
       (define pub (integer->mpz y))
       (define impl (send factory get-pk 'dsa))
-      (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f)))
+      (and impl (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f))))
 
     (define/override (-make-priv-dsa p q g y x)
-      (define params (-make-params-dsa p q g))
+      (define params (-params-dsa p q g))
       (define priv (integer->mpz x))
       (define pub
         (cond [y (integer->mpz y)]
@@ -93,9 +93,13 @@
                             (dsa_params_struct-p params))
                yz]))
       (define impl (send factory get-pk 'dsa))
-      (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv)))
+      (and impl (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv))))
 
-    (define/private (-make-params-dsa p q g)
+    (define/override (-make-params-dsa p q g)
+      (define impl (send factory get-pk 'dsa))
+      (and impl (new nettle-dsa-params% (impl impl) (params (-params-dsa p q g)))))
+
+    (define/private (-params-dsa p q g)
       (define params (new-dsa_params))
       (__gmpz_set (dsa_params_struct-p params) (integer->mpz p))
       (__gmpz_set (dsa_params_struct-q params) (integer->mpz q))
@@ -109,7 +113,7 @@
       (define pub (and ecc (make-ec-public-key ecc qB)))
       (cond [(and ecc pub)
              (define impl (send factory get-pk 'ec))
-             (new nettle-ec-key% (impl impl) (pub pub) (priv #f))]
+             (and impl (new nettle-ec-key% (impl impl) (pub pub) (priv #f)))]
             [else #f]))
 
     (define/override (-make-priv-ec curve-oid qB d)
@@ -119,7 +123,7 @@
              (define priv (new-ecc_scalar ecc))
              (nettle_ecc_scalar_set priv (integer->mpz d))
              (define impl (send factory get-pk 'ec))
-             (new nettle-ec-key% (impl impl) (pub pub) (priv priv))]
+             (and impl (new nettle-ec-key% (impl impl) (pub pub) (priv priv)))]
             [else #f]))
 
     (define/private (make-ec-public-key ecc qB)
@@ -132,9 +136,10 @@
                   pub)]
             [else #f]))
 
-    ;; ----
-
-    (define/override (read-params sp) #f)
+    (define/override (-make-params-ec curve-oid)
+      (define ecc (curve-oid->ecc curve-oid))
+      (define impl (send factory get-pk 'ec))
+      (and ecc impl (new nettle-ec-params% (impl impl) (ecc ecc))))
     ))
 
 ;; ============================================================
@@ -302,7 +307,6 @@
 ;; ============================================================
 ;; DSA
 
-;; Nettle doesn't support DSA params, so just use keygen directly.
 (define allowed-dsa-keygen
   `((nbits ,exact-positive-integer? "exact-positive-integer?")
     (qbits ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
@@ -333,7 +337,12 @@
 
     (define/override (can-sign? pad dspec) (memq pad '(#f)))
 
-    ;; (define/override (generate-params config) ...)
+    (define/override (generate-params config)
+      (check-keygen-spec config allowed-dsa-keygen)
+      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
+            [qbits (or (keygen-spec-ref config 'qbits) 256)])
+        (define params (-genparams nbits qbits))
+        (new nettle-dsa-params% (impl this) (params params))))
 
     (define/override (generate-key config)
       (check-keygen-spec config allowed-dsa-keygen)
@@ -350,6 +359,26 @@
       (or (nettle_dsa_generate_params params (get-random-ctx) nbits qbits)
           (crypto-error "failed to generate parameters"))
       params)
+    ))
+
+(define nettle-dsa-params%
+  (class* ctx-base% (pk-params<%>)
+    (init-field params)
+    (inherit-field impl)
+    (super-new)
+
+    (define/public (generate-key config)
+      (check-keygen-spec config '())
+      (define pub (new-mpz))
+      (define priv (new-mpz))
+      (nettle_dsa_generate_keypair params pub priv (send impl get-random-ctx))
+      (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv)))
+
+    (define/public (write-params fmt)
+      (encode-params-dsa fmt
+                         (mpz->integer (dsa_params_struct-p params))
+                         (mpz->integer (dsa_params_struct-q params))
+                         (mpz->integer (dsa_params_struct-g params))))
     ))
 
 (define nettle-dsa-key%
@@ -408,7 +437,34 @@
     (super-new (spec 'ec))
 
     (define/override (can-sign? pad dspec) (memq pad '(#f)))
-    ;; (define/override (generate-key config) ...) ;; FIXME
+
+    (define/override (generate-params config)
+      (check-keygen-spec config `((curve ,symbol? "symbol?")))
+      (define curve-name (keygen-spec-ref config 'curve))
+      (define ecc (curve-name->ecc curve-name))
+      (unless ecc (crypto-error "named curve not found\n  curve: ~v" curve-name))
+      (new nettle-ec-params% (impl this) (ecc ecc)))
+
+    (define/override (generate-key config)
+      (define params (generate-params config))
+      (send params generate-key '()))
+    ))
+
+(define nettle-ec-params%
+  (class* ctx-base% (pk-params<%>)
+    (init-field ecc)
+    (inherit-field impl)
+    (super-new)
+
+    (define/public (generate-key config)
+      (check-keygen-spec config '())
+      (define pub (new-ecc_point ecc))
+      (define priv (new-ecc_scalar ecc))
+      (nettle_ecdsa_generate_keypair pub priv (send impl get-random-ctx))
+      (new nettle-ec-key% (impl impl) (pub pub) (priv priv)))
+
+    (define/public (write-params fmt)
+      (encode-params-ec fmt (ecc->curve-oid ecc)))
     ))
 
 (define nettle-ec-key%

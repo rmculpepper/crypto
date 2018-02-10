@@ -140,30 +140,40 @@
     ;; ----------------------------------------
 
     (define/public (read-params buf fmt)
+      (-check-bytes fmt buf)
       (case fmt
         [(AlgorithmIdentifier)
          (-check-bytes fmt buf)
          (match (bytes->asn1/DER AlgorithmIdentifier/DER buf)
            [(hash-table ['algorithm alg-oid] ['parameters parameters])
             (cond [(equal? alg-oid id-dsa)
-                   (read-params parameters 'DSAParameters)] ;; Dss-Parms
+                   (read-params parameters 'Dss-Parms)] ;; Dss-Parms
                   [(equal? alg-oid dhKeyAgreement)
                    (read-params parameters 'DHParameter)] ;; DHParameter
                   [(equal? alg-oid id-ecPublicKey)
                    (read-params parameters 'EcpkParameters)] ;; EcpkParameters
                   [else #f])]
            [_ #f])]
-        [(DSAParameters)
-         (-decode-params-dsa buf)]
+        [(DSAParameters Dss-Parms)
+         (match (bytes->asn1/DER Dss-Parms buf)
+           [(hash-table ['p p] ['q q] ['g g])
+            (-make-params-dsa p q g)]
+           [_ #f])]
         [(DHParameter) ;; PKCS#3 ... not DomainParameters!
-         (-decode-params-dh buf)]
+         (match (bytes->asn1/DER DHParameter buf)
+           [(hash-table ['prime prime] ['base base])
+            (-make-params-dh prime base)]
+           [_ #f])]
         [(EcpkParameters)
-         (-decode-params-ec buf)]
+         (match (bytes->asn1/DER EcpkParameters)
+           [(list 'namedCurve curve-oid)
+            (-make-params-ec curve-oid)]
+           [_ #f])]
         [else #f]))
 
-    (define/public (-decode-params-dsa buf) #f)
-    (define/public (-decode-params-dh buf) #f)
-    (define/public (-decode-params-ec buf) #f)
+    (define/public (-make-params-dsa p q g) #f)
+    (define/public (-make-params-dh prime base) #f)
+    (define/public (-make-params-ec curve-oid) #f)
 
     ;; ----------------------------------------
 
@@ -213,6 +223,15 @@
 
 ;; ---- DSA ----
 
+(define (encode-params-dsa fmt p q g y)
+  (case fmt
+    [(AlgorithmIdentifier)
+     (asn1->bytes/DER AlgorithmIdentifier
+       (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g)))]
+    [(DSAParameters Dss-Parms)
+     (asn1->bytes/DER Dss-Parms (hasheq 'p p 'q q 'g g))]
+    [else #f]))
+
 (define (encode-pub-dsa fmt p q g y)
   (case fmt
     [(SubjectPublicKeyInfo)
@@ -241,6 +260,16 @@
 ;; ---- DH ----
 
 ;; ---- EC ----
+
+(define (encode-params-ec fmt curve-oid)
+  (case fmt
+    [(AlgorithmIdentifier)
+     (asn1->bytes/DER AlgorithmIdentifier
+       (hasheq 'algorithm id-ecPublicKey
+               'parameters (list 'namedCurve curve-oid)))]
+    [(EcpkParameters)
+     (asn1->bytes/DER EcpkParameters (list 'namedCurve curve-oid))]
+    [else #f]))
 
 (define (encode-pub-ec fmt curve-oid qB)
   (case fmt
