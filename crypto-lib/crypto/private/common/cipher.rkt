@@ -104,7 +104,8 @@
 
 (define (-get-impl o)
   (cond [(cipher-spec? o)
-         (or (get-cipher o) (err/missing-cipher o))]
+         (or (get-cipher o)
+             (crypto-error "could not get cipher implementation\n  cipher spec: ~e" o))]
         [else (get-impl* o)]))
 
 (define (-get-info o)

@@ -580,7 +580,7 @@
       (unless (send impl can-sign? #f #f)
         (crypto-error "sign/verify not supported\n  algorithm: ~e" (get-spec)))
       (unless (send impl can-sign? pad digest-spec)
-        (crypto-error "sign/verify not supported\n  algorithm: ~e\n  padding: ~e\n  digest: ~e"
+        (crypto-error "sign/verify options not supported\n  algorithm: ~e\n  padding: ~e\n  digest: ~e"
                       (get-spec) pad digest-spec)))
 
     (define/private (-check-digest-size digest digest-spec)

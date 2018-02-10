@@ -231,7 +231,8 @@
 
 (define (-get-impl pki)
   (cond [(pk-spec? pki)
-         (or (get-pk pki) (err/missing-pk pki))]
+         (or (get-pk pki)
+             (crypto-error "could not get PK implementation\n  algorithm: ~e" pki))]
         [else pki]))
 
 (define (generate-private-key pki [config '()])

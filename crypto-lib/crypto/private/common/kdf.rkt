@@ -53,7 +53,8 @@
 
 (define (-get-impl o)
   (cond [(kdf-spec? o)
-         (or (get-kdf o) (err/missing-kdf o))]
+         (or (get-kdf o)
+             (crypto-error "could not get KDF implementation\n  KDF spec: ~e" o))]
         [else (get-impl* o)]))
 
 (define (kdf k pass salt [params '()])

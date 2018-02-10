@@ -20,8 +20,6 @@
          with-crypto-entry
          crypto-who
          crypto-error
-         check-input-range
-         check-output-range
 
          err/no-impl
          err/key-format
@@ -30,10 +28,7 @@
          err/bad-encrypt-pad
          err/no-direct-keygen
          err/no-params
-         err/missing-digest
-         err/missing-cipher
-         err/missing-pk
-         err/missing-kdf)
+         err/missing-digest)
 
 (define crypto-entry-point (gensym))
 
@@ -79,37 +74,4 @@
   (crypto-error "algorithm does not have parameters\n  algorithm: ~e" spec))
 
 (define (err/missing-digest spec)
-  (crypto-error "could not get digest implementation\n  digest spec: ~e" spec))
-(define (err/missing-cipher spec)
-  (crypto-error "could not get cipher implementation\n  cipher spec: ~e" spec))
-(define (err/missing-pk spec)
-  (crypto-error "could not get PK implementation\n  algorithm: ~e" spec))
-(define (err/missing-kdf spec)
-  (crypto-error "could not get KDF implementation\n  KDF spec: ~e" spec))
-
-;; ----
-
-(define (check-input-range buf start end [maxlen #f])
-  (unless (and (<= 0 start end (bytes-length buf))
-               (or (not maxlen) (<= (- end start) maxlen)))
-    (crypto-error
-     "bad range for input buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a"
-     start end (bytes-length buf)
-     (if maxlen
-         (format " of length at most ~a" maxlen)
-         ""))))
-
-(define (check-output-range buf start end [minlen #f] #:msg [msg #f])
-  (when (immutable? buf)
-    (crypto-error "expected mutable output buffer"))
-  (unless (and (<= 0 start end (bytes-length buf))
-               (or (not minlen) (>= (- end start) minlen)))
-    (crypto-error
-     "bad range for output buffer\n  given: [~a,~a)\n  expected: range within [0,~a)~a~a"
-     start end (bytes-length buf)
-     (if minlen
-         (format " of length at least ~a" minlen)
-         "")
-     (if msg
-         (format "\n  ~a" msg)
-         ""))))
+  (crypto-error "could not get digest implementation\n  digest: ~e" spec))
