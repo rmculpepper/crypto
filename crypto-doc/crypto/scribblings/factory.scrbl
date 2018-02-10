@@ -64,11 +64,6 @@ Factory for
 @hyperlink["http://www.openssl.org/docs/crypto/crypto.html"]{libcrypto},
 the cryptography library of OpenSSL. The necessary foreign library is
 typically part of the operating system or distributed with Racket.
-
-@bold{CSPRNG Initialization} The libcrypto library automatically seeds
-its CSPRNG using entropy obtained from the operating system
-(@hyperlink["http://wiki.openssl.org/index.php/Random_Numbers"]{as
-described here}).
 }
 
 @section[#:tag "gcrypt-factory"]{GCrypt}
@@ -78,12 +73,10 @@ described here}).
 @defthing[gcrypt-factory crypto-factory?]{
 
 Factory for
-@hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt}, a
-cryptography library from the GNU project, originally part of GnuPG.
-The @tt{libgcrypt.so.20} foreign library is required.
-
-@bold{CSPRNG Initialization} The libgcrypt library seems to perform
-some default CSPRNG initialization, but I don't know the details.
+@hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt} (aka
+@as-index{libgcrypt}), a cryptography library from the GNU project,
+originally part of GnuPG.  The @tt{libgcrypt.so.20} foreign library is
+required.
 }
 
 @section[#:tag "nettle-factory"]{Nettle}
@@ -94,14 +87,21 @@ some default CSPRNG initialization, but I don't know the details.
 
 Factory for
 @hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle}, a
-lightweight cryptography library. The @tt{libnettle.so.6} and
-@tt{libhogweed.so.4} foreign libraries is required.
+lightweight cryptography library. The @tt{libnettle.so.6} foreign
+library is required, and @tt{libhogweed.so.4} is required for
+public-key crypto support.
+}
 
-@bold{CSPRNG Initialization} This library creates a Yarrow-256
-instance and seeds it with entropy obtained from
-@racket[crypto-random-bytes]. The instance does not automatically
-update its entropy pool, so it does @bold{not} enjoy Yarrow's
-key-compromise recovery properties.
+@section[#:tag "sodium-factory"]{Sodium}
+
+@defmodule[crypto/sodium]
+
+@defthing[sodium-factory crypto-factory?]{
+
+Factory for @hyperlink["https://download.libsodium.org/doc/"]{Sodium}
+(aka @as-index{libsodium}). This factory does @bold{not} provide the
+high-level Sodium APIs; it only provides access to some of the
+low-level primitives. The @tt{libsodium.so.23} library is required.
 }
 
 @section[#:tag "argon2-factory"]{Argon2}

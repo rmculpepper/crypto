@@ -45,9 +45,34 @@ Equivalent to @racket[(subbytes bs start end)] if @racket[bs] is not
 subsequently mutated, but avoids making a copy.
 }
 
-@section[#:tag "quirks"]{Cryptography Provider Quirks}
+@section[#:tag "provider-notes"]{Notes on Cryptography Providers}
 
-@section[#:tag "libcrypto-quirks"]{Libcrypto Quirks}
+@section[#:tag "random"]{CSPRNG Initialization}
+
+Some cryptographic operations require a source of cryptographically
+secure pseudo-random numbers. Some of these, such as
+@racket[generate-cipher-key], are handled at the Racket level and use
+@racket[crypto-random-bytes]. Other operations, such as
+@racket[generate-private-key], RSA signing with PSS padding, and many
+more, use the crypto provider's internal CSPRNG. This section contains
+notes on crypto providers' CSPRNG initialization.
+
+@bold{libcrypto} The libcrypto foreign library automatically seeds its
+CSPRNG using entropy obtained from the operating system
+(@hyperlink["http://wiki.openssl.org/index.php/Random_Numbers"]{as
+described here}).
+
+@bold{gcrypt} The libgcrypt foreign library seems to perform some
+default CSPRNG initialization, but I don't know the details.
+
+@bold{nettle} The @racketmodname[crypto] library creates a Yarrow-256
+instance and seeds it once with entropy obtained from
+@racket[crypto-random-bytes]. The instance does not automatically
+update its entropy pool, so it does @bold{not} enjoy Yarrow's
+key-compromise recovery properties.
+
+
+@section[#:tag "libcrypto-notes"]{Libcrypto Quirks}
 
 PSS padding for RSA signatures is, in principle, parameterized by the
 salt length. A standard choice is the length of the digest to be
@@ -61,13 +86,21 @@ padding to use the digest length and @racket['pss*] to be the
 libcrypto-specific behavior.
 
 
-@section[#:tag "gcrypt-quirks"]{GCrypt Quirks}
+@section[#:tag "gcrypt-notes"]{GCrypt Quirks}
 
 If ECDSA is used with a digest longer than the bit-length of the
 curve, gcrypt either fails to correctly truncate the digest or
 otherwise handles it by default in a way incompatible with libcrypto
 and nettle. Consequently, this library truncates the digest before
 passing it to gcrypt for signing.
+
+
+@section[#:tag "sodium-notes"]{Sodium Quirks}
+
+Sodium provides only ``all-at-once'' encryption and decryption
+functions. Consequently, encryption and decryption contexts using
+sodium ciphers produce no output until @racket[cipher-final] is
+called.
 
 
 @(close-eval the-eval)
