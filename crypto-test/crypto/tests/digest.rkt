@@ -68,7 +68,8 @@
       (when (zero? (length impls))
         (eprintf "-  no impl for digest ~e\n" name))
       (when (= (length impls) 1)
-        (eprintf "-  only one impl for digest ~e ~e\n" name (map object-name impls)))
+        (eprintf "-  only one impl for digest ~e (~s)\n" name
+                 (send (send (car impls) get-factory) get-name)))
       (when (> (length impls) 1)
         (when #t
           (eprintf "+  testing agreement ~e\n" name))

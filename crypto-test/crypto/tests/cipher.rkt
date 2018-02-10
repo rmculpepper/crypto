@@ -155,30 +155,35 @@
     (test-cipher-agreement spec factories)))
 
 (define (test-cipher-agreement spec factories)
-  (let ([names+impls
+  (let ([factories+impls
          (filter cdr
                  (for/list ([factory factories])
                    (cons factory (send factory get-cipher spec))))])
-    (when (zero? (length names+impls))
+    (define factories (map car factories+impls))
+    (define impls (map cdr factories+impls))
+    (when (zero? (length impls))
       (eprintf "-  no impl for cipher ~e\n" spec))
-    (when (= (length names+impls) 1)
+    (when (= (length impls) 1)
       (eprintf "-  only one impl for cipher ~e\n" spec))
-    (when (> (length names+impls) 1)
+    (when (> (length impls) 1)
       (when #t
-        (eprintf "+  testing agreement ~e (~s impls)\n" spec (length names+impls)))
-      (define names (map car names+impls))
-      (define impls (map cdr names+impls))
+        (eprintf "+  testing agreement ~e (~s impls)\n" spec (length impls)))
       (test-case (format "cipher agreement for ~e\n" spec)
         (define key (generate-cipher-key spec))
         (define iv (generate-cipher-iv spec))
-        (for ([plaintext plaintexts]
-              #:when (<= (bytes-length plaintext) 100))
+        (for ([plaintext plaintexts] #:when (<= (bytes-length plaintext) 100))
+          ;; skip impls that don't support chosen key length
           (define ciphertexts
-            (for/list ([impl impls]) (encrypt impl key iv plaintext)))
+            (for/list ([impl impls])
+              (and (send impl key-size-ok? (bytes-length key))
+                   (encrypt impl key iv plaintext))))
           (for ([ciphertext ciphertexts]
-                [name names])
+                [factory factories]
+                #:when ciphertext)
             (check-equal? ciphertext (car ciphertexts)
-                          (format "~e and ~e" name (car names)))))))))
+                          (format "~e and ~e"
+                                  (send factory get-name)
+                                  (send (car factories) get-name)))))))))
 
 ;; ----------------------------------------
 
