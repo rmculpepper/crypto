@@ -135,7 +135,7 @@
     (define/override (get-pk* spec)
       (case spec
         [(rsa) (and rsa-ok? (new nettle-rsa-impl% (factory this)))]
-        [(dsa) (and dsa-ok? (new nettle-dsa-impl% (factory this)))]
+        [(dsa) (and new-dsa-ok? (new nettle-dsa-impl% (factory this)))]
         [(ec) (and ec-ok? (new nettle-ec-impl% (factory this)))]
         [else #f]))
 

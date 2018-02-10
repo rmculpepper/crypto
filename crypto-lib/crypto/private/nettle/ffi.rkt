@@ -449,7 +449,10 @@
 (define-nettle nettle_yarrow256_slow_reseed
   (_fun _yarrow256_ctx -> _void))
 
-;; ----
+(define-nettle yarrow_random _fpointer
+  #:c-id nettle_yarrow256_random)
+
+;; ============================================================
 
 (define libhogweed (ffi-lib "libhogweed" '("4" #f) #:fail (lambda () #f)))
 (define-ffi-definer define-nettleHW libhogweed
@@ -458,8 +461,10 @@
 (define (get-hw-ok? fun)
   (and libhogweed (get-ffi-obj fun libhogweed _fpointer (lambda () #f)) #t))
 
+;; ----------------------------------------
+;; RSA
+
 (define rsa-ok? (get-hw-ok? #"nettle_rsa_public_key_init"))
-(define dsa-ok? (get-hw-ok? #"nettle_dsa_public_key_init"))
 
 (define-cstruct _rsa_public_key_struct
   ([size _uint]  ;; size of modulo in octets, also size in sigs
@@ -550,9 +555,6 @@
 (define-nettleHW nettle_rsa_pss_sha384_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
 (define-nettleHW nettle_rsa_pss_sha512_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
 
-(define-nettle yarrow_random _fpointer
-  #:c-id nettle_yarrow256_random)
-
 (define-nettleHW nettle_rsa_generate_keypair
   (_fun _rsa_public_key
         _rsa_private_key
@@ -597,102 +599,93 @@
   #:fail (lambda () (lambda (pub priv randomctx cleartext ciphertext)
                       (nettle_rsa_decrypt priv cleartext ciphertext))))
 
-;; ----
-
-(define-cstruct _dsa_public_key_struct
-  ([p    _mpz_struct]
-   [q    _mpz_struct]
-   [g    _mpz_struct]
-   [y    _mpz_struct]))
-
-(define-cstruct _dsa_private_key_struct
-  ([x    _mpz_struct]))
+;; ----------------------------------------
+;; DSA
 
 (define-cstruct _dsa_signature_struct
   ([r    _mpz_struct]
    [s    _mpz_struct]))
 
-(define _dsa_public_key _dsa_public_key_struct-pointer)
-(define _dsa_private_key _dsa_private_key_struct-pointer)
 (define _dsa_signature _dsa_signature_struct-pointer)
 
-(define-nettleHW nettle_dsa_public_key_init
-  (_fun _dsa_public_key -> _void))
-(define-nettleHW nettle_dsa_private_key_init
-  (_fun _dsa_private_key -> _void))
-(define-nettleHW nettle_dsa_signature_init
-  (_fun _dsa_signature -> _void))
-
-(define-nettleHW nettle_dsa_public_key_clear
-  (_fun _dsa_public_key -> _void)
+(define-nettleHW nettle_dsa_signature_init (_fun _dsa_signature -> _void))
+(define-nettleHW nettle_dsa_signature_clear (_fun _dsa_signature -> _void)
   #:wrap (deallocator))
-(define-nettleHW nettle_dsa_private_key_clear
-  (_fun _dsa_private_key -> _void)
-  #:wrap (deallocator))
-(define-nettleHW nettle_dsa_signature_clear
-  (_fun _dsa_signature -> _void)
-  #:wrap (deallocator))
-
-(define new-dsa_public_key
-  ((allocator nettle_dsa_public_key_clear)
-   (lambda ()
-     (define k (malloc _dsa_public_key_struct 'atomic-interior))
-     (cpointer-push-tag! k mpz_struct-tag) ;; FIXME: why necessary???
-     (cpointer-push-tag! k dsa_public_key_struct-tag)
-     (nettle_dsa_public_key_init k)
-     k)))
-
-(define new-dsa_private_key
-  ((allocator nettle_dsa_private_key_clear)
-   (lambda ()
-     (define k (malloc _dsa_private_key_struct 'atomic-interior))
-     (cpointer-push-tag! k mpz_struct-tag) ;; FIXME: why necessary???
-     (cpointer-push-tag! k dsa_private_key_struct-tag)
-     (nettle_dsa_private_key_init k)
-     k)))
 
 (define new-dsa_signature
   ((allocator nettle_dsa_signature_clear)
    (lambda ()
      (define k (malloc _dsa_signature_struct 'atomic-interior))
-     (cpointer-push-tag! k mpz_struct-tag) ;; FIXME: why necessary???
+     (cpointer-push-tag! k mpz_struct-tag)
      (cpointer-push-tag! k dsa_signature_struct-tag)
      (nettle_dsa_signature_init k)
      k)))
 
-(define _dsa_sign_digest
-  (_fun (pub : _dsa_public_key)
-        (priv : _dsa_private_key)
-        (random-ctx : _pointer)
-        (_fpointer = yarrow_random)
-        (dgst : _bytes)
-        (sig : _dsa_signature)
-        -> _bool))
+;; -- Nettle 3.0 has new DSA api
 
-(define _dsa_verify_digest
-  (_fun (pub : _dsa_public_key)
-        (dgst : _bytes)
-        (sig : _dsa_signature)
-        -> _bool))
+(define new-dsa-ok? (get-hw-ok? #"nettle_dsa_params_init"))
 
-(define-nettleHW nettle_dsa_sha1_sign_digest _dsa_sign_digest)
-(define-nettleHW nettle_dsa_sha256_sign_digest _dsa_sign_digest)
+(define-cstruct _dsa_params_struct
+  ([p    _mpz_struct]
+   [q    _mpz_struct]
+   [g    _mpz_struct]))
+(define _dsa_params _dsa_params_struct-pointer)
 
-(define-nettleHW nettle_dsa_sha1_verify_digest _dsa_verify_digest)
-(define-nettleHW nettle_dsa_sha256_verify_digest _dsa_verify_digest)
+(define-nettleHW nettle_dsa_params_init (_fun _dsa_params -> _void))
+(define-nettleHW nettle_dsa_params_clear (_fun _dsa_params -> _void)
+  #:wrap (deallocator))
 
-(define-nettleHW nettle_dsa_generate_keypair
-  (_fun _dsa_public_key
-        _dsa_private_key
-        (random-ctx : _pointer)
+(define new-dsa_params
+  ((allocator nettle_dsa_params_clear)
+   (lambda ()
+     (define p (malloc _dsa_params_struct 'atomic-interior))
+     (cpointer-push-tag! p mpz_struct-tag)
+     (cpointer-push-tag! p dsa_params_struct-tag)
+     (nettle_dsa_params_init p)
+     p)))
+
+(define-nettleHW nettle_dsa_generate_params
+  (_fun (params randctx pbits qbits) ::
+        (params : _dsa_params)
+        (randctx : _pointer)
         (_fpointer = yarrow_random)
         (_pointer = #f)
         (_fpointer = #f)
-        (p-bits : _uint) ;; eg, 2048
-        (q-bits : _uint) ;; 256
+        (pbits : _uint)
+        (qbits : _uint)
         -> _bool))
 
-;; ----
+(define-nettleHW nettle_dsa_sign
+  (_fun (params priv randctx digest sig) ::
+        (params : _dsa_params)
+        (priv : _mpz_t)
+        (randctx : _pointer)
+        (_fpointer = yarrow_random)
+        (_size = (bytes-length digest))
+        (digest : _bytes)
+        (sig : _dsa_signature)
+        -> _bool))
+
+(define-nettleHW nettle_dsa_verify
+  (_fun (params pub digest sig) ::
+        (params : _dsa_params)
+        (pub : _mpz_t)
+        (_size = (bytes-length digest))
+        (digest : _bytes)
+        (sig : _dsa_signature)
+        -> _bool))
+
+(define-nettleHW nettle_dsa_generate_keypair
+  (_fun (params pub priv randctx) ::
+        (params : _dsa_params)
+        (pub : _mpz_t)
+        (priv : _mpz_t)
+        (randctx : _pointer)
+        (_fpointer = yarrow_random)
+        -> _void))
+
+;; ----------------------------------------
+;; EC
 
 (define-cstruct _ecc_point_struct ([ecc _pointer] [p _pointer])
   #:malloc-mode 'atomic-interior)

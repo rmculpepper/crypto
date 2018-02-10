@@ -75,30 +75,32 @@
     ;; ---- DSA ----
 
     (define/override (-make-pub-dsa p q g y)
-      (define pub (new-dsa_public_key))
-      (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
-      (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
-      (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
-      (__gmpz_set (dsa_public_key_struct-y pub) (integer->mpz y))
+      (define params (-make-params-dsa p q g))
+      (define pub (integer->mpz y))
       (define impl (send factory get-pk 'dsa))
-      (new nettle-dsa-key% (impl impl) (pub pub) (priv #f)))
+      (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f)))
 
     (define/override (-make-priv-dsa p q g y x)
-      (define pub (new-dsa_public_key))
-      (define priv (new-dsa_private_key))
-      (__gmpz_set (dsa_public_key_struct-p pub) (integer->mpz p))
-      (__gmpz_set (dsa_public_key_struct-q pub) (integer->mpz q))
-      (__gmpz_set (dsa_public_key_struct-g pub) (integer->mpz g))
-      (__gmpz_set (dsa_private_key_struct-x priv) (integer->mpz x))
-      (if y
-          (__gmpz_set (dsa_public_key_struct-y priv) (integer->mpz y))
-          ;; else must recompute public key, y = g^x mod p
-          (__gmpz_powm (dsa_public_key_struct-y pub)
-                       (dsa_public_key_struct-g pub)
-                       (dsa_private_key_struct-x priv)
-                       (dsa_public_key_struct-p pub)))
+      (define params (-make-params-dsa p q g))
+      (define priv (integer->mpz x))
+      (define pub
+        (cond [y (integer->mpz y)]
+              [else ;; must recompute public key, y = g^x mod p
+               (define yz (new-mpz))
+               (__gmpz_powm yz
+                            (dsa_params_struct-g params)
+                            priv
+                            (dsa_params_struct-p params))
+               yz]))
       (define impl (send factory get-pk 'dsa))
-      (new nettle-dsa-key% (impl impl) (pub pub) (priv priv)))
+      (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv)))
+
+    (define/private (-make-params-dsa p q g)
+      (define params (new-dsa_params))
+      (__gmpz_set (dsa_params_struct-p params) (integer->mpz p))
+      (__gmpz_set (dsa_params_struct-q params) (integer->mpz q))
+      (__gmpz_set (dsa_params_struct-g params) (integer->mpz g))
+      params)
 
     ;; ---- EC ----
 
@@ -298,97 +300,12 @@
     ))
 
 ;; ============================================================
+;; DSA
 
 ;; Nettle doesn't support DSA params, so just use keygen directly.
-
 (define allowed-dsa-keygen
   `((nbits ,exact-positive-integer? "exact-positive-integer?")
     (qbits ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
-
-(define nettle-dsa-impl%
-  (class nettle-pk-impl%
-    (inherit-field spec factory)
-    (inherit get-random-ctx)
-    (super-new (spec 'dsa))
-
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (memq dspec '(#f sha1 sha256))))
-
-    (define/override (generate-key config)
-      (check-keygen-spec config allowed-dsa-keygen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
-            [qbits (or (keygen-spec-ref config 'qbits) 256)])
-        (define pub (new-dsa_public_key))
-        (define priv (new-dsa_private_key))
-        (define random-ctx (get-random-ctx))
-        (or (nettle_dsa_generate_keypair pub priv (get-random-ctx) nbits qbits)
-            (crypto-error "DSA key generation failed"))
-        (new nettle-dsa-key% (impl this) (pub pub) (priv priv))))
-    ))
-
-(define nettle-dsa-key%
-  (class pk-key-base%
-    (init-field pub priv)
-    (inherit-field impl)
-    (super-new)
-
-    (define/override (is-private?) (and priv #t))
-
-    (define/override (get-public-key)
-      (if priv (new nettle-dsa-key% (impl impl) (pub pub) (priv #f)) this))
-
-    (define/override (-write-public-key fmt)
-      (encode-pub-dsa fmt
-                      (mpz->integer (dsa_public_key_struct-p pub))
-                      (mpz->integer (dsa_public_key_struct-q pub))
-                      (mpz->integer (dsa_public_key_struct-g pub))
-                      (mpz->integer (dsa_public_key_struct-y pub))))
-
-    (define/override (-write-private-key fmt)
-      (encode-priv-dsa fmt
-                       (mpz->integer (dsa_public_key_struct-p pub))
-                       (mpz->integer (dsa_public_key_struct-q pub))
-                       (mpz->integer (dsa_public_key_struct-g pub))
-                       (mpz->integer (dsa_public_key_struct-y pub))
-                       (mpz->integer (dsa_private_key_struct-x priv))))
-
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-dsa-key%)
-           (mpz=? (dsa_public_key_struct-p pub)
-                  (dsa_public_key_struct-p (get-field pub other)))
-           (mpz=? (dsa_public_key_struct-q pub)
-                  (dsa_public_key_struct-q (get-field pub other)))
-           (mpz=? (dsa_public_key_struct-g pub)
-                  (dsa_public_key_struct-g (get-field pub other)))
-           (mpz=? (dsa_public_key_struct-y pub)
-                  (dsa_public_key_struct-y (get-field pub other)))))
-
-    (define/override (-sign digest digest-spec pad)
-      (define sign-fun
-        (case digest-spec
-          [(sha1) nettle_dsa_sha1_sign_digest]
-          [(sha256) nettle_dsa_sha256_sign_digest]
-          [else
-           (crypto-error "DSA signing not supported for digest\n  digest algorithm: ~s"
-                         digest-spec)]))
-      (define sig (new-dsa_signature))
-      (or (sign-fun pub priv (send impl get-random-ctx) digest sig)
-          (crypto-error "DSA signing failed"))
-      (dsa_signature->der sig))
-
-    (define/override (-verify digest digest-spec pad sig-der)
-      (define verify-fun
-        (case digest-spec
-          [(sha1) nettle_dsa_sha1_verify_digest]
-          [(sha256) nettle_dsa_sha256_verify_digest]
-          [else
-           (crypto-error "DSA verification not supported for digest\n  digest algorithm: ~s"
-                         digest-spec)]))
-      (unless (member pad '(#f))
-        (crypto-error "DSA padding not supported\n  padding: ~s" pad))
-      (define sig (der->dsa_signature sig-der))
-      (verify-fun pub digest sig))
-    ))
 
 (define (dsa_signature->der sig)
   (asn1->bytes/DER DSA-Sig-Val
@@ -404,6 +321,83 @@
      (__gmpz_set (dsa_signature_struct-s sig) (integer->mpz s))
      sig]
     [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
+
+;; ----------------------------------------
+;; New DSA API (Nettle >= 3.0)
+
+(define nettle-dsa-impl%
+  (class nettle-pk-impl%
+    (inherit-field spec factory)
+    (inherit get-random-ctx)
+    (super-new (spec 'dsa))
+
+    (define/override (can-sign? pad dspec) (memq pad '(#f)))
+
+    ;; (define/override (generate-params config) ...)
+
+    (define/override (generate-key config)
+      (check-keygen-spec config allowed-dsa-keygen)
+      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
+            [qbits (or (keygen-spec-ref config 'qbits) 256)])
+        (define params (-genparams nbits qbits))
+        (define pub (new-mpz))
+        (define priv (new-mpz))
+        (nettle_dsa_generate_keypair params pub priv (get-random-ctx))
+        (new nettle-dsa-key% (impl this) (params params) (pub pub) (priv priv))))
+
+    (define/private (-genparams nbits qbits)
+      (define params (new-dsa_params))
+      (or (nettle_dsa_generate_params params (get-random-ctx) nbits qbits)
+          (crypto-error "failed to generate parameters"))
+      params)
+    ))
+
+(define nettle-dsa-key%
+  (class pk-key-base%
+    (init-field params pub priv)
+    (inherit-field impl)
+    (super-new)
+
+    (define/override (is-private?) (and priv #t))
+
+    (define/override (get-public-key)
+      (if priv (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f)) this))
+
+    (define/override (-write-public-key fmt)
+      (encode-pub-dsa fmt
+                      (mpz->integer (dsa_params_struct-p params))
+                      (mpz->integer (dsa_params_struct-q params))
+                      (mpz->integer (dsa_params_struct-g params))
+                      (mpz->integer pub)))
+
+    (define/override (-write-private-key fmt)
+      (encode-priv-dsa fmt
+                       (mpz->integer (dsa_params_struct-p params))
+                       (mpz->integer (dsa_params_struct-q params))
+                       (mpz->integer (dsa_params_struct-g params))
+                       (mpz->integer pub)
+                       (mpz->integer priv)))
+
+    (define/override (equal-to-key? other)
+      (and (is-a? other nettle-dsa-key%)
+           (mpz=? (dsa_params_struct-p params)
+                  (dsa_params_struct-p (get-field params other)))
+           (mpz=? (dsa_params_struct-q params)
+                  (dsa_params_struct-q (get-field params other)))
+           (mpz=? (dsa_params_struct-g params)
+                  (dsa_params_struct-g (get-field params other)))
+           (mpz=? pub (get-field pub other))))
+
+    (define/override (-sign digest digest-spec pad)
+      (define sig (new-dsa_signature))
+      (or (nettle_dsa_sign params priv (send impl get-random-ctx) digest sig)
+          (crypto-error "DSA signing failed"))
+      (dsa_signature->der sig))
+
+    (define/override (-verify digest digest-spec pad sig-der)
+      (define sig (der->dsa_signature sig-der))
+      (nettle_dsa_verify params pub digest sig))
+    ))
 
 ;; ============================================================
 
