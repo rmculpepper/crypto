@@ -36,7 +36,7 @@
   [cipher-aead?
    (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) boolean?)]
   [cipher-default-auth-size
-   (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) (or/c nat? #f))]
+   (-> (or/c cipher-spec? cipher-impl? cipher-ctx?) nat?)]
   [cipher-chunk-size
    (-> (or/c cipher-impl? cipher-ctx?) nat?)]
 
