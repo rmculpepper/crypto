@@ -502,7 +502,16 @@
 
     (define/private (get-curve-oid sexp)
       (define curve (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
-      (cond [(assq curve known-curves) => cdr] [else #f]))
+      (cond [(assq (curve-alias->name curve) known-curves) => cdr] [else #f]))
+
+    (define/private (curve-alias->name curve-name)
+      (case curve-name
+        ['|NIST P-192| 'secp192r1]
+        ['|NIST P-224| 'secp224r1]
+        ['|NIST P-256| 'secp256r1]
+        ['|NIST P-384| 'secp384r1]
+        ['|NIST P-521| 'secp521r1]
+        [else curve-name]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       ;; When the digest is larger than the bits of the EC field, gcrypt is
