@@ -93,6 +93,7 @@ curve, gcrypt either fails to correctly truncate the digest or
 otherwise handles it by default in a way incompatible with libcrypto
 and nettle. Consequently, this library truncates the digest before
 passing it to gcrypt for signing.
+@; {https://crypto.stackexchange.com/questions/18488/ecdsa-with-sha256-and-sepc192r1-curve-impossible-or-how-to-calculate-e}
 
 
 @section[#:tag "sodium-notes"]{Sodium Quirks}
