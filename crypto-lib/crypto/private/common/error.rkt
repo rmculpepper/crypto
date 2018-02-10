@@ -24,7 +24,6 @@
          check-output-range
 
          err/no-impl
-         check-iv-size
          err/key-format
          err/params-format
          err/bad-signature-pad
@@ -53,15 +52,6 @@
 
 (define (err/no-impl)
   (crypto-error "internal error: unimplemented"))
-
-(define (check-iv-size spec iv-size iv)
-  (unless (= (if (bytes? iv) (bytes-length iv) 0) iv-size)
-    (err/bad-iv spec iv-size iv)))
-
-(define (err/bad-iv spec iv-size iv)
-  (crypto-error
-   "bad IV size for cipher\n  cipher: ~e\n  expected: ~s bytes\n  got: ~s bytes"
-   spec iv-size (if (bytes? iv) (bytes-length iv) 0)))
 
 (define (err/key-format spec private? fmt)
   (crypto-error "key format not supported\n  key type: ~a ~a key\n  format: ~e"

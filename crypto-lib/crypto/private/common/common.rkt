@@ -264,7 +264,7 @@
     (define/public (get-chunk-size) (send info get-chunk-size))
     (define/public (get-key-size) (send info get-key-size))
     (define/public (get-key-sizes) (send info get-key-sizes))
-    (define/public (key-size-ok? size) (send info key-size-ok? size))
+    (define/public (key-size-ok? size) (size-set-contains? (get-key-sizes) size))
     (define/public (get-iv-size) (send info get-iv-size))
     (define/public (iv-size-ok? size) (send info iv-size-ok? size))
     (define/public (get-auth-size) (send info get-auth-size))
@@ -289,19 +289,34 @@
       (void))
 
     (define/public (new-ctx key iv enc? pad? auth-len attached-tag?)
-      (check-key-size info (bytes-length key))
-      (check-iv-size (get-spec) (get-iv-size) iv)
+      (check-key-size (bytes-length key))
+      (check-iv-size (bytes-length (or iv #"")))
       (let ([pad? (and pad? (uses-padding?))])
         (-new-ctx key iv enc? pad? auth-len attached-tag?)))
 
     (abstract -new-ctx)
+
+    (define/public (check-key-size size)
+      (unless (key-size-ok? size)
+        (crypto-error "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed: ~a"
+                      (get-spec) size
+                      (match (get-key-sizes)
+                        [(? list? allowed)
+                         (string-join (map number->string allowed) ", ")]
+                        [(varsize min max step)
+                         (format "from ~a to ~a in multiples of ~a" min max step)]))))
+
+    (define/public (check-iv-size iv-size)
+      (unless (iv-size-ok? iv-size)
+        (crypto-error "bad IV size for cipher\n  cipher: ~v\n  expected: ~s bytes\n  got: ~s bytes"
+                      (get-spec) iv-size (get-iv-size))))
     ))
 
 (define multikeylen-cipher-impl%
   (class cipher-impl-base%
     (init-field impls) ;; (nonempty-listof (cons nat cipher-impl%))
     (inherit-field info)
-    (inherit get-spec)
+    (inherit get-spec check-key-size)
     (super-new)
 
     (define/override (get-key-size) (caar impls))
@@ -312,7 +327,7 @@
              => (lambda (keylen+impl)
                   (send/apply (cdr keylen+impl) new-ctx key args))]
             [else
-             (check-key-size info (bytes-length key))
+             (check-key-size (bytes-length key))
              (error 'multikeylen-cipher-impl%
                     (string-append "internal error: no implementation for key length"
                                    "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")

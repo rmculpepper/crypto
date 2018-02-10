@@ -145,17 +145,6 @@
 
 (define DEFAULT-KEY-SIZE 16) ;; 128 bits
 
-;; check-key-size : cipher-info Nat -> Void
-(define (check-key-size cinfo size)
-  (unless (send cinfo key-size-ok? size)
-    (crypto-error "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed: ~a"
-                  (send cinfo get-spec) size
-                  (match (send cinfo get-key-sizes)
-                    [(? list? allowed)
-                     (string-join (map number->string allowed ", "))]
-                    [(varsize min max step)
-                     (format "from ~a to ~a in multiples of ~a" min max step)]))))
-
 ;; ============================================================
 ;; Block Ciphers and Modes
 
@@ -314,7 +303,8 @@
             (info 'salsa20r12            64  8  '(32) 0)
             (info 'chacha20              64  8  '(32) 0)
             (info 'chacha20-poly1305     64 12  '(32) 16) ;; 96-bit nonce (IETF)
-            (info 'chacha20-poly1305/8   64 12  '(32) 16))) ;; 64-bit nonce (original)
+            (info 'chacha20-poly1305/8   64  8  '(32) 16) ;; 64-bit nonce (original)
+            (info 'xchacha20-poly1305    64 24  '(32) 16)))
     (for/hasheq ([sci (in-list all)])
       (values (send sci get-cipher-name) sci))))
 
