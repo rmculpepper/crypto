@@ -145,7 +145,7 @@ NIST P-192 disappeared!).
 ;; ============================================================
 
 (define libcrypto-pk-impl%
-  (class* impl-base% (pk-impl<%>)
+  (class pk-impl-base%
     (inherit-field spec factory)
     (super-new)
 
@@ -161,15 +161,6 @@ NIST P-192 disappeared!).
          (define p8 (EVP_PKEY2PKCS8 evp))
          (i2d i2d_PKCS8_PRIV_KEY_INFO p8)]
         [else (err/key-format spec private? fmt)]))
-
-    (define/public (generate-key config)
-      (err/no-direct-keygen spec))
-    (define/public (generate-params config)
-      (err/no-params spec))
-    (define/public (can-encrypt? pad) #f)
-    (define/public (can-sign? pad dspec) #f)
-    (define/public (can-key-agree?) #f)
-    (define/public (has-params?) #f)
 
     (define/public (-known-digest? dspec)
       (or (not dspec) (and (send factory get-digest dspec) #t)))

@@ -175,18 +175,9 @@
 ;; ============================================================
 
 (define gcrypt-pk-impl%
-  (class* impl-base% (pk-impl<%>)
-    (inherit-field spec factory)
+  (class pk-impl-base%
+    (inherit-field factory)
     (super-new)
-
-    (define/public (generate-key config)
-      (err/no-direct-keygen spec))
-    (define/public (generate-params config)
-      (err/no-params spec))
-    (define/public (can-encrypt? pad) #f)
-    (define/public (can-sign? pad dspec) #f)
-    (define/public (can-key-agree?) #f)
-    (define/public (has-params?) #f)
 
     (define/public (*generate-key keygen-sexp key-class)
       (define result

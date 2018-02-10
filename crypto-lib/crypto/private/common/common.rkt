@@ -35,6 +35,7 @@
          cipher-impl-base%
          multikeylen-cipher-impl%
          cipher-ctx%
+         pk-impl-base%
          pk-key-base%
          process-input
          get-impl*
@@ -538,6 +539,20 @@
 
 ;; ============================================================
 ;; PK
+
+(define pk-impl-base%
+  (class* impl-base% (pk-impl<%>)
+    (inherit get-spec)
+    (super-new)
+    (define/public (generate-key config)
+      (err/no-direct-keygen (get-spec)))
+    (define/public (generate-params config)
+      (err/no-params (get-spec)))
+    (define/public (can-encrypt? pad) #f)
+    (define/public (can-sign? pad dspec) #f)
+    (define/public (can-key-agree?) #f)
+    (define/public (has-params?) #f)
+    ))
 
 (define pk-key-base%
   (class* ctx-base% (pk-key<%>)
