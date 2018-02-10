@@ -22,7 +22,6 @@
          crypto-error
 
          err/no-impl
-         err/params-format
          err/bad-signature-pad
          err/bad-encrypt-pad
          err/missing-digest)
@@ -44,10 +43,6 @@
 
 (define (err/no-impl)
   (crypto-error "internal error: unimplemented"))
-
-(define (err/params-format spec fmt)
-  (crypto-error "parameters format not supported\n  algorithm: ~a\n  format: ~e"
-                spec fmt))
 
 (define (err/bad-*-pad kind spec pad)
   (crypto-error "bad ~a padding mode\n  algorithm: ~e\n  padding mode: ~e"

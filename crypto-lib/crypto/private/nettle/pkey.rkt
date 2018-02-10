@@ -352,19 +352,19 @@
     ))
 
 (define nettle-dsa-params%
-  (class* ctx-base% (pk-params<%>)
+  (class pk-params-base%
     (init-field params)
     (inherit-field impl)
     (super-new)
 
-    (define/public (generate-key config)
+    (define/override (generate-key config)
       (check-keygen-spec config '())
       (define pub (new-mpz))
       (define priv (new-mpz))
       (nettle_dsa_generate_keypair params pub priv (send impl get-random-ctx))
       (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv)))
 
-    (define/public (write-params fmt)
+    (define/override (-write-params fmt)
       (encode-params-dsa fmt
                          (mpz->integer (dsa_params_struct-p params))
                          (mpz->integer (dsa_params_struct-q params))
@@ -434,19 +434,19 @@
     ))
 
 (define nettle-ec-params%
-  (class* ctx-base% (pk-params<%>)
+  (class pk-params-base%
     (init-field ecc)
     (inherit-field impl)
     (super-new)
 
-    (define/public (generate-key config)
+    (define/override (generate-key config)
       (check-keygen-spec config '())
       (define pub (new-ecc_point ecc))
       (define priv (new-ecc_scalar ecc))
       (nettle_ecdsa_generate_keypair pub priv (send impl get-random-ctx))
       (new nettle-ec-key% (impl impl) (pub pub) (priv priv)))
 
-    (define/public (write-params fmt)
+    (define/override (-write-params fmt)
       (encode-params-ec fmt (ecc->curve-oid ecc)))
     ))
 

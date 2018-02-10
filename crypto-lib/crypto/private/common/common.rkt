@@ -36,6 +36,7 @@
          multikeylen-cipher-impl%
          cipher-ctx%
          pk-impl-base%
+         pk-params-base%
          pk-key-base%
          process-input
          get-impl*
@@ -555,6 +556,18 @@
     (define/public (can-sign? pad dspec) #f)
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
+    ))
+
+(define pk-params-base%
+  (class* ctx-base% (pk-params<%>)
+    (inherit-field impl)
+    (super-new)
+    (abstract generate-key)
+    (define/public (write-params fmt)
+      (or (-write-params fmt)
+          (crypto-error "parameters format not supported\n  format: ~e\n  parameters: ~a"
+                        fmt (send impl get-spec))))
+    (define/public (-write-params fmt) #f)
     ))
 
 (define pk-key-base%

@@ -279,7 +279,7 @@ NIST P-192 disappeared!).
          (i2d_DSAparams dsa buf)
          (DSA_free dsa)
          buf]
-        [else (err/params-format spec fmt)]))
+        [else #f]))
 
     #|
     ;; Similarly, this version of generate-params crashes.
@@ -359,7 +359,7 @@ NIST P-192 disappeared!).
          (i2d_DHparams dh buf)
          (DH_free dh)
          buf]
-        [else (err/params-format spec fmt)]))
+        [else #f]))
 
     (define/override (*write-key private? fmt evp)
       (super *write-key private? fmt evp))
@@ -438,7 +438,7 @@ NIST P-192 disappeared!).
          (define len2 (i2d_ECPKParameters group buf))
          (EC_KEY_free ec)
          (shrink-bytes buf len2)]
-        [else (err/params-format spec fmt)]))
+        [else #f]))
 
     (define/override (*write-key private? fmt evp)
       (cond [(and (eq? fmt 'ECPrivateKey) private?)
@@ -492,17 +492,17 @@ NIST P-192 disappeared!).
 (define allowed-params-keygen '())
 
 (define libcrypto-pk-params%
-  (class* ctx-base% (pk-params<%>)
+  (class pk-params-base%
     (init-field evp)
     (inherit-field impl)
     (super-new)
 
     ;; EVP_PKEY_keygen tends to crash, so call back to impl for low-level keygen.
-    (define/public (generate-key config)
+    (define/override (generate-key config)
       (check-keygen-spec config allowed-params-keygen)
       (send impl *generate-key config evp))
 
-    (define/public (write-params fmt)
+    (define/override (-write-params fmt)
       (send impl *write-params fmt evp))
     ))
 
