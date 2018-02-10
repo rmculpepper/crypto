@@ -22,6 +22,8 @@
          crypto/libcrypto
          crypto/gcrypt
          crypto/nettle
+         crypto/sodium
+         crypto/argon2
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt")
@@ -37,13 +39,17 @@
 
 (module+ main
 
-  (define all-factories (list libcrypto-factory gcrypt-factory nettle-factory #|cmdssl-factory|#))
+  (define all-factories
+    (list libcrypto-factory gcrypt-factory nettle-factory
+          sodium-factory argon2-factory))
 
   (run-tests
    (test-suite "crypto tests"
      (make-factory-tests libcrypto-factory)
      (make-factory-tests gcrypt-factory)
      (make-factory-tests nettle-factory)
+     (make-factory-tests sodium-factory)
+     (make-factory-tests argon2-factory)
      (when #t (eprintf ">>> Digest agreement\n"))
      (test-suite "digest agreement"
        (test-digests-agree all-factories))
@@ -54,5 +60,6 @@
      (test-suite "pkey agreement"
        (test-pk libcrypto-factory all-factories)
        (test-pk gcrypt-factory all-factories)
-       (test-pk nettle-factory all-factories))
+       (test-pk nettle-factory all-factories)
+       (test-pk sodium-factory all-factories))
      )))
