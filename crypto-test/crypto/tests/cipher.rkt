@@ -94,7 +94,9 @@
     (when (cipher-aead? ci)
       (for ([aad (in-list '(() #"" #"abc" #"abcdef123456"))])
         (define ct (encrypt ci key iv msg #:AAD aad))
-        (check-equal? (decrypt ci key iv ct #:AAD aad) msg)))
+        (check-equal? (decrypt ci key iv ct #:AAD aad) msg)
+        (check-exn #rx"authenticated decryption failed"
+                   (lambda () (decrypt ci key iv ct #:AAD "bad")))))
     ))
 
 (define (test-cipher/detached ci msg)
@@ -192,6 +194,10 @@
     #"abc"
     #"I am the walrus."
     ,(semirandom-bytes 10)
+    ,(semirandom-bytes 16)
+    ,(semirandom-bytes 31)
+    ,(semirandom-bytes 32)
+    ,(semirandom-bytes 33)
     ,(semirandom-bytes 100)
     ,(semirandom-bytes #e1e3)
     ,(semirandom-bytes #e1e4)
