@@ -54,7 +54,7 @@
    (-> any/c boolean?)]
   [cipher-update
    (-> cipher-ctx? input/c bytes?)]
-  [cipher-update-AAD
+  [cipher-update-aad
    (-> cipher-ctx? input/c void?)]
   [cipher-final
    (->* [cipher-ctx?] [(or/c bytes? #f)] bytes?)]
@@ -63,23 +63,23 @@
 
   [encrypt
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:AAD input/c #:auth-size (or/c nat? #f)
+        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)
          #| #:out (or/c output-port? #f) |#]
         bytes?)]
   [decrypt
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:AAD input/c #:auth-size (or/c nat? #f)
+        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)
          #| #:out (or/c output-port? #f) |#]
         bytes?)]
 
   [encrypt/auth
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:AAD input/c #:auth-size (or/c nat? #f)
+        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)
          #| #:out (or/c output-port? #f) |#]
         (values bytes? (or/c bytes? #f)))]
   [decrypt/auth
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:AAD input/c #:auth-tag (or/c bytes? #f)
+        [#:pad pad-mode/c #:aad input/c #:auth-tag (or/c bytes? #f)
          #| #:out (or/c output-port? #f) |#]
         bytes?)]
 
@@ -170,9 +170,9 @@
                     (send ci get-spec) size))
     size))
 
-(define (cipher-update-AAD c inp)
-  (with-crypto-entry 'cipher-update-AAD
-    (send c update-AAD inp)
+(define (cipher-update-aad c inp)
+  (with-crypto-entry 'cipher-update-aad
+    (send c update-aad inp)
     (void)))
 
 (define (cipher-update c inp)
@@ -192,7 +192,7 @@
 ;; ----
 
 (define (encrypt ci key iv inp
-                 #:pad [pad default-pad] #:AAD [aad-inp null] #:auth-size [auth-size #f])
+                 #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'encrypt
     (let ([ci (-get-impl ci)])
       (define ctx (-encrypt-ctx ci key iv pad auth-size #t))
@@ -202,7 +202,7 @@
       (send ctx get-output))))
 
 (define (decrypt ci key iv inp
-                 #:pad [pad default-pad] #:AAD [aad-inp null] #:auth-size [auth-size #f])
+                 #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'decrypt
     (let ([ci (-get-impl ci)])
       (define ctx (-decrypt-ctx ci key iv pad auth-size #t))
@@ -212,7 +212,7 @@
       (send ctx get-output))))
 
 (define (encrypt/auth ci key iv inp
-                      #:pad [pad default-pad] #:AAD [aad-inp null] #:auth-size [auth-size #f])
+                      #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'encrypt/auth
     (let ([ci (-get-impl ci)])
       (define ctx (-encrypt-ctx ci key iv pad auth-size #f))
@@ -222,7 +222,7 @@
       (values (send ctx get-output) (send ctx get-auth-tag)))))
 
 (define (decrypt/auth ci key iv inp
-                      #:pad [pad default-pad] #:AAD [aad-inp null] #:auth-tag [auth-tag #f])
+                      #:pad [pad default-pad] #:aad [aad-inp null] #:auth-tag [auth-tag #f])
   (with-crypto-entry 'decrypt
     (let ([ci (-get-impl ci)])
       (define auth-len (and auth-tag (bytes-length auth-tag)))

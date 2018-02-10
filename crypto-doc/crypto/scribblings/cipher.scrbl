@@ -263,7 +263,7 @@ ciphertext
                        [key bytes?]
                        [iv (or/c bytes? #f)]
                        [input input/c]
-                       [#:AAD additional-authenticated-data input/c #""]
+                       [#:aad additional-authenticated-data input/c #""]
                        [#:auth-size auth-size exact-nonnegative-integer?
                                     (cipher-default-auth-size ci)]
                        [#:pad pad-mode boolean? #t])
@@ -272,7 +272,7 @@ ciphertext
                        [key bytes?]
                        [iv (or/c bytes? #f)]
                        [input (or/c bytes? input-port?)]
-                       [#:AAD additional-authenticated-data input/c #""]
+                       [#:aad additional-authenticated-data input/c #""]
                        [#:auth-tag auth-tag bytes? #""]
                        [#:pad pad-mode boolean? #t])
          bytes?]
@@ -291,9 +291,9 @@ If @racket[ci] is not an AEAD cipher, the authentication tag is always
 (define key (generate-cipher-key '(aes gcm)))
 (define iv (generate-cipher-iv '(aes gcm)))
 (define-values (ciphertext auth-tag)
-  (encrypt/auth '(aes gcm) key iv "Hello world!" #:AAD #"greeting"))
-(decrypt/auth '(aes gcm) key iv ciphertext #:AAD #"greeting" #:auth-tag auth-tag)
-(decrypt/auth '(aes gcm) key iv ciphertext #:AAD #"INVALID" #:auth-tag auth-tag)
+  (encrypt/auth '(aes gcm) key iv "Hello world!" #:aad #"greeting"))
+(decrypt/auth '(aes gcm) key iv ciphertext #:aad #"greeting" #:auth-tag auth-tag)
+(decrypt/auth '(aes gcm) key iv ciphertext #:aad #"INVALID" #:auth-tag auth-tag)
 ]
 }
 
@@ -350,7 +350,7 @@ output may be larger or smaller than the input, because incomplete
 blocks are internally buffered by @racket[cctx].
 }
 
-@defproc[(cipher-update-AAD [cctx cipher-ctx?]
+@defproc[(cipher-update-aad [cctx cipher-ctx?]
                             [input input/c])
          void?]{
 

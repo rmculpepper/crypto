@@ -97,21 +97,21 @@ When an @tech{authenticated encryption} (AEAD) cipher, such as
 AES-GCM, is used with @racket[encrypt] or @racket[decrypt], the
 authentication tag is automatically appended to (or taken from) the
 end of the cipher text, respectively. AEAD ciphers also support
-@emph{additionally authenticated data}, passed with the @racket[#:AAD]
+@emph{additionally authenticated data}, passed with the @racket[#:aad]
 keyword.
 
 @interaction[#:eval the-eval
 (define key (generate-cipher-key '(aes gcm)))
 (define iv (generate-cipher-iv '(aes gcm)))
-(define ct (encrypt '(aes gcm) key iv #"Nevermore!" #:AAD #"quoth the raven"))
-(decrypt '(aes gcm) key iv ct #:AAD #"quoth the raven")
+(define ct (encrypt '(aes gcm) key iv #"Nevermore!" #:aad #"quoth the raven"))
+(decrypt '(aes gcm) key iv ct #:aad #"quoth the raven")
 ]
 
 If authentication fails at the end of decryption, an exception is
 raised:
 
 @interaction[#:eval the-eval
-(decrypt '(aes gcm) key iv ct #:AAD #"said the bird")
+(decrypt '(aes gcm) key iv ct #:aad #"said the bird")
 ]
 
 In addition to ``all-at-once'' operations like @racket[digest] and

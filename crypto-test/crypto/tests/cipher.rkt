@@ -93,10 +93,10 @@
 
     (when (cipher-aead? ci)
       (for ([aad (in-list '(() #"" #"abc" #"abcdef123456"))])
-        (define ct (encrypt ci key iv msg #:AAD aad))
-        (check-equal? (decrypt ci key iv ct #:AAD aad) msg)
+        (define ct (encrypt ci key iv msg #:aad aad))
+        (check-equal? (decrypt ci key iv ct #:aad aad) msg)
         (check-exn #rx"authenticated decryption failed"
-                   (lambda () (decrypt ci key iv ct #:AAD "bad")))))
+                   (lambda () (decrypt ci key iv ct #:aad "bad")))))
     ))
 
 (define (test-cipher/detached ci msg)
@@ -132,8 +132,8 @@
 
     (when (cipher-aead? ci)
       (for ([aad (in-list '(() #"" #"abc" #"abcdef123456"))])
-        (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg #:AAD aad))
-        (check-equal? (decrypt/auth ci key iv ciphertext #:AAD aad #:auth-tag auth-tag) msg))
+        (define-values (ciphertext auth-tag) (encrypt/auth ci key iv msg #:aad aad))
+        (check-equal? (decrypt/auth ci key iv ciphertext #:aad aad #:auth-tag auth-tag) msg))
       (when (positive? (bytes-length ciphertext))
         (define key2 (generate-cipher-key ci))
         (define iv2 (generate-cipher-iv ci))
