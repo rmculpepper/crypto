@@ -29,9 +29,13 @@
   (class* cipher-impl-base% (cipher-impl<%>)
     (init-field cipher)
     (inherit-field info)
+    (inherit sanity-check)
     (super-new)
 
+    (sanity-check #:iv-size (aeadcipher-noncesize cipher))
+
     (define/override (get-key-size) (aeadcipher-keysize cipher))
+    (define/override (get-key-sizes) (list (aeadcipher-keysize cipher)))
     (define/override (get-iv-size) (aeadcipher-noncesize cipher))
     (define/override (get-auth-size) (aeadcipher-authsize cipher))
     (define/override (get-chunk-size) 1)
