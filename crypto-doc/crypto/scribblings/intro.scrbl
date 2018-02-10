@@ -158,7 +158,7 @@ private key signs, and the public key verifies.
 ]
 
 It is also possible to sign a precomputed digest. The digest algorithm
-is still required as an argument, because the signature includes a
+is still required as an argument, because some signature schemes include a
 digest algorithm identifier.
 
 @interaction[#:eval the-eval

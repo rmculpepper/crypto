@@ -113,7 +113,7 @@ Returns a default size in bytes of the secret keys used by the cipher.
 
 @examples[#:eval the-eval
 (cipher-default-key-size '(aes cbc))
-(cipher-default-key-size '(blowfish cbc))
+(cipher-default-key-size '(chacha20 stream))
 ]
 }
 
@@ -125,6 +125,7 @@ cipher.
 
 @examples[#:eval the-eval
 (cipher-key-sizes '(aes cbc))
+(cipher-key-sizes '(chacha20 stream))
 ]
 }
 
@@ -144,7 +145,8 @@ returns the size of the counter.
 (cipher-iv-size '(aes ctr))
 (cipher-iv-size '(aes gcm))
 (cipher-iv-size '(aes ecb))
-(cipher-iv-size '(salsa20 stream))
+(cipher-iv-size '(chacha20-poly1305 stream))
+(cipher-iv-size '(chacha20-poly1305/iv8 stream))
 ]
 }
 
@@ -168,12 +170,12 @@ confidentiality.
 }
 
 @defproc[(cipher-default-auth-size [ci (or/c cipher-spec? cipher-impl? cipher-ctx?)])
-         (or/c exact-nonnegative-integer? #f)]{
+         exact-nonnegative-integer?]{
 
 Returns the default size in bytes of the @tech{authentication tag}
 produced by @racket[ci] if it represents an @tech[#:key "authenticated
 encryption"]{authenticated encryption or decryption} algorithm;
-@racket[#f] otherwise.
+@racket[0] otherwise.
 
 @examples[#:eval the-eval
 (cipher-default-auth-size '(aes gcm))
