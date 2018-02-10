@@ -28,6 +28,8 @@
              cipher-impl? cipher-ctx?
              pk-impl? pk-parameters? pk-key?)
        crypto-factory?)]
+  [factory-print-info
+   (-> crypto-factory? void?)]
   [get-digest
    (->* [digest-spec?] [factories/c] (or/c digest-impl? #f))]
   [get-cipher
@@ -68,3 +70,6 @@
   (with-crypto-entry 'get-kdf
     (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
       (send f get-kdf k))))
+
+(define (factory-print-info factory)
+  (send factory print-info) (void))

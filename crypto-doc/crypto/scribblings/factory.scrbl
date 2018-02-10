@@ -52,6 +52,23 @@ Gets the factory associated with a particular cryptographic algorithm
 implementation or context.
 }
 
+@defproc[(factory-print-info [factory crypto-factory?]) void?]{
+
+Prints information about @racket[factory] to the current output
+port. In particular, the following information is customarily
+included, if relevant:
+@itemlist[
+@item{the version of the underlying foreign library (if known)}
+@item{the available digests}
+@item{the available ciphers}
+@item{the available PK systems}
+@item{the available EC named curves}
+@item{the available key-derivation functions}
+]
+Different crypto providers support different levels of introspection,
+so the information is generally provided on a best-effort basis.
+}
+
 @;{----------------------------------------}
 
 @section[#:tag "libcrypto-factory"]{Libcrypto (OpenSSL)}

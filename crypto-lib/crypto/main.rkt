@@ -32,6 +32,7 @@
          crypto-factory?
          get-factory
          crypto-factories
+         factory-print-info
 
          get-digest
          digest-spec?
