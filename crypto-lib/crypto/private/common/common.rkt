@@ -153,7 +153,7 @@
             [else #f]))
 
     ;; -get-cipher : cipher-info -> (U #f cipher-impl (listof (cons Nat cipher-impl)))
-    (define/public (-get-cipher) #f)
+    (define/public (-get-cipher info) #f)
 
     (define/public (get-pk spec)
       (cond [(hash-ref pk-table spec #f)
@@ -427,7 +427,7 @@
                 (lambda (result) (set! auth-tag-out result))))
 
     ;; -make-aad-sink : -> UFP[#f => ]
-    (define (-make-aad-sink)
+    (define/public (-make-aad-sink)
       (define (update inbuf instart inend) (-do-aad inbuf instart inend))
       (define (finish _ignored) (void))
       (sink-ufp update finish))
@@ -435,7 +435,7 @@
     (abstract -do-aad) ;; Bytes Nat Nat -> Void
 
     ;; -make-crypt-ufp : Boolean UFP -> UFP[Bytes,#f/AuthTag => AuthTag/#f]
-    (define/private (-make-crypt-ufp enc? next)
+    (define/public (-make-crypt-ufp enc? next)
       (define (update inbuf instart inend)
         ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
         (define outlen0 (+ (- inend instart) (get-block-size)))

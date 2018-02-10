@@ -181,6 +181,17 @@
       (define Cstart (+ instart Blen))
       (send next finish (subbytes in Cstart inend) a))))
 
+;; chunk1       : a => bytes,a          ;; |a| = 1
+;; Chunk specialized to chunk size of 1
+(define chunk1-ufp%
+  (class chain-ufp%
+    (inherit-field next)
+    (super-new)
+    (define/override (finish a)
+      (send next finish #"" a))
+    (define/override (update/finish in instart inend a)
+      (send next update/finish in instart inend #"" a))))
+
 ;; add-right    : bytes/#f,a => a          ;; |a| = 0,1
 (define add-right-ufp%
   (class chain-ufp%
@@ -277,7 +288,9 @@
 (define (sink-ufp update-proc finish-proc)
   (new sink-ufp% (update-proc update-proc) (finish-proc finish-proc)))
 (define (chunk-ufp chunk-size next)
-  (new chunk-ufp% (chunk-size chunk-size) (next next)))
+  (if (= chunk-size 1)
+      (new chunk1-ufp% (next next))
+      (new chunk-ufp% (chunk-size chunk-size) (next next))))
 (define (add-right-ufp next)
   (new add-right-ufp% (next next)))
 (define (split-right-ufp suffix-size next)
