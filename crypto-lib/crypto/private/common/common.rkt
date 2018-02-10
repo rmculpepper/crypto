@@ -545,9 +545,12 @@
     (inherit get-spec)
     (super-new)
     (define/public (generate-key config)
-      (err/no-direct-keygen (get-spec)))
+      (crypto-error (string-append "direct key generation not supported;\n"
+                                   " generate parameters, then generate key\n"
+                                   "  algorithm: ~e")
+                    (get-spec)))
     (define/public (generate-params config)
-      (err/no-params (get-spec)))
+      (crypto-error "algorithm does not have parameters\n  algorithm: ~e" (get-spec)))
     (define/public (can-encrypt? pad) #f)
     (define/public (can-sign? pad dspec) #f)
     (define/public (can-key-agree?) #f)

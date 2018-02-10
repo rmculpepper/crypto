@@ -26,8 +26,6 @@
          err/params-format
          err/bad-signature-pad
          err/bad-encrypt-pad
-         err/no-direct-keygen
-         err/no-params
          err/missing-digest)
 
 (define crypto-entry-point (gensym))
@@ -62,16 +60,6 @@
   (err/bad-*-pad "signature" spec pad))
 (define (err/bad-encrypt-pad spec pad)
   (err/bad-*-pad "encryption" spec pad))
-
-(define (err/no-direct-keygen spec)
-  (crypto-error
-   (string-append "algorithm does not support direct key generation\n"
-                  " generate parameters, then generate key\n"
-                  "  algorithm: ~e")
-   spec))
-
-(define (err/no-params spec)
-  (crypto-error "algorithm does not have parameters\n  algorithm: ~e" spec))
 
 (define (err/missing-digest spec)
   (crypto-error "could not get digest implementation\n  digest: ~e" spec))
