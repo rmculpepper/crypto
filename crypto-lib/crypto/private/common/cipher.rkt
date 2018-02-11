@@ -156,20 +156,11 @@
     (-decrypt-ctx ci key iv pad? auth-size auth-attached?)))
 
 (define (-encrypt-ctx ci key iv pad auth-size auth-attached?)
-  (let ([ci (-get-impl ci)]
-        [auth-size (-check-auth-size ci auth-size)])
+  (let ([ci (-get-impl ci)])
     (send ci new-ctx key (or iv #"") #t pad auth-size auth-attached?)))
 (define (-decrypt-ctx ci key iv pad auth-size auth-attached?)
-  (let ([ci (-get-impl ci)]
-        [auth-size (-check-auth-size ci auth-size)])
+  (let ([ci (-get-impl ci)])
     (send ci new-ctx key (or iv #"") #f pad auth-size auth-attached?)))
-(define (-check-auth-size ci size)
-  (let* ([ci (-get-info ci)]
-         [size (or size (send ci get-auth-size))])
-    (unless (send ci auth-size-ok? size)
-      (crypto-error "wrong authentication tag size\n  cipher: ~a\n  size: ~e"
-                    (send ci about) size))
-    size))
 
 (define (cipher-update-aad c inp)
   (with-crypto-entry 'cipher-update-aad

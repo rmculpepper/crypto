@@ -159,7 +159,7 @@
 
 (define cipher-impl<%>
   (interface (impl<%> cipher-info<%>)
-    new-ctx         ;; Bytes Bytes/#f Bool Pad Nat    Bool -> cipher-ctx<%>
+    new-ctx         ;; Bytes Bytes/#f Bool Pad Nat/#f Bool -> cipher-ctx<%>
                     ;; key   iv       enc? pad taglen attached?
     ))
 

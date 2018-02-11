@@ -294,9 +294,11 @@
           (internal-error "iv-size ~s not ok" iv-size (about))))
       (void))
 
-    (define/public (new-ctx key iv enc? pad? auth-len attached-tag?)
+    (define/public (new-ctx key iv enc? pad? auth-len0 attached-tag?)
       (check-key-size (bytes-length key))
       (check-iv-size (bytes-length (or iv #"")))
+      (define auth-len (or auth-len0 (get-auth-size)))
+      (check-auth-size auth-len)
       (let ([pad? (and pad? (uses-padding?))])
         (-new-ctx key iv enc? pad? auth-len attached-tag?)))
 
@@ -316,6 +318,11 @@
       (unless (iv-size-ok? iv-size)
         (crypto-error "bad IV size for cipher\n  cipher: ~a\n  expected: ~s bytes\n  got: ~s bytes"
                       (about) iv-size (get-iv-size))))
+
+    (define/public (check-auth-size auth-size)
+      (unless (auth-size-ok? auth-size)
+        (crypto-error "bad authentication tag size\n  cipher: ~a\n  given: ~e"
+                      (about) auth-size)))
     ))
 
 (define multikeylen-cipher-impl%
