@@ -3,13 +3,15 @@
           scribble/basic
           scribble/eval
           racket/list
+          racket/runtime-path
           crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
                      racket/random
                      crypto))
 
-@(define the-eval (make-base-eval))
+@(define-runtime-path log-file "eval-logs/digest.rktd")
+@(define the-eval (make-log-based-eval log-file 'replay))
 @(the-eval '(require crypto crypto/libcrypto))
 @(the-eval '(crypto-factories (list libcrypto-factory)))
 

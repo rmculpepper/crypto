@@ -2,6 +2,7 @@
 @(require scribble/manual
           scribble/basic
           scribble/eval
+          racket/runtime-path
           (for-label racket/base
                      racket/contract
                      racket/match
@@ -9,7 +10,8 @@
                      crypto
                      crypto/libcrypto))
 
-@(define the-eval (make-base-eval))
+@(define-runtime-path log-file "eval-logs/intro.rktd")
+@(define the-eval (make-log-based-eval log-file 'replay))
 @(the-eval '(require crypto crypto/libcrypto racket/match))
 
 @title[#:tag "intro"]{Introduction to the Crypto Library}

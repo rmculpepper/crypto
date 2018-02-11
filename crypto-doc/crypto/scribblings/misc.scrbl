@@ -1,17 +1,11 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
-          scribble/eval
           racket/list
-          crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
                      racket/random
                      crypto))
-
-@(define the-eval (make-base-eval))
-@(the-eval '(require crypto crypto/libcrypto))
-@(the-eval '(crypto-factories (list libcrypto-factory)))
 
 @title[#:tag "misc"]{Miscellaneous Notes and Utilities}
 
@@ -102,6 +96,3 @@ Sodium provides only ``all-at-once'' encryption and decryption
 functions. Consequently, encryption and decryption contexts using
 sodium ciphers produce no output until @racket[cipher-final] is
 called.
-
-
-@(close-eval the-eval)
