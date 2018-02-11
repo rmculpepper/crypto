@@ -507,9 +507,13 @@
   #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'DSA_new)))
 
 (define-crypto DSA_generate_parameters_ex
-  (_fun _DSA _int (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) (_fpointer = #f)
+  (_fun _DSA _int (_pointer = #f) (_int = 0) (_pointer = #f) (_pointer = #f) (_pointer = #f)
         -> _int)
   #:wrap (err-wrap 'DSA_generate_parameters_ex))
+
+(define-crypto DSA_generate_key
+  (_fun _DSA -> _int)
+  #:wrap (err-wrap 'DSA_generate_key))
 
 ;; ============================================================
 ;; EC

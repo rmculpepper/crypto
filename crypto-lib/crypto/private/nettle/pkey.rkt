@@ -321,6 +321,7 @@
     (super-new (spec 'dsa))
 
     (define/override (can-sign? pad dspec) (memq pad '(#f)))
+    (define/override (has-params?) #t)
 
     (define/override (generate-params config)
       (check-config config config:dsa-paramgen "DSA parameter generation")
@@ -415,6 +416,7 @@
     (super-new (spec 'ec))
 
     (define/override (can-sign? pad dspec) (memq pad '(#f)))
+    (define/override (has-params?) #t)
 
     (define/override (generate-params config)
       (check-config config config:ec-paramgen "EC parameter generation")

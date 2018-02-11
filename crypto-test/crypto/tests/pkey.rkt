@@ -43,6 +43,9 @@
 
 (define (test-pk factory [pub-factories null])
   (define factory-name (send factory get-name))
+  (when (null? pub-factories)
+    (for ([pk '(rsa dsa dh ec)] #:when (get-pk pk factory))
+      (test-keygen factory pk (get-pk pk factory))))
   (for ([key-sexpr private-keys]
         #:when (send factory get-pk (cadr key-sexpr)))
     (match-define (list fmt pkspec desc keydata) key-sexpr)
@@ -77,6 +80,40 @@
                      factory-name (send pub-factory get-name)))
           (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name) fmt desc)
             (test-pk-key key pubkey*)))))))
+
+(define (test-keygen factory spec impl)
+  (test-case (format "~a ~a keygen" (send factory get-name) spec)
+    (define factory-name (send factory get-name))
+    (eprintf "+  testing keygen for ~s (~a)\n" spec factory-name)
+    (case spec
+      [(rsa)
+       (check-false (pk-has-parameters? impl))
+       (generate-private-key impl '((nbits 512)))]
+      [(dsa)
+       (case factory-name
+         [(gcrypt)  ;; params not implemented
+          (void)]
+         [else
+          (check-true (pk-has-parameters? impl))
+          (define p (generate-pk-parameters impl '((nbits 1024))))
+          (generate-private-key p)])
+       (generate-private-key impl '((nbits 1024)))]
+      [(dh)
+       (check-true (pk-has-parameters? impl))
+       (define p (generate-pk-parameters impl '((nbits 512))))
+       (generate-private-key p)
+       (generate-private-key impl '((nbits 512)))]
+      [(ec)
+       (case factory-name
+         [(gcrypt) (void)]
+         [else
+          (check-true (pk-has-parameters? impl))
+          (define p1 (generate-pk-parameters impl '((curve "secp192r1"))))
+          (define p2 (generate-pk-parameters impl '((curve secp256r1))))
+          (generate-private-key p1)
+          (generate-private-key p2)])
+       (generate-private-key impl '((curve secp192r1)))]
+      [else (void)])))
 
 (define (test-pk-serialize key pubkey factory)
   ;; can serialize and deserialize, and serialized format is canonical

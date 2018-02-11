@@ -27,13 +27,11 @@
          "digest.rkt")
 (provide (all-defined-out))
 
-#|
-TODO: check params (eg safe primes) on generate-params OR read-params
+;; My attempts to use EVP_PKEY_paramgen and EVP_PKEY_keygen have
+;; caused intermittent crashes (likely memory corruption), so drop
+;; down to the lower-level key and parameter generation functions.
 
-KNOWN BUG: Curve prime256v1 (NID=415) doesn't work with key derivation
-in OpenSSL 1.0.1c (Ubuntu 12.10), fixed in 1.0.1e (Fedora 20) (but
-NIST P-192 disappeared!).
-|#
+;; TODO: check params (eg safe primes) on generate-params, read-params
 
 ;; ============================================================
 
@@ -184,31 +182,6 @@ NIST P-192 disappeared!).
              (i2d i2d_PrivateKey evp)]
             [else (super *write-key private? fmt evp)]))
 
-    #|
-    ;; Key generation currently fails, possibly due to something like the following
-    ;; issue (but the suggested workaround doesn't work for me).
-    ;;   [openssl.org #2244]
-    ;;   https://groups.google.com/forum/#!topic/mailing.openssl.dev/jhooibXLmWk
-    ;; Try using RSA_generate_key directly.
-    (define/override (generate-key config)
-      (check-config config allowed-rsa-keygen "RSA key generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [e     (config-ref config 'e 65537)]
-            [ctx (EVP_PKEY_CTX_new_id (pktype))])
-        (EVP_PKEY_CTX_set_cb ctx #f)
-        (EVP_PKEY_keygen_init ctx)
-        (when nbits
-          (EVP_PKEY_CTX_set_rsa_keygen_bits ctx nbits))
-        (when e
-          (let ([ebn (BN_new)])
-            (BN_add_word ebn e)
-            ;; FIXME: refcount?
-            (EVP_PKEY_CTX_set_rsa_keygen_pubexp ctx ebn)
-            #;(BN_free ebn)))
-        (let ([evp (EVP_PKEY_keygen ctx)])
-          (EVP_PKEY_CTX_free ctx)
-          (new libcrypto-pk-key% (impl this) (evp evp) (private? #t)))))
-    |#
     (define/override (generate-key config)
       (check-config config config:rsa-keygen "RSA key generation")
       (let ([nbits (config-ref config 'nbits 2048)]
@@ -277,19 +250,6 @@ NIST P-192 disappeared!).
          buf]
         [else #f]))
 
-    #|
-    ;; Similarly, this version of generate-params crashes.
-    (define/override (generate-params config)
-      (check-config config allowed-dsa-paramgen "DSA parameter generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [ctx (EVP_PKEY_CTX_new_id (pktype))])
-        (EVP_PKEY_paramgen_init ctx)
-        (when nbits
-          (EVP_PKEY_CTX_set_dsa_paramgen_bits ctx nbits))
-        (let ([evp (EVP_PKEY_paramgen ctx)])
-          (EVP_PKEY_CTX_free ctx)
-          (new libcrypto-pk-params% (impl this) (evp evp)))))
-    |#
     (define/override (generate-params config)
       (check-config config allowed-dsa-paramgen "DSA parameter generation")
       (let ([nbits (config-ref config 'nbits 2048)])
@@ -300,16 +260,21 @@ NIST P-192 disappeared!).
         (DSA_free dsa)
         (new libcrypto-pk-params% (impl this) (evp evp))))
 
-    ;; In contrast to other generate-{key,params} methods above, this use of
-    ;; EVP_PKEY_keygen seems to work, but that may just be because DSA keygen
-    ;; is simple after paramgen is done.
-    (define/public (*generate-key config evp)
-      (check-config config '() "DSA key generation")
-      (let ([ctx (EVP_PKEY_CTX_new evp)])
-        (EVP_PKEY_keygen_init ctx)
-        (let ([kevp (EVP_PKEY_keygen ctx)])
-          (EVP_PKEY_CTX_free ctx)
-          (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))))
+    (define/override (generate-key config)
+      (define p (generate-params config))
+      (send p generate-key '()))
+
+    (define/public (*generate-key config pevp)
+      (check-config config '() "DSA key generation from parameters")
+      (define pdsa (EVP_PKEY_get1_DSA pevp))
+      (define pder (i2d i2d_DSAparams pdsa))
+      (DSA_free pdsa)
+      (define kdsa (d2i_DSAparams pder (bytes-length pder)))
+      (DSA_generate_key kdsa)
+      (define kevp (EVP_PKEY_new))
+      (EVP_PKEY_set1_DSA kevp kdsa)
+      (DSA_free kdsa)
+      (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))
 
     (define/public (*set-sign-padding ctx pad saltlen sign?)
       (case pad
@@ -343,6 +308,10 @@ NIST P-192 disappeared!).
         (EVP_PKEY_set1_DH evp dh)
         (DH_free dh)
         (new libcrypto-pk-params% (impl this) (evp evp))))
+
+    (define/override (generate-key config)
+      (define p (generate-params config))
+      (send p generate-key '()))
 
     (define/public (*write-params fmt evp)
       (case fmt
@@ -411,12 +380,15 @@ NIST P-192 disappeared!).
       (begin
         ;; See http://wiki.openssl.org/index.php/Elliptic_Curve_Diffie_Hellman
         ;; in section "ECDH and Named Curves"
-        ;; FIXME: when/if curves other than named curves get supported, update
         (EC_KEY_set_asn1_flag ec OPENSSL_EC_NAMED_CURVE))
       (define evp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY evp ec)
       (EC_KEY_free ec)
       (new libcrypto-pk-params% (impl this) (evp evp)))
+
+    (define/override (generate-key config)
+      (define params (generate-params config))
+      (send params generate-key '()))
 
     (define/public (*write-params fmt evp)
       (case fmt
@@ -451,8 +423,7 @@ NIST P-192 disappeared!).
           (begin0 (EC_KEY_dup ec0)
             (EC_KEY_free ec0))))
       (EC_KEY_generate_key kec)
-      (begin
-        ;; See note in generate-params above.
+      (begin ;; See note in generate-params above.
         (EC_KEY_set_asn1_flag kec OPENSSL_EC_NAMED_CURVE))
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY kevp kec)
