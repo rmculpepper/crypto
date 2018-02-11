@@ -19,6 +19,7 @@
          racket/dict
          racket/port
          rackunit
+         crypto/private/common/interfaces
          crypto/private/common/cipher
          crypto/private/common/catalog
          crypto/private/common/util
@@ -39,6 +40,7 @@
   (define ci (send factory get-cipher spec))
   (cond [ci
          (eprintf "+  testing ~e\n" spec)
+         (test-cipher-meta spec)
          (test-cipher-meta ci)
          (for ([in plaintexts])
            (test-cipher ci in))]
@@ -48,12 +50,14 @@
 
 (define (test-cipher-meta ci)
   (cipher-default-key-size ci)
-  (cipher-key-sizes ci)
+  (unless (cipher-ctx? ci)
+    (cipher-key-sizes ci))
   (cipher-block-size ci)
   (cipher-iv-size ci)
   (cipher-aead? ci)
   (cipher-default-auth-size ci)
-  (cipher-chunk-size ci))
+  (when (or (cipher-impl? ci) (cipher-ctx? ci))
+    (cipher-chunk-size ci)))
 
 (define (test-cipher ci msg)
   (test-cipher/attached ci msg)
@@ -71,6 +75,7 @@
     (check-equal? (decrypt ci key iv (open-input-bytes ciphertext)) msg)
 
     (let ([cctx (make-encrypt-ctx ci key iv #:auth-attached? #f)])
+      (test-cipher-meta cctx)
       (check-equal? (bytes-append
                      (apply bytes-append
                             (for/list ([inb (in-bytes msg)])

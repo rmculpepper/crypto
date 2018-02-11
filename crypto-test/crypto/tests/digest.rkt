@@ -40,8 +40,9 @@
             (test-digest/solo di in)))))))
 
 (define (test-digest-meta di)
-  (digest-size di)
-  (digest-block-size di))
+  (for ([di (list di (send di get-spec))])
+    (digest-size di)
+    (digest-block-size di)))
 
 (define (test-digest/solo di in)
   ;; All-at-once digest agrees with incremental
