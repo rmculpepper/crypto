@@ -51,11 +51,7 @@
         bytes?)]
   ))
 
-(define (-get-impl o)
-  (cond [(kdf-spec? o)
-         (or (get-kdf o)
-             (crypto-error "could not get KDF implementation\n  KDF spec: ~e" o))]
-        [else (get-impl* o)]))
+(define (-get-impl o) (to-impl o #:what "KDF" #:lookup get-kdf))
 
 (define (kdf k pass salt [params '()])
   (with-crypto-entry 'kdf

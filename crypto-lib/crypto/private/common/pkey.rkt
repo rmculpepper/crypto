@@ -112,6 +112,8 @@
 (define key-format/c
   (or/c symbol? #f))
 
+(define (-get-impl pki) (to-impl pki #:what "algorithm" #:lookup get-pk))
+
 ;; ============================================================
 
 ;; A private key is really a keypair, including both private and public parts.
@@ -124,19 +126,19 @@
 (define (pk-can-sign? pki [pad #f] [dspec #f])
   (with-crypto-entry 'pk-can-sign?
     (cond [(pk-spec? pki) (pk-spec-can-sign? pki pad)] ;; no dspec!
-          [else (and (send (get-impl* pki) can-sign? pad dspec) #t)])))
+          [else (and (send (to-impl pki) can-sign? pad dspec) #t)])))
 (define (pk-can-encrypt? pki [pad #f])
   (with-crypto-entry 'pk-can-encrypt?
     (cond [(pk-spec? pki) (pk-spec-can-encrypt? pki)]
-          [else (and (send (get-impl* pki) can-encrypt? pad) #t)])))
+          [else (and (send (to-impl pki) can-encrypt? pad) #t)])))
 (define (pk-can-key-agree? pki)
   (with-crypto-entry 'pk-can-key-agree?
     (cond [(pk-spec? pki) (pk-spec-can-key-agree? pki)]
-          [else (and (send (get-impl* pki) can-key-agree?) #t)])))
+          [else (and (send (to-impl pki) can-key-agree?) #t)])))
 (define (pk-has-parameters? pki)
   (with-crypto-entry 'pk-has-parameters?
     (cond [(pk-spec? pki) (pk-spec-has-parameters? pki)]
-          [else (and (send (get-impl* pki) has-params?) #t)])))
+          [else (and (send (to-impl pki) has-params?) #t)])))
 
 (define (pk-key->parameters pk)
   (with-crypto-entry 'pk-key->parameters
@@ -177,25 +179,25 @@
 
 (define (pk-sign-digest pk di dbuf #:pad [pad #f])
   (with-crypto-entry 'pk-sign-digest
-    (let ([di (get-spec* di)])
+    (let ([di (to-spec di)])
       (send pk sign dbuf di pad))))
 
 (define (pk-verify-digest pk di dbuf sig #:pad [pad #f])
   (with-crypto-entry 'pk-verify-digest
-    (let ([di (get-spec* di)])
+    (let ([di (to-spec di)])
       (send pk verify dbuf di pad sig))))
 
 ;; ============================================================
 
 (define (digest/sign pk di inp #:pad [pad #f])
   (with-crypto-entry 'digest/sign
-    (let* ([di (get-spec* di)]
+    (let* ([di (to-spec di)]
            [di* (get-digest di (get-factory pk))])
       (send pk sign (digest di* inp) di pad))))
 
 (define (digest/verify pk di inp sig #:pad [pad #f])
   (with-crypto-entry 'digest/verify
-    (let* ([di (get-spec* di)]
+    (let* ([di (to-spec di)]
            [di* (get-digest di (get-factory pk))])
       (send pk verify (digest di* inp) di pad sig))))
 
@@ -229,16 +231,12 @@
 
 ;; ============================================================
 
-(define (-get-impl pki)
-  (cond [(pk-spec? pki)
-         (or (get-pk pki)
-             (crypto-error "could not get PK implementation\n  algorithm: ~e" pki))]
-        [else pki]))
-
 (define (generate-private-key pki [config '()])
   (with-crypto-entry 'generate-private-key
-    (let ([pki (-get-impl pki)])
-      (send pki generate-key config))))
+    (if (is-a? pki pk-params<%>)
+        (send pki generate-key config)
+        (let ([pki (-get-impl pki)])
+          (send pki generate-key config)))))
 
 (define (generate-pk-parameters pki [config '()])
   (with-crypto-entry 'generate-pk-parameters

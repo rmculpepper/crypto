@@ -50,20 +50,10 @@
 
 (define digest/c (or/c digest-spec? digest-impl?))
 
+(define (-get-impl o) (to-impl o #:what "digest" #:lookup get-digest))
+(define (-get-info o) (to-info o #:what "digest" #:lookup digest-spec->info))
+
 ;; ----
-
-(define (make-digest-ctx di)
-  (with-crypto-entry 'make-digest-ctx
-    (send (-get-impl di) new-ctx)))
-
-(define (-get-impl o)
-  (cond [(digest-spec? o)
-         (or (get-digest o) (err/missing-digest o))]
-        [else (get-impl* o)]))
-
-(define (-get-info o)
-  (cond [(digest-spec? o) (digest-spec->info o)]
-        [else (get-info* o)]))
 
 (define (digest-size o)
   (with-crypto-entry 'digest-size
@@ -73,6 +63,10 @@
     (send (-get-info o) get-block-size)))
 
 ;; ----
+
+(define (make-digest-ctx di)
+  (with-crypto-entry 'make-digest-ctx
+    (send (-get-impl di) new-ctx)))
 
 (define (digest-update dg src)
   (with-crypto-entry 'digest-update

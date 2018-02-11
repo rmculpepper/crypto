@@ -39,10 +39,9 @@
          pk-params-base%
          pk-key-base%
          process-input
-         get-impl*
-         get-info*
-         get-spec*
-         get-factory*
+         to-impl
+         to-info
+         to-spec
          shrink-bytes
          keygen-spec/c
          check-keygen-spec
@@ -705,33 +704,26 @@
 
 ;; ============================================================
 
-(define (get-impl* src0 [fail-ok? #f])
+(define (to-impl src0 [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
   (let loop ([src src0])
     (cond [(is-a? src impl<%>) src]
-          [(is-a? src ctx<%>)
-           (loop (send src get-impl))]
+          [(is-a? src ctx<%>) (loop (send src get-impl))]
+          [(and lookup (lookup src)) => values]
           [fail-ok? #f]
-          [else (internal-error "cannot get impl\n  from: ~e" src0)])))
+          [else (crypto-error "could not get implementation\n  ~a: ~e"
+                              (or what "given") src0)])))
 
-(define (get-spec* src [fail-ok? #f])
-  (cond [(or (symbol? src) (pair? src)) src]
-        [(get-impl* src #t)
-         => (lambda (i) (send i get-spec))]
+(define (to-info src [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
+  ;; assumes impl<%> is also info<%>
+  (cond [(to-impl src #t) => values]
+        [(and lookup (lookup src)) => values]
         [fail-ok? #f]
-        [else (internal-error "cannot get spec\n  from: ~e" src)]))
+        [else (crypto-error "could not get info\n  ~a: ~e" (or what "given") src)]))
 
-(define (get-info* src [fail-ok? #f])
-  (cond [(get-impl* src #t)
-         => (lambda (i) (send i get-spec))]
-        [fail-ok? #f]
-        [else (internal-error "cannot get info\n  from: ~e" src)]))
-
-(define (get-factory* src [fail-ok? #f])
-  (cond [(is-a? src factory<%>) src]
-        [(get-impl* src #t)
-         => (lambda (i) (send i get-factory))]
-        [fail-ok? #f]
-        [else (internal-error "cannot get factory\n  from: ~e" src)]))
+(define (to-spec src)
+  ;; Assumes src is Spec | Impl | Ctx
+  (cond [(to-impl src #t) => (lambda (impl) (send impl get-spec))]
+        [else src]))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))

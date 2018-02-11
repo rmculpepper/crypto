@@ -39,11 +39,21 @@
   (define ci (send factory get-cipher spec))
   (cond [ci
          (eprintf "+  testing ~e\n" spec)
+         (test-cipher-meta ci)
          (for ([in plaintexts])
            (test-cipher ci in))]
         [else
          (when #f
            (eprintf "-  skipping cipher ~e\n" spec))]))
+
+(define (test-cipher-meta ci)
+  (cipher-default-key-size ci)
+  (cipher-key-sizes ci)
+  (cipher-block-size ci)
+  (cipher-iv-size ci)
+  (cipher-aead? ci)
+  (cipher-default-auth-size ci)
+  (cipher-chunk-size ci))
 
 (define (test-cipher ci msg)
   (test-cipher/attached ci msg)

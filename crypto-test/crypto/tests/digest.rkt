@@ -33,10 +33,15 @@
       (when di
         (test-case (format "~s" name)
           (when #t (eprintf "+  testing ~v\n" name))
+          (test-digest-meta di)
           (for ([in+out (dict-ref digest-test-vectors name null)])
             (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out))))
           (for ([in digest-inputs])
             (test-digest/solo di in)))))))
+
+(define (test-digest-meta di)
+  (digest-size di)
+  (digest-block-size di))
 
 (define (test-digest/solo di in)
   ;; All-at-once digest agrees with incremental

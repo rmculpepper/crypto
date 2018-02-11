@@ -99,20 +99,12 @@
 
 (define default-pad #t)
 
+(define (-get-impl o) (to-impl o #:what "cipher" #:lookup get-cipher))
+(define (-get-info o) (to-info o #:what "cipher" #:lookup cipher-spec->info))
+
 ;; ----
 
-(define (-get-impl o)
-  (cond [(cipher-spec? o)
-         (or (get-cipher o)
-             (crypto-error "could not get cipher implementation\n  cipher: ~e" o))]
-        [else (get-impl* o)]))
-
-(define (-get-info o)
-  (cond [(cipher-spec? o) (cipher-spec->info o)]
-        [else (get-impl* o)]))
-
-;; Defer to impl when avail to support unknown ciphers
-;; or impl-dependent limits.
+;; Defer to impl when avail to support unknown ciphers or impl-dependent limits.
 
 (define (cipher-default-key-size o)
   (with-crypto-entry 'cipher-default-key-size
