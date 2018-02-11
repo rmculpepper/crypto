@@ -28,9 +28,10 @@
   (class* impl-base% (kdf-impl<%>)
     (init-field di)
     (super-new)
-    (define/public (kdf params pass salt)
-      (define iters (cadr (assq 'iterations params)))
-      (define key-size (cadr (assq 'key-size params)))
+    (define/public (kdf config pass salt)
+      (check-config config config:pbkdf2 "PBKDF2")
+      (define iters    (config-ref config 'iterations))
+      (define key-size (config-ref config 'key-size))
       (case (send di get-spec)
         [(sha1) (nettle_pbkdf2_hmac_sha1 pass salt iters key-size)]
         [(sha256) (nettle_pbkdf2_hmac_sha256 pass salt iters key-size)]

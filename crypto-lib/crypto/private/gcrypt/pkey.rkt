@@ -236,10 +236,6 @@
 
 ;; ============================================================
 
-(define allowed-rsa-keygen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?")
-    (e     ,exact-positive-integer? "exact-positive-integer?")))
-
 (define gcrypt-rsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
@@ -251,10 +247,10 @@
       (and (memq pad '(#f pkcs1-v1.5)) (-known-digest? dspec)))
 
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-rsa-keygen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
+      (check-config config config:rsa-keygen "RSA key generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
             ;; e default 0 means use gcrypt default "secure and fast value"
-            [e (or (keygen-spec-ref config 'e) 0)])
+            [e     (config-ref config 'e 0)])
         (*generate-key 
          (gcry_sexp_build "(genkey (rsa %S %S))"
                           (gcry_sexp_build/%u "(nbits %u)" nbits)
@@ -369,8 +365,8 @@
 ;; TODO: implement DSA param support
 
 (define allowed-dsa-keygen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?")
-    (qbits ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
+  `((nbits #f ,exact-positive-integer? "exact-positive-integer?")
+    (qbits #f ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
 
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
@@ -382,9 +378,9 @@
       (and (memq pad '(#f)) (-known-digest? dspec)))
 
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-dsa-keygen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
-            [qbits (or (keygen-spec-ref config 'qbits) 256)])
+      (check-config config allowed-dsa-keygen "DSA key generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
+            [qbits (config-ref config 'qbits 256)])
         (*generate-key
          (gcry_sexp_build "(genkey (dsa %S %S))" 
                           (gcry_sexp_build/%u "(nbits %u)" nbits)
@@ -447,9 +443,6 @@
 ;;  - keygen returns key tagged "ecdh" ??!! with curve params rather than named curve (v1.5)
 ;;    so can't generate keys
 
-(define allowed-ec-keygen
-  `((curve ,string? "string?")))
-
 (define gcrypt-ec-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
@@ -460,11 +453,12 @@
       (and (memq pad '(#f)) (-known-digest? dspec)))
 
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-ec-keygen)
-      (let ([curve (keygen-spec-ref config 'curve)])
+      (check-config config config:ec-paramgen "EC key generation")
+      (let ([curve (config-ref config 'curve)])
         (*generate-key
          (gcry_sexp_build "(genkey (ecc (curve %s)))"
-                          (string->bytes/utf-8 curve))
+                          (let ([curve (if (symbol? curve) (symbol->string curve) curve)])
+                            (string->bytes/utf-8 curve)))
          gcrypt-ec-key%)))
     ))
 

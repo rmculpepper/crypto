@@ -168,10 +168,6 @@ NIST P-192 disappeared!).
 
 ;; ============================================================
 
-(define allowed-rsa-keygen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?")
-    (e     ,exact-positive-integer? "exact-positive-integer?")))
-
 (define libcrypto-rsa-impl%
   (class libcrypto-pk-impl%
     (inherit-field spec)
@@ -195,9 +191,9 @@ NIST P-192 disappeared!).
     ;;   https://groups.google.com/forum/#!topic/mailing.openssl.dev/jhooibXLmWk
     ;; Try using RSA_generate_key directly.
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-rsa-keygen)
-      (let ([nbits (keygen-spec-ref config 'nbits)]
-            [e (keygen-spec-ref config 'e)]
+      (check-config config allowed-rsa-keygen "RSA key generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
+            [e     (config-ref config 'e 65537)]
             [ctx (EVP_PKEY_CTX_new_id (pktype))])
         (EVP_PKEY_CTX_set_cb ctx #f)
         (EVP_PKEY_keygen_init ctx)
@@ -208,15 +204,15 @@ NIST P-192 disappeared!).
             (BN_add_word ebn e)
             ;; FIXME: refcount?
             (EVP_PKEY_CTX_set_rsa_keygen_pubexp ctx ebn)
-            #|(BN_free ebn)|#))
+            #;(BN_free ebn)))
         (let ([evp (EVP_PKEY_keygen ctx)])
           (EVP_PKEY_CTX_free ctx)
           (new libcrypto-pk-key% (impl this) (evp evp) (private? #t)))))
     |#
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-rsa-keygen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
-            [e (or (keygen-spec-ref config 'e) 65537)])
+      (check-config config config:rsa-keygen "RSA key generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
+            [e     (config-ref config 'e     65537)])
         (define rsa (RSA_new))
         (define bn-e (BN_new))
         (BN_add_word bn-e e)
@@ -249,7 +245,7 @@ NIST P-192 disappeared!).
 ;; ----
 
 (define allowed-dsa-paramgen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?")))
+  `((nbits #f ,exact-positive-integer? #f)))
 
 (define libcrypto-dsa-impl%
   (class libcrypto-pk-impl%
@@ -284,8 +280,8 @@ NIST P-192 disappeared!).
     #|
     ;; Similarly, this version of generate-params crashes.
     (define/override (generate-params config)
-      (check-keygen-spec 'generate-dsa-key config allowed-dsa-paramgen)
-      (let ([nbits (keygen-spec-ref config 'nbits)]
+      (check-config config allowed-dsa-paramgen "DSA parameter generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
             [ctx (EVP_PKEY_CTX_new_id (pktype))])
         (EVP_PKEY_paramgen_init ctx)
         (when nbits
@@ -295,8 +291,8 @@ NIST P-192 disappeared!).
           (new libcrypto-pk-params% (impl this) (evp evp)))))
     |#
     (define/override (generate-params config)
-      (check-keygen-spec config allowed-dsa-paramgen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)])
+      (check-config config allowed-dsa-paramgen "DSA parameter generation")
+      (let ([nbits (config-ref config 'nbits 2048)])
         (define dsa (DSA_new))
         (DSA_generate_parameters_ex dsa nbits)
         (define evp (EVP_PKEY_new))
@@ -308,6 +304,7 @@ NIST P-192 disappeared!).
     ;; EVP_PKEY_keygen seems to work, but that may just be because DSA keygen
     ;; is simple after paramgen is done.
     (define/public (*generate-key config evp)
+      (check-config config '() "DSA key generation")
       (let ([ctx (EVP_PKEY_CTX_new evp)])
         (EVP_PKEY_keygen_init ctx)
         (let ([kevp (EVP_PKEY_keygen ctx)])
@@ -323,8 +320,8 @@ NIST P-192 disappeared!).
 ;; ----
 
 (define allowed-dh-paramgen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?")
-    (generator ,(lambda (x) (member x '(2 5))) "(or/c 2 5)")))
+  `((nbits     #f ,exact-positive-integer? #f)
+    (generator #f ,(lambda (x) (member x '(2 5))) "(or/c 2 5)")))
 
 (define libcrypto-dh-impl%
   (class libcrypto-pk-impl%
@@ -336,9 +333,9 @@ NIST P-192 disappeared!).
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-keygen-spec config allowed-dh-paramgen)
-      (let ([nbits (keygen-spec-ref config 'nbits)]
-            [generator (or (keygen-spec-ref config 'generator) 2)])
+      (check-config config allowed-dh-paramgen "DH parameter generation")
+      (let ([nbits     (config-ref config 'nbits 2048)]
+            [generator (config-ref config 'generator 2)])
         (define dh (DH_new))
         (DH_generate_parameters_ex dh nbits generator)
         ;; FIXME: DH_check ???
@@ -365,6 +362,7 @@ NIST P-192 disappeared!).
       (super *write-key private? fmt evp))
 
     (define/public (*generate-key config evp)
+      (check-config config '() "DH key generation")
       (define kdh
         (let ([dh0 (EVP_PKEY_get1_DH evp)])
           (begin0 (DHparams_dup dh0)
@@ -391,9 +389,6 @@ NIST P-192 disappeared!).
 
 ;; ----
 
-(define allowed-ec-paramgen
-  `((curve ,string? "string?")))
-
 (define libcrypto-ec-impl%
   (class libcrypto-pk-impl%
     (inherit-field spec)
@@ -407,9 +402,8 @@ NIST P-192 disappeared!).
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-keygen-spec config allowed-ec-paramgen)
-      (define curve-name (keygen-spec-ref config 'curve))
-      (unless curve-name (crypto-error "missing required configuration key\n  key: ~s" 'curve))
+      (check-config config config:ec-paramgen "EC parameter generation")
+      (define curve-name (config-ref config 'curve))
       (define curve-nid (find-curve-nid-by-name curve-name))
       (unless curve-nid (crypto-error "named curve not found\n  curve: ~e" curve-name))
       (define ec (EC_KEY_new_by_curve_name curve-nid))
@@ -451,6 +445,7 @@ NIST P-192 disappeared!).
             [else (super *write-key private? fmt evp)]))
 
     (define/public (*generate-key config evp)
+      (check-config config '() "EC key generation")
       (define kec
         (let ([ec0 (EVP_PKEY_get1_EC_KEY evp)])
           (begin0 (EC_KEY_dup ec0)
@@ -489,8 +484,6 @@ NIST P-192 disappeared!).
 
 ;; ============================================================
 
-(define allowed-params-keygen '())
-
 (define libcrypto-pk-params%
   (class pk-params-base%
     (init-field evp)
@@ -499,7 +492,6 @@ NIST P-192 disappeared!).
 
     ;; EVP_PKEY_keygen tends to crash, so call back to impl for low-level keygen.
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-params-keygen)
       (send impl *generate-key config evp))
 
     (define/override (-write-params fmt)
@@ -624,8 +616,9 @@ NIST P-192 disappeared!).
 ;;   http://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf
 ;;   https://bugs.launchpad.net/pyopenssl/+bug/1233810
 
-;; find-curve-nid-by-name : String -> Nat/#f
-(define (find-curve-nid-by-name name)
+;; find-curve-nid-by-name : Symbol/String -> Nat/#f
+(define (find-curve-nid-by-name name0)
+  (define name (if (symbol? name0) (symbol->string name0) name0))
   (or (find-curve-nid-by-sn name)
       (for/or ([alias-set (in-list curve-aliases)]
                #:when (member name alias-set))

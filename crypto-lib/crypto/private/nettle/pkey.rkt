@@ -172,9 +172,9 @@
         [else #f]))
 
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-rsa-keygen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
-            [e (or (keygen-spec-ref config 'e) 65537)])
+      (check-config config config:rsa-keygen "RSA key generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
+            [e     (config-ref config 'e 65537)])
         (define pub (new-rsa_public_key))
         (define priv (new-rsa_private_key))
         (__gmpz_set_si (rsa_public_key_struct-e pub) e)
@@ -296,10 +296,6 @@
 ;; ============================================================
 ;; DSA
 
-(define allowed-dsa-keygen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?")
-    (qbits ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
-
 (define (dsa_signature->der sig)
   (asn1->bytes/DER DSA-Sig-Val
     (hasheq 'r (mpz->integer (dsa_signature_struct-r sig))
@@ -327,16 +323,16 @@
     (define/override (can-sign? pad dspec) (memq pad '(#f)))
 
     (define/override (generate-params config)
-      (check-keygen-spec config allowed-dsa-keygen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
-            [qbits (or (keygen-spec-ref config 'qbits) 256)])
+      (check-config config config:dsa-paramgen "DSA parameter generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
+            [qbits (config-ref config 'qbits 256)])
         (define params (-genparams nbits qbits))
         (new nettle-dsa-params% (impl this) (params params))))
 
     (define/override (generate-key config)
-      (check-keygen-spec config allowed-dsa-keygen)
-      (let ([nbits (or (keygen-spec-ref config 'nbits) 2048)]
-            [qbits (or (keygen-spec-ref config 'qbits) 256)])
+      (check-config config config:dsa-paramgen "DSA key generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
+            [qbits (config-ref config 'qbits 256)])
         (define params (-genparams nbits qbits))
         (define pub (new-mpz))
         (define priv (new-mpz))
@@ -357,7 +353,7 @@
     (super-new)
 
     (define/override (generate-key config)
-      (check-keygen-spec config '())
+      (check-config config '() "DSA key generation from parameters")
       (define pub (new-mpz))
       (define priv (new-mpz))
       (nettle_dsa_generate_keypair params pub priv (send impl get-random-ctx))
@@ -421,10 +417,11 @@
     (define/override (can-sign? pad dspec) (memq pad '(#f)))
 
     (define/override (generate-params config)
-      (check-keygen-spec config `((curve ,symbol? "symbol?")))
-      (define curve-name (keygen-spec-ref config 'curve))
+      (check-config config config:ec-paramgen "EC parameter generation")
+      (define curve-name0 (config-ref config 'curve))
+      (define curve-name (if (string? curve-name0) (string->symbol curve-name0) curve-name0))
       (define ecc (curve-name->ecc curve-name))
-      (unless ecc (crypto-error "named curve not found\n  curve: ~v" curve-name))
+      (unless ecc (crypto-error "named curve not found\n  curve: ~e" curve-name0))
       (new nettle-ec-params% (impl this) (ecc ecc)))
 
     (define/override (generate-key config)
@@ -439,7 +436,7 @@
     (super-new)
 
     (define/override (generate-key config)
-      (check-keygen-spec config '())
+      (check-config config '() "EC key generation from parameters")
       (define pub (new-ecc_point ecc))
       (define priv (new-ecc_scalar ecc))
       (nettle_ecdsa_generate_keypair pub priv (send impl get-random-ctx))

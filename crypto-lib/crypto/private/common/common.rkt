@@ -43,9 +43,14 @@
          to-info
          to-spec
          shrink-bytes
-         keygen-spec/c
-         check-keygen-spec
-         keygen-spec-ref
+         config/c
+         check-config
+         config-ref
+         config:pbkdf2
+         config:scrypt
+         config:rsa-keygen
+         config:dsa-paramgen
+         config:ec-paramgen
          crypto-random-bytes)
 
 ;; Convention: methods starting with `-` (eg, `-digest-buffer`) are
@@ -730,26 +735,55 @@
     (subbytes bs 0 len)
     bs))
 
-(define keygen-spec/c
-  (listof (list/c symbol? any/c)))
+;; ----
 
-(define (check-keygen-spec spec allowed)
-  ;; Assume already checked keygen-spec/c
-  ;; Check entries
-  (for ([entry (in-list spec)])
-    (cond [(assq (car entry) allowed)
-           => (lambda (allowed-entry)
-                (unless ((cadr allowed-entry) (cadr entry))
-                  (crypto-error "bad key-generation option value\n  key: ~e\n  expected: ~a\n  got: ~e"
-                                (car entry)
-                                (caddr allowed-entry)
-                                (cadr entry))))]
+;; A Config is (listof (list Symbol Any))
+(define config/c (listof (list/c symbol? any/c)))
+
+;; A ConfigSpec is (listof (list Symbol Required? Predicate String/#f))
+
+(define (check-config config spec what)
+  ;; Assume already checked config/c, now check entries
+  (for ([entry (in-list config)])
+    (match-define (list key value) entry)
+    (cond [(assq key spec)
+           => (lambda (aentry)
+                (match-define (list _ required? pred? expected) aentry)
+                (unless (pred? value)
+                  (crypto-error "bad option value for ~a\n  key: ~e\n  expected: ~a\n  given: ~e"
+                                what key (or expected (object-name pred?)) value)))]
           [else
-           (crypto-error "bad key-generation option\n  key: ~e\n  value: ~e"
-                         (car entry) (cadr entry))]))
-  ;; FIXME: check duplicates?
+           (crypto-error "unsupported option for ~a\n  key: ~e\n  value: ~e"
+                         key value)]))
+  (for ([aentry (in-list spec)] #:when (match aentry [(list _ required? _ _) required?]))
+    (match-define (list key required? pred? expected) aentry)
+    (unless (assq key config)
+      (crypto-error "missing required option for ~a\n  key: ~e\n  given: ~e"
+                    key config)))
   (void))
 
-(define (keygen-spec-ref spec key)
-  (cond [(assq key spec) => cadr]
-        [else #f]))
+(define (config-ref spec key [default #f])
+  (cond [(assq key spec) => cadr] [else default]))
+
+;; ----
+
+(define config:pbkdf2
+  `((iterations #t ,exact-positive-integer? #f)
+    (key-size   #t ,exact-positive-integer? #f)))
+
+(define config:scrypt
+  `((N #t ,exact-positive-integer? #f)
+    (p #f ,exact-positive-integer? #f)
+    (r #f ,exact-positive-integer? #f)
+    (key-size #f ,exact-positive-integer? #f)))
+
+(define config:rsa-keygen
+  `((nbits #f ,exact-positive-integer? #f)
+    (e     #f ,exact-positive-integer? #f)))
+
+(define config:dsa-paramgen
+  `((nbits #f ,exact-positive-integer? "exact-positive-integer?")
+    (qbits #f ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
+
+(define config:ec-paramgen
+  `((curve #t ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)")))

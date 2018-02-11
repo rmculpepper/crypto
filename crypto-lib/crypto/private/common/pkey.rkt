@@ -94,10 +94,10 @@
        bytes?)]
 
   [generate-pk-parameters
-   (->* [(or/c pk-spec? pk-impl?)] [keygen-spec/c]
+   (->* [(or/c pk-spec? pk-impl?)] [config/c]
         pk-parameters?)]
   [generate-private-key
-   (->* [(or/c pk-spec? pk-impl? pk-parameters?)] [keygen-spec/c]
+   (->* [(or/c pk-spec? pk-impl? pk-parameters?)] [config/c]
         private-key?)]))
 
 (define nat? exact-nonnegative-integer?)
