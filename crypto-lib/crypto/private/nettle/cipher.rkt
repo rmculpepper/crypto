@@ -83,7 +83,7 @@
     (define/override (-do-decrypt-end auth-tag)
       (define actual-tag (-get-auth-tag (bytes-length auth-tag)))
       (unless (crypto-bytes=? auth-tag actual-tag)
-        (crypto-error "authenticated decryption failed")))
+        (err/auth-decrypt-failed)))
 
     (abstract -get-auth-tag) ;; Nat -> Bytes
     ))
@@ -170,7 +170,7 @@
   (class nettle-cipher-ctx-base%
     (super-new)
     (inherit-field impl nc encrypt? ctx iv)
-    (inherit get-block-size get-chunk-size)
+    (inherit about get-block-size get-chunk-size)
 
     (define/public (get-spec) (send impl get-spec))
     (define mode (send impl get-mode))
@@ -186,7 +186,7 @@
     (define/override (-do-aad inbuf instart inend)
       (let ([update-aad (nettle-cipher-ref nc 'update-aad)])
         (unless update-aad
-          (crypto-error "internal error: cannot update AAD\n  cipher: ~e" (get-spec)))
+          (internal-error "cannot update AAD\n  cipher: ~a" (about)))
         (update-aad ctx (- inend instart) (ptr-add inbuf instart))))
 
     (define/override (-do-crypt enc? final? inbuf instart inend outbuf)
@@ -204,7 +204,7 @@
          (define crypt (nettle-cipher-encrypt nc))
          (nettle_ctr_crypt ctx crypt (get-chunk-size) iv (- inend instart)
                            outbuf (ptr-add inbuf instart))]
-        [else (crypto-error "internal error: bad mode: ~e" mode)])
+        [else (internal-error "bad mode: ~e\n  cipher: ~a" mode (about))])
       (- inend instart))
 
     (define/override (-get-auth-tag taglen)
@@ -212,6 +212,6 @@
       (cond [(zero? taglen) (void)]
             [(nettle-cipher-ref nc 'get-auth-tag)
              => (lambda (get-auth-tag) (get-auth-tag ctx taglen tag))]
-            [else (crypto-error "internal error: cannot get auth tag\n  cipher: ~s" (get-spec))])
+            [else (internal-error "cannot get auth tag\n  cipher: ~a" (about))])
       tag)
     ))

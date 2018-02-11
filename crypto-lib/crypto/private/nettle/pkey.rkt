@@ -188,6 +188,7 @@
   (class pk-key-base%
     (init-field pub priv)
     (inherit-field impl)
+    (inherit about)
     (super-new)
 
     (define/override (is-private?) (and priv #t))
@@ -242,13 +243,13 @@
              [(sha512) (nettle_rsa_pss_sha512_sign_digest_tr pub priv randctx saltlen salt digest sigz)]
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
           [else (err/bad-signature-pad impl pad)]))
-      (unless signed-ok? (crypto-error "RSA signing failed"))
+      (unless signed-ok? (crypto-error "signing failed\n  key: ~a" (about)))
       (mpz->bin sigz))
 
     (define/private (nosupport/digest+pad op digest-spec pad)
-      (crypto-error (string-append "RSA ~a not supported for digest and padding combination"
-                                   "\n  digest: ~s\n  padding: ~s")
-                    op digest-spec (or pad 'pkcs1-v1.5)))
+      (crypto-error (string-append "unsupported digest and padding combination for ~a"
+                                   "\n  digest: ~s\n  padding: ~s\n  key: ~a")
+                    op digest-spec (or pad 'pkcs1-v1.5) (about)))
 
     (define/override (-verify digest digest-spec pad sig)
       (define sigz (bin->mpz sig))
@@ -277,7 +278,7 @@
         [(pkcs1-v1.5 #f)
          (define enc-z (new-mpz))
          (or (nettle_rsa_encrypt pub (send impl get-random-ctx) buf enc-z)
-             (crypto-error "RSA encyption failed"))
+             (crypto-error "encyption failed"))
          (mpz->bin enc-z)]
         [else (err/bad-encrypt-pad impl pad)]))
 
@@ -288,8 +289,7 @@
          (define enc-z (bin->mpz buf))
          (define dec-buf (make-bytes (rsa_public_key_struct-size pub)))
          (define dec-size (nettle_rsa_decrypt_tr pub priv randctx dec-buf enc-z))
-         (unless dec-size
-           (crypto-error "RSA decryption failed"))
+         (unless dec-size (crypto-error "decryption failed"))
          (shrink-bytes dec-buf dec-size)]
         [else (err/bad-encrypt-pad impl pad)]))
     ))
@@ -314,7 +314,7 @@
      (__gmpz_set (dsa_signature_struct-r sig) (integer->mpz r))
      (__gmpz_set (dsa_signature_struct-s sig) (integer->mpz s))
      sig]
-    [_ (crypto-error 'der->dsa_signature "signature is not well-formed")]))
+    [_ (crypto-error "signature is not well-formed")]))
 
 ;; ----------------------------------------
 ;; New DSA API (Nettle >= 3.0)
@@ -403,7 +403,7 @@
     (define/override (-sign digest digest-spec pad)
       (define sig (new-dsa_signature))
       (or (nettle_dsa_sign params priv (send impl get-random-ctx) digest sig)
-          (crypto-error "DSA signing failed"))
+          (crypto-error "signing failed"))
       (dsa_signature->der sig))
 
     (define/override (-verify digest digest-spec pad sig-der)

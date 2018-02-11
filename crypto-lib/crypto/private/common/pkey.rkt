@@ -157,7 +157,7 @@
     (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
           (let ([reader (send factory get-pk-reader)])
             (and reader (send reader read-key datum fmt))))
-        (crypto-error "unable to read key\n  key: ~e" datum))))
+        (crypto-error "unable to read key"))))
 
 (define (pk-parameters->datum pkp fmt)
   (with-crypto-entry 'pk-parameters->datum
@@ -167,7 +167,7 @@
     (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
           (let ([reader (send factory get-pk-reader)])
             (and reader (send reader read-params datum fmt))))
-        (crypto-error "unable to read parameters\n  key: ~e" datum))))
+        (crypto-error "unable to read parameters"))))
 
 (define (pk-key->public-only-key pk)
   (with-crypto-entry 'pk-key->public-only-key

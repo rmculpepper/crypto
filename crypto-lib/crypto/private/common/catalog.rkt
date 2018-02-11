@@ -173,7 +173,7 @@
         [(ecb)             0]
         [(cbc ofb cfb ctr) (get-chunk-size)]
         [(gcm ocb eax)     12]
-        [else (crypto-error "internal error, unknown block mode: ~e" mode)]))
+        [else (internal-error "unknown block mode: ~e" mode)]))
     (define/public (iv-size-ok? size)
       (case mode
         [(ecb)         (= size 0)]

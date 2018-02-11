@@ -83,5 +83,5 @@
     (define/override (-do-decrypt-end auth-tag)
       (when (send impl aead?)
         (unless (= (gcry_cipher_checktag ctx auth-tag (bytes-length auth-tag)) GPG_ERR_NO_ERROR)
-          (crypto-error "authenticated decryption failed"))))
+          (err/auth-decrypt-failed))))
     ))

@@ -26,7 +26,9 @@
          err/no-impl
          err/bad-signature-pad
          err/bad-encrypt-pad
-         err/missing-digest)
+         err/missing-digest
+         err/crypt-failed
+         err/auth-decrypt-failed)
 
 (define crypto-entry-point (gensym))
 
@@ -54,9 +56,17 @@
   (crypto-error "~a padding not supported\n  key: ~a key\n  padding: ~e"
                 kind (send impl -about) pad))
 (define (err/bad-signature-pad impl pad)
-  (err/bad-*-pad 'signature impl pad))
+  (err/bad-*-pad "signature" impl pad))
 (define (err/bad-encrypt-pad impl pad)
-  (err/bad-*-pad 'encryption impl pad))
+  (err/bad-*-pad "encryption" impl pad))
 
 (define (err/missing-digest spec)
   (crypto-error "could not get digest implementation\n  digest: ~e" spec))
+
+(define (err/crypt-failed enc? auth?)
+  (crypto-error "~a~a failed"
+                (if auth? "authenticated " "")
+                (if enc? "encryption" "decryption")))
+
+(define (err/auth-decrypt-failed)
+  (err/crypt-failed #f #t))

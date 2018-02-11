@@ -80,7 +80,7 @@ NIST P-192 disappeared!).
       (define dh (d2i_DHparams params-buf (bytes-length params-buf)))
       ;; FIXME: DH check
       (when (or (DH_st_prefix-pubkey dh) (DH_st_prefix-privkey dh))
-        (crypto-error "internal error; keys found in DH parameters object"))
+        (internal-error "keys found in DH parameters object"))
       (let ([pubkey (BN_bin2bn pub-buf)])
         (set-DH_st_prefix-pubkey! dh pubkey)
         (BN-no-gc pubkey))
@@ -582,7 +582,7 @@ NIST P-192 disappeared!).
               [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
                     (eq? (send peer-pubkey0 get-impl) impl))
                (get-field evp peer-pubkey0)]
-              [else (crypto-error "internal error, bad peer public key")]))
+              [else (internal-error "bad peer public key")]))
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_derive_init ctx)
       (EVP_PKEY_derive_set_peer ctx peer-pubkey)

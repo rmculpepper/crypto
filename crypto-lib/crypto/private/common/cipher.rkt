@@ -105,7 +105,7 @@
 (define (-get-impl o)
   (cond [(cipher-spec? o)
          (or (get-cipher o)
-             (crypto-error "could not get cipher implementation\n  cipher spec: ~e" o))]
+             (crypto-error "could not get cipher implementation\n  cipher: ~e" o))]
         [else (get-impl* o)]))
 
 (define (-get-info o)
@@ -167,8 +167,8 @@
   (let* ([ci (-get-info ci)]
          [size (or size (send ci get-auth-size))])
     (unless (send ci auth-size-ok? size)
-      (crypto-error "invalid authentication tag size for cipher\n  cipher: ~s\n  size: ~e"
-                    (send ci get-spec) size))
+      (crypto-error "wrong authentication tag size\n  cipher: ~a\n  size: ~e"
+                    (send ci about) size))
     size))
 
 (define (cipher-update-aad c inp)

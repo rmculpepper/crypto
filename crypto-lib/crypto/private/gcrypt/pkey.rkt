@@ -71,7 +71,7 @@
               [else
                (define qInv*-mpi (gcry_mpi_new))
                (or (gcry_mpi_invm qInv*-mpi (int->mpi q) (int->mpi p))
-                   (crypto-error "failed to calculate qInv"))
+                   (internal-error "failed to calculate qInv"))
                (values q p (mpi->int qInv*-mpi))]))
       (define pub (make-rsa-public-key n e))
       (define priv (make-rsa-private-key n e d p* q* qInv*))
@@ -280,14 +280,14 @@
       (define dp-mpi (gcry_mpi_new))
       (gcry_mpi_sub_ui tmp p-mpi 1)
       (or (gcry_mpi_invm dp-mpi e-mpi tmp)
-          (crypto-error "failed to calculate dP"))
+          (internal-error "failed to calculate dP"))
       (define dq-mpi (gcry_mpi_new))
       (gcry_mpi_sub_ui tmp q-mpi 1)
       (or (gcry_mpi_invm dq-mpi e-mpi tmp)
-          (crypto-error "failed to calculate dQ"))
+          (internal-error "failed to calculate dQ"))
       (define qInv-mpi (gcry_mpi_new))
       (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
-          (crypto-error "failed to calculate qInv"))
+          (internal-error "failed to calculate qInv"))
       (apply encode-priv-rsa fmt
              (map mpi->int (list n-mpi e-mpi d-mpi p-mpi q-mpi dp-mpi dq-mpi qInv-mpi))))
 
@@ -351,7 +351,7 @@
                          (int->mpi (base256->unsigned data))))
       (define dec-sexp
         (or (gcry_pk_decrypt enc-sexp priv)
-            (crypto-error "RSA decryption failed")))
+            (crypto-error "decryption failed")))
       (define dec-data (gcry_sexp_nth_data dec-sexp 1))
       (gcry_sexp_release enc-sexp)
       (gcry_sexp_release dec-sexp)

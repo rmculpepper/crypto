@@ -17,7 +17,8 @@
 (require ffi/unsafe
          ffi/unsafe/define
          ffi/unsafe/alloc
-         ffi/unsafe/atomic)
+         ffi/unsafe/atomic
+         "../common/error.rkt")
 (provide (protect-out (all-defined-out)))
 
 (define libgcrypt (ffi-lib "libgcrypt" '(#f "20") #:fail (lambda () #f)))
@@ -50,7 +51,7 @@
      (let ([status (apply f args)])
        (if (= status GPG_ERR_NO_ERROR)
            (void)
-           (error 'libgcrypt "~a" (gcry_strerror status)))))))
+           (crypto-error "libgcrypt error: ~a" (gcry_strerror status)))))))
 
 (define ((check2 f) . args)
   (call-as-atomic
@@ -58,7 +59,7 @@
      (let-values ([(status result) (apply f args)])
        (if (= status GPG_ERR_NO_ERROR)
            result
-           (error 'libgcrypt "~a" (gcry_strerror status)))))))
+           (crypto-error "libgcrypt error: ~a" (gcry_strerror status)))))))
 
 (define-gcrypt gcry_check_version
   (_fun _bytes -> _string/utf-8)
