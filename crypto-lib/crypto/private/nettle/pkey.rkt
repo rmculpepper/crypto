@@ -24,7 +24,6 @@
          "../common/catalog.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
-         "../rkt/pk-asn1.rkt"
          "../gmp/ffi.rkt"
          "ffi.rkt")
 (provide (all-defined-out))

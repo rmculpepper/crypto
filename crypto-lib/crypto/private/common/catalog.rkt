@@ -14,8 +14,7 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require racket/string
-         racket/match
+(require racket/match
          racket/list
          racket/class
          "error.rkt")

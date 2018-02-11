@@ -19,7 +19,6 @@
          racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
-         "../common/catalog.rkt"
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"

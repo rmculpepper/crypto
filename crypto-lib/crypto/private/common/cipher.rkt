@@ -17,7 +17,6 @@
 #lang racket/base
 (require racket/class
          racket/contract/base
-         racket/port
          "interfaces.rkt"
          "catalog.rkt"
          "factory.rkt"

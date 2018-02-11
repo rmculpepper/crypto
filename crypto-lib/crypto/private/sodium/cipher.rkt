@@ -15,12 +15,9 @@
 
 #lang racket/base
 (require racket/class
-         ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
-         "../common/catalog.rkt"
          "../common/error.rkt"
-         "../common/util.rkt"
          "../common/ufp.rkt"
          "ffi.rkt")
 (provide sodium-cipher-impl%)

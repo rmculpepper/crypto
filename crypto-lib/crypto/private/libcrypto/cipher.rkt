@@ -19,10 +19,8 @@
          racket/class
          racket/match
          "../common/interfaces.rkt"
-         "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
-         "../common/ufp.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 

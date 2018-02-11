@@ -17,7 +17,6 @@
 (require ffi/unsafe
          racket/class
          "../common/interfaces.rkt"
-         "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
          "../common/util.rkt"
