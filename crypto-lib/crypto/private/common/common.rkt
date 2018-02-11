@@ -58,6 +58,7 @@
 (define impl-base%
   (class* object% (impl<%>)
     (init-field spec factory)
+    (define/public (about) (format "~a ~a" (send (get-factory) get-name) (get-spec)))
     (define/public (get-info) #f)
     (define/public (get-spec) spec)
     (define/public (get-factory) factory)
@@ -66,6 +67,7 @@
 (define info-impl-base%
   (class* object% (impl<%>)
     (init-field info factory)
+    (define/public (about) (format "~a ~a" (send (get-factory) get-name) (get-spec)))
     (define/public (get-info) info)
     (define/public (get-spec) (send info get-spec))
     (define/public (get-factory) factory)
@@ -74,6 +76,7 @@
 (define ctx-base%
   (class* object% (ctx<%>)
     (init-field impl)
+    (define/public (about) (format "~a context" (send impl about)))
     (define/public (get-impl) impl)
     (super-new)))
 
@@ -181,6 +184,7 @@
     (super-new)
 
     ;; Info methods
+    (define/override (about) (format "~a digest" (super about)))
     (define/public (get-size) (send info get-size))
     (define/public (get-block-size) (send info get-block-size))
 
@@ -189,12 +193,12 @@
       ;; override get-size and get-block-size.
       (when size
         (unless (= size (send info get-size))
-          (crypto-error "internal error in digest ~v size: expected ~s but got ~s"
-                        (get-spec) (send info get-size) size)))
+          (internal-error "digest size: expected ~s but got ~s\n  digest: ~a"
+                          (send info get-size) size (about))))
       (when block-size
         (unless (= block-size (send info get-block-size))
-          (crypto-error "internal error in digest ~v block size: expected ~s but got ~s"
-                        (get-spec) (send info get-block-size) block-size))))
+          (internal-error "block size: expected ~s but got ~s\n  digest: ~a"
+                          (send info get-block-size) block-size (about)))))
 
     (abstract new-ctx)        ;; -> digest-ctx<%>
     (abstract new-hmac-ctx)   ;; Bytes -> digest-ctx<%>
@@ -258,6 +262,7 @@
     (super-new)
 
     ;; Info methods
+    (define/override (about) (format "~a cipher" (super about)))
     (define/public (get-cipher-name) (send info get-cipher-name))
     (define/public (get-mode) (send info get-mode))
     (define/public (get-type) (send info get-type))
@@ -278,16 +283,15 @@
                                  #:iv-size [iv-size #f])
       (when block-size
         (unless (= block-size (send info get-block-size))
-          (crypto-error "internal error in cipher ~v block-size expected ~s but got ~s"
-                        (get-spec) (send info get-block-size) block-size)))
+          (internal-error "block-size expected ~s but got ~s\n  cipher: ~a"
+                          (send info get-block-size) block-size (about))))
       (when chunk-size
         (unless (= chunk-size (send info get-chunk-size))
-          (crypto-error "internal error in cipher ~v chunk-size expected ~s but got ~s"
-                        (get-spec) (send info get-chunk-size) chunk-size)))
+          (internal-error "chunk-size expected ~s but got ~s\n  cipher: ~a"
+                          (send info get-chunk-size) chunk-size (about))))
       (when iv-size
         (unless (iv-size-ok? iv-size)
-          (crypto-error "internal error in cipher ~v iv-size ~s not ok"
-                        (get-spec) iv-size)))
+          (internal-error "iv-size ~s not ok" iv-size (about))))
       (void))
 
     (define/public (new-ctx key iv enc? pad? auth-len attached-tag?)
@@ -300,8 +304,8 @@
 
     (define/public (check-key-size size)
       (unless (key-size-ok? size)
-        (crypto-error "bad key size for cipher\n  cipher: ~e\n  given: ~e\n  allowed: ~a"
-                      (get-spec) size
+        (crypto-error "bad key size for cipher\n  cipher: ~a\n  given: ~e\n  allowed: ~a"
+                      (about) size
                       (match (get-key-sizes)
                         [(? list? allowed)
                          (string-join (map number->string allowed) ", ")]
@@ -310,15 +314,15 @@
 
     (define/public (check-iv-size iv-size)
       (unless (iv-size-ok? iv-size)
-        (crypto-error "bad IV size for cipher\n  cipher: ~v\n  expected: ~s bytes\n  got: ~s bytes"
-                      (get-spec) iv-size (get-iv-size))))
+        (crypto-error "bad IV size for cipher\n  cipher: ~a\n  expected: ~s bytes\n  got: ~s bytes"
+                      (about) iv-size (get-iv-size))))
     ))
 
 (define multikeylen-cipher-impl%
   (class cipher-impl-base%
     (init-field impls) ;; (nonempty-listof (cons nat cipher-impl%))
     (inherit-field info)
-    (inherit get-spec check-key-size)
+    (inherit about get-spec check-key-size)
     (super-new)
 
     (define/override (get-key-size) (caar impls))
@@ -330,12 +334,11 @@
                   (send/apply (cdr keylen+impl) new-ctx key args))]
             [else
              (check-key-size (bytes-length key))
-             (error 'multikeylen-cipher-impl%
-                    (string-append "internal error: no implementation for key length"
-                                   "\n  cipher: ~e\n  given: ~s bytes\n  available: ~a")
-                    (get-spec) (bytes-length key)
-                    (string-join (map number->string (map car impls)) ", "))]))
-    (define/override (-new-ctx . args) (crypto-error "internal error, unreachable"))
+             (internal-error (string-append "no implementation for key length"
+                                            "\n  cipher: ~a\n  given: ~s bytes\n  available: ~a")
+                             (about) (bytes-length key)
+                             (string-join (map number->string (map car impls)) ", "))]))
+    (define/override (-new-ctx . args) (internal-error "unreachable"))
     ))
 
 ;; ----------------------------------------
@@ -354,7 +357,7 @@
     (inherit-field impl state)
     (field [auth-tag-out #f]
            [out (open-output-bytes)])
-    (inherit with-state set-state)
+    (inherit with-state set-state about)
     (super-new [state 1])
 
     (set-state (if (send impl aead?) 1 2))
@@ -399,8 +402,8 @@
             [else ;; decrypt w/ detached tag
              (let ([tag (or tag #"")])
                (unless (= (bytes-length tag) auth-len)
-                 (crypto-error "wrong size for authentication tag\n  expected: ~s\n  given: ~s"
-                               auth-len (bytes-length tag))))])
+                 (crypto-error "wrong authentication tag size\n  expected: ~s\n  given: ~s\n  cipher: ~a"
+                               auth-len (bytes-length tag) (about))))])
       (with-state #:ok '(1 2) #:post 3
         (lambda ()
           (when (member state '(1)) (-finish-aad))
@@ -459,7 +462,7 @@
         (define outbuf (make-bytes outlen0))
         (define outlen (-do-crypt enc? #f inbuf instart inend outbuf))
         (unless (= outlen (- inend instart))
-          (crypto-error "internal error, outlen = ~s, inlen = ~s" outlen (- inend instart)))
+          (internal-error "outlen = ~s, inlen = ~s" outlen (- inend instart)))
         (send next update outbuf 0 outlen))
       (define (finish partial auth-tag)
         ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
@@ -467,14 +470,14 @@
         (define outbuf (make-bytes outlen0))
         (define outlen (-do-crypt enc? #t partial 0 (bytes-length partial) outbuf))
         (unless (= outlen (bytes-length partial))
-          (crypto-error "internal error, outlen = ~s, partial = ~s" outlen (bytes-length partial)))
+          (internal-error "outlen = ~s, partial = ~s" outlen (bytes-length partial)))
         (send next update outbuf 0 outlen)
         (cond [enc?
                (send next finish (-do-encrypt-end auth-len))]
               [else
                (unless (= (bytes-length auth-tag) auth-len)
-                 (crypto-error "authentication tag wrong size\n  expected: ~s\n  given: ~s"
-                               auth-len (bytes-length auth-tag)))
+                 (crypto-error "wrong authentication tag size\n  expected: ~s\n  given: ~s\n  cipher: ~a"
+                               auth-len (bytes-length auth-tag) (about)))
                (-do-decrypt-end auth-tag)
                (send next finish #f)]))
       (sink-ufp update finish))
@@ -543,7 +546,7 @@
 
 (define pk-impl-base%
   (class* impl-base% (pk-impl<%>)
-    (inherit get-spec)
+    (inherit about get-spec get-factory)
     (super-new)
     (define/public (generate-key config)
       (crypto-error (string-append "direct key generation not supported;\n"
@@ -551,7 +554,7 @@
                                    "  algorithm: ~e")
                     (get-spec)))
     (define/public (generate-params config)
-      (crypto-error "algorithm does not have parameters\n  algorithm: ~e" (get-spec)))
+      (crypto-error "parameters not supported\n  algorithm: ~a" (about)))
     (define/public (can-encrypt? pad) #f)
     (define/public (can-sign? pad dspec) #f)
     (define/public (can-key-agree?) #f)
@@ -562,11 +565,12 @@
   (class* ctx-base% (pk-params<%>)
     (inherit-field impl)
     (super-new)
+    (define/override (about) (format "~a parameters" (send impl about)))
     (abstract generate-key)
     (define/public (write-params fmt)
       (or (-write-params fmt)
           (crypto-error "parameters format not supported\n  format: ~e\n  parameters: ~a"
-                        fmt (send impl get-spec))))
+                        fmt (about))))
     (define/public (-write-params fmt) #f)
     ))
 
@@ -575,6 +579,8 @@
     (inherit-field impl)
     (super-new)
 
+    (define/override (about)
+      (format "~a ~a key" (send impl about) (if (is-private?) 'private 'public)))
     (define/public (get-spec) (send impl get-spec))
 
     (abstract is-private?)
@@ -586,8 +592,8 @@
 
     (define/public (write-key fmt)
       (or (-write-key fmt)
-          (crypto-error "key format not supported\n  format: ~e\n  key: ~a ~a key"
-                        fmt (get-spec) (if (is-private?) "private" "public"))))
+          (crypto-error "key format not supported\n  format: ~e\n  key: ~a"
+                        fmt (about))))
     (define/public (-write-key fmt)
       (cond [(or (eq? fmt 'SubjectPublicKeyInfo) (not (is-private?)))
              (-write-public-key fmt)]
@@ -601,7 +607,7 @@
     (define/public (sign digest digest-spec pad)
       (-check-sign pad digest-spec)
       (unless (is-private?)
-        (crypto-error "signing requires private key"))
+        (crypto-error "signing requires private key\n  key: ~a" (about)))
       (-check-digest-size digest digest-spec)
       (-sign digest digest-spec pad))
 
@@ -612,18 +618,18 @@
 
     (define/private (-check-sign pad digest-spec)
       (unless (send impl can-sign? #f #f)
-        (crypto-error "sign/verify not supported\n  algorithm: ~e" (get-spec)))
+        (crypto-error "sign/verify not supported\n  key: ~a" (about)))
       (unless (send impl can-sign? pad digest-spec)
-        (crypto-error "sign/verify options not supported\n  algorithm: ~e\n  padding: ~e\n  digest: ~e"
-                      (get-spec) pad digest-spec)))
+        (crypto-error "sign/verify options not supported\n  key: ~a\n  padding: ~e\n  digest: ~e"
+                      (about) pad digest-spec)))
 
     (define/private (-check-digest-size digest digest-spec)
       (unless (= (bytes-length digest) (digest-spec-size digest-spec))
-        (crypto-error "wrong size for digest\n  digest: ~e\n  expected:  ~s\n  got: ~s"
+        (crypto-error "wrong size for digest\n  digest: ~e\n  expected:  ~s\n  given: ~s"
                       digest-spec (digest-spec-size digest-spec) (bytes-length digest))))
 
-    (define/public (-sign digest digest-spec pad) (err/no-impl))
-    (define/public (-verify digest digest-spec pad sig) (err/no-impl))
+    (define/public (-sign digest digest-spec pad) (err/no-impl this))
+    (define/public (-verify digest digest-spec pad sig) (err/no-impl this))
 
     ;; ----
 
@@ -633,31 +639,32 @@
     (define/public (decrypt buf pad)
       (-check-encrypt pad)
       (unless (is-private?)
-        (crypto-error "decryption requires private key"))
+        (crypto-error "decryption requires private key\n  key: ~a" (about)))
       (-decrypt buf pad))
 
     (define/public (compute-secret peer-pubkey)
       (-check-key-agree)
       (when (pk-key? peer-pubkey)
         (unless (eq? (send peer-pubkey get-impl) impl)
-          (crypto-error "peer key has different implementation")))
+          (crypto-error "peer key has different implementation\n  key: ~a\n  peer: ~a"
+                        (about) (send peer-pubkey about))))
       (-compute-secret peer-pubkey))
 
     (define/private (-check-encrypt pad)
       (unless (send impl can-encrypt? #f)
-        (crypto-error "encrypt/decrypt not supported\n  algorithm: ~e" (get-spec)))
+        (crypto-error "encrypt/decrypt not supported\n  key: ~a" (about)))
       (unless (send impl can-encrypt? pad)
-        (crypto-error "encrypt/decrypt not supported\n  algorithm: ~e\n  padding: ~e"
-                      (get-spec) pad)))
+        (crypto-error "encrypt/decrypt not supported\n  key: ~a\n  padding: ~e"
+                      (about) pad)))
 
-    (define/public (-encrypt buf pad) (err/no-impl))
-    (define/public (-decrypt buf pad) (err/no-impl))
+    (define/public (-encrypt buf pad) (err/no-impl this))
+    (define/public (-decrypt buf pad) (err/no-impl this))
 
     ;; ----
 
     (define/private (-check-key-agree)
       (unless (send impl can-key-agree?)
-        (crypto-error "key agreement not supported\n  algorithm: ~e" (get-spec))))
+        (crypto-error "key agreement not supported\n  key: ~a" (about))))
 
     (define/public (-compute-secret peer-pubkey) (err/no-impl))
     ))
@@ -697,27 +704,27 @@
           [(is-a? src ctx<%>)
            (loop (send src get-impl))]
           [fail-ok? #f]
-          [else (crypto-error "internal error: cannot get impl\n  from: ~e" src0)])))
+          [else (internal-error "cannot get impl\n  from: ~e" src0)])))
 
 (define (get-spec* src [fail-ok? #f])
   (cond [(or (symbol? src) (pair? src)) src]
         [(get-impl* src #t)
          => (lambda (i) (send i get-spec))]
         [fail-ok? #f]
-        [else (crypto-error "internal error: cannot get spec\n  from: ~e" src)]))
+        [else (internal-error "cannot get spec\n  from: ~e" src)]))
 
 (define (get-info* src [fail-ok? #f])
   (cond [(get-impl* src #t)
          => (lambda (i) (send i get-spec))]
         [fail-ok? #f]
-        [else (crypto-error "internal error: cannot get info\n  from: ~e" src)]))
+        [else (internal-error "cannot get info\n  from: ~e" src)]))
 
 (define (get-factory* src [fail-ok? #f])
   (cond [(is-a? src factory<%>) src]
         [(get-impl* src #t)
          => (lambda (i) (send i get-factory))]
         [fail-ok? #f]
-        [else (crypto-error "internal error: cannot get factory\n  from: ~e" src)]))
+        [else (internal-error "cannot get factory\n  from: ~e" src)]))
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))

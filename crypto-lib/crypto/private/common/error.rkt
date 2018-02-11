@@ -46,13 +46,13 @@
 
 ;; ----
 
-(define (err/no-impl)
-  (crypto-error "internal error: unimplemented"))
+(define (err/no-impl [obj #f])
+  (internal-error "unimplemented~a" (if obj (format "in: ~a" (send obj about)) "")))
 
 (define (err/bad-*-pad kind impl pad)
   (define factory (send impl get-factory))
-  (crypto-error "~a padding not supported\n  key: ~a ~a\n  padding: ~e"
-                kind (send impl get-spec) (send factory get-name) pad))
+  (crypto-error "~a padding not supported\n  key: ~a key\n  padding: ~e"
+                kind (send impl -about) pad))
 (define (err/bad-signature-pad impl pad)
   (err/bad-*-pad 'signature impl pad))
 (define (err/bad-encrypt-pad impl pad)

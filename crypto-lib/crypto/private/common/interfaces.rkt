@@ -58,6 +58,7 @@
 
 (define impl<%>
   (interface ()
+    about       ;; -> String
     get-info    ;; -> *Info
     get-spec    ;; -> *Spec
     get-factory ;; -> factory<%>
@@ -65,6 +66,7 @@
 
 (define ctx<%>
   (interface ()
+    about       ;; -> String
     get-impl    ;; -> impl<%>
     ))
 
