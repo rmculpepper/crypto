@@ -56,10 +56,10 @@
         (eprintf "+  testing ~s (~a)\n" desc factory-name)
         (eprintf " + self-test (~a => ~a)\n" factory-name factory-name))
       (test-case (format "~a ~a ~a" factory-name desc fmt)
-        ;; Can convert to pubkey, can serialize and deserialize
         (check-pred private-key? key)
         (check-pred public-only-key? pubkey)
         (check public-key=? key pubkey)
+        (test-pk-serialize key pubkey factory)
         (test-pk-key key pubkey))
       (define pubkey-der (pk-key->datum pubkey 'SubjectPublicKeyInfo))
       (for ([pub-factory (remove factory pub-factories)]
@@ -77,6 +77,20 @@
                      factory-name (send pub-factory get-name)))
           (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name) fmt desc)
             (test-pk-key key pubkey*)))))))
+
+(define (test-pk-serialize key pubkey factory)
+  ;; can serialize and deserialize, and serialized format is canonical
+  (define keydata (pk-key->datum key 'PrivateKeyInfo))
+  (define key2 (datum->pk-key keydata 'PrivateKeyInfo factory))
+  (check-pred private-key? key2)
+  (check public-key=? key2 key)
+  (check-equal? (pk-key->datum key2 'PrivateKeyInfo) keydata)
+  (define pubdata (pk-key->datum key 'SubjectPublicKeyInfo))
+  (define pubkey2 (datum->pk-key pubdata 'SubjectPublicKeyInfo factory))
+  (check-pred public-only-key? pubkey2)
+  (check public-key=? pubkey2 key)
+  (check public-key=? pubkey2 pubkey)
+  (check-equal? (pk-key->datum pubkey2 'SubjectPublicKeyInfo) pubdata))
 
 (define (test-pk-key key pubkey)
   (when (and (pk-can-sign? key) (pk-can-sign? pubkey))
