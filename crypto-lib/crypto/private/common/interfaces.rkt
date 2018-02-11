@@ -97,7 +97,9 @@
               (raise-range-error 'bytes-range "bytes" "ending " end buf start (bytes-length buf) 0))
             (values buf start end)))
 
-(define input/c (or/c bytes? string? input-port? bytes-range? (listof (recursive-contract input/c))))
+(define input/c
+  (flat-rec-contract input/c
+    (or/c bytes? string? input-port? bytes-range? (listof input/c))))
 
 ;; ============================================================
 ;; Implementation Factories
