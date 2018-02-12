@@ -41,9 +41,9 @@
   (with-handlers ([exn:fail? (lambda (e) #f)])
     (datum->pk-key keydata fmt factory)))
 
-(define (test-pk factory [pub-factories null])
+(define (test-pk factory [pub-factories null] #:keygen? [keygen? #f])
   (define factory-name (send factory get-name))
-  (when (null? pub-factories)
+  (when keygen?
     (for ([pk '(rsa dsa dh ec)] #:when (get-pk pk factory))
       (test-keygen factory pk (get-pk pk factory))))
   (for ([key-sexpr private-keys]
@@ -53,11 +53,11 @@
     (define pubkey (and key (pk-key->public-only-key key)))
     (unless key
       (when #t
-        (eprintf "-  ERROR: ~a cannot read ~s\n" (send factory get-name) desc)))
+        (hprintf "-  ERROR: ~a cannot read ~s\n" (send factory get-name) desc)))
     (when key
       (when #t
-        (eprintf "+  testing ~s (~a)\n" desc factory-name)
-        (eprintf " + self-test (~a => ~a)\n" factory-name factory-name))
+        (hprintf "+  testing ~s (~a)\n" desc factory-name)
+        (hprintf " + self-test (~a => ~a)\n" factory-name factory-name))
       (test-case (format "~a ~a ~a" factory-name desc fmt)
         (check-pred private-key? key)
         (check-pred public-only-key? pubkey)
@@ -72,11 +72,11 @@
             (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
         (unless pubkey*
           (when #t
-            (eprintf " - ERROR: ~a cannot read public key for ~s\n"
+            (hprintf " - ERROR: ~a cannot read public key for ~s\n"
                      (send pub-factory get-name) desc)))
         (when pubkey*
           (when #t
-            (eprintf " + cross-testing (~a => ~a)\n"
+            (hprintf " + cross-testing (~a => ~a)\n"
                      factory-name (send pub-factory get-name)))
           (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name) fmt desc)
             (test-pk-key key pubkey*)))))))
@@ -84,7 +84,7 @@
 (define (test-keygen factory spec impl)
   (test-case (format "~a ~a keygen" (send factory get-name) spec)
     (define factory-name (send factory get-name))
-    (eprintf "+  testing keygen for ~s (~a)\n" spec factory-name)
+    (hprintf "+  testing keygen for ~s (~a)\n" spec factory-name)
     (case spec
       [(rsa)
        (check-false (pk-has-parameters? impl))
@@ -145,11 +145,11 @@
   (for* ([pad (if rsa? '(pkcs1-v1.5 pss pss*) '(#f))])
     (define pad-ok? (and (pk-can-sign? key pad) (pk-can-sign? pubkey pad)))
     (unless pad-ok?
-      (eprintf "  -skipping sign w/ pad = ~v\n" pad))
+      (hprintf "  -skipping sign w/ pad = ~v\n" pad))
     (when pad-ok?
       (for ([di '(sha1 sha256)])
         (cond [(and (pk-can-sign? key pad di) (pk-can-sign? pubkey pad di))
-               (eprintf "  +testing sign w/ pad = ~v, digest = ~v\n" pad di)
+               (hprintf "  +testing sign w/ pad = ~v, digest = ~v\n" pad di)
                (define di* (get-digest di (get-factory key)))
                (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
                (define sig2 (digest/sign key di msg #:pad pad))
@@ -162,7 +162,7 @@
                (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
                (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
                (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")]
-              [else (eprintf "  -skipping sign w/ pad = ~v, digest = ~v\n" pad di)])))))
+              [else (hprintf "  -skipping sign w/ pad = ~v, digest = ~v\n" pad di)])))))
 
 (define (encrypt-pad-ok? key pad)
   (case pad
@@ -173,11 +173,11 @@
   (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
   (for ([pad (if rsa? '(pkcs1-v1.5 oaep) '(#f))])
     (cond [(and (pk-can-encrypt? key pad) (pk-can-encrypt? pubkey pad))
-           (eprintf "  +testing encrypt w/ pad = ~v\n" pad)
+           (hprintf "  +testing encrypt w/ pad = ~v\n" pad)
            (define skey (semirandom-bytes 16))
            (define wkey (pk-encrypt pubkey skey #:pad pad))
            (check-equal? (pk-decrypt key wkey #:pad pad) skey "pk-decrypt")]
-          [else (eprintf "  -skipping encrypt w/ pad = ~v\n" pad)])))
+          [else (hprintf "  -skipping encrypt w/ pad = ~v\n" pad)])))
 
 (define (test-pk-key-agree key1 pubkey1)
   (define params (pk-key->parameters key1))

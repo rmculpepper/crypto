@@ -1,4 +1,4 @@
-;; Copyright 2012-2014 Ryan Culpepper
+;; Copyright 2012-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -14,9 +14,7 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(provide semirandom-bytes
-         semirandom-bytes/no-nul
-         semirandom-bytes/alpha)
+(provide (all-defined-out))
 
 ;; let's not exhaust our entropy pool on testing
 (define (semirandom-bytes len)
@@ -36,3 +34,9 @@
     (for ([i (in-range len)])
       (bytes-set! bs i (+ 65 (random 26))))
     bs))
+
+;; Used to print testing headers
+(define current-header-port (make-parameter (current-output-port)))
+(define (hprintf fmt . args)
+  (apply fprintf (current-header-port) fmt args)
+  (flush-output (current-header-port)))
