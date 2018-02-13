@@ -18,7 +18,7 @@
          ffi/unsafe/alloc
          (only-in '#%foreign ffi-obj)
          ffi/unsafe/define
-         "../gmp/ffi.rkt")
+         gmp (rename-in gmp/unsafe [_mpz _mpz_t]))
 (provide (protect-out (all-defined-out)))
 
 (define libnettle (ffi-lib "libnettle" '("6" #f) #:fail (lambda () #f)))

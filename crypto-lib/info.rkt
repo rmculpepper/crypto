@@ -4,7 +4,7 @@
 
 (define version "1.0")
 (define collection "crypto")
-(define deps '("base" "asn1-lib" "binaryio-lib"))
+(define deps '("base" "asn1-lib" "binaryio-lib" ["gmp-lib" #:version "1.1"]))
 (define pkg-authors '(ryanc))
 
 ;; collection info

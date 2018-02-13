@@ -24,17 +24,17 @@
          "../common/catalog.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
-         "../gmp/ffi.rkt"
+         gmp gmp/unsafe
          "ffi.rkt")
 (provide (all-defined-out))
 
 (define DSA-Sig-Val (SEQUENCE [r INTEGER] [s INTEGER]))
 
-;; TODO: avoid trip through racket bignums, if feasible
-(define (integer->mpz n)
-  (bin->mpz (unsigned->base256 n)))
-(define (mpz->integer mpz)
-  (base256->unsigned (mpz->bin mpz)))
+(define (new-mpz) (mpz))
+(define (integer->mpz n) (mpz n))
+(define (mpz->integer z) (mpz->number z))
+(define (mpz->bin z) (mpz->bytes z #f #f #t))
+(define (bin->mpz buf) (bytes->mpz buf #f #t))
 
 ;; ============================================================
 
@@ -47,8 +47,8 @@
 
     (define/override (-make-pub-rsa n e)
       (define pub (new-rsa_public_key))
-      (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
-      (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
+      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
+      (mpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
       (unless (nettle_rsa_public_key_prepare pub) (crypto-error "bad public key"))
       (define impl (send factory get-pk 'rsa))
       (and impl (new nettle-rsa-key% (impl impl) (pub pub) (priv #f))))
@@ -56,14 +56,14 @@
     (define/override (-make-priv-rsa n e d p q dp dq qInv)
       (define pub (new-rsa_public_key))
       (define priv (new-rsa_private_key))
-      (__gmpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
-      (__gmpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
-      (__gmpz_set (rsa_private_key_struct-d priv) (integer->mpz d))
-      (__gmpz_set (rsa_private_key_struct-p priv) (integer->mpz p))
-      (__gmpz_set (rsa_private_key_struct-q priv) (integer->mpz q))
-      (__gmpz_set (rsa_private_key_struct-a priv) (integer->mpz dp))
-      (__gmpz_set (rsa_private_key_struct-b priv) (integer->mpz dq))
-      (__gmpz_set (rsa_private_key_struct-c priv) (integer->mpz qInv))
+      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
+      (mpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
+      (mpz_set (rsa_private_key_struct-d priv) (integer->mpz d))
+      (mpz_set (rsa_private_key_struct-p priv) (integer->mpz p))
+      (mpz_set (rsa_private_key_struct-q priv) (integer->mpz q))
+      (mpz_set (rsa_private_key_struct-a priv) (integer->mpz dp))
+      (mpz_set (rsa_private_key_struct-b priv) (integer->mpz dq))
+      (mpz_set (rsa_private_key_struct-c priv) (integer->mpz qInv))
       (unless (nettle_rsa_public_key_prepare pub)
         (crypto-error "bad public key"))
       (unless (nettle_rsa_private_key_prepare priv)
@@ -86,10 +86,10 @@
         (cond [y (integer->mpz y)]
               [else ;; must recompute public key, y = g^x mod p
                (define yz (new-mpz))
-               (__gmpz_powm yz
-                            (dsa_params_struct-g params)
-                            priv
-                            (dsa_params_struct-p params))
+               (mpz_powm yz
+                         (dsa_params_struct-g params)
+                         priv
+                         (dsa_params_struct-p params))
                yz]))
       (define impl (send factory get-pk 'dsa))
       (and impl (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv))))
@@ -100,9 +100,9 @@
 
     (define/private (-params-dsa p q g)
       (define params (new-dsa_params))
-      (__gmpz_set (dsa_params_struct-p params) (integer->mpz p))
-      (__gmpz_set (dsa_params_struct-q params) (integer->mpz q))
-      (__gmpz_set (dsa_params_struct-g params) (integer->mpz g))
+      (mpz_set (dsa_params_struct-p params) (integer->mpz p))
+      (mpz_set (dsa_params_struct-q params) (integer->mpz q))
+      (mpz_set (dsa_params_struct-g params) (integer->mpz g))
       params)
 
     ;; ---- EC ----
@@ -177,7 +177,7 @@
             [e     (config-ref config 'e 65537)])
         (define pub (new-rsa_public_key))
         (define priv (new-rsa_private_key))
-        (__gmpz_set_si (rsa_public_key_struct-e pub) e)
+        (mpz_set_si (rsa_public_key_struct-e pub) e)
         (or (nettle_rsa_generate_keypair pub priv (get-random-ctx) nbits 0)
             (crypto-error "RSA key generation failed"))
         (new nettle-rsa-key% (impl this) (pub pub) (priv priv))))
@@ -306,8 +306,8 @@
     [(hash-table ['r (? exact-nonnegative-integer? r)]
                  ['s (? exact-nonnegative-integer? s)])
      (define sig (new-dsa_signature))
-     (__gmpz_set (dsa_signature_struct-r sig) (integer->mpz r))
-     (__gmpz_set (dsa_signature_struct-s sig) (integer->mpz s))
+     (mpz_set (dsa_signature_struct-r sig) (integer->mpz r))
+     (mpz_set (dsa_signature_struct-s sig) (integer->mpz s))
      sig]
     [_ (crypto-error "signature is not well-formed")]))
 
