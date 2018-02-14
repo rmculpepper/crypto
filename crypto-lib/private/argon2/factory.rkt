@@ -50,11 +50,12 @@
     (define/override (get-name) 'argon2)
 
     (define/override (get-kdf spec)
-      (case spec
-        [(argon2d)  (new argon2-kdf-impl% (factory this) (spec 'argon2d))]
-        [(argon2i)  (new argon2-kdf-impl% (factory this) (spec 'argon2i))]
-        [(argon2id) (new argon2-kdf-impl% (factory this) (spec 'argon2id))]
-        [else #f]))
+      (and argon2-ok?
+           (case spec
+             [(argon2d)  (new argon2-kdf-impl% (factory this) (spec 'argon2d))]
+             [(argon2i)  (new argon2-kdf-impl% (factory this) (spec 'argon2i))]
+             [(argon2id) (new argon2-kdf-impl% (factory this) (spec 'argon2id))]
+             [else #f])))
 
     (define/override (info key)
       (case key
