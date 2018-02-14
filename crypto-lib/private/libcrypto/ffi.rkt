@@ -28,6 +28,8 @@
 (define-racket scheme_make_utf8_string
   (_fun _pointer -> _racket))
 
+(define ((K v) . args) v)
+
 ;; ============================================================
 ;; Library initialization & error-catching wrappers
 
@@ -35,9 +37,9 @@
   #:default-make-fail make-not-available)
 
 (let ()
-  (define-crypto ERR_load_crypto_strings (_fun -> _void))
-  (define-crypto OpenSSL_add_all_ciphers (_fun -> _void))
-  (define-crypto OpenSSL_add_all_digests (_fun -> _void))
+  (define-crypto ERR_load_crypto_strings (_fun -> _void) #:fail (K void))
+  (define-crypto OpenSSL_add_all_ciphers (_fun -> _void) #:fail (K void))
+  (define-crypto OpenSSL_add_all_digests (_fun -> _void) #:fail (K void))
   (ERR_load_crypto_strings)
   (OpenSSL_add_all_ciphers)
   (OpenSSL_add_all_digests))
@@ -126,11 +128,10 @@
 (define SSLEAY_PLATFORM		4)
 (define SSLEAY_DIR		5)
 
-(define-crypto SSLeay_version
-  (_fun _int -> _string/utf-8))
-
-(define-crypto SSLeay
-  (_fun -> _long))
+(define-crypto SSLeay_version (_fun _int -> _string/utf-8) #:fail (K (K #f)))
+(define-crypto SSLeay (_fun -> _long) #:fail (K (K #f)))
+(define-crypto OpenSSL_version (_fun _int -> _string/utf-8) #:fail (K SSLeay_version))
+(define-crypto OpenSSL_version_num (_fun -> _long) #:fail (K SSLeay))
 
 (define (parse-version v)
   ;; MNNFFPPS
@@ -230,12 +231,16 @@
 (define-crypto EVP_MD_size (_fun _EVP_MD -> _int))
 (define-crypto EVP_MD_block_size (_fun _EVP_MD -> _int))
 
-(define-crypto EVP_MD_CTX_destroy
-  (_fun _EVP_MD_CTX -> _void)
-  #:wrap (deallocator))
+;; New API since 1.1
+(define-crypto EVP_MD_CTX_free (_fun _EVP_MD_CTX -> _void))
+(define-crypto EVP_MD_CTX_new  (_fun -> _EVP_MD_CTX/null))
 
-(define-crypto EVP_MD_CTX_create
-  (_fun -> _EVP_MD_CTX/null)
+;; Old API through 1.0.2
+(define-crypto EVP_MD_CTX_destroy (_fun _EVP_MD_CTX -> _void)
+  #:fail (K EVP_MD_CTX_free)
+  #:wrap (deallocator))
+(define-crypto EVP_MD_CTX_create (_fun -> _EVP_MD_CTX/null)
+  #:fail (K EVP_MD_CTX_new)
   #:wrap (compose (allocator EVP_MD_CTX_destroy) (err-wrap/pointer 'EVP_MD_CTX_create)))
 
 (define-crypto EVP_DigestInit_ex
@@ -272,33 +277,35 @@
         (d : _pointer)
         (n : _int)
         (md : _pointer)
-        (r : (_ptr o _uint))
-        -> _void
-        -> r))
+        (len : (_ptr o _uint))
+        -> (r : _pointer)
+        -> (and r len))
+  #:wrap (err-wrap 'HMAC values))
 
-;; ugh - no HMAC_CTX* maker in libcrypto
-(define HMAC_CTX_free
-  ((deallocator)
-   (lambda (p)
-     (HMAC_CTX_cleanup p)
-     (free p))))
-(define HMAC_CTX_new
-  ((allocator HMAC_CTX_free)
-   ((err-wrap/pointer 'HMAC_CTX_new)
-    (lambda ()
-      (let ([hmac (malloc 'raw 300)]) ;; sizeof(HMAC_CTX) = 288 on linux-x86_64
-        (cpointer-push-tag! hmac HMAC_CTX-tag)
-        (HMAC_CTX_init hmac)
-        hmac)))))
+;; Old API, through 1.0.2
+;;   malloc -> HMAC_CTX_init -> ...use... -> HMAC_CTX_cleanup -> free
+(define-crypto HMAC_CTX_init  (_fun _HMAC_CTX -> _void))
+(define-crypto HMAC_CTX_cleanup (_fun _HMAC_CTX -> _void))
+(define (old-HMAC_CTX_free p)
+  (begin (HMAC_CTX_cleanup p) (free p)))
+(define (old-HMAC_CTX_new)
+  (let ([hmac (malloc 'raw 300)]) ;; sizeof(HMAC_CTX) = 288 on linux-x86_64
+    (cpointer-push-tag! hmac HMAC_CTX-tag)
+    (HMAC_CTX_init hmac)
+    hmac))
 
-(define-crypto HMAC_CTX_init
-  (_fun _HMAC_CTX -> _void))
+;; New API, since 1.1
+;;   HMAC_CTX_new -> ...use... -> HMAC_CTX_free
+(define-crypto HMAC_CTX_free (_fun _HMAC_CTX -> _void)
+  #:fail (K old-HMAC_CTX_free)
+  #:wrap (deallocator))
+(define-crypto HMAC_CTX_new (_fun -> _HMAC_CTX/null)
+  #:fail (K old-HMAC_CTX_new)
+  #:wrap (compose (allocator HMAC_CTX_free) (err-wrap/pointer 'EVP_CTX_new)))
+(define-crypto HMAC_CTX_reset (_fun _HMAC_CTX -> _int)
+  #:wrap (err-wrap 'HMAC_CTX_reset))
 
-(define-crypto HMAC_CTX_cleanup
-  (_fun _HMAC_CTX -> _void))
-
-(define-crypto HMAC_CTX_copy
-  (_fun _HMAC_CTX _HMAC_CTX -> _int)
+(define-crypto HMAC_CTX_copy (_fun _HMAC_CTX _HMAC_CTX -> _int)
   #:wrap (err-wrap 'HMAC_CTX_copy))
 
 (define-crypto HMAC_Init_ex

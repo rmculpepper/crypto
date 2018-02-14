@@ -126,7 +126,7 @@
 
     (define/override (info key)
       (case key
-        [(version) (SSLeay_version SSLEAY_VERSION)]
+        [(version) (OpenSSL_version SSLEAY_VERSION)]
         [(all-digests)
          (for/list ([di (in-hash-keys libcrypto-digests)] #:when (get-digest di)) di)]
         [(all-ciphers)
@@ -140,9 +140,9 @@
 
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " SSLeay() = #x~x\n" (SSLeay))
+      (printf " version: #x~x\n" (or (OpenSSL_version_num) 0))
       (printf " SSLEAY_VERSION: ~s\n" (info 'version))
-      (printf " SSLEAY_BUILT_ON: ~s\n" (SSLeay_version SSLEAY_BUILT_ON))
+      (printf " SSLEAY_BUILT_ON: ~s\n" (OpenSSL_version SSLEAY_BUILT_ON))
       (printf "Available digests:\n")
       (for ([di (in-list (info 'all-digests))])
         (printf " ~v\n" di))
