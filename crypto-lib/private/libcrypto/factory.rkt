@@ -140,9 +140,10 @@
 
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " version: #x~x\n" (or (OpenSSL_version_num) 0))
-      (printf " SSLEAY_VERSION: ~s\n" (info 'version))
-      (printf " SSLEAY_BUILT_ON: ~s\n" (OpenSSL_version SSLEAY_BUILT_ON))
+      (printf " version: ~s\n" (info 'version))
+      (when (OpenSSL_version_num)
+        (printf " version number: #x~x\n" (or (OpenSSL_version_num) 0))
+        (printf " built on: ~s\n" (OpenSSL_version SSLEAY_BUILT_ON)))
       (printf "Available digests:\n")
       (for ([di (in-list (info 'all-digests))])
         (printf " ~v\n" di))
