@@ -21,7 +21,7 @@
          gmp (rename-in gmp/unsafe [_mpz _mpz_t]))
 (provide (protect-out (all-defined-out)))
 
-(define libnettle (ffi-lib "libnettle" '("6" #f) #:fail (lambda () #f)))
+(define libnettle (ffi-lib "libnettle" '(#f "6") #:fail (lambda () #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
