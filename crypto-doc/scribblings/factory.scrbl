@@ -5,6 +5,7 @@
                      racket/contract
                      racket/random
                      crypto
+                     crypto/all
                      crypto/libcrypto
                      crypto/nettle
                      crypto/gcrypt))
@@ -67,6 +68,26 @@ included, if relevant:
 ]
 Different crypto providers support different levels of introspection,
 so the information is generally provided on a best-effort basis.
+}
+
+@;{----------------------------------------}
+
+@section[#:tag "all"]{All Factories}
+
+@defmodule[crypto/all]
+
+@defthing[all-factories (listof crypto-factory?)]{
+
+A list containing all of the factories available in the library.
+
+Warning: the order of the factories may change in future versions of
+this library. This module is intended as a convenience for interactive
+use, not for developing libraries or applications.
+}
+
+@defproc[(use-all-factories!) void?]{
+
+Equivalent to @racket[(crypto-factories all-factories)].
 }
 
 @;{----------------------------------------}
