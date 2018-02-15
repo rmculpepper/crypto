@@ -45,17 +45,17 @@
 
 (define argon2-factory%
   (class* factory-base% (factory<%>)
+    (inherit get-kdf)
     (super-new [ok? argon2-ok?])
 
     (define/override (get-name) 'argon2)
 
-    (define/override (get-kdf spec)
-      (and argon2-ok?
-           (case spec
-             [(argon2d)  (new argon2-kdf-impl% (factory this) (spec 'argon2d))]
-             [(argon2i)  (new argon2-kdf-impl% (factory this) (spec 'argon2i))]
-             [(argon2id) (new argon2-kdf-impl% (factory this) (spec 'argon2id))]
-             [else #f])))
+    (define/override (-get-kdf spec)
+      (case spec
+        [(argon2d)  (new argon2-kdf-impl% (factory this) (spec 'argon2d))]
+        [(argon2i)  (new argon2-kdf-impl% (factory this) (spec 'argon2i))]
+        [(argon2id) (new argon2-kdf-impl% (factory this) (spec 'argon2id))]
+        [else #f]))
 
     (define/override (info key)
       (case key

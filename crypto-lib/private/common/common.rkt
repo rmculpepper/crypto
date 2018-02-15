@@ -126,7 +126,6 @@
     (define/public (print-info) (void))
 
     ;; Only cache successful lookups to keep table size bounded.
-
     ;; digest-table : hash[DigestSpec => DigestImpl]
     (define digest-table (make-hash))
     ;; cipher-table : hash[CipherSpec => CipherImpl]
@@ -134,28 +133,34 @@
     ;; pk-table : hash[PKSpec => PKImpl]
     (define pk-table (make-hash))
 
+    ;; table : Hash[*Spec => *Impl]
+    ;; Note: assumes different *Spec types have disjoint values!
+    ;; Only cache successful lookups to keep table size bounded.
+    (field [table (make-hash)])
+
+    (define-syntax-rule (get/table spec spec->key get-impl)
+      ;; Note: spec should be variable reference
+      (cond [(not ok?) #f]
+            [(hash-ref table spec #f) => values]
+            [(spec->key spec)
+             => (lambda (key)
+                  (cond [(get-impl key)
+                         => (lambda (impl)
+                              (hash-set! table (send impl get-spec) impl)
+                              impl)]
+                        [else #f]))]
+            [else #f]))
+
     (define/public (get-digest spec)
-      (cond [(not ok?) #f]
-            [(hash-ref digest-table spec #f) => values]
-            [(digest-spec->info spec)
-             => (lambda (info)
-                  (cond [(-get-digest info)
-                         => (lambda (di) (hash-set! digest-table spec di) di)]
-                        [else #f]))]
-            [else #f]))
-
-    ;; -get-digest : digest-info -> (U #f digest-impl)
-    (define/public (-get-digest info) #f)
-
+      (get/table spec digest-spec->info -get-digest))
     (define/public (get-cipher spec)
-      (cond [(not ok?) #f]
-            [(hash-ref cipher-table spec #f) => values]
-            [(cipher-spec->info spec)
-             => (lambda (info)
-                  (cond [(-get-cipher0 info)
-                         => (lambda (ci) (hash-set! cipher-table spec ci) ci)]
-                        [else #f]))]
-            [else #f]))
+      (get/table spec cipher-spec->info -get-cipher0))
+    (define/public (get-pk spec)
+      (get/table spec values -get-pk))
+    (define/public (get-kdf spec)
+      (get/table spec values -get-kdf))
+    (define/public (get-pk-reader)
+      (get/table '*pk-reader* values (lambda (k) (-get-pk-reader))))
 
     (define/public (-get-cipher0 info)
       (define ci (-get-cipher info))
@@ -164,22 +169,20 @@
              (new multikeylen-cipher-impl% (info info) (factory this) (impls ci))]
             [else #f]))
 
+    ;; -get-digest : digest-info -> (U #f digest-impl)
+    (define/public (-get-digest info) #f)
+
     ;; -get-cipher : cipher-info -> (U #f cipher-impl (listof (cons Nat cipher-impl)))
     (define/public (-get-cipher info) #f)
 
-    (define/public (get-pk spec)
-      (cond [(not ok?) #f]
-            [(hash-ref pk-table spec #f)
-             => (lambda (impl/none)
-                  (and (pk-impl? impl/none) impl/none))]
-            [else
-             (let ([pki (get-pk* spec)])
-               (hash-set! pk-table spec (or pki 'none))
-               pki)]))
+    ;; -get-pk : pk-spec -> (U pk-impl #f)
+    (define/public (-get-pk spec) #f)
 
-    (define/public (get-pk-reader) #f)  ; -> pk-read-key<%>
-    (define/public (get-pk* spec) #f)
-    (define/public (get-kdf spec) #f)
+    ;; -get-pk-reader : -> (U pk-read-key #f)
+    (define/public (-get-pk-reader) #f)
+
+    ;; -get-kdf : -> (U kdf-impl #f)
+    (define/public (-get-kdf spec) #f)
     ))
 
 ;; ============================================================

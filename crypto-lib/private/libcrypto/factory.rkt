@@ -100,9 +100,7 @@
     (define/private (make-cipher info evp)
       (and evp (new libcrypto-cipher-impl% (info info) (factory this) (cipher evp))))
 
-    ;; ----
-
-    (define/override (get-pk* spec)
+    (define/override (-get-pk spec)
       (case spec
         [(rsa) (new libcrypto-rsa-impl% (factory this))]
         [(dsa) (new libcrypto-dsa-impl% (factory this))]
@@ -111,17 +109,15 @@
         [else #f]))
 
 
-    (define libcrypto-read-key (new libcrypto-read-key% (factory this)))
-    (define/override (get-pk-reader)
-      (and libcrypto-ok? libcrypto-read-key))
+    (define/override (-get-pk-reader)
+      (new libcrypto-read-key% (factory this)))
 
-    (define/override (get-kdf spec)
-      (and libcrypto-ok?
-           (match spec
-             [(list 'pbkdf2 'hmac di-spec)
-              (let ([di (get-digest di-spec)])
-                (and di (new libcrypto-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-             [_ #f])))
+    (define/override (-get-kdf spec)
+      (match spec
+        [(list 'pbkdf2 'hmac di-spec)
+         (let ([di (get-digest di-spec)])
+           (and di (new libcrypto-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+        [_ #f]))
 
     ;; ----
 

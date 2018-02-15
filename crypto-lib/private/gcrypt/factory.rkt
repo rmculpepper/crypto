@@ -183,26 +183,24 @@
            (or (search block-ciphers block-modes)
                (search stream-ciphers '()))))
 
-    (define gcrypt-read-key (new gcrypt-read-key% (factory this)))
-    (define/override (get-pk-reader)
-      (and gcrypt-ok? gcrypt-read-key))
+    (define/override (-get-pk-reader)
+      (new gcrypt-read-key% (factory this)))
 
-    (define/override (get-pk* spec)
+    (define/override (-get-pk spec)
       (case spec
         [(rsa) (new gcrypt-rsa-impl% (factory this))]
         [(dsa) (new gcrypt-dsa-impl% (factory this))]
         [(ec)  (new gcrypt-ec-impl%  (factory this))]
         [else #f]))
 
-    (define/override (get-kdf spec)
-      (and gcrypt-ok?
-           (match spec
-             [(list 'pbkdf2 'hmac di-spec)
-              (let ([di (get-digest di-spec)])
-                (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-             ['scrypt
-              (new gcrypt-scrypt-impl% (spec spec) (factory this))]
-             [_ #f])))
+    (define/override (-get-kdf spec)
+      (match spec
+        [(list 'pbkdf2 'hmac di-spec)
+         (let ([di (get-digest di-spec)])
+           (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+        ['scrypt
+         (new gcrypt-scrypt-impl% (spec spec) (factory this))]
+        [_ #f]))
 
     ;; ----
 
