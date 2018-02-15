@@ -45,7 +45,7 @@
 
 (define argon2-factory%
   (class* factory-base% (factory<%>)
-    (super-new)
+    (super-new [ok? argon2-ok?])
 
     (define/override (get-name) 'argon2)
 

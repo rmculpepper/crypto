@@ -118,6 +118,7 @@
 
 (define factory-base%
   (class* object% (factory<%>)
+    (init-field [ok? #t])
     (super-new)
 
     (define/public (get-name) #f)
@@ -134,7 +135,8 @@
     (define pk-table (make-hash))
 
     (define/public (get-digest spec)
-      (cond [(hash-ref digest-table spec #f) => values]
+      (cond [(not ok?) #f]
+            [(hash-ref digest-table spec #f) => values]
             [(digest-spec->info spec)
              => (lambda (info)
                   (cond [(-get-digest info)
@@ -146,7 +148,8 @@
     (define/public (-get-digest info) #f)
 
     (define/public (get-cipher spec)
-      (cond [(hash-ref cipher-table spec #f) => values]
+      (cond [(not ok?) #f]
+            [(hash-ref cipher-table spec #f) => values]
             [(cipher-spec->info spec)
              => (lambda (info)
                   (cond [(-get-cipher0 info)
@@ -165,7 +168,8 @@
     (define/public (-get-cipher info) #f)
 
     (define/public (get-pk spec)
-      (cond [(hash-ref pk-table spec #f)
+      (cond [(not ok?) #f]
+            [(hash-ref pk-table spec #f)
              => (lambda (impl/none)
                   (and (pk-impl? impl/none) impl/none))]
             [else
@@ -174,7 +178,7 @@
                pki)]))
 
     (define/public (get-pk-reader) #f)  ; -> pk-read-key<%>
-    (define/public (get-pk* spec) #f)   ;; -> (U #f DigestIpl
+    (define/public (get-pk* spec) #f)
     (define/public (get-kdf spec) #f)
     ))
 

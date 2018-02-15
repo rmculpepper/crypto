@@ -87,7 +87,7 @@
 (define nettle-factory%
   (class* factory-base% (factory<%>)
     (inherit get-digest get-cipher get-pk)
-    (super-new)
+    (super-new [ok? nettle-ok?])
 
     (define/override (get-name) 'nettle)
 
@@ -141,15 +141,16 @@
 
     (define nettle-read-key (new nettle-read-key% (factory this)))
     (define/override (get-pk-reader)
-      nettle-read-key)
+      (and nettle-ok? nettle-read-key))
 
     (define/override (get-kdf spec)
-      (match spec
-        [(list 'pbkdf2 'hmac di-spec)
-         (let ([di (get-digest di-spec)])
-           (and di (memq di-spec '(sha1 sha256))
-                (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-        [_ #f]))
+      (and nettle-ok?
+           (match spec
+             [(list 'pbkdf2 'hmac di-spec)
+              (let ([di (get-digest di-spec)])
+                (and di (memq di-spec '(sha1 sha256))
+                     (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+             [_ #f])))
 
     ;; ----
 

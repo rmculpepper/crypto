@@ -24,7 +24,7 @@
 (define sodium-factory%
   (class* factory-base% (factory<%>)
     (inherit get-cipher)
-    (super-new)
+    (super-new [ok? sodium-ok?])
 
     (define/override (get-name) 'sodium)
 

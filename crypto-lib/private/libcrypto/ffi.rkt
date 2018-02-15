@@ -21,7 +21,8 @@
          ffi/unsafe/atomic
          openssl/libcrypto
          "../common/error.rkt")
-(provide (protect-out (all-defined-out)))
+(provide (protect-out (all-defined-out))
+         libcrypto)
 
 (define-ffi-definer define-racket #f)
 
@@ -35,6 +36,14 @@
 
 (define-ffi-definer define-crypto libcrypto
   #:default-make-fail make-not-available)
+
+(define-crypto SSLeay (_fun -> _long) #:fail (K (K #f)))
+(define-crypto OpenSSL_version_num (_fun -> _long) #:fail (K SSLeay))
+
+(define libcrypto-ok?
+  (let ([v (or (OpenSSL_version_num) 0)])
+    ;; at least version 1.0.0 (MNNFFPPS)
+    (>= v #x10000000)))
 
 (let ()
   (define-crypto ERR_load_crypto_strings (_fun -> _void) #:fail (K void))
@@ -129,9 +138,7 @@
 (define SSLEAY_DIR		5)
 
 (define-crypto SSLeay_version (_fun _int -> _string/utf-8) #:fail (K (K #f)))
-(define-crypto SSLeay (_fun -> _long) #:fail (K (K #f)))
 (define-crypto OpenSSL_version (_fun _int -> _string/utf-8) #:fail (K SSLeay_version))
-(define-crypto OpenSSL_version_num (_fun -> _long) #:fail (K SSLeay))
 
 (define (parse-version v)
   ;; MNNFFPPS

@@ -63,8 +63,8 @@
 
 (define libcrypto-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest get-cipher)
-    (super-new)
+    (inherit get-digest get-cipher get-pk)
+    (super-new [ok? libcrypto-ok?])
 
     (define/override (get-name) 'libcrypto)
 
@@ -113,14 +113,15 @@
 
     (define libcrypto-read-key (new libcrypto-read-key% (factory this)))
     (define/override (get-pk-reader)
-      libcrypto-read-key)
+      (and libcrypto-ok? libcrypto-read-key))
 
     (define/override (get-kdf spec)
-      (match spec
-        [(list 'pbkdf2 'hmac di-spec)
-         (let ([di (get-digest di-spec)])
-           (and di (new libcrypto-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-        [_ #f]))
+      (and libcrypto-ok?
+           (match spec
+             [(list 'pbkdf2 'hmac di-spec)
+              (let ([di (get-digest di-spec)])
+                (and di (new libcrypto-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+             [_ #f])))
 
     ;; ----
 
@@ -135,7 +136,8 @@
                      [cspec (in-value (list (car cipher-entry) mode))]
                      #:when (get-cipher cspec))
            cspec)]
-        [(all-pks) '(rsa dsa dh ec)]
+        [(all-pks)
+         (for/list ([pki (in-list '(rsa dsa dh ec))] #:when (get-pk pki)) pki)]
         [else (super info key)]))
 
     (define/override (print-info)
@@ -144,6 +146,8 @@
       (when (OpenSSL_version_num)
         (printf " version number: #x~x\n" (or (OpenSSL_version_num) 0))
         (printf " built on: ~s\n" (OpenSSL_version SSLEAY_BUILT_ON)))
+      (when (and libcrypto (not libcrypto-ok?))
+        (printf " status: library version not supported!\n"))
       (printf "Available digests:\n")
       (for ([di (in-list (info 'all-digests))])
         (printf " ~v\n" di))
@@ -154,21 +158,23 @@
       (for ([pk (in-list (info 'all-pks))])
         (printf " ~v\n" pk))
       (printf "Available EC named curves:\n")
-      (let ([curve-names (make-hash)])
-        (for ([curve-info (enumerate-builtin-curves)])
-          (hash-set! curve-names (caddr curve-info) #t)
-          (printf " ~v  ;; ~s\n" (caddr curve-info) (cadr curve-info)))
-        (for ([alias-entry curve-aliases])
-          (for ([alias alias-entry])
-            (unless (hash-ref curve-names alias #f)
-              (define target
-                (for/or ([name alias-entry]
-                         #:when (hash-ref curve-names name #f))
-                  name))
-              (when target
-                (printf " ~v  ;; alias for ~v\n" alias target))))))
+      (when (get-pk 'ec)
+        (let ([curve-names (make-hash)])
+          (for ([curve-info (enumerate-builtin-curves)])
+            (hash-set! curve-names (caddr curve-info) #t)
+            (printf " ~v  ;; ~s\n" (caddr curve-info) (cadr curve-info)))
+          (for ([alias-entry curve-aliases])
+            (for ([alias alias-entry])
+              (unless (hash-ref curve-names alias #f)
+                (define target
+                  (for/or ([name alias-entry]
+                           #:when (hash-ref curve-names name #f))
+                    name))
+                (when target
+                  (printf " ~v  ;; alias for ~v\n" alias target)))))))
       (printf "Available KDFs:\n")
-      (printf " `(pbkdf hmac ,DIGEST)  ;; for all digests listed above\n")
+      (when (pair? (info 'all-digests))
+        (printf " `(pbkdf hmac ,DIGEST)  ;; for all digests listed above\n"))
       (void))
 
     (define/public (print-internal-info)

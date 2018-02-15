@@ -129,7 +129,7 @@
 (define gcrypt-factory%
   (class* factory-base% (factory<%>)
     (inherit get-digest get-cipher)
-    (super-new)
+    (super-new [ok? gcrypt-ok?])
 
     (define/override (get-name) 'gcrypt)
 
@@ -185,7 +185,7 @@
 
     (define gcrypt-read-key (new gcrypt-read-key% (factory this)))
     (define/override (get-pk-reader)
-      gcrypt-read-key)
+      (and gcrypt-ok? gcrypt-read-key))
 
     (define/override (get-pk* spec)
       (case spec
@@ -195,13 +195,14 @@
         [else #f]))
 
     (define/override (get-kdf spec)
-      (match spec
-        [(list 'pbkdf2 'hmac di-spec)
-         (let ([di (get-digest di-spec)])
-           (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-        ['scrypt
-         (new gcrypt-scrypt-impl% (spec spec) (factory this))]
-        [_ #f]))
+      (and gcrypt-ok?
+           (match spec
+             [(list 'pbkdf2 'hmac di-spec)
+              (let ([di (get-digest di-spec)])
+                (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+             ['scrypt
+              (new gcrypt-scrypt-impl% (spec spec) (factory this))]
+             [_ #f])))
 
     ;; ----
 
