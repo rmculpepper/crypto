@@ -20,7 +20,6 @@
          racket/port
          rackunit
          crypto
-         crypto/private/common/util
          "digest.rkt"
          "util.rkt")
 (provide (all-defined-out))
