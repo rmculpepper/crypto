@@ -21,7 +21,13 @@
          "argon2.rkt"
          "sodium.rkt")
 (provide all-factories
-         use-all-factories!)
+         use-all-factories!
+
+         libcrypto-factory
+         gcrypt-factory
+         nettle-factory
+         argon2-factory
+         sodium-factory)
 
 (define all-factories
   (list nettle-factory
