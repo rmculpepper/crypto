@@ -1,4 +1,4 @@
-;; Copyright 2012 Ryan Culpepper
+;; Copyright 2012-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -18,21 +18,12 @@
          "../common/interfaces.rkt"
          "../common/error.rkt"
          "../common/common.rkt")
-(provide rkt-hmac-impl%)
+(provide rkt-hmac-ctx%)
 
 ;; Reference: http://www.ietf.org/rfc/rfc2104.txt
 
-(define rkt-hmac-impl%
-  (class* impl-base% ()
-    (init-field digest)
-    (super-new)
-    (define/public (get-digest) digest)
-    (define/public (new-ctx key)
-      (new rkt-hmac-ctx% (impl digest) (key key)))
-    ))
-
 (define rkt-hmac-ctx%
-  (class* ctx-base% (digest-ctx<%>)
+  (class digest-ctx%
     (init-field key [ctx #f])
     (inherit-field impl)
     (super-new)
@@ -40,31 +31,29 @@
     (define block-size (send impl get-block-size))
     (define ipad (make-bytes block-size #x36))
     (define opad (make-bytes block-size #x5c))
-    (let* ([key (cond [(> (bytes-length key) block-size)
-                       ;; FIXME: supposed to hash the key
-                       (error 'hmac "key too long")]
-                      [else key])])
-      (define (xor-with-key! pad)
-        (for ([i (in-range (bytes-length key))])
-          (bytes-set! pad i (bitwise-xor (bytes-ref pad i) (bytes-ref key i)))))
-      (xor-with-key! ipad)
-      (xor-with-key! opad))
+    (when (> (bytes-length key) block-size)
+      (set! key (send impl digest key #f)))
+    (define (xor-with-key! pad)
+      (for ([i (in-range (bytes-length key))])
+        (bytes-set! pad i (bitwise-xor (bytes-ref pad i) (bytes-ref key i)))))
+    (xor-with-key! ipad)
+    (xor-with-key! opad)
 
     (unless ctx
-      (set! ctx (send impl new-ctx))
-      (send ctx update 'hmac ipad 0 block-size))
+      (set! ctx (send impl new-ctx #f))
+      (send ctx update ipad))
 
-    (define/public (update buf start end)
-      (send ctx update buf start end))
+    (define/override (-update buf start end)
+      (if (and (= start 0) (= end (bytes-length buf)))
+          (send ctx update buf)
+          (send ctx update (bytes-range buf start end))))
 
-    (define/public (final! buf start end)
-      (let* ([mdbuf (make-bytes block-size)]
-             [mdlen (send ctx final! mdbuf 0 block-size)]
-             [ctx2 (send impl new-ctx)])
-        (send ctx2 update opad 0 block-size)
-        (send ctx2 update mdbuf 0 mdlen)
-        (send ctx2 final! buf start end)))
+    (define/override (-final! buf)
+      (define mdbuf (send ctx final))
+      (define ctx2 (send impl new-ctx #f))
+      (send ctx2 update (list opad mdbuf))
+      (bytes-copy! buf 0 (send ctx2 final)))
 
-    (define/public (copy)
+    (define/override (-copy)
       (new rkt-hmac-ctx% (key key) (impl impl) (ctx (send ctx copy))))
     ))

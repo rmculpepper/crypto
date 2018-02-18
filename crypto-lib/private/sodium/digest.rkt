@@ -19,6 +19,7 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
+         "../rkt/hmac.rkt"
          "ffi.rkt")
 (provide sodium-blake2-digest-impl%)
 
@@ -39,7 +40,8 @@
       (crypto_generichash_blake2b_init ctx (or key #"") (get-size))
       (new sodium-blake2b-digest-ctx% (impl this) (ctx ctx)))
 
-    (define/override (new-hmac-ctx key) #f)
+    (define/override (new-hmac-ctx key)
+      (new rkt-hmac-ctx% (impl this) (key key)))
     ))
 
 (define sodium-blake2b-digest-ctx%
