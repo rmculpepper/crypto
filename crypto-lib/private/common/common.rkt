@@ -315,7 +315,7 @@
                           (send info get-chunk-size) chunk-size (about))))
       (when iv-size
         (unless (iv-size-ok? iv-size)
-          (internal-error "iv-size ~s not ok" iv-size (about))))
+          (internal-error "iv-size ~s not ok\n  cipher: ~a" iv-size (about))))
       (void))
 
     (define/public (new-ctx key iv enc? pad? auth-len0 attached-tag?)
