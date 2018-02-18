@@ -34,6 +34,69 @@
 (define-na sodium_library_minimal (_fun -> _int))
 
 ;; ============================================================
+;; Digests
+
+(define crypto_generichash_blake2b_BYTES_MIN     16)
+(define crypto_generichash_blake2b_BYTES_MAX     64)
+(define crypto_generichash_blake2b_BYTES         32)
+(define crypto_generichash_blake2b_KEYBYTES_MIN  16)
+(define crypto_generichash_blake2b_KEYBYTES_MAX  64)
+(define crypto_generichash_blake2b_KEYBYTES      32)
+(define crypto_generichash_blake2b_SALTBYTES     16)
+(define crypto_generichash_blake2b_PERSONALBYTES 16)
+
+(define-na crypto_generichash_blake2b_bytes_min (_fun -> _size))
+(define-na crypto_generichash_blake2b_bytes_max (_fun -> _size))
+(define-na crypto_generichash_blake2b_bytes (_fun -> _size))
+(define-na crypto_generichash_blake2b_keybytes_min (_fun -> _size))
+(define-na crypto_generichash_blake2b_keybytes_max (_fun -> _size))
+(define-na crypto_generichash_blake2b_keybytes (_fun -> _size))
+(define-na crypto_generichash_blake2b_saltbytes (_fun -> _size))
+(define-na crypto_generichash_blake2b_personalbytes (_fun -> _size))
+(define-na crypto_generichash_blake2b_statebytes (_fun -> _size))
+
+(define-na crypto_generichash_blake2b
+  (_fun (out : _bytes) (_size = (bytes-length out))
+        (in : _bytes)  (_ullong = (bytes-length in))
+        (key : _bytes) (_size = (bytes-length key))
+        -> _int))
+
+(define-na crypto_generichash_blake2b_salt_personal
+  (_fun (out : _bytes) (_size = (bytes-length out))
+        (in : _bytes)  (_ullong = (bytes-length in))
+        (key : _bytes) (_size = (bytes-length key))
+        (salt : _bytes)
+        (pers : _bytes)
+        -> _int))
+
+(define-na crypto_generichash_blake2b_init
+  (_fun (state : _pointer)
+        (key : _bytes) (_size = (bytes-length key))
+        (outlen : _size)
+        -> _int))
+
+(define-na crypto_generichash_blake2b_init_salt_personal
+  (_fun (state : _pointer)
+        (key : _bytes) (_size = (bytes-length key))
+        (outlen : _size)
+        (salt : _bytes)
+        (pers : _bytes)
+        -> _int))
+
+(define-na crypto_generichash_blake2b_update
+  (_fun (state in inlen) ::
+        (state : _pointer)
+        (in : _pointer)
+        (inlen : _ullong)
+        -> _int))
+
+(define-na crypto_generichash_blake2b_final
+  (_fun (state : _pointer)
+        (out : _bytes) (_size = (bytes-length out))
+        -> _int))
+
+
+;; ============================================================
 ;; AEAD Ciphers
 
 (define _aead_encrypt_detached_func

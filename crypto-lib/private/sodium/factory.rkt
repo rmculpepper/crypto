@@ -18,8 +18,11 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "ffi.rkt"
+         "digest.rkt"
          "cipher.rkt")
 (provide sodium-factory)
+
+(define blake2-digests '(blake2b-512 blake2b-384 blake2b-256 blake2b-160))
 
 (define sodium-factory%
   (class* factory-base% (factory<%>)
@@ -27,6 +30,11 @@
     (super-new [ok? sodium-ok?])
 
     (define/override (get-name) 'sodium)
+
+    (define/override (-get-digest info)
+      (cond [(memq (send info get-spec) blake2-digests)
+             (new sodium-blake2-digest-impl% (info info) (factory this))]
+            [else #f]))
 
     (define/override (-get-cipher info)
       (define spec (send info get-spec))
@@ -41,7 +49,7 @@
     (define/override (info key)
       (case key
         [(version) (and sodium-ok? (sodium_version_string))]
-        [(all-digests) null]
+        [(all-digests) blake2-digests]
         [(all-ciphers) (map aeadcipher-spec cipher-records)]
         [(all-pks) null]
         [(all-curves) null]
@@ -50,6 +58,9 @@
     (define/override (print-info)
       (printf "Library info:\n")
       (printf " Version: ~v\n" (info 'version))
+      (printf "Available digests:\n")
+      (for ([di (in-list (info 'all-digests))])
+        (printf " ~v\n" di))
       (printf "Available ciphers:\n")
       (for ([ci (in-list (info 'all-ciphers))])
         (printf " ~v\n" ci))
