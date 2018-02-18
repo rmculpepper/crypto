@@ -250,6 +250,17 @@
   #:fail (K EVP_MD_CTX_new)
   #:wrap (compose (allocator EVP_MD_CTX_destroy) (err-wrap/pointer 'EVP_MD_CTX_create)))
 
+(define-crypto EVP_Digest
+  (_fun (inbuf inlen outbuf md) ::
+        (inbuf : _pointer)
+        (inlen : _size)
+        (outbuf : _bytes)
+        (outlen : (_ptr io _size) = (bytes-length outbuf))
+        (md : _EVP_MD)
+        (_pointer = #f)
+        -> _int)
+  #:wrap (err-wrap 'EVP_Digest))
+
 (define-crypto EVP_DigestInit_ex
   (_fun _EVP_MD_CTX
         _EVP_MD

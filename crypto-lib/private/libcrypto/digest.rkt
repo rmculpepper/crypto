@@ -30,6 +30,8 @@
 
     (sanity-check #:size (EVP_MD_size md) #:block-size (EVP_MD_block_size md))
 
+    (define/override (key-size-ok? size) #f)
+
     (define/override (-new-ctx key)
       (define ctx (EVP_MD_CTX_create))
       (EVP_DigestInit_ex ctx md)
@@ -40,10 +42,10 @@
       (HMAC_Init_ex ctx key (bytes-length key) md)
       (new libcrypto-hmac-ctx% (impl this) (ctx ctx)))
 
-    ;; (define/public (-digest-buffer buf start end)
-    ;;   (define outbuf (make-bytes (get-size)))
-    ;;   (EVP_Digest (ptr-add buf start) (- end start) outbuf md)
-    ;;   outbuf)
+    (define/override (-digest-buffer buf start end)
+      (define outbuf (make-bytes (get-size)))
+      (EVP_Digest (ptr-add buf start) (- end start) outbuf md)
+      outbuf)
 
     (define/override (-hmac-buffer key buf start end)
       (define outbuf (make-bytes (get-size)))
