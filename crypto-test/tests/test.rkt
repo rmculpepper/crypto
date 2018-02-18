@@ -19,11 +19,7 @@
          rackunit
          rackunit/text-ui
          crypto
-         crypto/libcrypto
-         crypto/gcrypt
-         crypto/nettle
-         crypto/sodium
-         crypto/argon2
+         crypto/all
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
@@ -43,10 +39,6 @@
       (test-suite "pkey"    (test-pk factory #:keygen? (test-pk-keygen?)))
       )))
 
-(define all-factories
-  (list libcrypto-factory gcrypt-factory nettle-factory
-        sodium-factory argon2-factory))
-
 (define (go)
   (define the-factories (filter (factory-filter) all-factories))
   (run-tests
@@ -54,6 +46,7 @@
      (make-factory-tests libcrypto-factory)
      (make-factory-tests gcrypt-factory)
      (make-factory-tests nettle-factory)
+     (make-factory-tests b2-factory)
      (make-factory-tests sodium-factory)
      (make-factory-tests argon2-factory)
      (when (test-cross?)

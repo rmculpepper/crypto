@@ -19,6 +19,7 @@
          "gcrypt.rkt"
          "nettle.rkt"
          "argon2.rkt"
+         "b2.rkt"
          "sodium.rkt")
 (provide all-factories
          use-all-factories!
@@ -27,11 +28,13 @@
          gcrypt-factory
          nettle-factory
          argon2-factory
+         b2-factory
          sodium-factory)
 
 (define all-factories
   (list nettle-factory
         gcrypt-factory
+        b2-factory
         argon2-factory
         sodium-factory
         libcrypto-factory))
