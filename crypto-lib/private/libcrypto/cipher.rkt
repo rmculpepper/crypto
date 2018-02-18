@@ -30,12 +30,10 @@
     (inherit-field info)
     (inherit get-spec get-mode sanity-check get-auth-size uses-padding?)
     (super-new)
-    (define-values (block-size key-size iv-size)
-      (match (ptr-ref cipher (_list-struct _int _int _int _int))
-        [(list _ size keylen ivlen)
-         (values size keylen ivlen)]))
-    (sanity-check #:block-size block-size
-                  #:iv-size iv-size)
+
+    (define block-size (EVP_CIPHER_block_size cipher))
+    (define iv-size (EVP_CIPHER_iv_length cipher))
+    (sanity-check #:block-size block-size #:iv-size iv-size)
 
     (define/override (get-block-size) block-size)
     (define/override (get-iv-size) iv-size)

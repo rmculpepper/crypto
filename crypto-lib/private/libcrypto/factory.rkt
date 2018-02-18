@@ -26,6 +26,9 @@
          "ffi.rkt")
 (provide libcrypto-factory)
 
+;; Note: libcrypto ~1.1 has blake2s-256 and blake2b-512, limited (no
+;; support for keys) so don't add here.
+
 (define libcrypto-digests
   #hasheq(;; DigestSpec -> String
           ;; Maps to name for EVP_get_digestbyname
@@ -50,7 +53,9 @@
     [des (cbc cfb #|cfb1 cfb8|# ecb ofb) #f "des"]
     [des-ede2 (cbc cfb ofb) #f "des-ede"] ;; ECB mode???
     [des-ede3 (cbc cfb ofb) #f "des-ede3"] ;; ECB mode???
-    [rc4 (stream) #f "rc4"]))
+    [rc4 (stream) #f "rc4"]
+    ;; [chacha20 (stream) #f "chacha20"] ;; libcrypto reports wrong IV length
+    [chacha20-poly1305 (stream) #f "chacha20-poly1305"]))
 
 #|
 ;; As of openssl-0.9.8 pkeys can only be used with certain types of digests.

@@ -443,6 +443,10 @@
 (define         EVP_CTRL_CCM_SET_L              #x14)
 (define         EVP_CTRL_CCM_SET_MSGLEN         #x15)
 
+(define-crypto EVP_CIPHER_block_size (_fun _EVP_CIPHER -> _int))
+(define-crypto EVP_CIPHER_key_length (_fun _EVP_CIPHER -> _int))
+(define-crypto EVP_CIPHER_iv_length  (_fun _EVP_CIPHER -> _int))
+
 ;; ============================================================
 ;; Diffie-Hellman
 
