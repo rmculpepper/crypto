@@ -31,8 +31,9 @@
 
     (sanity-check #:size (gcry_md_get_algo_dlen md) #:block-size blocksize)
 
-    (define/override (new-ctx)
+    (define/override (-new-ctx key)
       (let ([ctx (gcry_md_open md 0)])
+        (when key (gcry_md_setkey ctx key (bytes-length key)))
         (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 
     (define/override (new-hmac-ctx key)

@@ -30,7 +30,7 @@
 
     (sanity-check #:size (EVP_MD_size md) #:block-size (EVP_MD_block_size md))
 
-    (define/override (new-ctx)
+    (define/override (-new-ctx key)
       (define ctx (EVP_MD_CTX_create))
       (EVP_DigestInit_ex ctx md)
       (new libcrypto-digest-ctx% (impl this) (ctx ctx)))
@@ -65,7 +65,7 @@
       (EVP_DigestInit_ex ctx (get-field md impl)))
 
     (define/override (-copy)
-      (let ([other (send impl new-ctx)])
+      (let ([other (send impl new-ctx #f)])
         (EVP_MD_CTX_copy_ex (get-field ctx other) ctx)
         other))
     ))

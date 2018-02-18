@@ -198,6 +198,7 @@
     (define/override (about) (format "~a digest" (super about)))
     (define/public (get-size) (send info get-size))
     (define/public (get-block-size) (send info get-block-size))
+    (define/public (key-size-ok? keysize) (send info key-size-ok? keysize))
 
     (define/public (sanity-check #:size [size #f] #:block-size [block-size #f])
       ;; Use info::get-{block-,}size directly so that subclasses can
@@ -211,15 +212,27 @@
           (internal-error "block size: expected ~s but got ~s\n  digest: ~a"
                           (send info get-block-size) block-size (about)))))
 
-    (abstract new-ctx)        ;; -> digest-ctx<%>
+    (define/public (new-ctx key)
+      (when key (check-key-size (bytes-length key)))
+      (-new-ctx key))
+
+    (define/public (check-key-size keysize)
+      (unless (key-size-ok? keysize)
+        (crypto-error "bad key size\n  key: ~s bytes\n  digest: ~a"
+                      keysize (about))))
+
+    (abstract -new-ctx)       ;; Bytes/#f -> digest-ctx<%>
     (abstract new-hmac-ctx)   ;; Bytes -> digest-ctx<%>
 
-    (define/public (digest src)
-      (define (fallback) (send (new-ctx) digest src))
-      (match src
-        [(? bytes?) (or (-digest-buffer src 0 (bytes-length src)) (fallback))]
-        [(bytes-range buf start end) (or (-digest-buffer buf start end) (fallback))]
-        [_ (fallback)]))
+    (define/public (digest src key)
+      (define (fallback) (send (new-ctx key) digest src))
+      (when key (check-key-size (bytes-length key)))
+      (cond [key (fallback)]
+            [else
+             (match src
+               [(? bytes?) (or (-digest-buffer src 0 (bytes-length src)) (fallback))]
+               [(bytes-range buf start end) (or (-digest-buffer buf start end) (fallback))]
+               [_ (fallback)])]))
 
     (define/public (hmac key src)
       (define (fallback) (send (new-hmac-ctx key) digest src))

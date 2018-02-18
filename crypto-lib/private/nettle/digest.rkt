@@ -38,7 +38,7 @@
 
     (sanity-check #:size (get-size) #:block-size (get-block-size))
 
-    (define/override (new-ctx)
+    (define/override (-new-ctx key)
       (let ([ctx (make-ctx (nettle_hash-context_size nh))])
         ((nettle_hash-init nh) ctx)
         (new nettle-digest-ctx% (impl this) (nh nh) (ctx ctx))))

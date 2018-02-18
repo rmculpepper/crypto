@@ -102,12 +102,19 @@ The random bytes are generated with @racket[crypto-random-bytes].
 @section{High-level Digest Functions}
 
 @defproc[(digest [di (or/c digest-spec? digest-impl?)]
-                 [input input/c])
+                 [input input/c]
+                 [#:key key (or/c bytes? #f) #f])
          bytes?]{
 
 Computes the digest of @racket[input] using the digest function
 represented by @racket[di]. See @racket[input/c] for accepted values
 and their conversion rules to bytes.
+
+If @racket[di] supports keys (eg, the BLAKE2 family of digests), then
+@racket[key] is used as the digest key if it is a byte string; if
+@racket[key] is @racket[#f], the digest is used in unkeyed mode. If
+@racket[di] does not support keys (this is true for most digests),
+then @racket[key] must be @racket[#f] or else an error is raised.
 
 @examples[#:eval the-eval
 (digest 'sha1 "Hello world!")
@@ -128,7 +135,8 @@ key length @cite{HMAC}.
 
 @section{Low-level Digest Functions}
 
-@defproc[(make-digest-ctx [di (or/c digest-spec? digest-impl?)])
+@defproc[(make-digest-ctx [di (or/c digest-spec? digest-impl?)]
+                          [#:key key (or/c bytes? #f) #f])
          digest-ctx?]{
 
 Creates a digest context for the digest function represented by

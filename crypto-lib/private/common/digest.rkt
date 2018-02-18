@@ -29,12 +29,12 @@
   [digest-block-size
    (-> (or/c digest-spec? digest-impl? digest-ctx?) exact-nonnegative-integer?)]
   [digest
-   (-> digest/c input/c bytes?)]
+   (->* [digest/c input/c] [#:key (or/c bytes? #f)] bytes?)]
   [hmac
    (-> digest/c bytes? input/c bytes?)]
 
   [make-digest-ctx
-   (-> digest/c digest-ctx?)]
+   (->* [digest/c] [#:key (or/c bytes? #f)] digest-ctx?)]
   [digest-update
    (-> digest-ctx? input/c void?)]
   [digest-final
@@ -64,9 +64,9 @@
 
 ;; ----
 
-(define (make-digest-ctx di)
+(define (make-digest-ctx di #:key [key #f])
   (with-crypto-entry 'make-digest-ctx
-    (send (-get-impl di) new-ctx)))
+    (send (-get-impl di) new-ctx key)))
 
 (define (digest-update dg src)
   (with-crypto-entry 'digest-update
@@ -86,10 +86,10 @@
 
 ;; ----
 
-(define (digest di inp)
+(define (digest di inp #:key [key #f])
   (with-crypto-entry 'digest
     (let ([di (-get-impl di)])
-      (send di digest inp))))
+      (send di digest inp key))))
 
 ;; ----
 

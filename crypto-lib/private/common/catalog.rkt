@@ -37,11 +37,13 @@
     (define/public (get-spec) spec)
     (define/public (get-size) size)
     (define/public (get-block-size) block-size)
-    (define/public (get-max-key-len) max-key-len)))
+    (define/public (get-max-key-size) max-key-len)
+    (define/public (key-size-ok? keysize) (<= 1 keysize (get-max-key-size)))
+    ))
 
 (define known-digests
   (let ()
-    (define (info spec size block-size [max-key-len #f])
+    (define (info spec size block-size [max-key-len 0])
       (new digest-info% (spec spec) (size size) (block-size block-size) (max-key-len max-key-len)))
     (define all
       (list (info 'md2         16  16)
