@@ -139,7 +139,7 @@ public-key crypto support.
 Factory for @hyperlink["https://download.libsodium.org/doc/"]{Sodium}
 (aka @as-index{libsodium}). This factory does @bold{not} provide the
 high-level Sodium APIs; it only provides access to some of the
-low-level primitives. The @tt{libsodium.so.23} library is required.
+low-level primitives. The @tt{libsodium.so.{23,18}} library is required.
 }
 
 @section[#:tag "b2-factory"]{B2 (Blake2)}
