@@ -57,13 +57,6 @@
     ;; [chacha20 (stream) #f "chacha20"] ;; libcrypto reports wrong IV length
     [chacha20-poly1305 (stream) #f "chacha20-poly1305"]))
 
-#|
-;; As of openssl-0.9.8 pkeys can only be used with certain types of digests.
-;; openssl-0.9.9 is supposed to remove the restriction for digest types
-(define pkey:rsa:digests '(ripemd160 sha1 sha224 sha256 sha384 sha512))
-(define pkey:dsa:digests '(dss1))
-|#
-
 ;; ============================================================
 
 (define libcrypto-factory%
