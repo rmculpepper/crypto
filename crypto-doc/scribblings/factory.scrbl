@@ -142,6 +142,17 @@ high-level Sodium APIs; it only provides access to some of the
 low-level primitives. The @tt{libsodium.so.23} library is required.
 }
 
+@section[#:tag "b2-factory"]{B2 (Blake2)}
+
+@defmodule[crypto/b2]
+
+@defthing[b2-factory crypto-factory?]{
+
+Factory for @hyperlink["https://github.com/BLAKE2/libb2"]{libb2}, a
+small library implementing the @hyperlink["https://blake2.net/"]{Blake2}
+digest and MAC algorithm. The @tt{libb2.so.1} foreign library is required.
+}
+
 @section[#:tag "argon2-factory"]{Argon2}
 
 @defmodule[crypto/argon2]
