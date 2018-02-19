@@ -27,12 +27,12 @@
 (provide (all-defined-out))
 
 (define (test-ciphers factory)
-  (for* ([name (in-hash-keys known-block-ciphers)]
-         [mode known-block-modes])
+  (for* ([name (sort (hash-keys known-block-ciphers) symbol<?)]
+         [mode (sort known-block-modes symbol<?)])
     (define spec (list name mode))
     (when (cipher-spec? spec)
       (test-cipher/spec factory spec)))
-  (for ([name (in-hash-keys known-stream-ciphers)])
+  (for ([name (sort (hash-keys known-stream-ciphers) symbol<?)])
     (define spec (list name 'stream))
     (test-cipher/spec factory spec)))
 
@@ -162,12 +162,12 @@
 ;; ----------------------------------------
 
 (define (test-ciphers-agree factories)
-  (for* ([name (in-hash-keys known-block-ciphers)]
-         [mode known-block-modes])
+  (for* ([name (sort (hash-keys known-block-ciphers) symbol<?)]
+         [mode (sort known-block-modes symbol<?)])
     (define spec (list name mode))
     (when (cipher-spec? spec)
       (test-cipher-agreement spec factories)))
-  (for ([name (in-hash-keys known-stream-ciphers)])
+  (for ([name (sort (hash-keys known-stream-ciphers) symbol<?)])
     (define spec (list name 'stream))
     (test-cipher-agreement spec factories)))
 

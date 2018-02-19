@@ -28,14 +28,14 @@
          digest-inputs)
 
 (define (test-digests factory)
-  (for ([name (hash-keys known-digests)])
+  (for ([name (sort (hash-keys known-digests) symbol<?)])
     (let ([di (send factory get-digest name)])
       (when di
         (test-case (format "~s" name)
           (when #t (hprintf "+  testing ~v\n" name))
           (test-digest-meta di)
           (for ([in+out (dict-ref digest-test-vectors name null)])
-            (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out))))
+            (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out)) #f))
           (for ([in digest-inputs])
             (test-digest/solo di in)))))))
 
@@ -47,12 +47,34 @@
 (define (test-digest/solo di in)
   ;; All-at-once digest agrees with incremental
   (define md (digest di in))
+  (check-equal? (digest di (open-input-bytes in)) md)
   (let ([dctx (make-digest-ctx di)])
     (for ([inb (in-bytes in)])
       (digest-update dctx (bytes inb)))
     (cond [(digest-peek-final dctx)
            => (lambda (md*) (check-equal? md* md))])
     (check-equal? (digest-final dctx) md))
+  (let ()
+    (define r 57)
+    (define inlen (bytes-length in))
+    (define in* (bytes-append (make-bytes r 65) in (make-bytes r 66)))
+    (check-equal? (digest di (bytes-range in* r (+ r inlen))) md)
+    (let ([dctx (make-digest-ctx di)])
+      (digest-update dctx (bytes-range in* r (+ r inlen)))
+      (check-equal? (digest-final dctx) md))
+    (let ([dctx (make-digest-ctx di)])
+      (for ([i (in-range inlen)])
+        (digest-update dctx (bytes-range in* (+ r i) (+ r i 1))))
+      (check-equal? (digest-final dctx) md)))
+  ;; Check keyed digest, if supported
+  (for ([keylen '(16)]
+        #:when (send di key-size-ok? keylen))
+    (define key (semirandom-bytes keylen))
+    (define kmd (digest di in #:key key))
+    (check-equal? (digest di (open-input-bytes in) #:key key) kmd)
+    (let ([kctx (make-digest-ctx di #:key key)])
+      (digest-update kctx in)
+      (check-equal? (digest-final kctx) kmd)))
   ;; All-at-once HMAC agrees with incremental
   (for ([key digest-keys])
     (define h (hmac di key in))
@@ -66,7 +88,7 @@
 ;; ----
 
 (define (test-digests-agree factories)
-  (for ([name (hash-keys known-digests)])
+  (for ([name (sort (hash-keys known-digests) symbol<?)])
     (let ([impls
            (filter values
                    (for/list ([factory factories])
@@ -79,36 +101,29 @@
       (when (> (length impls) 1)
         (when #t
           (hprintf "+  testing agreement ~e\n" name))
-        (for ([impl impls])
+        (define impl0 (car impls))
+        (for ([impl (cdr impls)])
           (for ([in digest-inputs])
-            (test-digest-impls-agree impl (car impls) in))
+            (test-digest-impls-agree impl impl0 in))
           (for* ([key digest-keys]
                  [in digest-inputs])
-            (test-hmac-impls-agree impl (car impls) key in)))))))
+            (test-hmac-impls-agree impl impl0 key in)))))))
 
 (define (test-digest-impls-agree di di-base in)
-  (test-digest/in+out di in (digest di-base in)))
+  (test-digest/in+out di in (digest di-base in) #f)
+  (for ([keylen '(16)])
+    (when (and (send di key-size-ok? keylen) (send di-base key-size-ok? keylen))
+      (define key (semirandom-bytes keylen))
+      (test-digest/in+out di in (digest di-base in #:key key) key))))
 
-(define (test-digest/in+out di in out)
+(define (test-digest/in+out di in out key)
   (test-case (format "~a: ~e" (send di get-spec) in)
-    (check-equal? (digest di in) out)
-    (check-equal? (digest di (open-input-bytes in)) out)
-    (let ([ctx (make-digest-ctx di)])
+    (check-equal? (digest di in #:key key) out)
+    (check-equal? (digest di (open-input-bytes in) #:key key) out)
+    (let ([ctx (make-digest-ctx di #:key key)])
       (digest-update ctx in)
       (check-equal? (digest-peek-final ctx) out)
-      (check-equal? (digest-final ctx) out))
-    (let* ([r 57]
-           [in* (bytes-append (make-bytes r 65) in (make-bytes r 66))])
-      (let ([ctx (make-digest-ctx di)])
-        (digest-update ctx (bytes-range in* r (+ r (bytes-length in))))
-        (check-equal? (digest-final ctx) out))
-      (let ([ctx (make-digest-ctx di)])
-        (for ([i (in-range r (+ r (bytes-length in)))])
-          (digest-update ctx (bytes-range in* i (add1 i)))
-          (let ([so-far (digest-peek-final ctx)])
-            (when so-far
-              (check-equal? so-far (digest di (bytes-range in* r (+ i 1)))))))
-        (check-equal? (digest-final ctx) out)))))
+      (check-equal? (digest-final ctx) out))))
 
 (define (test-hmac-impls-agree di di-base key in)
   (test-hmac/in+out di key in (hmac di-base key in)))
@@ -162,7 +177,7 @@
     #"The cat is in the box."
     ,(semirandom-bytes 10)
     ,(semirandom-bytes 100)
-    ,(semirandom-bytes 1000)
+    ,(semirandom-bytes 1024)
     ,(semirandom-bytes 10000)))
 
 (define digest-keys
