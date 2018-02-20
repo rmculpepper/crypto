@@ -82,33 +82,3 @@
     (let ([k (-get-impl 'scrypt)])
       (send k kdf `((N ,N) (p ,p) (r ,r) (key-size ,key-size))
             pass salt))))
-
-#|
-pbkdf2(digest-for-hmac, iterations, desired-output-size | salt, passphrase)
-
-scrypt(cost-param-N, parallel-param-p, block-size=8, desired-output-size | salt, passphrase)
-  gcrypt fixes block-size=8
-
-bcrypt(cost, ??? | salt, passphrase)
-   iterations = 2^cost
-   -> produces 24 bytes of key material
-      as password hash, usually concat BCRYT_VERSION_ID+cost+salt+key 
-
-
-(get-kdf kdf-spec params)
--> (salt passphrase -> key)
-
-params for '(pbkdf2 hmac <digest>)
-  - 'iterations
-  - 'key-size = (digest-size digest)
-
-params for 'bcrypt
-  - 'cost
-  - ???
-
-params for 'scrypt
-  - 'cost
-  - 'parallel-???
-  - 'block-size ??? (gcrypt allows only 8)
-  - 'key-size = ???
-|#

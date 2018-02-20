@@ -436,13 +436,6 @@
 
 ;; ============================================================
 
-;; Problems with gcrypt EC keys:
-;;  - infeasible to recover Q (public key) from private components,
-;;    (easy in principle, but gcrypt seems to lack necessary functions),
-;;    so can't read PrivateKeyInfo (unless pubkey included --- but seems rare?)
-;;  - keygen returns key tagged "ecdh" ??!! with curve params rather than named curve (v1.5)
-;;    so can't generate keys
-
 (define gcrypt-ec-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)

@@ -175,8 +175,8 @@
 
 (define pk-impl<%>
   (interface (impl<%>)
-    generate-key    ;; GenKeySpec -> pk-key<%>
-    generate-params ;; GenParamSpec -> pk-params<%>
+    generate-key    ;; Config -> pk-key<%>
+    generate-params ;; Config -> pk-params<%>
     can-key-agree?  ;; Symbol/#f -> boolean
     can-sign?       ;; Symbol/#f DigestSpec/#f -> boolean
     can-encrypt?    ;; -> boolean
@@ -185,14 +185,14 @@
 
 (define pk-read-key<%>
   (interface (impl<%>)
-    read-key        ;; Datum KeyFormat -> pk-key<%>/#f
-    read-params     ;; Datum ParamsFormat -> pk-params<%>/#f
+    read-key        ;; Datum Symbol -> pk-key<%>/#f
+    read-params     ;; Datum Symbol -> pk-params<%>/#f
     ))
 
 (define pk-params<%>
   (interface (ctx<%>)
-    generate-key    ;; GenKeySpec -> pk-key<%>
-    write-params    ;; ParamsFormat -> Datum
+    generate-key    ;; Config -> pk-key<%>
+    write-params    ;; Symbol -> Datum
     ))
 
 (define pk-key<%>
@@ -201,7 +201,7 @@
     get-public-key          ;; -> pk-key<%>
     get-params              ;; -> pk-params<%> or #f
 
-    write-key       ;; KeyFormat -> Datum
+    write-key       ;; Symbol -> Datum
     equal-to-key?   ;; pk-key<%> -> boolean
 
     sign            ;; bytes DigestSpec Padding -> bytes
@@ -213,23 +213,8 @@
     compute-secret  ;; bytes -> bytes
     ))
 
-;; KeyFormat
-;;  any symbol which is the head of a legal SerializedKey or SerializedParams
-;;  #f means *impl-specific*, may alias another defined format
-
-;; SerializedKey is one of
-;;  - (list 'libcrypto (U 'rsa 'dsa 'ec 'dh) (U 'public 'private) bytes)
-;;  - ...
-
-;; SerializedParams is one of
-;;  - (list 'libcrypto (U 'dsa 'ec 'dh) bytes)
-;;  - ...
-
 ;; Padding is a symbol (eg 'oaep) or #f
 ;;  #f means *impl-specific* default
-
-;; GenKeySpec is a (listof (list symbol any)) w/o duplicates,
-;; where only known keys are allowed (impl-specific).
 
 (define (pk-impl? x) (is-a? x pk-impl<%>))
 (define (pk-parameters? x) (is-a? x pk-params<%>))

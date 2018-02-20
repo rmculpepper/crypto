@@ -62,28 +62,21 @@
 
   [encrypt
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)
-         #| #:out (or/c output-port? #f) |#]
+        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)]
         bytes?)]
   [decrypt
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)
-         #| #:out (or/c output-port? #f) |#]
+        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)]
         bytes?)]
 
   [encrypt/auth
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)
-         #| #:out (or/c output-port? #f) |#]
+        [#:pad pad-mode/c #:aad input/c #:auth-size (or/c nat? #f)]
         (values bytes? (or/c bytes? #f)))]
   [decrypt/auth
    (->* [cipher/c key/c iv/c input/c]
-        [#:pad pad-mode/c #:aad input/c #:auth-tag (or/c bytes? #f)
-         #| #:out (or/c output-port? #f) |#]
+        [#:pad pad-mode/c #:aad input/c #:auth-tag (or/c bytes? #f)]
         bytes?)]
-
-  ;; encrypt-write
-  ;; decrypt-write
 
   [generate-cipher-key
    (->* [cipher/c] [#:size nat?] key/c)]

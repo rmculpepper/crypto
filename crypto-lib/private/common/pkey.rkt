@@ -82,13 +82,6 @@
    (->* [private-key? bytes?] [#:pad encrypt-pad/c]
         bytes?)]
 
-  ;; [encrypt-envelope
-  ;;  (-> pk-key? (or/c cipher-spec? cipher-impl?) (or/c bytes? string? input-port?)
-  ;;      (values key/c iv/c bytes?))]
-  ;; [decrypt-envelope
-  ;;  (-> private-key? (or/c cipher-spec? cipher-impl?) key/c iv/c (or/c bytes? input-port?)
-  ;;      bytes?)]
-
   [pk-derive-secret
    (-> private-key? (or/c pk-key? bytes?)
        bytes?)]
@@ -210,18 +203,6 @@
 (define (pk-decrypt pk buf #:pad [pad #f])
   (with-crypto-entry 'pk-decrypt
     (send pk decrypt buf pad)))
-
-;; ============================================================
-
-;; ;; sk = "sealed key"
-;; (define (encrypt-envelope pk ci buf)
-;;   (define k (generate-cipher-key ci))
-;;   (define iv (generate-cipher-iv ci))
-;;   (define sk (pk-encrypt pk k))
-;;   (values sk iv (encrypt ci k iv buf)))
-
-;; (define (decrypt-envelope pk ci sk iv buf)
-;;   (decrypt ci (pk-decrypt pk sk) iv buf))
 
 ;; ============================================================
 

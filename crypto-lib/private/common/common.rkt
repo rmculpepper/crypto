@@ -152,14 +152,6 @@
           (printf "Available EC named curves:\n")
           (for ([curve (in-list all-curves)]) (printf " ~v\n" curve)))))
 
-    ;; Only cache successful lookups to keep table size bounded.
-    ;; digest-table : hash[DigestSpec => DigestImpl]
-    (define digest-table (make-hash))
-    ;; cipher-table : hash[CipherSpec => CipherImpl]
-    (define cipher-table (make-hash))
-    ;; pk-table : hash[PKSpec => PKImpl]
-    (define pk-table (make-hash))
-
     ;; table : Hash[*Spec => *Impl]
     ;; Note: assumes different *Spec types have disjoint values!
     ;; Only cache successful lookups to keep table size bounded.
