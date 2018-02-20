@@ -365,7 +365,7 @@ encryption"]{authenticated encryption or decryption}, an exception is
 raised.
 }
 
-@defproc[(cipher-final [cctx cipher-ctx?] [auth-tag (or/c bytes? #f)])
+@defproc[(cipher-final [cctx cipher-ctx?] [auth-tag (or/c bytes? #f) #f])
          bytes?]{
 
 Processes any remaining input buffered by @racket[cctx], applies or
