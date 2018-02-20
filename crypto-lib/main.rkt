@@ -44,6 +44,7 @@
          (recontract-out
           crypto-factories
           get-factory
+          factory-version
           factory-print-info
           get-digest
           get-cipher

@@ -128,18 +128,12 @@
 
 (define gcrypt-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest get-cipher)
+    (inherit print-avail get-digest get-cipher)
     (super-new [ok? gcrypt-ok?])
 
     (define/override (get-name) 'gcrypt)
-
-    ;; get-version : -> (values Nat Nat)
-    (define/private (get-version)
-      ;; Note: returns (values 0 0) if can't parse version.
-      (match (regexp-match #rx"^([0-9]+)\\.([0-9]+)\\.([0-9]+)$" (or (gcry_check_version #f) ""))
-        [(list _ major minor _)
-         (values (string->number major) (string->number minor))]
-        [_ (values 0 0)]))
+    (define/override (get-version)
+      (version->list (gcry_check_version #f)))
 
     (define/override (-get-digest info)
       (define spec (send info get-spec))
@@ -206,49 +200,22 @@
 
     (define/override (info key)
       (case key
-        [(version) (gcry_check_version #f)]
-        [(all-digests)
-         (for/list ([di (map car digests)] #:when (get-digest di)) di)]
-        [(all-ciphers)
-         (for/list ([ciphers (list block-ciphers stream-ciphers)]
-                    [modes   (list block-modes   '((stream)))]
-                    #:when #t
-                    [cipher (map car ciphers)]
-                    #:when #t
-                    [mode (map car modes)]
-                    #:when #t
-                    [cspec (in-value (list cipher mode))]
-                    #:when (get-cipher cspec))
-           cspec)]
-        [(all-pks)
-         (for/list ([pk (in-list '(rsa dsa ec))] #:when gcrypt-ok?) pk)]
         [(all-curves) gcrypt-curves]
         [else (super info key)]))
 
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " version: ~s\n" (gcry_check_version #f))
-      (printf "Available digests:\n")
-      (for ([di (in-list (info 'all-digests))])
-        (printf " ~v\n" di))
-      (printf "Available ciphers:\n")
-      (for ([ci (in-list (info 'all-ciphers))])
-        (printf " ~v\n" ci))
-      (printf "Available PK:\n")
-      (for ([pk (in-list (info 'all-pks))])
-        (printf " ~v\n" pk))
-      (printf "Available EC named curves:\n")
-      (for ([curve (in-list gcrypt-curves)])
-        (printf " ~v\n" curve))
+      (printf " version: ~v\n" (get-version))
+      (printf " version string: ~s\n" (gcry_check_version #f))
+      (print-avail)
       (printf "Available KDFs:\n")
-      (let-values ([(major minor) (get-version)])
+      (let ([version (get-version)])
         ;; PBKDF2 available since 1.5
         ;; scrypt available since 1.6
-        (when (>= major 1)
-          (when (>= minor 5)
-            (printf " `(pbkdf2 hmac ,DIGEST)  ;; for all digests listed above\n"))
-          (when (>= minor 6)
-            (printf " 'scrypt\n"))))
+        (when (version>=? version '(1 5))
+          (printf " `(pbkdf2 hmac ,DIGEST)  ;; for all digests listed above\n"))
+        (when (version>=? version '(1 6))
+          (printf " 'scrypt\n")))
       (void))
     ))
 

@@ -20,6 +20,7 @@
          racket/contract/base
          racket/string
          racket/random
+         racket/string
          "catalog.rkt"
          "interfaces.rkt"
          "error.rkt"
@@ -51,6 +52,9 @@
          config:rsa-keygen
          config:dsa-paramgen
          config:ec-paramgen
+         version->list
+         version->string
+         version>=?
          crypto-random-bytes)
 
 ;; Convention: methods starting with `-` (eg, `-digest-buffer`) are
@@ -122,8 +126,31 @@
     (super-new)
 
     (define/public (get-name) #f)
-    (define/public (info key) #f)
-    (define/public (print-info) (void))
+    (define/public (get-version) (and ok? '()))
+
+    (define/public (info key)
+      (case key
+        [(version) (and ok? (get-version))]
+        [(all-digests) (filter (lambda (s) (get-digest s)) (list-known-digests))]
+        [(all-ciphers) (filter (lambda (x) (get-cipher x)) (list-known-ciphers))]
+        [(all-pks)     (filter (lambda (x) (get-pk x)) '(rsa dsa dh ec))]
+        [(all-curves)  #f]
+        [else #f]))
+
+    (define/public (print-info)
+      (void))
+
+    (define/public (print-avail)
+      (printf "Available digests:\n")
+      (for ([di (in-list (info 'all-digests))])  (printf " ~v\n" di))
+      (printf "Available ciphers:\n")
+      (for ([ci (in-list (info 'all-ciphers))])  (printf " ~v\n" ci))
+      (printf "Available PK:\n")
+      (for ([pk (in-list (info 'all-pks))])      (printf " ~v\n" pk))
+      (let ([all-curves (info 'all-curves)])
+        (when all-curves
+          (printf "Available EC named curves:\n")
+          (for ([curve (in-list all-curves)]) (printf " ~v\n" curve)))))
 
     ;; Only cache successful lookups to keep table size bounded.
     ;; digest-table : hash[DigestSpec => DigestImpl]
@@ -807,3 +834,27 @@
 
 (define config:ec-paramgen
   `((curve #t ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)")))
+
+;; ----------------------------------------
+
+;; version->list : String/#f -> (Listof Nat)/#f
+(define (version->list str)
+  (and str
+       (if (regexp-match? #rx"^[0-9]+(?:[.][0-9]+)*$" str)
+           (map string->number (string-split str #rx"[.]"))
+           (internal-error "invalid version string: ~e" str))))
+
+;; version->string : (Listof Nat)/#f -> String/#f
+(define (version->string v)
+  (and v (string-join (map number->string v) ".")))
+
+;; version>=? : (Listof Nat)/#f (Listof Nat) -> Boolean
+(define (version>=? v1 v2)
+  (match* [v1 v2]
+    [[#f _] #f]
+    [[(cons p1 v1*) (cons p2 v2*)]
+     (or (> p1 p2)
+         (and (= p1 p2) (version>=? v1* v2*)))]
+    [[(cons p1 v1*) '()] #t]
+    ;; FIXME: currently 1.0 < 1.0.0; maybe consider equal?
+    [['() (cons p2 v2*)] #f]))

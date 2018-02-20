@@ -90,6 +90,8 @@
     (super-new [ok? nettle-ok?])
 
     (define/override (get-name) 'nettle)
+    (define/override (get-version)
+      (and nettle-ok? (list (nettle_version_major) (nettle_version_minor))))
 
     (define/override (-get-digest info)
       (define spec (send info get-spec))
@@ -175,8 +177,8 @@
 
     (define/override (info key)
       (case key
-        [(version)
-         (and nettle-ok? (format "~s.~s" (nettle_version_major) (nettle_version_minor)))]
+        [(version) (get-version)]
+        [(version-string) (version->string (get-version))]
         [(all-digests)
          (for/list ([di (map car digests)] #:when (get-digest di)) di)]
         [(all-ciphers)
@@ -200,7 +202,7 @@
 
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " Version: ~v\n" (info 'version))
+      (printf " version: ~v\n" (get-version))
       (printf "Available digests:\n")
       (for ([di (in-list (info 'all-digests))])
         (printf " ~v\n" di))
@@ -209,7 +211,6 @@
         (printf " ~v\n" ci))
       (printf "Available PK:\n")
       (for ([pk (in-list (info 'all-pks))])
-        ;; FIXME: check impl avail???
         (printf " ~v\n" pk))
       (printf "Available EC named curves:\n")
       (for ([curve-name (in-list (info 'all-curves))])

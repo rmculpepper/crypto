@@ -61,10 +61,13 @@
 
 (define libcrypto-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest get-cipher get-pk)
+    (inherit print-avail get-digest get-cipher get-pk)
     (super-new [ok? libcrypto-ok?])
 
     (define/override (get-name) 'libcrypto)
+    (define/override (get-version)
+      (and (OpenSSL_version_num)
+           (call-with-values (lambda () (parse-version (OpenSSL_version_num))) list)))
 
     (define/override (-get-digest info)
       (let* ([spec (send info get-spec)]
@@ -121,51 +124,20 @@
 
     (define/override (info key)
       (case key
-        [(version) (OpenSSL_version SSLEAY_VERSION)]
-        [(all-digests)
-         (for/list ([di (in-hash-keys libcrypto-digests)] #:when (get-digest di)) di)]
-        [(all-ciphers)
-         (for*/list ([cipher-entry (in-list libcrypto-ciphers)]
-                     [mode (in-list (cadr cipher-entry))]
-                     [cspec (in-value (list (car cipher-entry) mode))]
-                     #:when (get-cipher cspec))
-           cspec)]
-        [(all-pks)
-         (for/list ([pki (in-list '(rsa dsa dh ec))] #:when (get-pk pki)) pki)]
+        [(all-curves)
+         (and (get-pk 'ec) (sort (hash-keys curve-table) string<?))]
         [else (super info key)]))
 
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " version: ~s\n" (info 'version))
+      (printf " version: ~v\n" (get-version))
+      (printf " version string: ~s\n" (OpenSSL_version SSLEAY_VERSION))
       (when (OpenSSL_version_num)
-        (printf " version number: #x~x\n" (or (OpenSSL_version_num) 0))
+        (printf " OpenSSL_version_num: #x~x\n" (OpenSSL_version_num))
         (printf " built on: ~s\n" (OpenSSL_version SSLEAY_BUILT_ON)))
       (when (and libcrypto (not libcrypto-ok?))
         (printf " status: library version not supported!\n"))
-      (printf "Available digests:\n")
-      (for ([di (in-list (info 'all-digests))])
-        (printf " ~v\n" di))
-      (printf "Available ciphers:\n")
-      (for ([ci (in-list (info 'all-ciphers))])
-        (printf " ~v\n" ci))
-      (printf "Available PK:\n")
-      (for ([pk (in-list (info 'all-pks))])
-        (printf " ~v\n" pk))
-      (printf "Available EC named curves:\n")
-      (when (get-pk 'ec)
-        (let ([curve-names (make-hash)])
-          (for ([curve-info (enumerate-builtin-curves)])
-            (hash-set! curve-names (caddr curve-info) #t)
-            (printf " ~v  ;; ~s\n" (caddr curve-info) (cadr curve-info)))
-          (for ([alias-entry curve-aliases])
-            (for ([alias alias-entry])
-              (unless (hash-ref curve-names alias #f)
-                (define target
-                  (for/or ([name alias-entry]
-                           #:when (hash-ref curve-names name #f))
-                    name))
-                (when target
-                  (printf " ~v  ;; alias for ~v\n" alias target)))))))
+      (print-avail)
       (printf "Available KDFs:\n")
       (when (pair? (info 'all-digests))
         (printf " `(pbkdf hmac ,DIGEST)  ;; for all digests listed above\n"))

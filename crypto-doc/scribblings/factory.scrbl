@@ -53,6 +53,16 @@ Gets the factory associated with a particular cryptographic algorithm
 implementation or context.
 }
 
+@defproc[(factory-version [factory crypto-factory?])
+         (or/c (listof exact-nonnegative-integer?) #f)]{
+
+Returns a list representing the library version associated with
+@racket[factory], or @racket[#f] if the library could not be loaded. A
+version list starts with the major version number; the total number of
+elements depends on the library's versioning conventions. If the
+library does not provide version information, the result is @racket['()].
+}
+
 @defproc[(factory-print-info [factory crypto-factory?]) void?]{
 
 Prints information about @racket[factory] to the current output

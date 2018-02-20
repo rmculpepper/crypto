@@ -557,30 +557,10 @@
 
 ;; ============================================================
 
-;; get-builtin-curve-nids : -> (listof Nat)
-(define builtin-curve-nids #f)
-(define (get-builtin-curve-nids)
-  (unless builtin-curve-nids
-    (set! builtin-curve-nids (map car (enumerate-builtin-curves))))
-  builtin-curve-nids)
-
-;; Enumerate and describe all builtin elliptic curves.
-(define (enumerate-builtin-curves)
-  (define curve-count (EC_get_builtin_curves #f 0))
-  (define ci0 (malloc curve-count _EC_builtin_curve 'atomic))
-  (set! ci0 (cast ci0 _pointer _EC_builtin_curve-pointer))
-  (EC_get_builtin_curves ci0 curve-count)
-  (for/list ([i curve-count])
-    (define ci (ptr-add ci0 i _EC_builtin_curve))
-    (define nid (EC_builtin_curve-nid ci))
-    (list nid
-          (EC_builtin_curve-comment ci)
-          (OBJ_nid2sn nid))))
-
 ;; find-curve-nid-by-sn : String -> Nat/#f
 (define (find-curve-nid-by-sn sn)
   (define nid (OBJ_sn2nid sn))
-  (and (member nid (get-builtin-curve-nids)) nid))
+  (and (member nid builtin-curve-nids) nid))
 
 ;; Note about curve names and aliases:
 ;;   http://tools.ietf.org/html/rfc4492#section-5.1.1
@@ -624,3 +604,27 @@
     ["secp256r1" "NIST P-256" "prime256v1"]
     ["secp384r1" "NIST P-384"]
     ["secp521r1" "NIST P-521"]))
+
+;; curve-table : Hash[String => (cons Nat String/#f)]
+(define curve-table (make-hash))
+(let ()
+  ;; Add builtin curves
+  (define curve-count (EC_get_builtin_curves #f 0))
+  (define ci0 (cast (malloc curve-count _EC_builtin_curve 'atomic)
+                    _pointer _EC_builtin_curve-pointer))
+  (EC_get_builtin_curves ci0 curve-count)
+  (for ([i curve-count])
+    (define ci (ptr-add ci0 i _EC_builtin_curve))
+    (define nid (EC_builtin_curve-nid ci))
+    (hash-set! curve-table (OBJ_nid2sn nid) (cons nid (EC_builtin_curve-comment ci))))
+  ;; Add aliases
+  (for ([aliases (in-list curve-aliases)])
+    (define target
+      (for/or ([alias (in-list aliases)])
+        (hash-ref curve-table alias #f)))
+    (for ([alias (in-list aliases)])
+      (unless (hash-ref curve-table alias #f)
+        (hash-set! curve-table alias target)))))
+
+;; builtin-curve-nids : (Listof Nat)
+(define builtin-curve-nids (map car (hash-values curve-table)))

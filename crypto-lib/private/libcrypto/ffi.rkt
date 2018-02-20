@@ -147,10 +147,10 @@
   (define F (bitwise-bit-field v 12 19))
   (define N (bitwise-bit-field v 20 27))
   (define M (bitwise-bit-field v 28 31))
-  (values M N F))
+  (values M N F P S))
 
 (define (openssl-version>=? a b c)
-  (define-values (va vb vc) (parse-version (SSLeay)))
+  (define-values (va vb vc vd ve) (parse-version (SSLeay)))
   (or (>= va a)
       (and (= va a)
            (or (>= vb b)

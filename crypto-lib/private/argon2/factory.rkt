@@ -49,6 +49,7 @@
     (super-new [ok? argon2-ok?])
 
     (define/override (get-name) 'argon2)
+    (define/override (get-version) (and argon2-ok? '()))
 
     (define/override (-get-kdf spec)
       (case spec
@@ -59,17 +60,12 @@
 
     (define/override (info key)
       (case key
-        [(version) (and argon2-ok? 'unknown)]
-        [(all-digests) null]
-        [(all-ciphers) null]
-        [(all-pks) null]
-        [(all-curves) null]
         [(all-kdfs) (filter (lambda (s) (get-kdf s)) '(argon2d argon2i argon2id))]
         [else (super info key)]))
 
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " Version: ~v\n" (info 'version))
+      (printf " version: ~v\n" (get-version))
       (printf "Available KDFs:\n")
       (for ([kdf (in-list (info 'all-kdfs))])
         (printf " ~v\n" kdf))

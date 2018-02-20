@@ -26,10 +26,11 @@
 
 (define b2-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-cipher)
+    (inherit print-avail get-cipher)
     (super-new [ok? b2-ok?])
 
     (define/override (get-name) 'b2)
+    (define/override (get-version) (and b2-ok? '()))
 
     (define/override (-get-digest info)
       (define spec (send info get-spec))
@@ -41,21 +42,10 @@
 
     ;; ----
 
-    (define/override (info key)
-      (case key
-        [(version) (and b2-ok? 'unknown)]
-        [(all-digests) (append blake2b-digests blake2s-digests)]
-        [(all-ciphers) null]
-        [(all-pks) null]
-        [(all-curves) null]
-        [else (super info key)]))
-
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " Version: ~v\n" (info 'version))
-      (printf "Available digests:\n")
-      (for ([di (in-list (info 'all-digests))])
-        (printf " ~v\n" di))
+      (printf " version: ~v\n" (get-version))
+      (print-avail)
       (void))
     ))
 

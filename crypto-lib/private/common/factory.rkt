@@ -28,6 +28,8 @@
              cipher-impl? cipher-ctx?
              pk-impl? pk-parameters? pk-key?)
        crypto-factory?)]
+  [factory-version
+   (-> crypto-factory? (or/c (listof exact-nonnegative-integer?) #f))]
   [factory-print-info
    (-> crypto-factory? void?)]
   [get-digest
@@ -73,3 +75,6 @@
 
 (define (factory-print-info factory)
   (send factory print-info) (void))
+
+(define (factory-version factory)
+  (send factory get-version))

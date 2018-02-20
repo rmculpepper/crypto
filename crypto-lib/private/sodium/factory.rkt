@@ -30,6 +30,8 @@
     (super-new [ok? sodium-ok?])
 
     (define/override (get-name) 'sodium)
+    (define/override (get-version)
+      (and sodium-ok? (version->list (sodium_version_string))))
 
     (define/override (-get-digest info)
       (cond [(memq (send info get-spec) blake2-digests)
@@ -48,16 +50,15 @@
 
     (define/override (info key)
       (case key
-        [(version) (and sodium-ok? (sodium_version_string))]
-        [(all-digests) blake2-digests]
-        [(all-ciphers) (map aeadcipher-spec cipher-records)]
-        [(all-pks) null]
-        [(all-curves) null]
+        [(version-string) (and sodium-ok? (sodium_version_string))]
         [else (super info key)]))
 
     (define/override (print-info)
       (printf "Library info:\n")
-      (printf " Version: ~v\n" (info 'version))
+      (printf " version: ~v\n" (get-version))
+      (printf " version string: ~v\n" (info 'version-string))
+      (printf " sodium_library_version_major: ~s\n" (sodium_library_version_major))
+      (printf " sodium_library_version_minor: ~s\n" (sodium_library_version_minor))
       (printf "Available digests:\n")
       (for ([di (in-list (info 'all-digests))])
         (printf " ~v\n" di))

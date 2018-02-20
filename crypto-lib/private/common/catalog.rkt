@@ -91,6 +91,9 @@
 (define (digest-spec-block-size ds)
   (send (digest-spec->info ds) get-block-size))
 
+(define (list-known-digests)
+  (sort (hash-keys known-digests) symbol<?))
+
 ;; ============================================================
 
 ;; SizeSet is one of
@@ -347,6 +350,15 @@
   (cond [(hash-ref cipher-spec-table spec #f) => values]
         [(get-info) => (lambda (ci) (hash-set! cipher-spec-table (send ci get-spec) ci) ci)]
         [else #f]))
+
+(define (list-known-ciphers)
+  (append (for*/list ([cipher (in-list (sort (hash-keys known-block-ciphers) symbol<?))]
+                      [mode (sort known-block-modes symbol<?)]
+                      [spec (in-value (list cipher mode))]
+                      #:when (cipher-spec? spec))
+            spec)
+          (for/list ([cipher (in-list (sort (hash-keys known-stream-ciphers) symbol<?))])
+            (list cipher 'stream))))
 
 ;; ============================================================
 ;; PK

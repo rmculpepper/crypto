@@ -104,21 +104,11 @@
 ;; ============================================================
 ;; Implementation Factories
 
-;; FIXME: add all-digests, all-ciphers, all-pks methods ???
-;; (mostly for testing?)
-
-;; FIXME: add more flexible description language for requests
-;; eg PBKDF2-HMAC-SHA1 is specialized by libcrypto, else generic
-
 (define factory<%>
   (interface ()
+    get-version ;; (Listof Nat)/#f
     info        ;; Symbol -> Any
     print-info  ;; -> Void
-    #|
-    all-digests        ;; -> (listof digest-impl<%>)
-    all-ciphers        ;; -> (listof cipher-impl<%>)
-    all-pks          ;; -> (listof pk-impl<%>)
-    |#
     get-name    ;; -> Symbol, for testing
     get-digest  ;; DigestSpec -> digest-impl<%>/#f
     get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
