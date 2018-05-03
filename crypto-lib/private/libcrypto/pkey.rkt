@@ -622,9 +622,10 @@
     (define target
       (for/or ([alias (in-list aliases)])
         (hash-ref curve-table alias #f)))
-    (for ([alias (in-list aliases)])
-      (unless (hash-ref curve-table alias #f)
-        (hash-set! curve-table alias target)))))
+    (when target
+      (for ([alias (in-list aliases)])
+        (unless (hash-ref curve-table alias #f)
+          (hash-set! curve-table alias target))))))
 
 ;; builtin-curve-nids : (Listof Nat)
 (define builtin-curve-nids (map car (hash-values curve-table)))
