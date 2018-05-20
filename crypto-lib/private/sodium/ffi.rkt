@@ -23,6 +23,9 @@
 (define-ffi-definer define-na libsodium
   #:default-make-fail make-not-available)
 
+(define-na sodium_init (_fun -> (r : _int) -> (>= r 0))
+  #:fail (lambda () (lambda () #f)))
+
 (define sodium-ok? (and libsodium #t))
 
 (define-na sodium_version_string (_fun -> _string/utf-8)
