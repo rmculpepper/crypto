@@ -35,8 +35,13 @@
       (and sodium-ok? (version->list (sodium_version_string))))
 
     (define/override (-get-digest info)
-      (cond [(and (memq (send info get-spec) blake2-digests) blake2-ok?)
+      (define spec (send info get-spec))
+      (cond [(and (memq spec blake2-digests) blake2-ok?)
              (new sodium-blake2-digest-impl% (info info) (factory this))]
+            [(eq? spec 'sha256)
+             (new sodium-sha256-digest-impl% (info info) (factory this))]
+            [(eq? spec 'sha512)
+             (new sodium-sha512-digest-impl% (info info) (factory this))]
             [else #f]))
 
     (define/override (-get-cipher info)

@@ -103,6 +103,78 @@
 
 (define blake2-ok? (and crypto_generichash_blake2b_final #t))
 
+;; ----------------------------------------
+;; SHA2-256
+
+(define crypto_hash_sha256_BYTES 32)
+
+(define-na crypto_hash_sha256_statebytes (_fun -> _size))
+(define-na crypto_hash_sha256_bytes      (_fun -> _size))
+
+(define-na crypto_hash_sha256
+  (_fun (out : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
+
+(define-na crypto_hash_sha256_init
+  (_fun (state : _pointer) -> _int))
+
+(define-na crypto_hash_sha256_update
+  (_fun (state : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
+
+(define-na crypto_hash_sha256_final
+  (_fun (state : _pointer) (out : _pointer) -> _int))
+
+(define crypto_auth_hmacsha256_BYTES    32)
+(define crypto_auth_hmacsha256_KEYBYTES 32)
+
+(define-na crypto_auth_hmacsha256_bytes      (_fun -> _size))
+(define-na crypto_auth_hmacsha256_keybytes   (_fun -> _size))
+(define-na crypto_auth_hmacsha256_statebytes (_fun -> _size))
+
+(define-na crypto_auth_hmacsha256_init
+  (_fun (state : _pointer) (key : _pointer) (keylen : _size) -> _int))
+
+(define-na crypto_auth_hmacsha256_update
+  (_fun (state : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
+
+(define-na crypto_auth_hmacsha256_final
+  (_fun (state : _pointer) (out : _pointer) -> _int))
+
+;; ----------------------------------------
+;; SHA2-512
+
+(define crypto_hash_sha512_BYTES 64)
+(define-na crypto_hash_sha512_statebytes (_fun -> _size))
+(define-na crypto_hash_sha512_bytes      (_fun -> _size))
+
+(define-na crypto_hash_sha512
+  (_fun (out : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
+
+(define-na crypto_hash_sha512_init
+  (_fun (state : _pointer) -> _int))
+
+(define-na crypto_hash_sha512_update
+  (_fun (state : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
+
+(define-na crypto_hash_sha512_final
+  (_fun (state : _pointer) (out : _pointer) -> _int))
+
+(define crypto_auth_hmacsha512_BYTES 64)
+(define crypto_auth_hmacsha512_KEYBYTES 32)
+
+(define-na crypto_auth_hmacsha512_bytes      (_fun -> _size))
+(define-na crypto_auth_hmacsha512_keybytes   (_fun -> _size))
+(define-na crypto_auth_hmacsha512_statebytes (_fun -> _size))
+
+(define-na crypto_auth_hmacsha512_init
+  (_fun (state : _pointer) (key : _pointer) (keylen : _size) -> _int))
+
+(define-na crypto_auth_hmacsha512_update
+  (_fun (state : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
+
+(define-na crypto_auth_hmacsha512_final
+  (_fun (state : _pointer) (out : _pointer) -> _int))
+
+
 ;; ============================================================
 ;; AEAD Ciphers
 
