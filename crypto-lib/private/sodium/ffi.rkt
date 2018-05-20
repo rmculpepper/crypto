@@ -44,6 +44,7 @@
 (define crypto_generichash_blake2b_KEYBYTES      32)
 (define crypto_generichash_blake2b_SALTBYTES     16)
 (define crypto_generichash_blake2b_PERSONALBYTES 16)
+(define crypto_generichash_blake2b_STATEBYTES   384)
 
 (define-na crypto_generichash_blake2b_bytes_min (_fun -> _size))
 (define-na crypto_generichash_blake2b_bytes_max (_fun -> _size))
@@ -53,7 +54,8 @@
 (define-na crypto_generichash_blake2b_keybytes (_fun -> _size))
 (define-na crypto_generichash_blake2b_saltbytes (_fun -> _size))
 (define-na crypto_generichash_blake2b_personalbytes (_fun -> _size))
-(define-na crypto_generichash_blake2b_statebytes (_fun -> _size))
+(define-na crypto_generichash_blake2b_statebytes (_fun -> _size)
+  #:fail (lambda () (lambda () crypto_generichash_blake2b_STATEBYTES)))
 
 (define-na crypto_generichash_blake2b
   (_fun (out : _bytes) (_size = (bytes-length out))
@@ -93,8 +95,10 @@
 (define-na crypto_generichash_blake2b_final
   (_fun (state : _pointer)
         (out : _bytes) (_size = (bytes-length out))
-        -> _int))
+        -> _int)
+  #:fail (lambda () #f))
 
+(define blake2-ok? (and crypto_generichash_blake2b_final #t))
 
 ;; ============================================================
 ;; AEAD Ciphers
