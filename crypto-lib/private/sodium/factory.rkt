@@ -19,7 +19,8 @@
          "../common/common.rkt"
          "ffi.rkt"
          "digest.rkt"
-         "cipher.rkt")
+         "cipher.rkt"
+         "kdf.rkt")
 (provide sodium-factory)
 
 (define blake2-digests '(blake2b-512 blake2b-384 blake2b-256 blake2b-160))
@@ -45,6 +46,13 @@
                     #:when (equal? (aeadcipher-spec rec) spec))
           rec))
       (and cipher (new sodium-cipher-impl% (info info) (factory this) (cipher cipher))))
+
+    (define/override (-get-kdf spec)
+      (case spec
+        [(argon2i)  (new sodium-argon2-impl% (factory this) (spec 'argon2i))]
+        [(argon2id) (new sodium-argon2-impl% (factory this) (spec 'argon2id))]
+        [(scrypt)   (new sodium-scrypt-impl% (factory this) (spec 'scrypt))]
+        [else #f]))
 
     ;; ----
 

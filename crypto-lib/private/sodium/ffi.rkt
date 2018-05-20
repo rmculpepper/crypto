@@ -275,3 +275,233 @@
                 aes256gcm-record)))
 
 ;; ============================================================
+;; Argon2
+
+(define crypto_pwhash_argon2id_ALG_ARGON2ID13 2)
+(define crypto_pwhash_argon2id_BYTES_MIN 16)
+;;(define crypto_pwhash_argon2id_BYTES_MAX ...)
+(define crypto_pwhash_argon2id_PASSWD_MIN 0)
+(define crypto_pwhash_argon2id_PASSWD_MAX 4294967295)
+(define crypto_pwhash_argon2id_SALTBYTES 16)
+(define crypto_pwhash_argon2id_STRBYTES 128)
+(define crypto_pwhash_argon2id_STRPREFIX "$argon2id$")
+(define crypto_pwhash_argon2id_OPSLIMIT_MIN 1)
+(define crypto_pwhash_argon2id_OPSLIMIT_MAX 4294967295)
+(define crypto_pwhash_argon2id_MEMLIMIT_MIN 8192)
+;;(define crypto_pwhash_argon2id_MEMLIMIT_MAX ...)
+
+(define crypto_pwhash_argon2id_OPSLIMIT_INTERACTIVE 2)
+(define crypto_pwhash_argon2id_MEMLIMIT_INTERACTIVE 67108864)
+(define crypto_pwhash_argon2id_OPSLIMIT_MODERATE 3)
+(define crypto_pwhash_argon2id_MEMLIMIT_MODERATE 268435456)
+(define crypto_pwhash_argon2id_OPSLIMIT_SENSITIVE 4)
+(define crypto_pwhash_argon2id_MEMLIMIT_SENSITIVE 1073741824)
+
+(define-na crypto_pwhash_argon2id_alg_argon2id13  (_fun -> _int))
+(define-na crypto_pwhash_argon2id_bytes_min       (_fun -> _size))
+(define-na crypto_pwhash_argon2id_bytes_max       (_fun -> _size))
+(define-na crypto_pwhash_argon2id_passwd_min      (_fun -> _size))
+(define-na crypto_pwhash_argon2id_passwd_max      (_fun -> _size))
+(define-na crypto_pwhash_argon2id_saltbytes       (_fun -> _size))
+(define-na crypto_pwhash_argon2id_strbytes        (_fun -> _size))
+(define-na crypto_pwhash_argon2id_strprefix       (_fun -> _string/utf-8))
+(define-na crypto_pwhash_argon2id_opslimit_min    (_fun -> _size))
+(define-na crypto_pwhash_argon2id_opslimit_max    (_fun -> _size))
+(define-na crypto_pwhash_argon2id_memlimit_min    (_fun -> _size))
+(define-na crypto_pwhash_argon2id_memlimit_max    (_fun -> _size))
+(define-na crypto_pwhash_argon2id_opslimit_interactive (_fun -> _size))
+(define-na crypto_pwhash_argon2id_memlimit_interactive (_fun -> _size))
+(define-na crypto_pwhash_argon2id_opslimit_moderate    (_fun -> _size))
+(define-na crypto_pwhash_argon2id_memlimit_moderate    (_fun -> _size))
+(define-na crypto_pwhash_argon2id_opslimit_sensitive   (_fun -> _size))
+(define-na crypto_pwhash_argon2id_memlimit_sensitive   (_fun -> _size))
+
+(define-na crypto_pwhash_argon2id
+  (_fun (out      : _pointer)
+        (outlen   : _ullong)
+        (passwd   : _pointer)
+        (pwdlen   : _ullong)
+        (salt     : _pointer)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        (alg      : _int = crypto_pwhash_argon2id_ALG_ARGON2ID13)
+        -> _int)) ;; __attribute__ ((warn_unused_result))
+
+(define-na crypto_pwhash_argon2id_str
+  (_fun (out      : _pointer)
+        (passwd   : _pointer)
+        (pwdlen   : _ullong)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        -> _int))
+
+(define-na crypto_pwhash_argon2id_str_verify
+  (_fun (str    : _pointer)
+        (passwd : _pointer)
+        (pwdlen : _ullong)
+        -> _int))
+
+(define-na crypto_pwhash_argon2id_str_needs_rehash
+  (_fun (str      : _pointer)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        -> _int))
+
+(define crypto_pwhash_ALG_ARGON2I13  1)
+(define crypto_pwhash_ALG_ARGON2ID13 2)
+;; (define crypto_pwhash_BYTES_MIN crypto_pwhash_argon2id_BYTES_MIN)
+;; (define crypto_pwhash_BYTES_MAX crypto_pwhash_argon2id_BYTES_MAX)
+;; (define crypto_pwhash_PASSWD_MIN crypto_pwhash_argon2id_PASSWD_MIN)
+;; (define crypto_pwhash_PASSWD_MAX crypto_pwhash_argon2id_PASSWD_MAX)
+;; (define crypto_pwhash_SALTBYTES crypto_pwhash_argon2id_SALTBYTES)
+;; (define crypto_pwhash_STRBYTES crypto_pwhash_argon2id_STRBYTES)
+;; (define crypto_pwhash_STRPREFIX crypto_pwhash_argon2id_STRPREFIX)
+;; (define crypto_pwhash_OPSLIMIT_MIN crypto_pwhash_argon2id_OPSLIMIT_MIN)
+;; (define crypto_pwhash_OPSLIMIT_MAX crypto_pwhash_argon2id_OPSLIMIT_MAX)
+;; (define crypto_pwhash_MEMLIMIT_MIN crypto_pwhash_argon2id_MEMLIMIT_MIN)
+;; (define crypto_pwhash_MEMLIMIT_MAX crypto_pwhash_argon2id_MEMLIMIT_MAX)
+;; (define crypto_pwhash_OPSLIMIT_INTERACTIVE crypto_pwhash_argon2id_OPSLIMIT_INTERACTIVE)
+;; (define crypto_pwhash_MEMLIMIT_INTERACTIVE crypto_pwhash_argon2id_MEMLIMIT_INTERACTIVE)
+;; (define crypto_pwhash_OPSLIMIT_MODERATE crypto_pwhash_argon2id_OPSLIMIT_MODERATE)
+;; (define crypto_pwhash_MEMLIMIT_MODERATE crypto_pwhash_argon2id_MEMLIMIT_MODERATE)
+;; (define crypto_pwhash_OPSLIMIT_SENSITIVE crypto_pwhash_argon2id_OPSLIMIT_SENSITIVE)
+;; (define crypto_pwhash_MEMLIMIT_SENSITIVE crypto_pwhash_argon2id_MEMLIMIT_SENSITIVE)
+
+(define-na crypto_pwhash_alg_argon2i13  (_fun -> _int))
+(define-na crypto_pwhash_alg_argon2id13 (_fun -> _int))
+(define-na crypto_pwhash_alg_default    (_fun -> _int))
+(define-na crypto_pwhash_bytes_min      (_fun -> _size))
+(define-na crypto_pwhash_bytes_max      (_fun -> _size))
+(define-na crypto_pwhash_passwd_min     (_fun -> _size))
+(define-na crypto_pwhash_passwd_max     (_fun -> _size))
+(define-na crypto_pwhash_saltbytes      (_fun -> _size))
+(define-na crypto_pwhash_strbytes       (_fun -> _size))
+(define-na crypto_pwhash_strprefix      (_fun -> _string/utf-8))
+(define-na crypto_pwhash_opslimit_min   (_fun -> _size))
+(define-na crypto_pwhash_opslimit_max   (_fun -> _size))
+(define-na crypto_pwhash_memlimit_min   (_fun -> _size))
+(define-na crypto_pwhash_memlimit_max   (_fun -> _size))
+(define-na crypto_pwhash_opslimit_interactive (_fun -> _size))
+(define-na crypto_pwhash_memlimit_interactive (_fun -> _size))
+(define-na crypto_pwhash_opslimit_moderate  (_fun -> _size))
+(define-na crypto_pwhash_memlimit_moderate  (_fun -> _size))
+(define-na crypto_pwhash_opslimit_sensitive (_fun -> _size))
+(define-na crypto_pwhash_memlimit_sensitive (_fun -> _size))
+
+(define-na crypto_pwhash
+  (_fun (out : _pointer)
+        (outlen : _ullong)
+        (passwd : _pointer)
+        (pwdlen : _ullong)
+        (salt : _pointer)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        (alg : _int)
+        -> _int))
+
+(define-na crypto_pwhash_str
+  (_fun (out : _pointer) ;;char out[crypto_pwhash_STRBYTES],
+        (passwd : _pointer)
+        (pwdlen : _ullong)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        -> _int))
+
+(define-na crypto_pwhash_str_alg
+  (_fun (out : _pointer) ;;char out[crypto_pwhash_STRBYTES],
+        (passwd : _pointer)
+        (pwdlen : _ullong)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        (alg : _int)
+        -> _int))
+
+(define-na crypto_pwhash_str_verify
+  (_fun (str : _pointer) ;;const char str[crypto_pwhash_STRBYTES],
+        (passwd : _pointer)
+        (pwdlen : _ullong)
+        -> _int))
+
+(define-na crypto_pwhash_str_needs_rehash
+  (_fun (str : _pointer) ;;const char str[crypto_pwhash_STRBYTES],
+        (opslimit : _ullong)
+        (memlimit : _size)
+        -> _int))
+
+
+;; ============================================================
+;; Argon2
+
+(define crypto_pwhash_scryptsalsa208sha256_BYTES_MIN 16)
+;; (define crypto_pwhash_scryptsalsa208sha256_BYTES_MAX ...)
+(define crypto_pwhash_scryptsalsa208sha256_PASSWD_MIN 0)
+;; (define crypto_pwhash_scryptsalsa208sha256_PASSWD_MAX ...)
+(define crypto_pwhash_scryptsalsa208sha256_SALTBYTES 32)
+(define crypto_pwhash_scryptsalsa208sha256_STRBYTES 102)
+(define crypto_pwhash_scryptsalsa208sha256_STRPREFIX "$7$")
+(define crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_MIN 32768)
+(define crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_MAX 4294967295)
+(define crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_MIN 16777216)
+;; (define crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_MAX ...)
+(define crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE 524288)
+(define crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE 16777216)
+(define crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_SENSITIVE 33554432)
+(define crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_SENSITIVE 1073741824)
+
+(define-na crypto_pwhash_scryptsalsa208sha256_bytes_min  (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_bytes_max  (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_passwd_min (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_passwd_max (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_saltbytes  (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_strbytes   (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_strprefix  (_fun -> _string/utf-8))
+(define-na crypto_pwhash_scryptsalsa208sha256_opslimit_min (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_opslimit_max (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_memlimit_min (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_memlimit_max (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_opslimit_interactive (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_memlimit_interactive (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_opslimit_sensitive (_fun -> _size))
+(define-na crypto_pwhash_scryptsalsa208sha256_memlimit_sensitive (_fun -> _size))
+
+(define-na crypto_pwhash_scryptsalsa208sha256
+  (_fun (out    : _pointer)
+        (outlen : _ullong)
+        (passwd : _pointer)
+        (pwdlen : _ullong)
+        (salt   : _pointer)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        -> _int))
+
+(define-na crypto_pwhash_scryptsalsa208sha256_str
+  (_fun (out      : _pointer) ;;char out[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
+        (passwd   : _pointer)
+        (pwdlen   : _ullong)
+        (opslimit : _ullong)
+        (memlimit : _size)
+        -> _int))
+
+(define-na crypto_pwhash_scryptsalsa208sha256_str_verify
+  (_fun (str    : _pointer) ;;const char str[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
+        (passwd : _pointer)
+        (pwdlen : _ullong)
+        -> _int))
+
+(define-na crypto_pwhash_scryptsalsa208sha256_ll
+  (_fun (passwd : _pointer)
+        (pwdlen : _size)
+        (salt   : _pointer)
+        (saltln : _size)
+        (N      : _uint64)
+        (r      : _uint32)
+        (p      : _uint32)
+        (buf    : _pointer)
+        (buflen : _size)
+        -> _int))
+
+(define-na crypto_pwhash_scryptsalsa208sha256_str_needs_rehash
+  (_fun (str : _pointer) ;;const char str[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
+        (opslimit : _ullong)
+        (memlimit : _size)
+        -> _int))
