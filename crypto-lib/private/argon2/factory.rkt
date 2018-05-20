@@ -28,13 +28,14 @@
     (inherit-field spec)
     (super-new)
     (define/public (kdf params pass salt)
+      (check-config params config:argon2 "argon2")
       (define (getparam key [default #f])
         (cond [(assq key params) => cadr]
               [default default]
               [else (crypto-error "missing parameter\n  parameter: ~v" key)]))
       (define t (getparam 't))
       (define m (getparam 'm))
-      (define p (getparam 'p))
+      (define p (getparam 'p 1))
       (define key-size (getparam 'key-size 32))
       (case spec
         [(argon2d)  (argon2d_hash_raw  t m p pass salt key-size)]

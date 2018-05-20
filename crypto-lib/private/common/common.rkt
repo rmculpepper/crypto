@@ -49,6 +49,7 @@
          config-ref
          config:pbkdf2
          config:scrypt
+         config:argon2
          config:rsa-keygen
          config:dsa-paramgen
          config:ec-paramgen
@@ -814,6 +815,12 @@
   `((N #t ,exact-positive-integer? #f)
     (p #f ,exact-positive-integer? #f)
     (r #f ,exact-positive-integer? #f)
+    (key-size #f ,exact-positive-integer? #f)))
+
+(define config:argon2
+  `((t #t ,exact-positive-integer? #f)
+    (m #t ,exact-positive-integer? #f)
+    (p #f ,exact-positive-integer? #f)
     (key-size #f ,exact-positive-integer? #f)))
 
 (define config:rsa-keygen
