@@ -39,6 +39,9 @@
 ;; ============================================================
 ;; Digests
 
+;; ----------------------------------------
+;; blake2b (since 0.4)
+
 (define crypto_generichash_blake2b_BYTES_MIN     16)
 (define crypto_generichash_blake2b_BYTES_MAX     64)
 (define crypto_generichash_blake2b_BYTES         32)
@@ -57,7 +60,7 @@
 (define-na crypto_generichash_blake2b_keybytes (_fun -> _size))
 (define-na crypto_generichash_blake2b_saltbytes (_fun -> _size))
 (define-na crypto_generichash_blake2b_personalbytes (_fun -> _size))
-(define-na crypto_generichash_blake2b_statebytes (_fun -> _size)
+(define-na crypto_generichash_blake2b_statebytes (_fun -> _size) ;; (added 1.0.9)
   #:fail (lambda () (lambda () crypto_generichash_blake2b_STATEBYTES)))
 
 (define-na crypto_generichash_blake2b
@@ -104,7 +107,7 @@
 (define blake2-ok? (and crypto_generichash_blake2b_final #t))
 
 ;; ----------------------------------------
-;; SHA2-256
+;; SHA2-256 (since 0.5.0)
 
 (define crypto_hash_sha256_BYTES 32)
 
@@ -121,7 +124,8 @@
   (_fun (state : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
 
 (define-na crypto_hash_sha256_final
-  (_fun (state : _pointer) (out : _pointer) -> _int))
+  (_fun (state : _pointer) (out : _pointer) -> _int)
+  #:fail (lambda () #f))
 
 (define crypto_auth_hmacsha256_BYTES    32)
 (define crypto_auth_hmacsha256_KEYBYTES 32)
@@ -139,8 +143,11 @@
 (define-na crypto_auth_hmacsha256_final
   (_fun (state : _pointer) (out : _pointer) -> _int))
 
+(define sha256-ok? (and crypto_hash_sha256_final #t))
+
+
 ;; ----------------------------------------
-;; SHA2-512
+;; SHA2-512 (since 0.5.0)
 
 (define crypto_hash_sha512_BYTES 64)
 (define-na crypto_hash_sha512_statebytes (_fun -> _size))
@@ -156,7 +163,8 @@
   (_fun (state : _pointer) (in : _pointer) (inlen : _ullong) -> _int))
 
 (define-na crypto_hash_sha512_final
-  (_fun (state : _pointer) (out : _pointer) -> _int))
+  (_fun (state : _pointer) (out : _pointer) -> _int)
+  #:fail (lambda () #f))
 
 (define crypto_auth_hmacsha512_BYTES 64)
 (define crypto_auth_hmacsha512_KEYBYTES 32)
@@ -173,6 +181,8 @@
 
 (define-na crypto_auth_hmacsha512_final
   (_fun (state : _pointer) (out : _pointer) -> _int))
+
+(define sha512-ok? (and crypto_hash_sha512_final #t))
 
 
 ;; ============================================================
@@ -203,7 +213,7 @@
 (struct aeadcipher (spec keysize noncesize authsize encrypt decrypt))
 
 ;; ----------------------------------------
-;; chacha20-poly1305
+;; chacha20-poly1305 (since 1.0.9 for detached mode)
 
 ;; -- IETF ChaCha20-Poly1305 construction with a 96-bit nonce and a 32-bit internal counter --
 
@@ -272,7 +282,7 @@
                    crypto_aead_chacha20poly1305_decrypt_detached)))
 
 ;; ----------------------------------------
-;; xchacha20-poly1305
+;; xchacha20-poly1305 (since 1.0.12)
 
 (define crypto_aead_xchacha20poly1305_ietf_KEYBYTES  32)
 (define crypto_aead_xchacha20poly1305_ietf_NSECBYTES  0)
@@ -350,7 +360,7 @@
                 aes256gcm-record)))
 
 ;; ============================================================
-;; Argon2
+;; argon2 (argon2id since 1.0.13, argon2i since 1.0.9)
 
 (define crypto_pwhash_argon2id_ALG_ARGON2ID13 2)
 (define crypto_pwhash_argon2id_BYTES_MIN 16)
@@ -442,8 +452,8 @@
 ;; (define crypto_pwhash_OPSLIMIT_SENSITIVE crypto_pwhash_argon2id_OPSLIMIT_SENSITIVE)
 ;; (define crypto_pwhash_MEMLIMIT_SENSITIVE crypto_pwhash_argon2id_MEMLIMIT_SENSITIVE)
 
-(define-na crypto_pwhash_alg_argon2i13  (_fun -> _int))
-(define-na crypto_pwhash_alg_argon2id13 (_fun -> _int))
+(define-na crypto_pwhash_alg_argon2i13  (_fun -> _int) #:fail (lambda () #f))
+(define-na crypto_pwhash_alg_argon2id13 (_fun -> _int) #:fail (lambda () #f))
 (define-na crypto_pwhash_alg_default    (_fun -> _int))
 (define-na crypto_pwhash_bytes_min      (_fun -> _size))
 (define-na crypto_pwhash_bytes_max      (_fun -> _size))
@@ -462,6 +472,9 @@
 (define-na crypto_pwhash_memlimit_moderate  (_fun -> _size))
 (define-na crypto_pwhash_opslimit_sensitive (_fun -> _size))
 (define-na crypto_pwhash_memlimit_sensitive (_fun -> _size))
+
+(define argon2i-ok?  (and crypto_pwhash_alg_argon2i13  #t))
+(define argon2id-ok? (and crypto_pwhash_alg_argon2id13 #t))
 
 (define-na crypto_pwhash
   (_fun (out : _pointer)
@@ -505,7 +518,7 @@
 
 
 ;; ============================================================
-;; Argon2
+;; scrypt (since 0.6.0)
 
 (define crypto_pwhash_scryptsalsa208sha256_BYTES_MIN 16)
 ;; (define crypto_pwhash_scryptsalsa208sha256_BYTES_MAX ...)
@@ -573,10 +586,13 @@
         (p      : _uint32)
         (buf    : _pointer)
         (buflen : _size)
-        -> _int))
+        -> _int)
+  #:fail (lambda () #f))
 
 (define-na crypto_pwhash_scryptsalsa208sha256_str_needs_rehash
   (_fun (str : _pointer) ;;const char str[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
         (opslimit : _ullong)
         (memlimit : _size)
         -> _int))
+
+(define scrypt-ok? (and crypto_pwhash_scryptsalsa208sha256_ll #t))

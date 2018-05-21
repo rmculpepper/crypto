@@ -27,7 +27,7 @@
 
 (define sodium-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-cipher)
+    (inherit get-cipher get-kdf print-avail)
     (super-new [ok? (and sodium-ok? (sodium_init))])
 
     (define/override (get-name) 'sodium)
@@ -38,9 +38,9 @@
       (define spec (send info get-spec))
       (cond [(and (memq spec blake2-digests) blake2-ok?)
              (new sodium-blake2-digest-impl% (info info) (factory this))]
-            [(eq? spec 'sha256)
+            [(and (eq? spec 'sha256) sha256-ok?)
              (new sodium-sha256-digest-impl% (info info) (factory this))]
-            [(eq? spec 'sha512)
+            [(and (eq? spec 'sha512) sha512-ok?)
              (new sodium-sha512-digest-impl% (info info) (factory this))]
             [else #f]))
 
@@ -54,9 +54,12 @@
 
     (define/override (-get-kdf spec)
       (case spec
-        [(argon2i)  (new sodium-argon2-impl% (factory this) (spec 'argon2i))]
-        [(argon2id) (new sodium-argon2-impl% (factory this) (spec 'argon2id))]
-        [(scrypt)   (new sodium-scrypt-impl% (factory this) (spec 'scrypt))]
+        [(argon2i)
+         (and argon2i-ok? (new sodium-argon2-impl% (factory this) (spec 'argon2i)))]
+        [(argon2id)
+         (and argon2id-ok? (new sodium-argon2-impl% (factory this) (spec 'argon2id)))]
+        [(scrypt)
+         (and scrypt-ok? (new sodium-scrypt-impl% (factory this) (spec 'scrypt)))]
         [else #f]))
 
     ;; ----
@@ -72,13 +75,7 @@
       (printf " version string: ~v\n" (info 'version-string))
       (printf " sodium_library_version_major: ~s\n" (sodium_library_version_major))
       (printf " sodium_library_version_minor: ~s\n" (sodium_library_version_minor))
-      (printf "Available digests:\n")
-      (for ([di (in-list (info 'all-digests))])
-        (printf " ~v\n" di))
-      (printf "Available ciphers:\n")
-      (for ([ci (in-list (info 'all-ciphers))])
-        (printf " ~v\n" ci))
-      (void))
+      (print-avail))
     ))
 
 (define sodium-factory (new sodium-factory%))
