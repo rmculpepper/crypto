@@ -45,8 +45,7 @@
     (define/override (print-info)
       (printf "Library info:\n")
       (printf " version: ~v\n" (get-version))
-      (print-avail)
-      (void))
+      (print-avail))
     ))
 
 (define b2-factory (new b2-factory%))

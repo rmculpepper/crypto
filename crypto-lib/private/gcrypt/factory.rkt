@@ -190,10 +190,12 @@
     (define/override (-get-kdf spec)
       (match spec
         [(list 'pbkdf2 'hmac di-spec)
-         (let ([di (get-digest di-spec)])
-           (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+         (and (version>=? (get-version) '(1 5))
+              (let ([di (get-digest di-spec)])
+                (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di)))))]
         ['scrypt
-         (new gcrypt-scrypt-impl% (spec spec) (factory this))]
+         (and (version>=? (get-version) '(1 6))
+              (new gcrypt-scrypt-impl% (spec spec) (factory this)))]
         [_ #f]))
 
     ;; ----
@@ -207,16 +209,7 @@
       (printf "Library info:\n")
       (printf " version: ~v\n" (get-version))
       (printf " version string: ~s\n" (gcry_check_version #f))
-      (print-avail)
-      (printf "Available KDFs:\n")
-      (let ([version (get-version)])
-        ;; PBKDF2 available since 1.5
-        ;; scrypt available since 1.6
-        (when (version>=? version '(1 5))
-          (printf " `(pbkdf2 hmac ,DIGEST)  ;; for all digests listed above\n"))
-        (when (version>=? version '(1 6))
-          (printf " 'scrypt\n")))
-      (void))
+      (print-avail))
     ))
 
 (define gcrypt-factory (new gcrypt-factory%))

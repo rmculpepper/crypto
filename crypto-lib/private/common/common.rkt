@@ -134,8 +134,9 @@
         [(version) (and ok? (get-version))]
         [(all-digests) (filter (lambda (s) (get-digest s)) (list-known-digests))]
         [(all-ciphers) (filter (lambda (x) (get-cipher x)) (list-known-ciphers))]
-        [(all-pks)     (filter (lambda (x) (get-pk x)) '(rsa dsa dh ec))]
-        [(all-curves)  #f]
+        [(all-pks)     (filter (lambda (x) (get-pk x))     (list-known-pks))]
+        [(all-curves)  '()]
+        [(all*-kdfs)   (filter (lambda (k) (get-kdf k))    (list-known-simple-kdfs))]
         [else #f]))
 
     (define/public (print-info)
@@ -149,9 +150,19 @@
       (printf "Available PK:\n")
       (for ([pk (in-list (info 'all-pks))])      (printf " ~v\n" pk))
       (let ([all-curves (info 'all-curves)])
-        (when all-curves
+        (when (pair? all-curves)
           (printf "Available EC named curves:\n")
-          (for ([curve (in-list all-curves)]) (printf " ~v\n" curve)))))
+          (for ([curve (in-list all-curves)]) (printf " ~v\n" curve))))
+      (printf "Available KDFs:\n")
+      (for ([kdf (in-list (info 'all*-kdfs))])
+        (printf " ~v\n" kdf))
+      (let ([all-digests (info 'all-digests)])
+        (cond [(null? all-digests) (void)]
+              [(for/and ([di (in-list all-digests)]) (get-kdf `(pbkdf2 hmac ,di)))
+               (printf " `(pbkdf2 hmac ,digest)  ;; for all digests listed above\n")]
+              [(for/or  ([di (in-list all-digests)]) (get-kdf `(pbkdf2 hmac ,di)))
+               (printf " `(pbkdf2 hmac ,digest)  ;; for some of the digests listed above\n")]))
+      (void))
 
     ;; table : Hash[*Spec => *Impl]
     ;; Note: assumes different *Spec types have disjoint values!

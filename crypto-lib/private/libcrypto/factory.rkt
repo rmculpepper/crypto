@@ -138,9 +138,6 @@
       (when (and libcrypto (not libcrypto-ok?))
         (printf " status: library version not supported!\n"))
       (print-avail)
-      (printf "Available KDFs:\n")
-      (when (pair? (info 'all-digests))
-        (printf " `(pbkdf hmac ,DIGEST)  ;; for all digests listed above\n"))
       (void))
 
     (define/public (print-internal-info)
