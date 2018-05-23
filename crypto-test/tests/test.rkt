@@ -23,6 +23,7 @@
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"
+         "kdf.rkt"
          "util.rkt")
 (provide (all-defined-out))
 
@@ -63,7 +64,11 @@
          (test-pk libcrypto-factory the-factories)
          (test-pk gcrypt-factory the-factories)
          (test-pk nettle-factory the-factories)
-         (test-pk sodium-factory the-factories))))))
+         (test-pk sodium-factory the-factories)))
+     (when (test-cross?)
+       (when #t (hprintf ">>> KDF agreement\n"))
+       (test-suite "kdf agreement"
+         (test-kdfs-agree the-factories))))))
 
 (module+ main
   (require racket/cmdline)

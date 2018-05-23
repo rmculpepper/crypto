@@ -831,12 +831,12 @@
                                 what key (or expected (object-name pred?)) value)))]
           [else
            (crypto-error "unsupported option for ~a\n  key: ~e\n  value: ~e"
-                         key value)]))
+                         what key value)]))
   (for ([aentry (in-list spec)] #:when (match aentry [(list _ required? _ _) required?]))
     (match-define (list key required? pred? expected) aentry)
     (unless (assq key config)
       (crypto-error "missing required option for ~a\n  key: ~e\n  given: ~e"
-                    key config)))
+                    what key config)))
   (void))
 
 (define (config-ref spec key [default #f])
