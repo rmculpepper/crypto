@@ -177,25 +177,6 @@
 
     (define/override (info key)
       (case key
-        [(version) (get-version)]
-        [(version-string) (version->string (get-version))]
-        [(all-digests)
-         (for/list ([di (map car digests)] #:when (get-digest di)) di)]
-        [(all-ciphers)
-         (append
-          (for*/list ([cipher (map car block-ciphers)]
-                      [mode (in-list block-modes)]
-                      [cspec (in-value (list cipher mode))]
-                      #:when (get-cipher cspec))
-            cspec)
-          (for*/list ([cipher (map car stream-ciphers)]
-                      [cspec (in-value (list cipher 'stream))]
-                      #:when (get-cipher cspec))
-            cspec))]
-        [(all-pks)
-         (for/list ([pk (in-list '(rsa dsa ec))]
-                    #:when (get-pk pk))
-           pk)]
         [(all-curves)
          (map car nettle-curves)]
         [else (super info key)]))

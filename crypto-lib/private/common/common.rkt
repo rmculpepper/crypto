@@ -16,9 +16,9 @@
 
 #lang racket/base
 (require racket/class
+         racket/list
          racket/match
          racket/contract/base
-         racket/string
          racket/random
          racket/string
          "catalog.rkt"
@@ -136,32 +136,58 @@
         [(all-ciphers) (filter (lambda (x) (get-cipher x)) (list-known-ciphers))]
         [(all-pks)     (filter (lambda (x) (get-pk x))     (list-known-pks))]
         [(all-curves)  '()]
-        [(all*-kdfs)   (filter (lambda (k) (get-kdf k))    (list-known-simple-kdfs))]
+        [(all-kdfs)    (filter (lambda (k) (get-kdf k))    (list-known-kdfs))]
         [else #f]))
 
     (define/public (print-info)
       (void))
 
     (define/public (print-avail)
-      (printf "Available digests:\n")
-      (for ([di (in-list (info 'all-digests))])  (printf " ~v\n" di))
-      (printf "Available ciphers:\n")
-      (for ([ci (in-list (info 'all-ciphers))])  (printf " ~v\n" ci))
-      (printf "Available PK:\n")
-      (for ([pk (in-list (info 'all-pks))])      (printf " ~v\n" pk))
+      (define (pad-to v len)
+        (let ([vs (format "~a" v)])
+          (string-append vs (make-string (- len (string-length vs)) #\space))))
+      ;; == Digests ==
+      (let ([all-digests (info 'all-digests)])
+        (when (pair? all-digests)
+          (printf "Available digests:\n")
+          (for ([di (in-list (info 'all-digests))])  (printf " ~v\n" di))))
+      ;; == Ciphers ==
+      (let ([all-ciphers (info 'all-ciphers)])
+        (when (pair? all-ciphers)
+          (printf "Available ciphers:\n")
+          (define cipher-groups (group-by car all-ciphers))
+          (define cipher-max-len
+            (apply max 0 (for/list ([cg (in-list cipher-groups)] #:when (> (length cg) 1))
+                           (string-length (symbol->string (caar cg))))))
+          (for ([group (in-list cipher-groups)])
+            (cond [(> (length group) 1)
+                   (printf " `(~a ,mode)  for mode in ~a\n"
+                           (pad-to (car (car group)) cipher-max-len)
+                           (map cadr group))]
+                  [else (printf " ~v\n" (car group))]))))
+      ;; == PK ==
+      (let ([all-pks (info 'all-pks)])
+        (when (pair? all-pks)
+          (printf "Available PKs:\n")
+          (for ([pk (in-list all-pks)]) (printf " ~v\n" pk))))
+      ;; == EC named curves ==
       (let ([all-curves (info 'all-curves)])
         (when (pair? all-curves)
           (printf "Available EC named curves:\n")
           (for ([curve (in-list all-curves)]) (printf " ~v\n" curve))))
-      (printf "Available KDFs:\n")
-      (for ([kdf (in-list (info 'all*-kdfs))])
-        (printf " ~v\n" kdf))
-      (let ([all-digests (info 'all-digests)])
-        (cond [(null? all-digests) (void)]
-              [(for/and ([di (in-list all-digests)]) (get-kdf `(pbkdf2 hmac ,di)))
-               (printf " `(pbkdf2 hmac ,digest)  ;; for all digests listed above\n")]
-              [(for/or  ([di (in-list all-digests)]) (get-kdf `(pbkdf2 hmac ,di)))
-               (printf " `(pbkdf2 hmac ,digest)  ;; for some of the digests listed above\n")]))
+      ;; == KDFs ==
+      (let ([all-kdfs (info 'all-kdfs)])
+        (when (pair? all-kdfs)
+          (printf "Available KDFs:\n")
+          (for ([kdf (in-list all-kdfs)] #:when (symbol? kdf))
+            (printf " ~v\n" kdf))
+          (let ([all-digests (info 'all-digests)])
+            (cond [(null? all-digests) (void)]
+                  [(for/and ([di (in-list all-digests)]) (get-kdf `(pbkdf2 hmac ,di)))
+                   (printf " `(pbkdf2 hmac ,digest)  for all available digests\n")]
+                  [else
+                   (for ([di (in-list all-digests)] #:when (get-kdf `(pbkdf2 hmac ,di)))
+                     (printf " ~v\n" `(pbkdf2 hmac ,di)))]))))
       (void))
 
     ;; table : Hash[*Spec => *Impl]

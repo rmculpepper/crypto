@@ -403,5 +403,10 @@
      (digest-spec? di)]
     [_ #f]))
 
+(define (list-known-kdfs)
+  (append (list-known-simple-kdfs)
+          (for/list ([di (in-list (list-known-digests))])
+            `(pbkdf2 hmac ,di))))
+
 (define (list-known-simple-kdfs) ;; no `(pbkdf2 hmac ,digest)
   '(argon2d argon2i argon2id bcrypt scrypt))
