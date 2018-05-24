@@ -90,14 +90,11 @@
       (define len (or (EVP_CipherFinal_ex ctx outbuf)
                       (err/crypt-failed #t (send impl aead?))))
       (unless (zero? len) (internal-error "EVP_CipherFinal_ex output len = ~s" len))
-      (case (get-mode)
-        [(gcm ocb) (-get-auth-tag auth-len)]
-        [else #""]))
+      (if (send impl aead?) (-get-auth-tag auth-len) #""))
 
     (define/override (-do-decrypt-end auth-tag)
-      (case (get-mode)
-        [(gcm ocb) (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_AEAD_SET_TAG (bytes-length auth-tag) auth-tag)]
-        [else (void)])
+      (when (send impl aead?)
+        (EVP_CIPHER_CTX_ctrl ctx EVP_CTRL_AEAD_SET_TAG (bytes-length auth-tag) auth-tag))
       (define outbuf (make-bytes (get-chunk-size))) ;; to be safe?
       (define len (or (EVP_CipherFinal_ex ctx outbuf)
                       (err/crypt-failed #f (send impl aead?))))
