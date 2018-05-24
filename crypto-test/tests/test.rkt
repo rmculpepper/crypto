@@ -33,7 +33,7 @@
 
 (define (make-factory-tests factory #:keygen? [keygen? #f])
   (when ((factory-filter) factory)
-    (when #t (hprintf ">>> Testing ~a\n" (send factory get-name)))
+    (when #t (hprintf ">> Testing ~a\n" (send factory get-name)))
     (test-suite (format "~a" (send factory get-name))
       (test-suite "digests" (test-digests factory))
       (test-suite "ciphers" (test-ciphers factory))
@@ -52,22 +52,22 @@
      (make-factory-tests sodium-factory)
      (make-factory-tests argon2-factory)
      (when (test-cross?)
-       (when #t (hprintf ">>> Digest agreement\n"))
+       (when #t (hprintf ">> Digest agreement\n"))
        (test-suite "digest agreement"
          (test-digests-agree the-factories)))
      (when (test-cross?)
-       (when #t (hprintf ">>> Cipher agreement\n"))
+       (when #t (hprintf ">> Cipher agreement\n"))
        (test-suite "cipher agreement"
          (test-ciphers-agree the-factories)))
      (when (test-cross?)
-       (when #t (hprintf ">>> PKey agreement\n"))
+       (when #t (hprintf ">> PKey agreement\n"))
        (test-suite "pkey agreement"
          (test-pk libcrypto-factory the-factories)
          (test-pk gcrypt-factory the-factories)
          (test-pk nettle-factory the-factories)
          (test-pk sodium-factory the-factories)))
      (when (test-cross?)
-       (when #t (hprintf ">>> KDF agreement\n"))
+       (when #t (hprintf ">> KDF agreement\n"))
        (test-suite "kdf agreement"
          (test-kdfs-agree the-factories))))))
 
