@@ -38,6 +38,7 @@
       (test-suite "digests" (test-digests factory))
       (test-suite "ciphers" (test-ciphers factory))
       (test-suite "pkey"    (test-pk factory #:keygen? (test-pk-keygen?)))
+      (test-suite "kdfs"    (test-kdfs factory))
       )))
 
 (define (go)

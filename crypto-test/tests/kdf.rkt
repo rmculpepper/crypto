@@ -21,10 +21,22 @@
          crypto/private/common/catalog
          crypto/private/common/kdf
          crypto/private/common/util
+         (prefix-in rkt: crypto/private/rkt/pbkdf2)
          "util.rkt")
-(provide test-kdfs-agree)
+(provide test-kdfs
+         test-kdfs-agree)
 
-;; FIXME: test pbkdf2 against rkt version?
+(define (test-kdfs factory)
+  (for ([name (list-known-kdfs)])
+    (match name
+      [(list 'pbkdf2 'hmac di)
+       (define impl (send factory get-kdf name))
+       (define dimpl (send factory get-kdf di))
+       (when impl
+         (hprintf "+  testing ~v\n" name)
+         (check-equal? (kdf impl key salt '((iterations 2000) (key-size 89)))
+                       (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
+      [_ (void)])))
 
 (define (test-kdfs-agree factories)
   (for ([name (list-known-kdfs)])
