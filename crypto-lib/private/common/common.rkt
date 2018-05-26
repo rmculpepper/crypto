@@ -398,7 +398,7 @@
     (define/public (check-iv-size iv-size)
       (unless (iv-size-ok? iv-size)
         (crypto-error "bad IV size for cipher\n  cipher: ~a\n  expected: ~s bytes\n  got: ~s bytes"
-                      (about) iv-size (get-iv-size))))
+                      (about) (get-iv-size) iv-size)))
 
     (define/public (check-auth-size auth-size)
       (unless (auth-size-ok? auth-size)
