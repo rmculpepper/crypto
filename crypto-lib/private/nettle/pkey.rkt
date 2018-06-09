@@ -191,11 +191,11 @@
     (super-new (spec 'rsa))
 
     (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5)))
-    (define/override (can-sign? pad dspec)
+    (define/override (can-sign? pad) 'depends)
+    (define/override (can-sign2? pad dspec)
       (case pad
-        [(pkcs1-v1.5) (memq dspec '(#f md5 sha1 sha256 sha512))]
+        [(pkcs1-v1.5 #f) (memq dspec '(#f md5 sha1 sha256 sha512))]
         [(pss) (and pss-ok? (memq dspec '(#f sha256 sha384 sha512)))]
-        [(#f) #t]
         [else #f]))
 
     (define/override (generate-key config)
@@ -347,7 +347,7 @@
     (inherit get-random-ctx)
     (super-new (spec 'dsa))
 
-    (define/override (can-sign? pad dspec) (memq pad '(#f)))
+    (define/override (can-sign? pad) (memq pad '(#f)))
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
@@ -446,7 +446,7 @@
     (inherit get-random-ctx)
     (super-new (spec 'ec))
 
-    (define/override (can-sign? pad dspec) (memq pad '(#f)))
+    (define/override (can-sign? pad) (memq pad '(#f)))
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
@@ -573,8 +573,7 @@
     (inherit get-random-ctx)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (memq dspec '(#f none))))
+    (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
     (define/override (has-params?) #f)
 
     (define/override (generate-key config)

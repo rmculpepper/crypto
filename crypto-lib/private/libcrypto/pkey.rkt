@@ -174,8 +174,11 @@
 
     (define/override (pktype) EVP_PKEY_RSA)
     (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
-    (define/override (can-sign? pad dspec) ;; FIXME: check digest compat
-      (and (memq pad '(#f pkcs1-v1.5 pss pss*)) (-known-digest? dspec)))
+
+    (define/override (can-sign? pad) 'depends)
+    (define/override (can-sign2? pad dspec)
+      (and (memq pad '(#f pkcs1-v1.5 pss pss*))
+           (-known-digest? dspec)))
 
     (define/override (*write-key private? fmt evp)
       (cond [(and (eq? fmt 'RSAPrivateKey) private?)
@@ -227,8 +230,7 @@
     (super-new (spec 'dsa))
 
     (define/override (pktype) EVP_PKEY_DSA)
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (-known-digest? dspec)))
+    (define/override (can-sign? pad) (memq pad '(#f)))
     (define/override (has-params?) #t)
 
     (define/override (*write-key private? fmt evp)
@@ -365,8 +367,7 @@
     (super-new (spec 'ec))
 
     (define/override (pktype) EVP_PKEY_EC)
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (-known-digest? dspec)))
+    (define/override (can-sign? pad) (memq pad '(#f)))
     (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
 

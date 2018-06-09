@@ -72,8 +72,7 @@
     (inherit-field spec factory)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (memq dspec '(#f *none*))))
+    (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
     (define/override (has-params?) #f)
 
     (define/override (generate-key config)

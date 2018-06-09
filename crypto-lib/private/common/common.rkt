@@ -644,8 +644,23 @@
                     (get-spec)))
     (define/public (generate-params config)
       (crypto-error "parameters not supported\n  algorithm: ~a" (about)))
+
+    ;; can-encrypt? : Padding -> Bool-like; pad=#f means "at all?"
     (define/public (can-encrypt? pad) #f)
-    (define/public (can-sign? pad dspec) #f)
+
+    ;; can-sign? : Pad -> Result; pad=#f means "at all?"
+    ;; Result = #f        -- not supported (eg DH)
+    ;;        | 'depends  -- call can-sign2? to check specific digest arg (eg RSA)
+    ;;        | 'nodigest -- supported, but digest must be 'none (eg EdDSA)
+    ;;        | other     -- supported, digest arg ignored (eg DSA, EC, for backwards-compat)
+    ;; For backwards compat, want to ignore digest arg for DSA and EC; but want to forbid
+    ;; for EdDSA, so that in the future giving a digest argument can mean use EdDSAph.
+    (define/public (can-sign? pad) #f)
+
+    ;; can-sign2? : Pad (U DigestSpec 'none) -> Bool-like
+    ;; Only overridden if can-sign? returned 'depends.
+    (define/public (can-sign2? pad dspec) #t)
+
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
     ))
@@ -695,7 +710,7 @@
 
     (define/public (sign msg dspec0 pad)
       (define dspec (or dspec0 'none))
-      (-check-sign pad dspec dspec0)
+      (-check-sign pad dspec)
       (unless (is-private?)
         (crypto-error "signing requires private key\n  key: ~a" (about)))
       (unless (eq? dspec 'none) (-check-msg-size msg dspec))
@@ -703,16 +718,26 @@
 
     (define/public (verify msg dspec0 pad sig)
       (define dspec (or dspec0 'none))
-      (-check-sign pad dspec dspec0)
+      (-check-sign pad dspec)
       (unless (eq? dspec 'none) (-check-msg-size msg dspec))
       (-verify msg dspec pad sig))
 
-    (define/private (-check-sign pad dspec dspec0)
-      (unless (send impl can-sign? #f #f)
-        (crypto-error "sign/verify not supported\n  key: ~a" (about)))
-      (unless (send impl can-sign? pad dspec)
-        (crypto-error "sign/verify options not supported\n  key: ~a\n  padding: ~e\n  digest: ~e"
-                      (about) pad dspec0)))
+    (define/private (-check-sign pad dspec)
+      (case (send impl can-sign? pad)
+        [(#f)
+         (unless (send impl can-sign? #f)
+           (crypto-error "sign/verify not supported\n  key: ~a" (about)))
+         (crypto-error "sign/verify padding not supported\n  key: ~a\n  padding: ~e"
+                       (about) pad)]
+        [(depends)
+         (unless (send impl can-sign2? pad dspec)
+           (crypto-error "sign/verify options not supported\n  key: ~a\n  padding: ~e\n  digest: ~e"
+                         (about) pad dspec))]
+        [(nodigest)
+         (unless (memq dspec '(none))
+           (crypto-error "sign/verify digest not supported\n  key: ~a\n  digest: ~e"
+                         (about) dspec))]
+        [else (void)]))
 
     (define/private (-check-msg-size msg dspec)
       (unless (= (bytes-length msg) (digest-spec-size dspec))

@@ -280,8 +280,8 @@
     (super-new (spec 'rsa))
 
     (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f pkcs1-v1.5)) (-known-digest? dspec)))
+    (define/override (can-sign? pad) (memq pad '(#f pkcs1-v1.5)))
+    (define/override (can-sign2? pad dspec) (-known-digest? dspec))
 
     (define/override (generate-key config)
       (check-config config config:rsa-keygen "RSA key generation")
@@ -411,7 +411,7 @@
     (inherit -known-digest? *generate-key)
     (super-new (spec 'dsa))
 
-    (define/override (can-sign? pad dspec) (memq pad '(#f)))
+    (define/override (can-sign? pad) (memq pad '(#f)))
 
     (define/override (generate-key config)
       (check-config config allowed-dsa-keygen "DSA key generation")
@@ -478,7 +478,7 @@
     (inherit -known-digest? *generate-key)
     (super-new (spec 'ec))
 
-    (define/override (can-sign? pad dspec) (memq pad '(#f)))
+    (define/override (can-sign? pad) (memq pad '(#f)))
 
     (define/override (generate-key config)
       (check-config config config:ec-paramgen "EC key generation")
@@ -561,8 +561,7 @@
     (inherit -known-digest? *generate-key)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (memq dspec '(#f *none*))))
+    (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
 
     (define/override (generate-key config)
       (check-config config config:eddsa-keygen "EdDSA key generation")
