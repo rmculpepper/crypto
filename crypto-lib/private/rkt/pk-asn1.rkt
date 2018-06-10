@@ -43,6 +43,7 @@ References:
  - http://csrc.nist.gov/groups/ST/crypto_apps_infra/csor/algorithms.html#modules
    - some OIDs for AES, digests, etc
  - http://www.cryptsoft.com/pkcs11doc/v220/group__SEC__12__6__WRAPPING__UNWRAPPING__PRIVATE__KEYS.html
+ - https://tools.ietf.org/html/draft-ietf-curdle-pkix-07 (EdDSA; X25519, etc)
 |#
 
 ;; ============================================================
@@ -271,6 +272,15 @@ References:
 (define ecPrivkeyVer1 1)
 
 ;; ============================================================
+;; EdDSA
+
+(define id-edwards-curve-algs (OID 1 3 101))
+(define id-X25519    (build-OID id-edwards-curve-algs 110))
+(define id-X448      (build-OID id-edwards-curve-algs 111))
+(define id-Ed25519   (build-OID id-edwards-curve-algs 112))
+(define id-Ed448     (build-OID id-edwards-curve-algs 113))
+
+;; ============================================================
 
 (define-asn1-type PrivateKeyInfo
   (SEQUENCE [version                   INTEGER]
@@ -313,12 +323,17 @@ References:
         ;; DH: PKIX says use dhpublicnumber; OpenSSL uses PKCS#3 OID
         (list dhpublicnumber  DomainParameters DHPublicKey)
         (list dhKeyAgreement  DHParameter      DHPublicKey)
-        ;; Special case!: the bitstring's octets are ECPoint, not a BER-encoding of ECPoint
-        (list id-ecPublicKey  EcpkParameters   #f)))
+        ;; Special case!: the bitstring's octets are ECPoint, not a
+        ;; BER-encoding of ECPoint
+        (list id-ecPublicKey  EcpkParameters   #f)
+        (list id-Ed25519      NULL             #f)
+        (list id-Ed448        NULL             #f)))
 
 ;; for PKCS #8 PrivateKeyInfo
 (define known-private-key-formats
   (list (list rsaEncryption   RSAPrivateKey)
         (list id-dsa          INTEGER)
         (list dhKeyAgreement  INTEGER)
-        (list id-ecPublicKey  ECPrivateKey)))
+        (list id-ecPublicKey  ECPrivateKey)
+        (list id-Ed25519      OCTET-STRING)
+        (list id-Ed448        OCTET-STRING)))

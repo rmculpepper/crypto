@@ -45,6 +45,10 @@
                   ;; FIXME: DH support
                   [(equal? alg-oid id-ecPublicKey)
                    (-decode-pub-ec params subjectPublicKey)]
+                  [(equal? alg-oid id-Ed25519)
+                   (-decode-pub-eddsa 'ed25519 subjectPublicKey)]
+                  [(equal? alg-oid id-Ed448)
+                   (-decode-pub-eddsa 'ed448 subjectPublicKey)]
                   [else #f])]
            [_ #f])]
         [(PrivateKeyInfo)
@@ -61,6 +65,10 @@
                    (-decode-priv-dsa alg-params privateKey)]
                   [(equal? alg-oid id-ecPublicKey)
                    (-decode-priv-ec alg-params privateKey)]
+                  [(equal? alg-oid id-Ed25519)
+                   (-decode-priv-eddsa 'ed25519 privateKey)]
+                  [(equal? alg-oid id-Ed448)
+                   (-decode-priv-eddsa 'ed448 privateKey)]
                   [else #f])]
            [_ #f])]
         [(RSAPrivateKey)
@@ -71,7 +79,33 @@
          (match (bytes->asn1/DER (SEQUENCE-OF INTEGER) sk)
            [(list 0 p q g y x) ;; FIXME!
             (-make-priv-dsa p q g y x)])]
+        [(rkt) (read-rkt-key sk)]
         [else #f]))
+
+    (define/private (read-rkt-key sk)
+      (define nat? exact-nonnegative-integer?)
+      (define (oid? x) (and (list? x) (andmap nat? x)))
+      (match sk
+        ;; Public-only keys
+        [(list 'rsa 'public (? nat? n) (? nat? e))
+         (-make-pub-rsa n e)]
+        [(list 'dsa 'public (? nat? p) (? nat? q) (? nat? g))
+         (-make-pub-dsa p q g)]
+        [(list 'ec 'public (? oid? curve-oid) (? bytes? qB))
+         (-make-pub-ec curve-oid qB)]
+        [(list 'eddsa 'public curve (? bytes? qB))
+         (-make-pub-eddsa curve qB)]
+        ;; Private keys
+        [(list 'rsa 'private 0 (? nat? n) (? nat? e) (? nat? d)
+               (? nat? p) (? nat? q) (? nat? dp) (? nat? dq) (? nat? qInv))
+         (-make-priv-rsa n e d p q dp dq qInv)]
+        [(list 'dsa 'private (? nat? p) (? nat? q) (? nat? g) (? nat? y) (? nat? x))
+         (-make-priv-dsa p q g y x)]
+        [(list 'ec 'private (? oid? curve-oid) (? bytes? qB) (? nat? x))
+         (-make-priv-ec curve-oid qB x)]
+        [(list 'eddsa 'private (? symbol? curve) (? bytes? qB) (? bytes? dB))
+         (-make-priv-eddsa curve qB dB)]
+        [_ #f]))
 
     ;; ---- RSA ----
 
@@ -137,10 +171,19 @@
     (define/public (-make-pub-ec curve-oid qB) #f)
     (define/public (-make-priv-ec curve-oid qB x) #f)
 
+    ;; ---- EdDSA ----
+
+    (define/public (-decode-pub-eddsa curve qB)
+      (-make-pub-eddsa curve qB))
+    (define/public (-decode-priv-eddsa curve dB)
+      (-make-priv-eddsa curve #f dB))
+
+    (define/public (-make-pub-eddsa curve qB) #f)
+    (define/public (-make-priv-eddsa curve qB dB) #f)
+
     ;; ----------------------------------------
 
     (define/public (read-params buf fmt)
-      (-check-bytes fmt buf)
       (case fmt
         [(AlgorithmIdentifier)
          (-check-bytes fmt buf)
@@ -155,21 +198,37 @@
                   [else #f])]
            [_ #f])]
         [(DSAParameters Dss-Parms)
+         (-check-bytes fmt buf)
          (match (bytes->asn1/DER Dss-Parms buf)
            [(hash-table ['p p] ['q q] ['g g])
             (-make-params-dsa p q g)]
            [_ #f])]
         [(DHParameter) ;; PKCS#3 ... not DomainParameters!
+         (-check-bytes fmt buf)
          (match (bytes->asn1/DER DHParameter buf)
            [(hash-table ['prime prime] ['base base])
             (-make-params-dh prime base)]
            [_ #f])]
         [(EcpkParameters)
+         (-check-bytes fmt buf)
          (match (bytes->asn1/DER EcpkParameters)
            [(list 'namedCurve curve-oid)
             (-make-params-ec curve-oid)]
            [_ #f])]
+        [(rkt) (read-rkt-params buf)]
         [else #f]))
+
+    (define/private (read-rkt-params p)
+      (define nat? exact-nonnegative-integer?)
+      (define (oid? x) (and (list? x) (andmap nat? x)))
+      (match p
+        [(list 'dsa 'params (? nat? p) (? nat? q) (? nat? g))
+         (-make-params-dsa p q g)]
+        [(list 'dh 'params (? nat? prime) (? nat? base))
+         (-make-params-dh prime base)]
+        [(list 'ec 'params (? oid? curve-oid))
+         (-make-params-ec curve-oid)]
+        [_ #f]))
 
     (define/public (-make-params-dsa p q g) #f)
     (define/public (-make-params-dh prime base) #f)
@@ -194,6 +253,7 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
               'subjectPublicKey (hasheq 'modulus n 'publicExponent e)))]
+    [(rkt) (list 'rsa 'public n e)]
     [else #f]))
 
 (define (encode-priv-rsa fmt n e d p q dp dq qInv)
@@ -208,6 +268,7 @@
               'privateKey (-priv-rsa n e d p q dp dq qInv)))]
     [(RSAPrivateKey)
      (asn1->bytes/DER RSAPrivateKey (-priv-rsa n e d p q dp dq qInv))]
+    [(rkt) (list 'rsa 'private 0 n e d p q dp dq qInv)]
     [else #f]))
 
 (define (-priv-rsa n e d p q dp dq qInv)
@@ -223,13 +284,14 @@
 
 ;; ---- DSA ----
 
-(define (encode-params-dsa fmt p q g y)
+(define (encode-params-dsa fmt p q g)
   (case fmt
     [(AlgorithmIdentifier)
      (asn1->bytes/DER AlgorithmIdentifier
        (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g)))]
     [(DSAParameters Dss-Parms)
      (asn1->bytes/DER Dss-Parms (hasheq 'p p 'q q 'g g))]
+    [(rkt) (list 'dsa 'params p q g)]
     [else #f]))
 
 (define (encode-pub-dsa fmt p q g y)
@@ -239,6 +301,7 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g))
               'subjectPublicKey y))]
+    [(rkt) (list 'dsa 'public p q g y)]
     [else #f]))
 
 (define (encode-priv-dsa fmt p q g y x)
@@ -255,6 +318,7 @@
      (asn1->bytes/DER
       (SEQUENCE-OF INTEGER)
       (list 0 p q g y x))]
+    [(rkt) (list 'dsa 'private p q g y x)]
     [else #f]))
 
 ;; ---- DH ----
@@ -269,6 +333,7 @@
                'parameters (list 'namedCurve curve-oid)))]
     [(EcpkParameters)
      (asn1->bytes/DER EcpkParameters (list 'namedCurve curve-oid))]
+    [(rkt) (list 'ec 'params curve-oid)]
     [else #f]))
 
 (define (encode-pub-ec fmt curve-oid qB)
@@ -279,6 +344,7 @@
       (hasheq 'algorithm (hasheq 'algorithm id-ecPublicKey
                                  'parameters (list 'namedCurve curve-oid))
               'subjectPublicKey qB))]
+    [(rkt) (list 'ec 'public curve-oid qB)]
     [else #f]))
 
 (define (encode-priv-ec fmt curve-oid qB d)
@@ -294,7 +360,40 @@
               'privateKey (hasheq 'version 1
                                   'privateKey (unsigned->base256 d)
                                   'publicKey qB)))]
+    [(rkt) (list 'ec 'private curve-oid qB d)]
     [else #f]))
+
+;; ---- EdDSA ----
+
+(define (encode-priv-eddsa fmt curve qB dB)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (encode-pub-eddsa fmt curve qB)]
+    [(PrivateKeyInfo)
+     (asn1->bytes/DER
+      PrivateKeyInfo
+      (hasheq 'version 0
+              'privateKeyAlgorithm (hasheq 'algorithm (ed-curve->oid curve))
+              'privateKey dB))]
+    [(rkt) (list 'eddsa 'private curve qB dB)]
+    [else #f]))
+
+(define (encode-pub-eddsa fmt curve qB)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (asn1->bytes/DER
+      SubjectPublicKeyInfo
+      (hasheq 'algorithm (hasheq 'algorithm (ed-curve->oid curve))
+              'subjectPublicKey qB))]
+    [(rkt) (list 'eddsa 'public curve qB)]
+    [else #f]))
+
+(define (ed-curve->oid curve)
+  (case curve
+    [(ed25519) id-Ed25519]
+    [(ed448)   id-Ed448]))
+
+;; ----------------------------------------
 
 ;; EC public key = ECPoint = octet string
 ;; EC private key = unsigned integer
