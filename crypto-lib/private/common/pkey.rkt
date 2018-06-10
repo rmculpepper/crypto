@@ -58,6 +58,14 @@
    (->* [any/c symbol?] [(or/c crypto-factory? (listof crypto-factory?))]
         pk-parameters?)]
 
+  [pk-sign
+   (->* [private-key? bytes?]
+        [#:digest (or/c digest-spec? #f 'none) #:pad sign-pad/c]
+        bytes?)]
+  [pk-verify
+   (->* [pk-key? bytes? bytes?]
+        [#:digest (or/c digest-spec? #f 'none) #:pad sign-pad/c]
+        boolean?)]
   [pk-sign-digest
    (->* [private-key? (or/c digest-spec? digest-impl?) bytes?]
         [#:pad  sign-pad/c]
@@ -170,11 +178,18 @@
 
 ;; ============================================================
 
+(define (pk-sign pk msg #:digest [dspec #f] #:pad [pad #f])
+  (with-crypto-entry 'pk-sign
+    (send pk sign msg dspec pad)))
+
+(define (pk-verify pk msg sig #:digest [dspec #f] #:pad [pad #f])
+  (with-crypto-entry 'pk-verify
+    (send pk verify msg dspec pad sig)))
+
 (define (pk-sign-digest pk di dbuf #:pad [pad #f])
   (with-crypto-entry 'pk-sign-digest
     (let ([di (to-spec di)])
       (send pk sign dbuf di pad))))
-
 (define (pk-verify-digest pk di dbuf sig #:pad [pad #f])
   (with-crypto-entry 'pk-verify-digest
     (let ([di (to-spec di)])

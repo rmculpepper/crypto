@@ -104,6 +104,8 @@
           datum->pk-key
           pk-parameters->datum
           datum->pk-parameters
+          pk-sign
+          pk-verify
           pk-sign-digest
           pk-verify-digest
           digest/sign

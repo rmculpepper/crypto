@@ -693,32 +693,34 @@
 
     ;; ----
 
-    (define/public (sign digest digest-spec pad)
-      (-check-sign pad digest-spec)
+    (define/public (sign msg dspec0 pad)
+      (define dspec (or dspec0 'none))
+      (-check-sign pad dspec dspec0)
       (unless (is-private?)
         (crypto-error "signing requires private key\n  key: ~a" (about)))
-      (-check-digest-size digest digest-spec)
-      (-sign digest digest-spec pad))
+      (unless (eq? dspec 'none) (-check-msg-size msg dspec))
+      (-sign msg dspec pad))
 
-    (define/public (verify digest digest-spec pad sig)
-      (-check-sign pad digest-spec)
-      (-check-digest-size digest digest-spec)
-      (-verify digest digest-spec pad sig))
+    (define/public (verify msg dspec0 pad sig)
+      (define dspec (or dspec0 'none))
+      (-check-sign pad dspec dspec0)
+      (unless (eq? dspec 'none) (-check-msg-size msg dspec))
+      (-verify msg dspec pad sig))
 
-    (define/private (-check-sign pad digest-spec)
+    (define/private (-check-sign pad dspec dspec0)
       (unless (send impl can-sign? #f #f)
         (crypto-error "sign/verify not supported\n  key: ~a" (about)))
-      (unless (send impl can-sign? pad digest-spec)
+      (unless (send impl can-sign? pad dspec)
         (crypto-error "sign/verify options not supported\n  key: ~a\n  padding: ~e\n  digest: ~e"
-                      (about) pad digest-spec)))
+                      (about) pad dspec0)))
 
-    (define/private (-check-digest-size digest digest-spec)
-      (unless (= (bytes-length digest) (digest-spec-size digest-spec))
+    (define/private (-check-msg-size msg dspec)
+      (unless (= (bytes-length msg) (digest-spec-size dspec))
         (crypto-error "wrong size for digest\n  digest: ~e\n  expected:  ~s\n  given: ~s"
-                      digest-spec (digest-spec-size digest-spec) (bytes-length digest))))
+                      dspec (digest-spec-size dspec) (bytes-length msg))))
 
-    (define/public (-sign digest digest-spec pad) (err/no-impl this))
-    (define/public (-verify digest digest-spec pad sig) (err/no-impl this))
+    (define/public (-sign msg dspec pad) (err/no-impl this))
+    (define/public (-verify msg dspec pad sig) (err/no-impl this))
 
     ;; ----
 
