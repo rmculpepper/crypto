@@ -288,6 +288,28 @@
 (define (translate-key key-datum from-fmt to-fmt)
   (send (new translate-key% (fmt to-fmt)) read-key key-datum from-fmt))
 
+;; merge-rkt-private-key : Datum Datum -> Datum
+;; Try to fill missing fields in priv with pub.
+(define (merge-rkt-private-key priv pub)
+  (or (match priv
+        [(list 'dsa 'private p q g #f x)
+         (match pub
+           [(list 'dsa 'public _ _ _ y)
+            (list 'dsa 'private p q g y x)]
+           [_ #f])]
+        [(list 'ec 'private curve-oid #f d)
+         (match pub
+           [(list 'ec 'public _ qB)
+            (list 'ec 'private curve-oid qB d)]
+           [_ #f])]
+        [(list 'eddsa 'private curve #f dB)
+         (match pub
+           [(list 'eddsa 'public _ qB)
+            (list 'eddsa 'private curve qB dB)]
+           [_ #f])]
+        [_ #f])
+      priv))
+
 ;; ============================================================
 
 (define (private-key->der fmt priv pub)
