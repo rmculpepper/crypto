@@ -42,7 +42,8 @@
                    (-decode-pub-rsa subjectPublicKey)]
                   [(equal? alg-oid id-dsa)
                    (-decode-pub-dsa params subjectPublicKey)]
-                  ;; FIXME: DH support
+                  [(equal? alg-oid dhKeyAgreement)
+                   (-decode-pub-dh params subjectPublicKey)]
                   [(equal? alg-oid id-ecPublicKey)
                    (-decode-pub-ec params subjectPublicKey)]
                   [(equal? alg-oid id-Ed25519)
@@ -60,6 +61,8 @@
                   (-decode-priv-rsa privateKey)]
                  [(equal? alg-oid id-dsa)
                   (-decode-priv-dsa alg-params publicKey privateKey)]
+                 [(equal? alg-oid dhKeyAgreement)
+                  (-decode-priv-dh alg-params publicKey privateKey)]
                  [(equal? alg-oid id-ecPublicKey)
                   (-decode-priv-ec alg-params publicKey privateKey)]
                  [(equal? alg-oid id-Ed25519)
@@ -105,6 +108,8 @@
          (-make-pub-rsa n e)]
         [(list 'dsa 'public (? nat? p) (? nat? q) (? nat? g))
          (-make-pub-dsa p q g)]
+        [(list 'dh 'public (? nat? p) (? nat? g) (? nat? y))
+         (-make-pub-dh p g y)]
         [(list 'ec 'public (? oid? curve-oid) (? bytes? qB))
          (-make-pub-ec curve-oid qB)]
         [(list 'eddsa 'public curve (? bytes? qB))
@@ -115,6 +120,8 @@
          (-make-priv-rsa n e d p q dp dq qInv)]
         [(list 'dsa 'private (? nat? p) (? nat? q) (? nat? g) (? nat? y) (? nat? x))
          (-make-priv-dsa p q g y x)]
+        [(list 'dh 'private (? nat? p) (? nat? g) (? nat? y) (? nat? x))
+         (-make-priv-dh p g y x)]
         [(list 'ec 'private (? oid? curve-oid) (? bytes? qB) (? nat? x))
          (-make-priv-ec curve-oid qB x)]
         [(list 'eddsa 'private (? symbol? curve) (? bytes? qB) (? bytes? dB))
@@ -164,6 +171,21 @@
     (define/public (-make-priv-dsa p q g y x) #f)
 
     ;; ---- DH ----
+
+    (define/public (-decode-pub-dh params y)
+      (match params
+        [(hash-table ['prime p] ['base g])
+         (-make-pub-dh p g y)]
+        [_ #f]))
+
+    (define/public (-decode-priv-dh params y x)
+      (match params
+        [(hash-table ['prime p] ['base g])
+         (-make-priv-dh p g y x)]
+        [_ #f]))
+
+    (define/public (-make-pub-dh p g y) #f)
+    (define/public (-make-priv-dh p g y x) #f)
 
     ;; ---- EC ----
 
@@ -238,8 +260,8 @@
       (match p
         [(list 'dsa 'params (? nat? p) (? nat? q) (? nat? g))
          (-make-params-dsa p q g)]
-        [(list 'dh 'params (? nat? prime) (? nat? base))
-         (-make-params-dh prime base)]
+        [(list 'dh 'params (? nat? p) (? nat? g))
+         (-make-params-dh p g)]
         [(list 'ec 'params (? oid? curve-oid))
          (-make-params-ec curve-oid)]
         [_ #f]))
@@ -270,8 +292,12 @@
       (encode-pub-dsa fmt p q g y))
     (define/override (-make-priv-dsa p q g y x)
       (encode-priv-dsa fmt p q g y x))
-    (define/override (-make-params-dh prime base)
-      #f)
+    (define/override (-make-params-dh p g)
+      (encode-params-dh fmt p g))
+    (define/override (-make-pub-dh p g y)
+      (encode-pub-dh fmt p g y))
+    (define/override (-make-priv-dh p g y x)
+      (encode-priv-dh fmt p g y x))
     (define/override (-make-params-ec curve-oid)
       (encode-params-ec fmt curve-oid))
     (define/override (-make-pub-ec curve-oid qB)
@@ -296,6 +322,11 @@
          (match pub
            [(list 'dsa 'public _ _ _ y)
             (list 'dsa 'private p q g y x)]
+           [_ #f])]
+        [(list 'dh 'private p g #f x)
+         (match pub
+           [(list 'dh 'public _ _ y)
+            (list 'dh 'private p g y x)]
            [_ #f])]
         [(list 'ec 'private curve-oid #f d)
          (match pub
@@ -400,6 +431,43 @@
     [else #f]))
 
 ;; ---- DH ----
+
+(define (encode-params-dh fmt p g)
+  (case fmt
+    [(AlgorithmIdentifier)
+     (asn1->bytes/DER AlgorithmIdentifier
+       (hasheq 'algorithm dhKeyAgreement
+               'parameters (hasheq 'prime p 'base g)))]
+    [(DHParameter)
+     (asn1->bytes/DER DHParameter
+       (hasheq 'prime p 'base g))]
+    [(rkt) (list 'dh 'params p g)]
+    [else #f]))
+
+(define (encode-pub-dh fmt p g y)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (asn1->bytes/DER
+      SubjectPublicKeyInfo
+      (hasheq 'algorithm (hasheq 'algorithm dhKeyAgreement
+                                 'parameters (hasheq 'prime p 'base g))
+              'subjectPublicKey y))]
+    [(rkt) (list 'dh 'public p g y)]
+    [else #f]))
+
+(define (encode-priv-dh fmt p g y x)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (encode-pub-dh fmt p g y x)]
+    [(PrivateKeyInfo OneAsymmetricKey)
+     (private-key->der
+      fmt
+      (hasheq 'privateKeyAlgorithm (hasheq 'algorithm dhKeyAgreement
+                                           'parameters (hasheq 'prime p 'base g))
+              'privateKey x)
+      y)]
+    [(rkt) (list 'dh 'private p g y x)]
+    [else #f]))
 
 ;; ---- EC ----
 

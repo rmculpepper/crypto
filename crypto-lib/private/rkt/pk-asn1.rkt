@@ -345,7 +345,7 @@ References:
   ;;          alg-oid         priv-key-type    pub-key-type (OAK)
   (list (list rsaEncryption   RSAPrivateKey    #f)
         (list id-dsa          INTEGER          INTEGER)
-        (list dhKeyAgreement  INTEGER          #f)
+        (list dhKeyAgreement  INTEGER          INTEGER)
         (list id-ecPublicKey  ECPrivateKey     #f)
         (list id-Ed25519      OCTET-STRING     #f)
         (list id-Ed448        OCTET-STRING     #f)))
