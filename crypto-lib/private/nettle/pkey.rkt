@@ -16,6 +16,7 @@
 #lang racket/base
 (require ffi/unsafe
          asn1
+         binaryio/integer
          racket/class
          racket/match
          "../common/interfaces.rkt"
@@ -23,7 +24,6 @@
          "../common/pk-common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
-         "../common/base256.rkt"
          gmp gmp/unsafe
          "ffi.rkt")
 (provide (all-defined-out))
@@ -41,7 +41,7 @@
 (define nettle-read-key%
   (class pk-read-key-base%
     (inherit-field factory)
-    (super-new (spec 'gcrypt-read-key))
+    (super-new (spec 'nettle-read-key))
 
     ;; ---- RSA ----
 
@@ -139,6 +139,33 @@
       (define ecc (curve-oid->ecc curve-oid))
       (define impl (send factory get-pk 'ec))
       (and ecc impl (new nettle-ec-params% (impl impl) (ecc ecc))))
+
+    ;; ---- EdDSA ----
+
+    (define/override (-make-pub-eddsa curve qB)
+      (case curve
+        [(ed25519)
+         (define pub (make-sized-copy ED25519_KEY_SIZE qB))
+         (define impl (send factory get-pk 'eddsa))
+         (and impl (new nettle-ed25519-key% (impl impl) (pub pub) (priv #f)))]
+        [else #f]))
+
+    (define/override (-make-priv-eddsa curve _qB dB)
+      ;; Note: qB (public key) might be missing, so just recompute
+      (case curve
+        [(ed25519)
+         (define priv (make-sized-copy ED25519_KEY_SIZE dB))
+         (define pub (make-bytes ED25519_KEY_SIZE))
+         (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED25519_KEY_SIZE))
+         (nettle_ed25519_sha512_public_key pub priv)
+         (define impl (send factory get-pk 'eddsa))
+         (and impl (new nettle-ed25519-key% (impl impl) (pub pub) (priv priv)))]
+        [else #f]))
+
+    (define/private (make-sized-copy size buf)
+      (define copy (make-bytes size))
+      (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
+      copy)
     ))
 
 ;; ============================================================
@@ -378,6 +405,9 @@
     (define/override (get-public-key)
       (if priv (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f)) this))
 
+    (define/override (get-params)
+      (new nettle-dsa-params% (impl impl) (params params)))
+
     (define/override (-write-key fmt)
       (define p (mpz->integer (dsa_params_struct-p params)))
       (define q (mpz->integer (dsa_params_struct-q params)))
@@ -460,6 +490,9 @@
     (define/override (get-public-key)
       (if priv (new nettle-ec-key% (impl impl) (pub pub) (priv #f)) this))
 
+    (define/override (get-params)
+      (new nettle-ec-params% (impl impl) (ecc (ecc_point_struct-ecc pub))))
+
     (define/override (-write-key fmt)
       (define ecc (ecc_point_struct-ecc pub))
       (define curve-oid (ecc->curve-oid ecc))
@@ -534,15 +567,14 @@
 ;; ============================================================
 ;; Ed25519
 
-(define nettle-ed25519-impl%
+(define nettle-eddsa-impl%
   (class nettle-pk-impl%
     (inherit-field spec factory)
     (inherit get-random-ctx)
     (super-new (spec 'eddsa))
 
     (define/override (can-sign? pad dspec)
-      (eprintf "can-sign? ~e, ~e\n" pad dspec)
-      (and (memq pad '(#f)) (memq dspec '(#f sha512))))
+      (and (memq pad '(#f)) (memq dspec '(#f none))))
     (define/override (has-params?) #f)
 
     (define/override (generate-key config)
@@ -568,12 +600,14 @@
     (define/override (get-public-key)
       (if priv (new nettle-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-key fmt)
-      (error 'nope))
+    (define/override (-write-public-key fmt)
+      (encode-pub-eddsa fmt 'ed25519 pub))
+    (define/override (-write-private-key fmt)
+      (encode-priv-eddsa fmt 'ed25519 pub priv))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-ed25519-key%)
-           (error 'nope)))
+           (equal? pub (get-field pub other))))
 
     (define/override (-sign msg _dspec pad)
       (define sig (make-bytes ED25519_SIGNATURE_SIZE))

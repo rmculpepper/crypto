@@ -18,23 +18,62 @@
          racket/class
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/pk-common.rkt"
          "../common/catalog.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 
-;; ============================================================
+;; Size of serialized public and private key components.
+(define KEYSIZE 32)
 
+(define sodium-read-key%
+  (class pk-read-key-base%
+    (inherit-field factory)
+    (super-new (spec 'sodium-read-key))
+
+    ;; ---- EdDSA ----
+
+    (define/override (-make-pub-eddsa curve qB)
+      (case curve
+        [(ed25519)
+         (define pub (make-sized-copy crypto_sign_ed25519_PUBLICKEYBYTES qB))
+         (define impl (send factory get-pk 'eddsa))
+         (and impl (new sodium-ed25519-key% (impl impl) (pub qB) (priv #f)))]
+        [else #f]))
+
+    (define/override (-make-priv-eddsa curve qB dB)
+      ;; AFAICT, libsodium calls the secret part of the key the "seed",
+      ;; and seed_keypair can be used to recompute the public key.
+      (case curve
+        [(ed25519)
+         (define seed (make-sized-copy crypto_sign_ed25519_SEEDBYTES dB))
+         (define priv (make-bytes crypto_sign_ed25519_SECRETKEYBYTES))
+         (define pub (make-bytes crypto_sign_ed25519_PUBLICKEYBYTES))
+         (crypto_sign_ed25519_seed_keypair pub priv seed)
+         ;; FIXME: check against qB, dB
+         (unless (equal? seed (subbytes priv 0 32))
+           (crypto-error "failed to recompute key from seed"))
+         (define impl (send factory get-pk 'eddsa))
+         (and impl (new sodium-ed25519-key% (impl impl) (pub pub) (priv priv)))]
+        [else #f]))
+
+    (define/private (make-sized-copy size buf)
+      (define copy (make-bytes size))
+      (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
+      copy)
+    ))
+
+;; ============================================================
 ;; Ed25519
 
-(define sodium-ed25519-impl%
+(define sodium-eddsa-impl%
   (class pk-impl-base%
     (inherit-field spec factory)
     (super-new (spec 'eddsa))
 
     (define/override (can-sign? pad dspec)
-      (eprintf "can-sign? ~e, ~e\n" pad dspec)
-      (and (memq pad '(#f)) (memq dspec '(#f sha512))))
+      (and (memq pad '(#f)) (memq dspec '(#f *none*))))
     (define/override (has-params?) #f)
 
     (define/override (generate-key config)
@@ -61,12 +100,14 @@
     (define/override (get-public-key)
       (if priv (new sodium-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-key fmt)
-      (error 'nope))
+    (define/override (-write-public-key fmt)
+      (encode-pub-eddsa fmt 'ed25519 pub))
+    (define/override (-write-private-key fmt)
+      (encode-priv-eddsa fmt 'ed25519 pub (subbytes priv 0 32)))
 
     (define/override (equal-to-key? other)
       (and (is-a? other sodium-ed25519-key%)
-           (error 'nope)))
+           (equal? pub (get-field pub other))))
 
     (define/override (-sign msg _dspec pad)
       (define sig (make-bytes crypto_sign_ed25519_BYTES))

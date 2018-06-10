@@ -160,6 +160,43 @@
       (gcry_pk_testkey priv)
       priv)
 
+    ;; ---- EdDSA ----
+
+    (define/override (-make-pub-eddsa curve qB)
+      (case curve
+        [(ed25519)
+         (define pub (make-ed25519-public-key qB))
+         (define impl (send factory get-pk 'eddsa))
+         (new gcrypt-eddsa-key% (impl impl) (pub pub) (priv #f))]
+        [else #f]))
+
+    (define/private (make-ed25519-public-key qB)
+      (gcry_sexp_build "(public-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
+                       (gcry_sexp_build/%b "(q %b)" qB)))
+
+    (define/override (-make-priv-eddsa curve qB dB)
+      ;; It doesn't seem to be possible to recover qB if it is missing,
+      ;; so just fail.
+      (case curve
+        [(ed25519)
+         (cond [qB
+                (define pub (make-ed25519-public-key qB))
+                (define priv (make-ed25519-private-key qB dB))
+                (define impl (send factory get-pk 'eddsa))
+                (new gcrypt-eddsa-key% (impl impl) (pub pub) (priv priv))]
+               [else #f])]
+        [else #f]))
+
+    (define/private (make-ed25519-private-key qB dB)
+      (define priv
+        (gcry_sexp_build "(private-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
+                         (gcry_sexp_build/%b "(q %b)" qB)
+                         (gcry_sexp_build/%b "(d %b)" dB)))
+      (gcry_pk_testkey priv)
+      priv)
+
+    ;; ----
+
     (define/private (curve-oid->name oid)
       (define name-sym
         (for/first ([entry (in-list known-curves)]
@@ -374,8 +411,7 @@
     (inherit -known-digest? *generate-key)
     (super-new (spec 'dsa))
 
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (-known-digest? dspec)))
+    (define/override (can-sign? pad dspec) (memq pad '(#f)))
 
     (define/override (generate-key config)
       (check-config config allowed-dsa-keygen "DSA key generation")
@@ -442,8 +478,7 @@
     (inherit -known-digest? *generate-key)
     (super-new (spec 'ec))
 
-    (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (-known-digest? dspec)))
+    (define/override (can-sign? pad dspec) (memq pad '(#f)))
 
     (define/override (generate-key config)
       (check-config config config:ec-paramgen "EC key generation")
@@ -527,7 +562,7 @@
     (super-new (spec 'eddsa))
 
     (define/override (can-sign? pad dspec)
-      (and (memq pad '(#f)) (memq dspec '(#f))))
+      (and (memq pad '(#f)) (memq dspec '(#f *none*))))
 
     (define/override (generate-key config)
       (check-config config config:eddsa-keygen "EdDSA key generation")
@@ -548,10 +583,13 @@
     (super-new)
 
     (define/override (-write-private-key fmt)
-      'todo)
+      (let ([qB (sexp-get-data priv "ecc" "q")]
+            [dB (sexp-get-data priv "ecc" "d")])
+        (encode-priv-eddsa fmt 'ed25519 qB dB)))
 
     (define/override (-write-public-key fmt)
-      'todo)
+      (let ([qB (sexp-get-data pub "ecc" "q")])
+        (encode-pub-eddsa fmt 'ed25519 qB)))
 
     (define/override (sign-make-data-sexp msg _dspec pad)
       (gcry_sexp_build "(data (flags eddsa) (hash-algo sha512) (value %M))"

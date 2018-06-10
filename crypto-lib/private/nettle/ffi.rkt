@@ -687,12 +687,13 @@
 ;; ----------------------------------------
 ;; EC
 
-(define-cstruct _ecc_point_struct ([ecc _pointer] [p _pointer])
+(define-cpointer-type _ecc_curve)
+
+(define-cstruct _ecc_point_struct ([ecc _ecc_curve] [p _pointer])
   #:malloc-mode 'atomic-interior)
-(define-cstruct _ecc_scalar_struct ([ecc _pointer] [p _pointer])
+(define-cstruct _ecc_scalar_struct ([ecc _ecc_curve] [p _pointer])
   #:malloc-mode 'atomic-interior)
 
-(define-cpointer-type _ecc_curve)
 (define _ecc_point _ecc_point_struct-pointer)
 (define _ecc_scalar _ecc_scalar_struct-pointer)
 
