@@ -41,7 +41,7 @@ subsequently mutated, but avoids making a copy.
 
 @section[#:tag "provider-notes"]{Notes on Cryptography Providers}
 
-@section[#:tag "random"]{CSPRNG Initialization}
+@subsection[#:tag "random"]{CSPRNG Initialization}
 
 Some cryptographic operations require a source of cryptographically
 secure pseudo-random numbers. Some of these, such as
@@ -66,7 +66,7 @@ update its entropy pool, so it does @bold{not} enjoy Yarrow's
 key-compromise recovery properties.
 
 
-@section[#:tag "libcrypto-notes"]{Libcrypto Quirks}
+@subsection[#:tag "libcrypto-notes"]{Libcrypto Quirks}
 
 PSS padding for RSA signatures is, in principle, parameterized by the
 salt length. A standard choice is the length of the digest to be
@@ -80,7 +80,7 @@ padding to use the digest length and @racket['pss*] to be the
 libcrypto-specific behavior.
 
 
-@section[#:tag "gcrypt-notes"]{GCrypt Quirks}
+@subsection[#:tag "gcrypt-notes"]{GCrypt Quirks}
 
 If ECDSA is used with a digest longer than the bit-length of the
 curve, gcrypt either fails to correctly truncate the digest or
@@ -89,8 +89,13 @@ and nettle. Consequently, this library truncates the digest before
 passing it to gcrypt for signing.
 @; {https://crypto.stackexchange.com/questions/18488/ecdsa-with-sha256-and-sepc192r1-curve-impossible-or-how-to-calculate-e}
 
+GCrypt does not expose operations to compute EC and EdDSA public keys
+from the private keys, so reading a private key in PrivateKeyInfo or
+OneAsymmetricKey form may fail if the optional public key field is
+missing.
 
-@section[#:tag "sodium-notes"]{Sodium Quirks}
+
+@subsection[#:tag "sodium-notes"]{Sodium Quirks}
 
 Sodium provides only ``all-at-once'' encryption and decryption
 functions. Consequently, encryption and decryption contexts using

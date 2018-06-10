@@ -25,13 +25,29 @@ cryptosystem's potential operations.
 Returns @racket[#t] if @racket[v] is a PK cryptosystem specifier,
 @racket[#f] otherwise.
 
-A PK cryptosystem specifier is one of the following: @racket['rsa],
-@racket['dsa], @racket['dh], or @racket['ec]. Strictly speaking, it
-specifies the information represented by the public and private keys
-and the algorithms that operate on that information. For example,
-@racket['rsa] specifies RSA keys with RSAES-* encryption algorithms
-and the RSASSA-* signature algorithms, and @racket['ec] specifies EC
-keys with ECDSA signing and ECDH key agreement.
+A PK cryptosystem specifies the information represented by the public and
+private keys and the algorithms that operate on that information. The
+following PK systems are supported:
+
+@itemlist[
+
+@item{@racket['rsa] --- RSA keys with RSAES-* encryption and RSASSA-* signing.}
+
+@item{@racket['dsa] --- DSA keys with DSA signing.}
+
+@item{@racket['dh] --- Diffie-Helman keys with DH key agreement.}
+
+@item{@racket['ec] --- Elliptic curve keys with ECDSA signing and ECDH key
+agreement. Only named curves are supported, and different implementations
+support different curves; use @racket[factory-print-info] to see supported
+curves.}
+
+@item{@racket['eddsa] --- Edwards curve keys with EdDSA signing. Currently only
+@as-index{Ed25519} is supported.}
+
+]
+
+@history[#:changed "1.1" @elem{Added @racket['eddsa].}]
 }
 
 @defproc[(pk-impl? [v any/c]) boolean?]{
@@ -123,7 +139,7 @@ Returns @racket[#t] if @racket[v] is a value representing PK key
 parameters for some cryptosystem, @racket[#f] otherwise.
 }
 
-@defproc[(pk-key->parameters [pk pk-key?]) pk-parameters?]{
+@defproc[(pk-key->parameters [pk pk-key?]) (or/c pk-parameters? #f)]{
 
 Returns a value representing the key parameters of @racket[pk], or
 @racket[#f] if @racket[pk]'s cryptosystem does not use key parameters.
@@ -182,9 +198,9 @@ The following configuration values are recognized for EC
 (@racket['ec]):
 @itemlist[
 
-@item{@racket[(list 'curve _curve-name)] --- Required. Use the
-standard curve named @racket[_curve-name]. Examples include
-@racket["NIST P-256"] and @racket["secp192r1"].}
+@item{@racket[(list 'curve _curve-name)] --- Required. Use the standard curve
+named @racket[_curve-name]. Examples include @racket["NIST P-256"] and
+@racket["secp192r1"]. Use @racket[factory-print-info] to show available curves.}
 
 ]
 }
@@ -205,6 +221,17 @@ The following configuration values are recognized for RSA
 @racket[_nbits]. Examples include @racket[1024] and @racket[2048].}
 
 ]
+
+The following configuration values are recognized for EdDSA
+(@racket['eddsa]):
+@itemlist[
+
+@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key for the
+given curve. The @racket[_curve-sym] must be @racket['ed25519].}
+
+]
+
+@history[#:changed "1.1" @elem{Added @racket['eddsa] options.}]
 }
 
 
@@ -212,23 +239,24 @@ The following configuration values are recognized for RSA
 
 In PK signing, the sender uses their own private key to sign a
 message; any other party can verify the sender's signature using the
-sender's public key. Only short messages can be directly signed using
-PK cryptosystems (limits are generally proportional to the size of the
-PK keys), so a typical process is to compute a digest of the message
-and sign the digest. The message and digest signature are sent
-together, possibly with additional data. PK signing and verification
-is supported by the RSA, DSA, and EC (ECDSA) cryptosystems.
+sender's public key.
 
-@defproc[(pk-sign-digest [pk private-key?]
-                         [di (or/c digest-spec? digest-impl?)]
-                         [dgst bytes?]
-                         [#:pad padding (or/c #f 'pkcs1-v1.5 'pss 'pss*) #f])
+In RSA, DSA, and ECDSA, only short messages can be signed directly (limits are
+generally proportional to the size of the keys), so a typical process is to
+compute a digest of the message and sign the digest. The message and digest
+signature are sent together, possibly with additional data.
+
+In EdDSA, messages are signed directly. (The signing process computes a message
+digest internally.)
+
+@defproc[(pk-sign [pk private-key?]
+                  [msg bytes?]
+                  [#:pad padding (or/c #f 'pkcs1-v1.5 'pss 'pss*) #f]
+                  [#:digest dspec (or/c digest-spec? 'none #f) #f])
          bytes?]{
 
-Returns the signature using the private key @racket[pk] of
-@racket[dgst] and metadata indicating that @racket[dgst] was computed
-using digest function @racket[di]. The @racket[dgst] argument should
-be the @racket[di] digest of some message.
+Returns the signature using the private key @racket[pk] of the message
+@racket[msg].
 
 If @racket[pk] is an RSA private key, then @racket[padding] must be
 one of the following:
@@ -242,21 +270,42 @@ verifying}
 ]
 For all other cryptosystems, @racket[padding] must be @racket[#f].
 
-If @racket[di] is not a digest compatible with @racket[pk], or if the
-size of @racket[dgst] is not the digest size of @racket[di], or if the
-digest size is too large for @racket[pk], then an exception is raised.
+If @racket[pk] is an RSA private key, then @racket[dspec] must be the name
+of a digest algorithm, and @racket[msg] must be a digest computed with
+@racket[dspec] (in particular, it must have the correct size for
+@racket[dspec]). The resulting signature depends on the identity of the
+digest algorithm. Different RSA implementations may support different digest
+algorithms.
+
+If @racket[pk] is a DSA or EC private key, the signature does not depend on
+the digest algorithm; the @racket[dspec] should be omitted. (For backwards
+compatibility, the @racket[dspec] argument is accepted, but it has no effect
+other than checking the length of @racket[msg].)
+
+If @racket[pk] is a EdDSA private key, then @racket[dspec] must be
+@racket[#f] or @racket['none] (both values mean the same thing). The message
+may be of any length, and the EdDSA signature is computed. Future versions
+of this library may accept other values of @racket[dspec] and compute
+HashEdDSA signatures (eg, Ed25519ph) in reponse.
+
+@history[#:added "1.1"]
 }
 
-@defproc[(pk-verify-digest [pk pk-key?]
-                           [di (or/c digest-spec? digest-impl?)] 
-                           [dgst bytes?]
-                           [sig bytes?]
-                           [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
+@defproc[(pk-verify [pk pk-key?]
+                    [msg bytes?]
+                    [sig bytes?]
+                    [#:digest dspec (or/c digest-spec? #f 'none) #f]
+                    [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
          boolean?]{
 
-Returns @racket[#t] if @racket[pk] verifies that @racket[sig] is a
-valid signature of the message digest @racket[dgst] using digest
-function @racket[di], or @racket[#f] if the signature is invalid.
+Returns @racket[#t] if @racket[pk] verifies that @racket[sig] is a valid
+signature of the message @racket[msg], or @racket[#f] if the signature is
+invalid.
+
+The @racket[dspec] and @racket[padding] arguments have the same meanings as
+for @racket[pk-sign].
+
+@history[#:added "1.1"]
 }
 
 @deftogether[[
@@ -276,6 +325,28 @@ function @racket[di], or @racket[#f] if the signature is invalid.
 Computes or verifies signature of the @racket[di] message digest of
 @racket[input]; equivalent to calling @racket[digest] then
 @racket[pk-sign-digest] or @racket[pk-verify-digest], respectively.
+
+Do not use these functions with EdDSA keys; use @racket[pk-sign] and
+@racket[pk-verify] directly on the messages. (This library currently does
+not support pre-hashing EdDSA variants, eg Ed25519ph.)
+}
+
+@deftogether[[
+@defproc[(pk-sign-digest [pk private-key?]
+                         [di (or/c digest-spec? digest-impl?)]
+                         [dgst bytes?]
+                         [#:pad padding (or/c #f 'pkcs1-v1.5 'pss 'pss*) #f])
+         bytes?]
+@defproc[(pk-verify-digest [pk pk-key?]
+                           [di (or/c digest-spec? digest-impl?)] 
+                           [dgst bytes?]
+                           [sig bytes?]
+                           [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
+         boolean?]
+]]{
+
+Equivalent to @racket[(pk-sign pk dgst #:digest di #:pad padding)] and
+@racket[(pk-verify pk dgst sig #:digest di #:pad padding)], respectively.
 }
 
 
@@ -370,13 +441,25 @@ of @racket[pk]. All key types are supported, and an identifier for the
 key type is embedded in the encoding.
 
 For compatibility with OpenSSL, DH keys are encoded using the PKCS #3
-identifier and parameters @cite["PKCS3"] rather than those specified
-by @cite["PKIX-AlgId"].}
+identifier and parameters @cite["PKCS3"] rather than those specified by
+@cite["PKIX-AlgId"], and EdDSA keys are encoded using the algorithm
+identifiers specified in the draft @cite["PKIX-EdC"].}
 
 @item{@racket['PrivateKeyInfo] --- DER-encoded PrivateKeyInfo
 @cite["PKCS8"] representation of @racket[pk], which must be a private
 key. All key types are supported, and an identifier for the key type
-is embedded in the encoding.}
+is embedded in the encoding.
+
+For DSA, DH, and EdDSA keys, the PrivateKeyInfo (version 1) format does not
+store derived public-key fields. Some implementations (eg GCrypt) do not
+expose the ability to recompute the public key, so they may not be able to
+read such keys. See also @racket['OneAsymmetricKey].}
+
+@item{@racket['OneAsymmetricKey] --- DER-encoded OneAsymmetricKey
+@cite["AKP"] representation of @racket[pk], which must be a private
+key. OneAsymmetricKey is essentially PrivateKeyInfo version 2; it adds an
+optional field for the public key. Prefer OneAsymmetricKey for storing DSA,
+DH, and EdDSA keys.}
 
 @item{@racket['RSAPrivateKey] --- DER-encoded RSAPrivateKey
 @cite["PKCS1"] representation of @racket[pk], which must be an RSA
@@ -389,6 +472,8 @@ used by OpenSSL.}}
 @;{@item{@racket['ECPrivateKey] --- DER-encoded ECPrivateKey @cite{SEC1}
 representation of @racket[pk], which must be an EC private key. Only
 keys using named curves are supported.}}
+
+@history[#:changed "1.1" @elem{Added @racket['OneAsymmetricKey] support.}]
 ]
 
 More formats may be added in future versions of this library.
@@ -457,13 +542,16 @@ found that accepts @racket[fmt], an exception is raised.
 @bibliography[
 #:tag "pk-bibliography"
 
+@bib-entry[#:key "AKP"
+           #:title "RFC 5958: Asymmetric Key Packages"
+           #:url "https://tools.ietf.org/html/rfc5958"]
+
 @bib-entry[#:key "PKCS1"
            #:title "PKCS #1: RSA Cryptography, version 2.1"
            #:url "http://www.ietf.org/rfc/rfc3447.txt"]
 
 @bib-entry[#:key "PKCS3"
-           #:title "PKCS #3: Diffie-Hellman Key-Agreement Standard"
-           #:url "http://www.emc.com/emc-plus/rsa-labs/standards-initiatives/pkcs-3-diffie-hellman-key-agreement-standar.htm"]
+           #:title "PKCS #3: Diffie-Hellman Key-Agreement Standard"]
 
 @bib-entry[#:key "PKCS8"
            #:title "PKCS #8: Private-Key Information Syntax Specification, version 1.2"
@@ -476,6 +564,10 @@ found that accepts @racket[fmt], an exception is raised.
 @bib-entry[#:key "PKIX-AlgId"
            #:title "RFC 3279: Algorithms and Identifiers for the Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile"
            #:url "http://www.ietf.org/rfc/rfc3279.txt"]
+
+@bib-entry[#:key "PKIX-EdC"
+           #:title "(Draft) Algorithm Identifiers for Ed25519, Ed448, X25519 and X448 for use in the Internet X.509 Public Key Infrastructure"
+           #:url "https://tools.ietf.org/html/draft-ietf-curdle-pkix-07"]
 
 @bib-entry[#:key "RFC2631"
            #:title "RFC 2631: Diffie-Hellman Key Agreement Method"

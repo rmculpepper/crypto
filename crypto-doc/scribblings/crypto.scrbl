@@ -4,7 +4,7 @@
                      racket/contract
                      crypto))
 
-@title{Crypto: Cryptographic Operations}
+@title[#:version "1.1"]{Crypto: Cryptographic Operations}
 @author[@author+email["Ryan Culpepper" "ryanc@racket-lang.org"]]
 
 @defmodule[crypto]
