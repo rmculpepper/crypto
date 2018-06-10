@@ -367,7 +367,8 @@
   '#hasheq([rsa . (sign encrypt)]
            [dsa . (sign params)]
            [dh  . (key-agree params)]
-           [ec  . (sign key-agree params)]))
+           [ec  . (sign key-agree params)]
+           [eddsa . (sign)]))
 (define rsa-sign-pads '(pkcs1-v1.5 pss pss* #f))
 (define rsa-enc-pads '(pkcs1-v1.5 oeap #f))
 
@@ -391,7 +392,7 @@
   (and (memq 'params (hash-ref known-pk pk '())) #t))
 
 (define (list-known-pks)
-  '(rsa dsa dh ec))
+  '(rsa dsa dh ec eddsa))
 
 ;; ============================================================
 ;; KDF

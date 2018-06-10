@@ -53,6 +53,7 @@
          config:rsa-keygen
          config:dsa-paramgen
          config:ec-paramgen
+         config:eddsa-keygen
          version->list
          version->string
          version>=?
@@ -870,6 +871,9 @@
 
 (define config:ec-paramgen
   `((curve #t ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)")))
+
+(define config:eddsa-keygen
+  `((curve #t ,symbol? #f)))
 
 ;; ----------------------------------------
 
