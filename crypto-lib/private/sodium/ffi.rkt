@@ -596,3 +596,65 @@
         -> _int))
 
 (define scrypt-ok? (and crypto_pwhash_scryptsalsa208sha256_ll #t))
+
+;; ============================================================
+;; ed25519 (since ?)
+
+(define crypto_sign_ed25519_BYTES 64)
+(define crypto_sign_ed25519_SEEDBYTES 32)
+(define crypto_sign_ed25519_PUBLICKEYBYTES 32)
+(define crypto_sign_ed25519_SECRETKEYBYTES 64)  ;; = public and private keys
+;; (define crypto_sign_ed25519_MESSAGEBYTES_MAX ...)
+
+(define-na crypto_sign_ed25519ph_statebytes      (_fun -> _size))
+(define-na crypto_sign_ed25519_bytes             (_fun -> _size))
+(define-na crypto_sign_ed25519_seedbytes         (_fun -> _size))
+(define-na crypto_sign_ed25519_publickeybytes    (_fun -> _size))
+(define-na crypto_sign_ed25519_secretkeybytes    (_fun -> _size))
+(define-na crypto_sign_ed25519_messagebytes_max  (_fun -> _size))
+
+(define-na crypto_sign_ed25519_detached
+  (_fun (sig : _pointer) (siglen : (_ptr o _ullong))
+        (m   : _pointer) (mlen   : _ullong)
+        (sk  : _pointer)
+        -> (s : _int) -> (zero? s)))
+
+(define-na crypto_sign_ed25519_verify_detached
+  (_fun (sig : _pointer)
+        (m   : _pointer) (mlen : _ullong)
+        (pk  : _pointer)
+        -> (s : _int) -> (zero? s)))
+
+(define-na crypto_sign_ed25519_keypair
+  (_fun (pk : _pointer) (sk : _pointer) -> (s : _int) -> (zero? s)))
+
+(define-na crypto_sign_ed25519_seed_keypair
+  (_fun (pk : _pointer) (sk : _pointer) (seed : _pointer) -> _int))
+
+(define-na crypto_sign_ed25519_pk_to_curve25519
+  (_fun (curve25519_pk : _pointer) (ed25519_pk : _pointer) -> _int))
+
+(define-na crypto_sign_ed25519_sk_to_curve25519
+  (_fun (curve25519_sk : _pointer) (ed25519_sk : _pointer) -> _int))
+
+(define-na crypto_sign_ed25519_sk_to_seed
+  (_fun (seed : _pointer) (sk : _pointer) -> _int))
+
+(define-na crypto_sign_ed25519_sk_to_pk
+  (_fun (pk : _pointer) (sk : _pointer) -> _int))
+
+(define-na crypto_sign_ed25519ph_init
+  (_fun (state : _pointer) -> _int))
+
+(define-na crypto_sign_ed25519ph_update
+  (_fun (state : _pointer) (m : _pointer) (mlen : _ullong) -> _int))
+
+(define-na crypto_sign_ed25519ph_final_create
+  (_fun (state : _pointer)
+        (sig   : _pointer) (siglen : (_ptr o _ullong))
+        (sk    : _pointer)
+        -> _int))
+
+(define-na crypto_sign_ed25519ph_final_verify
+  (_fun (state : _pointer) (sig : _pointer) (pk : _pointer)
+        -> _int))

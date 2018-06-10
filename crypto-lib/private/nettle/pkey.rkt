@@ -408,6 +408,7 @@
     ))
 
 ;; ============================================================
+;; EC
 
 (define nettle-ec-impl%
   (class nettle-pk-impl%
@@ -529,3 +530,56 @@
 
 (define (curve-oid->ecc curve-oid)
   (curve-name->ecc (curve-oid->name curve-oid)))
+
+;; ============================================================
+;; Ed25519
+
+(define nettle-ed25519-impl%
+  (class nettle-pk-impl%
+    (inherit-field spec factory)
+    (inherit get-random-ctx)
+    (super-new (spec 'eddsa))
+
+    (define/override (can-sign? pad dspec)
+      (eprintf "can-sign? ~e, ~e\n" pad dspec)
+      (and (memq pad '(#f)) (memq dspec '(#f sha512))))
+    (define/override (has-params?) #f)
+
+    (define/override (generate-key config)
+      (check-config config config:eddsa-keygen "EdDSA key generation")
+      (define curve (config-ref config 'curve))
+      (case curve
+        [(ed25519)
+         (define priv (crypto-random-bytes ED25519_KEY_SIZE))
+         (define pub (make-bytes ED25519_KEY_SIZE))
+         (nettle_ed25519_sha512_public_key pub priv)
+         (new nettle-ed25519-key% (impl this) (pub pub) (priv priv))]
+        [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
+    ))
+
+(define nettle-ed25519-key%
+  (class pk-key-base%
+    (init-field pub priv)
+    (inherit-field impl)
+    (super-new)
+
+    (define/override (is-private?) (and priv #t))
+
+    (define/override (get-public-key)
+      (if priv (new nettle-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
+
+    (define/override (-write-key fmt)
+      (error 'nope))
+
+    (define/override (equal-to-key? other)
+      (and (is-a? other nettle-ed25519-key%)
+           (error 'nope)))
+
+    (define/override (-sign msg _dspec pad)
+      (define sig (make-bytes ED25519_SIGNATURE_SIZE))
+      (nettle_ed25519_sha512_sign pub priv (bytes-length msg) msg sig)
+      sig)
+
+    (define/override (-verify msg _dspec pad sig)
+      (nettle_ed25519_sha512_verify pub (bytes-length msg) msg sig))
+    ))

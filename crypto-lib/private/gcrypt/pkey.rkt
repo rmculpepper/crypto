@@ -517,3 +517,68 @@
          (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
         [_ (crypto-error "signature is not well-formed")]))
     ))
+
+;; ============================================================
+
+(define gcrypt-eddsa-impl%
+  (class gcrypt-pk-impl%
+    (inherit-field spec factory)
+    (inherit -known-digest? *generate-key)
+    (super-new (spec 'eddsa))
+
+    (define/override (can-sign? pad dspec)
+      (and (memq pad '(#f)) (memq dspec '(#f))))
+
+    (define/override (generate-key config)
+      (check-config config config:eddsa-keygen "EdDSA key generation")
+      (define curve-name
+        (case (config-ref config 'curve)
+          [(ed25519) #"Ed25519"]
+          [else (crypto-error "unsupported curve\n  curve: ~e"
+                              (config-ref config 'curve))]))
+      (*generate-key
+       (gcry_sexp_build "(genkey (ecc (curve %s) (flags eddsa)))" curve-name)
+       gcrypt-eddsa-key%))
+    ))
+
+(define gcrypt-eddsa-key%
+  (class gcrypt-pk-key%
+    (inherit-field pub priv impl)
+    (inherit is-private?)
+    (super-new)
+
+    (define/override (-write-private-key fmt)
+      'todo)
+
+    (define/override (-write-public-key fmt)
+      'todo)
+
+    (define/override (sign-make-data-sexp msg _dspec pad)
+      (gcry_sexp_build "(data (flags eddsa) (hash-algo sha512) (value %M))"
+                       (base256->mpi msg)))
+
+    (define/override (sign-unpack-sig-sexp sig-sexp)
+      (define sig-part (gcry_sexp_find_token sig-sexp "eddsa"))
+      (define sig-r-part (gcry_sexp_find_token sig-part "r"))
+      (define sig-r-data (gcry_sexp_nth_data sig-r-part 1))
+      (define sig-s-part (gcry_sexp_find_token sig-part "s"))
+      (define sig-s-data (gcry_sexp_nth_data sig-s-part 1))
+      (gcry_sexp_release sig-r-part)
+      (gcry_sexp_release sig-s-part)
+      (gcry_sexp_release sig-part)
+      (bytes-append sig-r-data
+                    (make-bytes (- 32 (bytes-length sig-r-data)) 0)
+                    sig-s-data
+                    (make-bytes (- 32 (bytes-length sig-s-data)) 0)))
+
+    (define/override (check-sig-pad pad)
+      (unless (member pad '(#f))
+        (err/bad-signature-pad impl pad)))
+
+    (define/override (verify-make-sig-sexp sig-bytes)
+      (unless (= (bytes-length sig-bytes) 64)
+        (crypto-error "signature is not well-formed"))
+      (gcry_sexp_build "(sig-val (eddsa (r %M) (s %M)))"
+                       (base256->mpi (subbytes sig-bytes 0 32))
+                       (base256->mpi (subbytes sig-bytes 32 64))))
+    ))

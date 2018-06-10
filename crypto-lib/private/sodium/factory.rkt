@@ -20,6 +20,7 @@
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"
+         "pkey.rkt"
          "kdf.rkt")
 (provide sodium-factory)
 
@@ -51,6 +52,11 @@
                     #:when (equal? (aeadcipher-spec rec) spec))
           rec))
       (and cipher (new sodium-cipher-impl% (info info) (factory this) (cipher cipher))))
+
+    (define/override (-get-pk spec)
+      (case spec
+        [(eddsa) (new sodium-ed25519-impl% (factory this))]
+        [else #f]))
 
     (define/override (-get-kdf spec)
       (case spec

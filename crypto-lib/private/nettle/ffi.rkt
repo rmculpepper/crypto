@@ -764,3 +764,29 @@
 
 (define-nettleHW nettle_ecdsa_generate_keypair
   (_fun _ecc_point _ecc_scalar _pointer (_fpointer = yarrow_random) -> _void))
+
+;; ----------------------------------------
+;; Ed25519
+
+(define ED25519_KEY_SIZE 32)
+(define ED25519_SIGNATURE_SIZE 64)
+
+(define-nettleHW nettle_ed25519_sha512_public_key
+  (_fun (pub : _pointer)
+        (priv : _pointer)
+        -> _void))
+
+(define-nettleHW nettle_ed25519_sha512_sign
+  (_fun (pub : _pointer)
+        (priv : _pointer)
+        (len : _size)
+        (msg : _pointer)
+        (sig : _pointer)
+        -> _void))
+
+(define-nettleHW nettle_ed25519_sha512_verify
+  (_fun (pub : _pointer)
+        (len : _size)
+        (msg : _pointer)
+        (sig : _pointer)
+        -> _bool))

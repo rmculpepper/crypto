@@ -185,6 +185,7 @@
         [(rsa) (new gcrypt-rsa-impl% (factory this))]
         [(dsa) (new gcrypt-dsa-impl% (factory this))]
         [(ec)  (new gcrypt-ec-impl%  (factory this))]
+        [(eddsa) (new gcrypt-eddsa-impl% (factory this))]
         [else #f]))
 
     (define/override (-get-kdf spec)
