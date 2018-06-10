@@ -22,6 +22,7 @@
          "../rkt/pk-asn1.rkt"
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/pk-common.rkt"
          "../common/error.rkt"
          "ffi.rkt"
          "digest.rkt")
@@ -41,29 +42,39 @@
     (super-new (spec 'libcrypto-read-key))
 
     (define/public (read-key sk fmt)
-      (define (check-bytes)
-        (unless (bytes? sk)
-          (crypto-error "bad value for key format\n  format: ~e\n  expected: ~s\n  got: ~e"
-                        fmt 'bytes? sk)))
       (define-values (evp private?)
-        (case fmt
-          [(SubjectPublicKeyInfo)
-           (check-bytes)
-           (values (d2i_PUBKEY sk (bytes-length sk)) #f)]
-          [(PrivateKeyInfo)
-           (check-bytes)
-           (define p8 (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk)))
-           (values (and p8 (EVP_PKCS82PKEY p8)) #t)]
-          [(RSAPrivateKey)
-           (check-bytes)
-           (values (d2i_PrivateKey EVP_PKEY_RSA sk (bytes-length sk)) #t)]
-          [(DSAPrivateKey)
-           (check-bytes)
-           (values (d2i_PrivateKey EVP_PKEY_DSA sk (bytes-length sk)) #t)]
-          [(ECPrivateKey)
-           (check-bytes)
-           (values (read-private-ec-key sk) #t)]
-          [else (values #f #f)]))
+        (let loop ([sk sk] [fmt fmt])
+          (define (check-bytes)
+            (unless (bytes? sk)
+              (crypto-error "bad value for key format\n  format: ~e\n  expected: ~s\n  got: ~e"
+                            fmt 'bytes? sk)))
+          (case fmt
+            [(SubjectPublicKeyInfo)
+             (check-bytes)
+             (values (d2i_PUBKEY sk (bytes-length sk)) #f)]
+            [(PrivateKeyInfo OneAsymmetricKey)
+             (check-bytes)
+             (define p8 (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk)))
+             (values (and p8 (EVP_PKCS82PKEY p8)) #t)]
+            [(RSAPrivateKey)
+             (check-bytes)
+             (values (d2i_PrivateKey EVP_PKEY_RSA sk (bytes-length sk)) #t)]
+            [(DSAPrivateKey)
+             (check-bytes)
+             (values (d2i_PrivateKey EVP_PKEY_DSA sk (bytes-length sk)) #t)]
+            [(ECPrivateKey)
+             (check-bytes)
+             (values (read-private-ec-key sk) #t)]
+            [(rkt)
+             (match sk
+               [(list* _ 'private _)
+                (let ([txkey (translate-key sk 'rkt 'PrivateKeyInfo)])
+                  (if txkey (loop txkey 'PrivateKeyInfo) (values #f #f)))]
+               [(list* _ 'public _)
+                (let ([txkey (translate-key sk 'rkt 'SubjectPublicKeyInfo)])
+                  (if txkey (loop txkey 'SubjectPublicKeyInfo) (values #f #f)))]
+               [_ (values #f #f)])]
+            [else (values #f #f)])))
       (define impl (and evp (evp->impl evp)))
       (and evp impl (new libcrypto-pk-key% (impl impl) (evp evp) (private? private?))))
 
@@ -153,11 +164,18 @@
       (case fmt
         [(SubjectPublicKeyInfo)
          (i2d i2d_PUBKEY evp)]
-        [(PrivateKeyInfo)
+        [(PrivateKeyInfo OneAsymmetricKey)
          (cond [private?
                 (define p8 (EVP_PKEY2PKCS8 evp))
                 (i2d i2d_PKCS8_PRIV_KEY_INFO p8)]
                [else #f])]
+        [(rkt)
+         (define pub-spki (*write-key #f 'SubjectPublicKeyInfo evp))
+         (define pub-rkt (translate-key pub-spki 'SubjectPublicKeyInfo 'rkt))
+         (if private?
+             (let ([priv-pki (*write-key #t 'PrivateKeyInfo evp)])
+               (merge-rkt-private-key (translate-key priv-pki 'PrivateKeyInfo 'rkt) pub-rkt))
+             pub-rkt)]
         [else #f]))
 
     (define/public (-known-digest? dspec)
