@@ -256,6 +256,38 @@
                       fmt v)))
     ))
 
+(define translate-key%
+  (class pk-read-key-base%
+    (init-field fmt)
+    (super-new (factory #f) (spec 'translate-key))
+    (define/override (-make-pub-rsa n e)
+      (encode-pub-rsa fmt n e))
+    (define/override (-make-priv-rsa n e d p q dp dq qInv)
+      (encode-priv-rsa fmt n e d p q dp dq qInv))
+    (define/override (-make-params-dsa p q g)
+      (encode-params-dsa fmt p q g))
+    (define/override (-make-pub-dsa p q g y)
+      (encode-pub-dsa fmt p q g y))
+    (define/override (-make-priv-dsa p q g y x)
+      (encode-priv-dsa fmt p q g y x))
+    (define/override (-make-params-dh prime base)
+      #f)
+    (define/override (-make-params-ec curve-oid)
+      (encode-params-ec fmt curve-oid))
+    (define/override (-make-pub-ec curve-oid qB)
+      (encode-pub-ec fmt curve-oid qB))
+    (define/override (-make-priv-ec curve-oid qB x)
+      (encode-priv-ec fmt curve-oid qB x))
+    (define/override (-make-pub-eddsa curve qB)
+      (encode-pub-eddsa fmt curve qB))
+    (define/override (-make-priv-eddsa curve qB dB)
+      (encode-priv-eddsa fmt curve qB dB))
+    ))
+
+;; translate-key : Datum KeyFormat KeyFormat -> (U Datum #f)
+(define (translate-key key-datum from-fmt to-fmt)
+  (send (new translate-key% (fmt to-fmt)) read-key key-datum from-fmt))
+
 ;; ============================================================
 
 (define (private-key->der fmt priv pub)
