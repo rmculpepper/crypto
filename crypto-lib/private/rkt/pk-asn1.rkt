@@ -53,12 +53,23 @@ References:
                       #:encode (lambda (v) (bytes->asn1/DER ANY v))
                       #:decode (lambda (v) (asn1->bytes/DER ANY v))))
 
+;; BIT-STRING-containing : (U ASN1-Type #f) -> ASN1-Type
+(define (BIT-STRING-containing type)
+  (cond [type
+         (WRAP BIT-STRING
+               #:encode (lambda (v) (bit-string (asn1->bytes/DER type v) 0))
+               #:decode (lambda (v) (bytes->asn1/DER type (bit-string-bytes v))))]
+        [else
+         (WRAP BIT-STRING
+               #:encode (lambda (v) (bit-string v 0))
+               #:decode (lambda (v) (bit-string-bytes v)))]))
+
 ;; ============================================================
 
 (define-asn1-type AlgorithmIdentifier
   (let ([typemap known-public-key-algorithms])
     (SEQUENCE [algorithm              OBJECT-IDENTIFIER]
-              [parameters #:dependent (get-type algorithm typemap) #:optional])))
+              [parameters #:dependent (get-type 1 algorithm typemap) #:optional])))
 
 (define AlgorithmIdentifier/DER
   (SEQUENCE [algorithm  OBJECT-IDENTIFIER]
@@ -66,18 +77,11 @@ References:
 
 (define-asn1-type SubjectPublicKeyInfo
   (SEQUENCE [algorithm AlgorithmIdentifier]
-            [subjectPublicKey #:dependent (BIT-STRING-containing (hash-ref algorithm 'algorithm))]))
+            [subjectPublicKey #:dependent (SPKI-PublicKey algorithm)]))
 
-(define (BIT-STRING-containing alg-oid)
-  (cond [(get-type2 alg-oid known-public-key-algorithms)
-         => (lambda (type)
-              (WRAP BIT-STRING
-                    #:encode (lambda (v) (bit-string (asn1->bytes/DER type v) 0))
-                    #:decode (lambda (v) (bytes->asn1/DER type (bit-string-bytes v)))))]
-        [else
-         (WRAP BIT-STRING
-               #:encode (lambda (v) (bit-string v 0))
-               #:decode (lambda (v) (bit-string-bytes v)))]))
+(define (SPKI-PublicKey algorithm)
+  (BIT-STRING-containing
+   (get-type 2 (hash-ref algorithm 'algorithm) known-public-key-algorithms)))
 
 ;; ============================================================
 ;; RSA
@@ -267,7 +271,7 @@ References:
   (SEQUENCE [version        INTEGER] ;; ecPrivkeyVer1
             [privateKey     OCTET-STRING]
             [parameters #:explicit 0 EcpkParameters #:optional]
-            [publicKey  #:explicit 1 (BIT-STRING-containing id-ecPublicKey) #:optional]))
+            [publicKey  #:explicit 1 (BIT-STRING-containing #f) #:default #f]))
 
 (define ecPrivkeyVer1 1)
 
@@ -288,36 +292,43 @@ References:
             [privateKey #:dependent    (PrivateKey privateKeyAlgorithm)]
             [attributes #:implicit 0   Attributes #:optional]))
 
+(define-asn1-type OneAsymmetricKey
+  (SEQUENCE [version                   INTEGER]
+            [privateKeyAlgorithm       AlgorithmIdentifier]
+            [privateKey #:dependent    (PrivateKey privateKeyAlgorithm)]
+            [attributes #:implicit 0   Attributes #:optional]
+            [publicKey #:implicit 1 #:dependent (OAK-PublicKey privateKeyAlgorithm)
+                       #:default #f]))
+
 (define (PrivateKey alg)
   (define alg-oid (hash-ref alg 'algorithm))
-  (cond [(get-type alg-oid known-private-key-formats)
+  (cond [(get-type 1 alg-oid known-private-key-formats)
          => (lambda (type)
               (WRAP OCTET-STRING
                     #:encode (lambda (v) (asn1->bytes/DER type v))
                     #:decode (lambda (v) (bytes->asn1/DER type v))))]
         [else OCTET-STRING]))
 
+(define (OAK-PublicKey algorithm)
+  (BIT-STRING-containing
+   (get-type 2 (hash-ref algorithm 'algorithm) known-private-key-formats)))
+
 (define Attributes (SET-OF ANY/DER))
 
 ;; ============================================================
 ;; Some utilities
 
-;; get-type : Key (listof (list Key Type)) -> Type
-(define (get-type key typemap)
+;; get-type : Nat Key (Listof (list Key X ...)) -> X
+(define (get-type index key typemap)
   (cond [(assoc key typemap)
-         => (lambda (e) (cadr e))]
+         => (lambda (e) (list-ref e index))]
         [else (error 'get-type "key not found\n  key: ~e" key)]))
-
-;; get-type2 : Key (listof (list Key Type)) -> Type
-(define (get-type2 key typemap)
-  (cond [(assoc key typemap)
-         => (lambda (e) (caddr e))]
-        [else (error 'get-type2 "key not found\n  key: ~e" key)]))
 
 ;; ============================================================
 
 ;; for SubjectPublicKeyInfo
 (define known-public-key-algorithms
+  ;;          alg-oid         params-type      pub-key-type (SPKI)
   (list (list rsaEncryption   NULL             RSAPublicKey)
         (list id-dsa          Dss-Parms        DSAPublicKey)
         ;; DH: PKIX says use dhpublicnumber; OpenSSL uses PKCS#3 OID
@@ -329,11 +340,12 @@ References:
         (list id-Ed25519      NULL             #f)
         (list id-Ed448        NULL             #f)))
 
-;; for PKCS #8 PrivateKeyInfo
+;; for PKCS #8 PrivateKeyInfo and OneAsymmetricKey
 (define known-private-key-formats
-  (list (list rsaEncryption   RSAPrivateKey)
-        (list id-dsa          INTEGER)
-        (list dhKeyAgreement  INTEGER)
-        (list id-ecPublicKey  ECPrivateKey)
-        (list id-Ed25519      OCTET-STRING)
-        (list id-Ed448        OCTET-STRING)))
+  ;;          alg-oid         priv-key-type    pub-key-type (OAK)
+  (list (list rsaEncryption   RSAPrivateKey    #f)
+        (list id-dsa          INTEGER          INTEGER)
+        (list dhKeyAgreement  INTEGER          #f)
+        (list id-ecPublicKey  ECPrivateKey     #f)
+        (list id-Ed25519      OCTET-STRING     #f)
+        (list id-Ed448        OCTET-STRING     #f)))

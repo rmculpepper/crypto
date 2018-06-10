@@ -51,26 +51,40 @@
                    (-decode-pub-eddsa 'ed448 subjectPublicKey)]
                   [else #f])]
            [_ #f])]
-        [(PrivateKeyInfo)
+        [(PrivateKeyInfo OneAsymmetricKey)
          (-check-bytes fmt sk)
-         (match (bytes->asn1/DER PrivateKeyInfo sk)
-           [(hash-table ['version version]
-                        ['privateKeyAlgorithm alg]
-                        ['privateKey privateKey])
-            (define alg-oid (hash-ref alg 'algorithm))
-            (define alg-params (hash-ref alg 'parameters #f))
-            (cond [(equal? alg-oid rsaEncryption)
-                   (-decode-priv-rsa privateKey)]
-                  [(equal? alg-oid id-dsa)
-                   (-decode-priv-dsa alg-params privateKey)]
-                  [(equal? alg-oid id-ecPublicKey)
-                   (-decode-priv-ec alg-params privateKey)]
-                  [(equal? alg-oid id-Ed25519)
-                   (-decode-priv-eddsa 'ed25519 privateKey)]
-                  [(equal? alg-oid id-Ed448)
-                   (-decode-priv-eddsa 'ed448 privateKey)]
-                  [else #f])]
-           [_ #f])]
+         (define (decode version alg privateKey publicKey)
+           (define alg-oid (hash-ref alg 'algorithm))
+           (define alg-params (hash-ref alg 'parameters #f))
+           (cond [(equal? alg-oid rsaEncryption)
+                  (-decode-priv-rsa privateKey)]
+                 [(equal? alg-oid id-dsa)
+                  (-decode-priv-dsa alg-params publicKey privateKey)]
+                 [(equal? alg-oid id-ecPublicKey)
+                  (-decode-priv-ec alg-params publicKey privateKey)]
+                 [(equal? alg-oid id-Ed25519)
+                  (-decode-priv-eddsa 'ed25519 publicKey privateKey)]
+                 [(equal? alg-oid id-Ed448)
+                  (-decode-priv-eddsa 'ed448 publicKey privateKey)]
+                 [else #f]))
+         (case fmt
+           ;; Avoid attempting to parse the publicKey field (which could fail!)
+           ;; unless OneAsymmetricKey is requested.
+           [(PrivateKeyInfo)
+            (match (bytes->asn1/DER PrivateKeyInfo sk)
+              [(hash-table ['version version]
+                           ['privateKeyAlgorithm alg]
+                           ['privateKey privateKey])
+               (decode version alg privateKey #f)]
+              [_ #f])]
+           [(OneAsymmetricKey)
+            (match (bytes->asn1/DER OneAsymmetricKey sk)
+              [(hash-table ['version version]
+                           ['privateKeyAlgorithm alg]
+                           ['privateKey privateKey]
+                           ['publicKey publicKey])
+               (decode version alg privateKey publicKey)]
+              [_ #f])])]
         [(RSAPrivateKey)
          (-check-bytes fmt sk)
          (-decode-priv-rsa (bytes->asn1/DER RSAPrivateKey sk))]
@@ -140,10 +154,10 @@
          (-make-pub-dsa p q g subjectPublicKey)]
         [_ #f]))
 
-    (define (-decode-priv-dsa alg-params privateKey)
+    (define/public (-decode-priv-dsa alg-params publicKey privateKey)
       (match alg-params
         [(hash-table ['p p] ['q q] ['g g])
-         (-make-priv-dsa p q g #f privateKey)]
+         (-make-priv-dsa p q g publicKey privateKey)]
         [_ #f]))
 
     (define/public (-make-pub-dsa p q g y) #f)
@@ -159,12 +173,12 @@
          (-make-pub-ec curve-oid subjectPublicKey)]
         [_ #f]))
 
-    (define (-decode-priv-ec alg-params privateKey)
+    (define/public (-decode-priv-ec alg-params publicKey privateKey)
       (match alg-params
         [`(namedCurve ,curve-oid)
          (match privateKey
            [(hash-table ['version 1] ['privateKey xB] ['publicKey qB])
-            (-make-priv-ec curve-oid qB (base256->unsigned xB))]
+            (-make-priv-ec curve-oid (or qB publicKey) (base256->unsigned xB))]
            [_ #f])]
         [_ #f]))
 
@@ -175,8 +189,8 @@
 
     (define/public (-decode-pub-eddsa curve qB)
       (-make-pub-eddsa curve qB))
-    (define/public (-decode-priv-eddsa curve dB)
-      (-make-priv-eddsa curve #f dB))
+    (define/public (-decode-priv-eddsa curve qB dB)
+      (-make-priv-eddsa curve qB dB))
 
     (define/public (-make-pub-eddsa curve qB) #f)
     (define/public (-make-priv-eddsa curve qB dB) #f)
@@ -244,6 +258,14 @@
 
 ;; ============================================================
 
+(define (private-key->der fmt priv pub)
+  (cond [(and (eq? fmt 'OneAsymmetricKey) pub)
+         (asn1->bytes/DER OneAsymmetricKey
+                          (hash-set* priv 'version 1 'publicKey pub))]
+        [else
+         (asn1->bytes/DER PrivateKeyInfo
+                          (hash-set priv 'version 0))]))
+
 ;; ---- RSA ----
 
 (define (encode-pub-rsa fmt n e)
@@ -260,7 +282,8 @@
   (case fmt
     [(SubjectPublicKeyInfo)
      (encode-pub-rsa fmt n e)]
-    [(PrivateKeyInfo)
+    [(PrivateKeyInfo OneAsymmetricKey)
+     ;; OAK note: private key already contains public key fields
      (asn1->bytes/DER
       PrivateKeyInfo
       (hasheq 'version 0
@@ -308,12 +331,13 @@
   (case fmt
     [(SubjectPublicKeyInfo)
      (encode-pub-dsa fmt p q g y)]
-    [(PrivateKeyInfo)
-     (asn1->bytes/DER
-      PrivateKeyInfo
-      (hasheq 'version 0
-              'privateKeyAlgorithm (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g))
-              'privateKey x))]
+    [(PrivateKeyInfo OneAsymmetricKey)
+     (private-key->der
+      fmt
+      (hasheq 'privateKeyAlgorithm (hasheq 'algorithm id-dsa
+                                           'parameters (hasheq 'p p 'q q 'g g))
+              'privateKey x)
+      y)]
     [(DSAPrivateKey)
      (asn1->bytes/DER
       (SEQUENCE-OF INTEGER)
@@ -351,7 +375,8 @@
   (case fmt
     [(SubjectPublicKeyInfo)
      (encode-pub-ec fmt curve-oid qB)]
-    [(PrivateKeyInfo)
+    [(PrivateKeyInfo OneAsymmetricKey)
+     ;; OAK note: private key already contains public key
      (asn1->bytes/DER
       PrivateKeyInfo
       (hasheq 'version 0
@@ -369,12 +394,12 @@
   (case fmt
     [(SubjectPublicKeyInfo)
      (encode-pub-eddsa fmt curve qB)]
-    [(PrivateKeyInfo)
-     (asn1->bytes/DER
-      PrivateKeyInfo
-      (hasheq 'version 0
-              'privateKeyAlgorithm (hasheq 'algorithm (ed-curve->oid curve))
-              'privateKey dB))]
+    [(PrivateKeyInfo OneAsymmetricKey)
+     (private-key->der
+      fmt
+      (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (ed-curve->oid curve))
+              'privateKey dB)
+      qB)]
     [(rkt) (list 'eddsa 'private curve qB dB)]
     [else #f]))
 
