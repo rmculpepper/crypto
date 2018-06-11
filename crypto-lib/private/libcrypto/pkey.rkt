@@ -76,7 +76,7 @@
                [_ (values #f #f)])]
             [else (values #f #f)])))
       (define impl (and evp (evp->impl evp)))
-      (and evp impl (new libcrypto-pk-key% (impl impl) (evp evp) (private? private?))))
+      (and evp impl (send impl make-key evp private?)))
 
     (define/private (evp->impl evp)
       (define type (EVP->type evp))
@@ -112,7 +112,7 @@
     (define/public (read-params buf fmt)
       (define (evp->params evp)
         (define impl (and evp (evp->impl evp)))
-        (and impl (new libcrypto-pk-params% (impl impl) (evp evp))))
+        (and impl (send impl make-params evp)))
       (case fmt
         [(AlgorithmIdentifier)
          (match (bytes->asn1/DER AlgorithmIdentifier/DER buf)
@@ -155,12 +155,49 @@
 
 (define libcrypto-pk-impl%
   (class pk-impl-base%
-    (inherit-field spec factory)
+    (inherit-field factory)
+    (super-new)
+    (define/public (-known-digest? dspec)
+      (or (not dspec) (and (send factory get-digest dspec) #t)))
+
+    (define/public (make-key evp private?)
+      (new (get-key-class) (impl this) (evp evp) (private? private?)))
+    (define/public (make-params evp)
+      (new (get-params-class) (impl this) (pevp evp)))
+    (abstract get-key-class)
+    (define/public (get-params-class) (internal-error "params not supported"))
+    ))
+
+;; ------------------------------------------------------------
+
+(define libcrypto-pk-params%
+  (class pk-params-base%
+    (init-field pevp)
+    (super-new)
+    ))
+
+;; ------------------------------------------------------------
+
+(define libcrypto-pk-key%
+  (class pk-key-base%
+    (init-field evp private?)
+    (inherit-field impl)
     (super-new)
 
-    (abstract pktype)
+    (define/override (is-private?) private?)
 
-    (define/public (*write-key private? fmt evp)
+    (define/override (get-public-key)
+      (define pub (i2d i2d_PUBKEY evp))
+      (define pub-evp (d2i_PUBKEY pub (bytes-length pub)))
+      (send impl make-key pub-evp #f))
+
+    (define/override (get-params)
+      ;; Note: EVP_PKEY_copy_parameters doesn't work! (Probably used
+      ;; to copy params from cert to key).  We treat keys as read-only
+      ;; once created, so safe to share evp.
+      (send impl make-params evp))
+
+    (define/override (-write-key fmt)
       (case fmt
         [(SubjectPublicKeyInfo)
          (i2d i2d_PUBKEY evp)]
@@ -170,38 +207,102 @@
                 (i2d i2d_PKCS8_PRIV_KEY_INFO p8)]
                [else #f])]
         [(rkt)
-         (define pub-spki (*write-key #f 'SubjectPublicKeyInfo evp))
+         (define pub-spki (-write-key 'SubjectPublicKeyInfo))
          (define pub-rkt (translate-key pub-spki 'SubjectPublicKeyInfo 'rkt))
          (if private?
-             (let ([priv-pki (*write-key #t 'PrivateKeyInfo evp)])
+             (let ([priv-pki (-write-key 'PrivateKeyInfo)])
                (merge-rkt-private-key (translate-key priv-pki 'PrivateKeyInfo 'rkt) pub-rkt))
              pub-rkt)]
         [else #f]))
 
-    (define/public (-known-digest? dspec)
-      (or (not dspec) (and (send factory get-digest dspec) #t)))
+    (define/override (equal-to-key? other)
+      (and (is-a? other libcrypto-pk-key%)
+           (EVP_PKEY_cmp evp (get-field evp other))))
+
+    (define/override (-sign digest digest-spec pad)
+      (define di (send (send impl get-factory) get-digest digest-spec))
+      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
+      (define ctx (EVP_PKEY_CTX_new evp))
+      (EVP_PKEY_sign_init ctx)
+      (-set-sign-padding ctx pad (send di get-size) #t)
+      (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
+      (define siglen (EVP_PKEY_sign ctx #f 0 digest (bytes-length digest)))
+      (define sigbuf (make-bytes siglen))
+      (define siglen2 (EVP_PKEY_sign ctx sigbuf siglen digest (bytes-length digest)))
+      (EVP_PKEY_CTX_free ctx)
+      (shrink-bytes sigbuf siglen2))
+
+    (define/override (-verify digest digest-spec pad sig)
+      (define di (send (send impl get-factory) get-digest digest-spec))
+      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
+      (define ctx (EVP_PKEY_CTX_new evp))
+      (EVP_PKEY_verify_init ctx)
+      (-set-sign-padding ctx pad (send di get-size) #f)
+      (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
+      (begin0 (EVP_PKEY_verify ctx sig (bytes-length sig) digest (bytes-length digest))
+        (EVP_PKEY_CTX_free ctx)))
+
+    (define/public (-set-sign-padding ctx pad saltlen sign?)
+      (case pad
+        [(#f) (void)]
+        [else (err/bad-signature-pad this pad)]))
+
+    (define/override (-encrypt buf pad)
+      (*crypt buf pad EVP_PKEY_encrypt_init EVP_PKEY_encrypt))
+
+    (define/override (-decrypt buf pad)
+      (*crypt buf pad EVP_PKEY_decrypt_init EVP_PKEY_decrypt))
+
+    (define/private (*crypt buf pad EVP_*crypt_init EVP_*crypt)
+      (define ctx (EVP_PKEY_CTX_new evp))
+      (EVP_*crypt_init ctx)
+      (-set-encrypt-padding ctx pad)
+      (define outlen (EVP_*crypt ctx #f 0 buf (bytes-length buf)))
+      (define outbuf (make-bytes outlen))
+      (define outlen2 (EVP_*crypt ctx outbuf outlen buf (bytes-length buf)))
+      (EVP_PKEY_CTX_free ctx)
+      (shrink-bytes outbuf outlen2))
+
+    (define/public (-set-encrypt-padding ctx pad)
+      (case pad
+        [(#f) (void)]
+        [else (err/bad-encrypt-pad this pad)]))
+
+    (define/override (-compute-secret peer-pubkey0)
+      (define peer-pubkey
+        (cond [(bytes? peer-pubkey0)
+               (-convert-peer-pubkey peer-pubkey0)]
+              [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
+                    (eq? (send peer-pubkey0 get-impl) impl))
+               (get-field evp peer-pubkey0)]
+              [else (internal-error "bad peer public key")]))
+      (define ctx (EVP_PKEY_CTX_new evp))
+      (EVP_PKEY_derive_init ctx)
+      (EVP_PKEY_derive_set_peer ctx peer-pubkey)
+      (define outlen (EVP_PKEY_derive ctx #f 0))
+      (define buf (make-bytes outlen))
+      (define outlen2 (EVP_PKEY_derive ctx buf (bytes-length buf)))
+      (shrink-bytes buf outlen2))
+
+    (define/public (-convert-peer-pubkey peer-pubkey)
+      (internal-error "unsupported"))
     ))
 
 ;; ============================================================
 
 (define libcrypto-rsa-impl%
   (class libcrypto-pk-impl%
-    (inherit-field spec)
     (inherit -known-digest?)
     (super-new (spec 'rsa))
 
-    (define/override (pktype) EVP_PKEY_RSA)
+    (define/override (get-key-class) libcrypto-rsa-key%)
+
     (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
 
     (define/override (can-sign? pad) 'depends)
     (define/override (can-sign2? pad dspec)
       (and (memq pad '(#f pkcs1-v1.5 pss pss*))
            (-known-digest? dspec)))
-
-    (define/override (*write-key private? fmt evp)
-      (cond [(and (eq? fmt 'RSAPrivateKey) private?)
-             (i2d i2d_PrivateKey evp)]
-            [else (super *write-key private? fmt evp)]))
 
     (define/override (generate-key config)
       (check-config config config:rsa-keygen "RSA key generation")
@@ -214,9 +315,20 @@
         (define evp (EVP_PKEY_new))
         (EVP_PKEY_set1_RSA evp rsa)
         (RSA_free rsa)
-        (new libcrypto-pk-key% (impl this) (evp evp) (private? #t))))
+        (new libcrypto-rsa-key% (impl this) (evp evp) (private? #t))))
+    ))
 
-    (define/public (*set-sign-padding ctx pad saltlen sign?)
+(define libcrypto-rsa-key%
+  (class libcrypto-pk-key%
+    (inherit-field impl evp private?)
+    (super-new)
+
+    (define/override (-write-key fmt)
+      (cond [(and (eq? fmt 'RSAPrivateKey) private?)
+             (i2d i2d_PrivateKey evp)]
+            [else (super -write-key fmt)]))
+
+    (define/override (-set-sign-padding ctx pad saltlen sign?)
       (case pad
         [(pkcs1-v1.5 #f)
          (EVP_PKEY_CTX_set_rsa_padding ctx RSA_PKCS1_PADDING)]
@@ -228,7 +340,7 @@
          (when sign? (EVP_PKEY_CTX_set_rsa_pss_saltlen ctx saltlen))]
         [else (err/bad-signature-pad this pad)]))
 
-    (define/public (*set-encrypt-padding ctx pad)
+    (define/override (-set-encrypt-padding ctx pad)
       (EVP_PKEY_CTX_set_rsa_padding ctx
         (case pad
           [(pkcs1-v1.5) RSA_PKCS1_PADDING]
@@ -236,39 +348,25 @@
           [else (err/bad-encrypt-pad this pad)])))
     ))
 
-;; ----
+;; ============================================================
 
 (define allowed-dsa-paramgen
   `((nbits #f ,exact-positive-integer? #f)))
 
 (define libcrypto-dsa-impl%
   (class libcrypto-pk-impl%
-    (inherit-field spec)
     (inherit -known-digest?)
     (super-new (spec 'dsa))
 
-    (define/override (pktype) EVP_PKEY_DSA)
+    (define/override (get-params-class) libcrypto-dsa-params%)
+    (define/override (get-key-class) libcrypto-dsa-key%)
+
     (define/override (can-sign? pad) (memq pad '(#f)))
     (define/override (has-params?) #t)
 
-    (define/override (*write-key private? fmt evp)
-      (cond [(and (eq? fmt 'DSAPrivateKey) private?)
-             (i2d i2d_PrivateKey evp)]
-            [else (super *write-key private? fmt evp)]))
-
-    (define/public (*write-params fmt evp)
-      (case fmt
-        [(AlgorithmIdentifier)
-         (asn1->bytes/DER AlgorithmIdentifier/DER
-          (hasheq 'algorithm id-dsa
-                  'parameters (*write-params 'DSAParameters evp)))]
-        [(DSAParameters)
-         (define dsa (EVP_PKEY_get1_DSA evp))
-         (define buf (make-bytes (i2d_DSAparams dsa #f)))
-         (i2d_DSAparams dsa buf)
-         (DSA_free dsa)
-         buf]
-        [else #f]))
+    (define/override (generate-key config)
+      (define p (generate-params config))
+      (send p generate-key '()))
 
     (define/override (generate-params config)
       (check-config config allowed-dsa-paramgen "DSA parameter generation")
@@ -278,13 +376,15 @@
         (define evp (EVP_PKEY_new))
         (EVP_PKEY_set1_DSA evp dsa)
         (DSA_free dsa)
-        (new libcrypto-pk-params% (impl this) (evp evp))))
+        (new libcrypto-dsa-params% (impl this) (pevp evp))))
+    ))
+
+(define libcrypto-dsa-params%
+  (class libcrypto-pk-params%
+    (inherit-field impl pevp)
+    (super-new)
 
     (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
-
-    (define/public (*generate-key config pevp)
       (check-config config '() "DSA key generation from parameters")
       (define pdsa (EVP_PKEY_get1_DSA pevp))
       (define pder (i2d i2d_DSAparams pdsa))
@@ -294,15 +394,33 @@
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_DSA kevp kdsa)
       (DSA_free kdsa)
-      (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))
+      (send impl make-key kevp #t))
 
-    (define/public (*set-sign-padding ctx pad saltlen sign?)
-      (case pad
-        [(#f) (void)]
-        [else (err/bad-signature-pad this pad)]))
+    (define/override (-write-params fmt)
+      (case fmt
+        [(AlgorithmIdentifier)
+         (asn1->bytes/DER AlgorithmIdentifier/DER
+          (hasheq 'algorithm id-dsa
+                  'parameters (-write-params 'DSAParameters)))]
+        [(DSAParameters)
+         (define dsa (EVP_PKEY_get1_DSA pevp))
+         (begin0 (i2d i2d_DSAparams dsa)
+           (DSA_free dsa))]
+        [else #f]))
     ))
 
-;; ----
+(define libcrypto-dsa-key%
+  (class libcrypto-pk-key%
+    (inherit-field impl evp private?)
+    (super-new)
+
+    (define/override (-write-key fmt)
+      (cond [(and (eq? fmt 'DSAPrivateKey) private?)
+             (i2d i2d_PrivateKey evp)]
+            [else (super -write-key fmt)]))
+    ))
+
+;; ============================================================
 
 (define allowed-dh-paramgen
   `((nbits     #f ,exact-positive-integer? #f)
@@ -310,10 +428,11 @@
 
 (define libcrypto-dh-impl%
   (class libcrypto-pk-impl%
-    (inherit-field spec)
     (super-new (spec 'dh))
 
-    (define/override (pktype) EVP_PKEY_DH)
+    (define/override (get-params-class) libcrypto-dh-params%)
+    (define/override (get-key-class) libcrypto-dh-key%)
+
     (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
 
@@ -327,42 +446,50 @@
         (define evp (EVP_PKEY_new))
         (EVP_PKEY_set1_DH evp dh)
         (DH_free dh)
-        (new libcrypto-pk-params% (impl this) (evp evp))))
+        (new libcrypto-dh-params% (impl this) (pevp evp))))
 
     (define/override (generate-key config)
       (define p (generate-params config))
       (send p generate-key '()))
 
-    (define/public (*write-params fmt evp)
+    ))
+
+(define libcrypto-dh-params%
+  (class libcrypto-pk-params%
+    (inherit-field impl pevp)
+    (super-new)
+
+    (define/override (-write-params fmt)
       (case fmt
         [(AlgorithmIdentifier)
          (asn1->bytes/DER AlgorithmIdentifier/DER
           (hasheq 'algorithm dhKeyAgreement
-                  'parameters (*write-params 'DHParameter evp)))]
+                  'parameters (-write-params 'DHParameter)))]
         [(DHParameter)
-         (define dh (EVP_PKEY_get1_DH evp))
-         (define buf (make-bytes (i2d_DHparams dh #f)))
-         (i2d_DHparams dh buf)
-         (DH_free dh)
-         buf]
+         (define dh (EVP_PKEY_get1_DH pevp))
+         (begin0 (i2d i2d_DHparams dh)
+           (DH_free))]
         [else #f]))
 
-    (define/override (*write-key private? fmt evp)
-      (super *write-key private? fmt evp))
-
-    (define/public (*generate-key config evp)
+    (define/override (generate-key config)
       (check-config config '() "DH key generation")
       (define kdh
-        (let ([dh0 (EVP_PKEY_get1_DH evp)])
+        (let ([dh0 (EVP_PKEY_get1_DH pevp)])
           (begin0 (DHparams_dup dh0)
             (DH_free dh0))))
       (DH_generate_key kdh)
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_DH kevp kdh)
       (DH_free kdh)
-      (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))
+      (send impl make-key kevp #t))
+    ))
 
-    (define/public (*convert-peer-pubkey evp peer-pubkey0)
+(define libcrypto-dh-key%
+  (class libcrypto-pk-key%
+    (inherit-field impl evp private?)
+    (super-new)
+
+    (define/override (-convert-peer-pubkey peer-pubkey0)
       (define peer-dh
         (let ([dh0 (EVP_PKEY_get1_DH evp)])
           (begin0 (DHparams_dup dh0)
@@ -376,15 +503,16 @@
       peer-evp)
     ))
 
-;; ----
+;; ============================================================
 
 (define libcrypto-ec-impl%
   (class libcrypto-pk-impl%
-    (inherit-field spec)
     (inherit -known-digest?)
     (super-new (spec 'ec))
 
-    (define/override (pktype) EVP_PKEY_EC)
+    (define/override (get-params-class) libcrypto-ec-params%)
+    (define/override (get-key-class) libcrypto-ec-key%)
+
     (define/override (can-sign? pad) (memq pad '(#f)))
     (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
@@ -403,42 +531,35 @@
       (define evp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY evp ec)
       (EC_KEY_free ec)
-      (new libcrypto-pk-params% (impl this) (evp evp)))
+      (new libcrypto-ec-params% (impl this) (pevp evp)))
 
     (define/override (generate-key config)
       (define params (generate-params config))
       (send params generate-key '()))
+    ))
 
-    (define/public (*write-params fmt evp)
+(define libcrypto-ec-params%
+  (class libcrypto-pk-params%
+    (inherit-field impl pevp)
+    (super-new)
+
+    (define/override (-write-params fmt)
       (case fmt
         [(AlgorithmIdentifier)
          (asn1->bytes/DER AlgorithmIdentifier/DER
           (hasheq 'algorithm id-ecPublicKey
-                  'parameters (*write-params 'EcpkParameters evp)))]
+                  'parameters (-write-params 'EcpkParameters)))]
         [(EcpkParameters)
-         (define ec (EVP_PKEY_get1_EC_KEY evp))
+         (define ec (EVP_PKEY_get1_EC_KEY pevp))
          (define group (EC_KEY_get0_group ec))
-         (define len (i2d_ECPKParameters group #f))
-         (define buf (make-bytes len))
-         (define len2 (i2d_ECPKParameters group buf))
-         (EC_KEY_free ec)
-         (shrink-bytes buf len2)]
+         (begin0 (i2d i2d_ECPKParameters group)
+           (EC_KEY_free ec))]
         [else #f]))
 
-    (define/override (*write-key private? fmt evp)
-      (cond [(and (eq? fmt 'ECPrivateKey) private?)
-             (define ec (EVP_PKEY_get1_EC_KEY evp))
-             (define outlen (i2d_ECPrivateKey ec #f))
-             (define outbuf (make-bytes outlen))
-             (define outlen2 (i2d_ECPrivateKey ec outbuf))
-             (EC_KEY_free ec)
-             (shrink-bytes outbuf outlen2)]
-            [else (super *write-key private? fmt evp)]))
-
-    (define/public (*generate-key config evp)
+    (define/override (generate-key config)
       (check-config config '() "EC key generation")
       (define kec
-        (let ([ec0 (EVP_PKEY_get1_EC_KEY evp)])
+        (let ([ec0 (EVP_PKEY_get1_EC_KEY pevp)])
           (begin0 (EC_KEY_dup ec0)
             (EC_KEY_free ec0))))
       (EC_KEY_generate_key kec)
@@ -447,9 +568,22 @@
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY kevp kec)
       (EC_KEY_free kec)
-      (new libcrypto-pk-key% (impl this) (evp kevp) (private? #t)))
+      (send impl make-key kevp #t))
+    ))
 
-    (define/public (*convert-peer-pubkey evp peer-pubkey0)
+(define libcrypto-ec-key%
+  (class libcrypto-pk-key%
+    (inherit-field impl evp private?)
+    (super-new)
+
+    (define/override (-write-key fmt)
+      (cond [(and (eq? fmt 'ECPrivateKey) private?)
+             (define ec (EVP_PKEY_get1_EC_KEY evp))
+             (begin0 (i2d i2d_ECPrivateKey ec)
+               (EC_KEY_free ec))]
+            [else (super -write-key fmt)]))
+
+    (define/override (-convert-peer-pubkey peer-pubkey0)
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (define group (EC_KEY_get0_group ec))
       (define group-degree (EC_GROUP_get_degree group))
@@ -465,113 +599,6 @@
       (EVP_PKEY_set1_EC_KEY peer-evp peer-ec)
       (EC_KEY_free peer-ec)
       peer-evp)
-
-    (define/public (*set-sign-padding ctx pad saltlen sign?)
-      (case pad
-        [(#f) (void)]
-        [else (err/bad-signature-pad this pad)]))
-    ))
-
-;; ============================================================
-
-(define libcrypto-pk-params%
-  (class pk-params-base%
-    (init-field evp)
-    (inherit-field impl)
-    (super-new)
-
-    ;; EVP_PKEY_keygen tends to crash, so call back to impl for low-level keygen.
-    (define/override (generate-key config)
-      (send impl *generate-key config evp))
-
-    (define/override (-write-params fmt)
-      (send impl *write-params fmt evp))
-    ))
-
-;; ============================================================
-
-(define libcrypto-pk-key%
-  (class pk-key-base%
-    (init-field evp private?)
-    (inherit-field impl)
-    (super-new)
-
-    (define/override (is-private?) private?)
-
-    (define/override (get-public-key)
-      (define outlen (i2d_PUBKEY evp #f))
-      (define outbuf (make-bytes outlen))
-      (define outlen2 (i2d_PUBKEY evp outbuf))
-      (define pub-evp (d2i_PUBKEY outbuf outlen2))
-      (new libcrypto-pk-key% (impl impl) (evp pub-evp) (private? #f)))
-
-    (define/override (get-params)
-      ;; Note: EVP_PKEY_copy_parameters doesn't work! (Probably used
-      ;; to copy params from cert to key).  We treat keys as read-only
-      ;; once created, so safe to share evp.
-      (new libcrypto-pk-params% (impl impl) (evp evp)))
-
-    (define/override (write-key fmt)
-      (send impl *write-key private? fmt evp))
-
-    (define/override (equal-to-key? other)
-      (and (is-a? other libcrypto-pk-key%)
-           (EVP_PKEY_cmp evp (get-field evp other))))
-
-    (define/override (-sign digest digest-spec pad)
-      (define di (send (send impl get-factory) get-digest digest-spec))
-      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
-      (define ctx (EVP_PKEY_CTX_new evp))
-      (EVP_PKEY_sign_init ctx)
-      (send impl *set-sign-padding ctx pad (send di get-size) #t)
-      (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
-      (define siglen (EVP_PKEY_sign ctx #f 0 digest (bytes-length digest)))
-      (define sigbuf (make-bytes siglen))
-      (define siglen2 (EVP_PKEY_sign ctx sigbuf siglen digest (bytes-length digest)))
-      (EVP_PKEY_CTX_free ctx)
-      (shrink-bytes sigbuf siglen2))
-
-    (define/override (-verify digest digest-spec pad sig)
-      (define di (send (send impl get-factory) get-digest digest-spec))
-      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
-      (define ctx (EVP_PKEY_CTX_new evp))
-      (EVP_PKEY_verify_init ctx)
-      (send impl *set-sign-padding ctx pad (send di get-size) #f)
-      (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
-      (begin0 (EVP_PKEY_verify ctx sig (bytes-length sig) digest (bytes-length digest))
-        (EVP_PKEY_CTX_free ctx)))
-
-    (define/override (-encrypt buf pad)
-      (*crypt buf pad EVP_PKEY_encrypt_init EVP_PKEY_encrypt))
-
-    (define/override (-decrypt buf pad)
-      (*crypt buf pad EVP_PKEY_decrypt_init EVP_PKEY_decrypt))
-
-    (define/private (*crypt buf pad EVP_*crypt_init EVP_*crypt)
-      (define ctx (EVP_PKEY_CTX_new evp))
-      (EVP_*crypt_init ctx)
-      (send impl *set-encrypt-padding ctx pad)
-      (define outlen (EVP_*crypt ctx #f 0 buf (bytes-length buf)))
-      (define outbuf (make-bytes outlen))
-      (define outlen2 (EVP_*crypt ctx outbuf outlen buf (bytes-length buf)))
-      (EVP_PKEY_CTX_free ctx)
-      (shrink-bytes outbuf outlen2))
-
-    (define/override (-compute-secret peer-pubkey0)
-      (define peer-pubkey
-        (cond [(bytes? peer-pubkey0)
-               (send impl *convert-peer-pubkey evp peer-pubkey0)]
-              [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
-                    (eq? (send peer-pubkey0 get-impl) impl))
-               (get-field evp peer-pubkey0)]
-              [else (internal-error "bad peer public key")]))
-      (define ctx (EVP_PKEY_CTX_new evp))
-      (EVP_PKEY_derive_init ctx)
-      (EVP_PKEY_derive_set_peer ctx peer-pubkey)
-      (define outlen (EVP_PKEY_derive ctx #f 0))
-      (define buf (make-bytes outlen))
-      (define outlen2 (EVP_PKEY_derive ctx buf (bytes-length buf)))
-      (shrink-bytes buf outlen2))
     ))
 
 ;; ============================================================
