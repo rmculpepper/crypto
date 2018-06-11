@@ -601,7 +601,7 @@
       peer-evp)
     ))
 
-;; ============================================================
+;; ----------------------------------------
 
 ;; find-curve-nid-by-sn : String -> Nat/#f
 (define (find-curve-nid-by-sn sn)
@@ -675,3 +675,74 @@
 
 ;; builtin-curve-nids : (Listof Nat)
 (define builtin-curve-nids (map car (hash-values curve-table)))
+
+;; ============================================================
+
+(define libcrypto-eddsa-impl%
+  (class libcrypto-pk-impl%
+    (inherit -known-digest?)
+    (super-new (spec 'eddsa))
+
+    (define/override (get-key-class) libcrypto-eddsa-key%)
+
+    (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
+
+    (define/override (generate-key config)
+      (check-config config config:eddsa-keygen "EdDSA key generation")
+      (define curve-name (config-ref config 'curve))
+      (define curve-nid
+        (or (ed-curve->nid curve-name)
+            (crypto-error "named curve not found\n  curve: ~e" curve-name)))
+      (define secret-key-size (ed-curve->secret-key-size curve-name))
+      (define secret-key (crypto-random-bytes secret-key-size))
+      (define evp (EVP_PKEY_new_raw_private_key curve-nid secret-key (bytes-length secret-key)))
+      (new libcrypto-eddsa-key% (impl this) (evp evp) (private? #t)))
+    ))
+
+(define libcrypto-eddsa-key%
+  (class libcrypto-pk-key%
+    (inherit-field impl evp private?)
+    (super-new)
+
+    (define/public (get-curve)
+      (nid->ed-curve (EVP->type evp)))
+    (define/public (get-sig-size)
+      (ed-curve->sig-size (get-curve)))
+
+    (define/override (-sign msg _dspec pad)
+      (define ctx (EVP_MD_CTX_create))
+      (define sig (make-bytes (get-sig-size)))
+      (EVP_DigestSignInit ctx #f evp)
+      (EVP_DigestSign ctx sig (bytes-length sig) msg (bytes-length msg))
+      (EVP_MD_CTX_destroy ctx)
+      sig)
+
+    (define/override (-verify msg _dspec pad sig)
+      (define ctx (EVP_MD_CTX_create))
+      (EVP_DigestVerifyInit ctx #f evp)
+      (begin0 (EVP_DigestVerify ctx sig (bytes-length sig) msg (bytes-length msg))
+        (EVP_MD_CTX_destroy ctx)))
+    ))
+
+;; ----------------------------------------
+
+(define (nid->ed-curve nid)
+  (cond [(= nid NID_ED25519) 'ed25519]
+        [(= nid NID_ED448)   'ed448]
+        [else #f]))
+
+(define (ed-curve->nid curve)
+  (case curve
+    [(ed25519) NID_ED25519]
+    [(ed448)   NID_ED448]
+    [else      #f]))
+
+(define (ed-curve->secret-key-size curve)
+  (case curve
+    [(ed25519) 32]
+    [(ed448)   57]))
+
+(define (ed-curve->sig-size curve)
+  (case curve
+    [(ed25519) 64]
+    [(ed448)  114]))

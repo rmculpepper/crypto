@@ -107,8 +107,8 @@
         [(dsa) (new libcrypto-dsa-impl% (factory this))]
         [(dh)  (new libcrypto-dh-impl%  (factory this))]
         [(ec)  (new libcrypto-ec-impl%  (factory this))]
+        [(eddsa) (new libcrypto-eddsa-impl% (factory this))]
         [else #f]))
-
 
     (define/override (-get-pk-reader)
       (new libcrypto-read-key% (factory this)))

@@ -663,12 +663,18 @@
 (define EVP_PKEY_DSA    116)
 (define EVP_PKEY_DH     28)
 (define EVP_PKEY_EC     408)
+(define NID_X25519      1034)
+(define NID_X448        1035)
+(define NID_ED25519     1087)
+(define NID_ED448       1088)
 
 (define type=>spec
-  '((6   . rsa)
-    (116 . dsa)
-    (28  . dh)
-    (408 . ec)))
+  `((,EVP_PKEY_RSA . rsa)
+    (,EVP_PKEY_DSA . dsa)
+    (,EVP_PKEY_DH  . dh)
+    (,EVP_PKEY_EC  . ec)
+    (,NID_ED25519  . eddsa)
+    (,NID_ED448    . eddsa)))
 
 (define-crypto EVP_PKEY_free
   (_fun _EVP_PKEY -> _void)
@@ -976,6 +982,40 @@
 
 (define-crypto EC_KEY_set_asn1_flag
   (_fun _EC_KEY _int -> _void))
+
+;; ============================================================
+;; New PKEY
+
+(define-crypto EVP_PKEY_new_raw_private_key
+  (_fun (type : _int) (_pointer = #f) (key : _pointer) (klen : _size) -> _EVP_PKEY)
+  #:wrap (compose (allocator EVP_PKEY_free)
+                  (err-wrap/pointer 'EVP_PKEY_new_raw_private_key)))
+
+(define-crypto EVP_PKEY_new_raw_public_key
+  (_fun (type : _int) (_pointer = #f) (key : _pointer) (klen : _size) -> _EVP_PKEY)
+  #:wrap (compose (allocator EVP_PKEY_free)
+                  (err-wrap/pointer 'EVP_PKEY_new_raw_public_key)))
+
+(define-crypto EVP_DigestSignInit
+  (_fun (ctx : _EVP_MD_CTX) (_pointer = #f) (md : _EVP_MD/null) (_pointer = #f) (k : _EVP_PKEY)
+        -> _int)
+  #:wrap (err-wrap 'EVP_DigestSignInit))
+
+(define-crypto EVP_DigestSign
+  (_fun (ctx : _EVP_MD_CTX) (sig : _pointer) (siglen : (_ptr io _size))
+        (msg : _pointer) (mlen : _size)
+        -> _int)
+  #:wrap (err-wrap 'EVP_DigestSign))
+
+(define-crypto EVP_DigestVerifyInit
+  (_fun (ctx : _EVP_MD_CTX) (_pointer = #f) (md : _EVP_MD/null) (_pointer = #f) (k : _EVP_PKEY)
+        -> _int)
+  #:wrap (err-wrap 'EVP_DigestVerifyInit))
+
+(define-crypto EVP_DigestVerify
+  (_fun (ctx : _EVP_MD_CTX) (sig : _pointer) (siglen : _size)
+        (msg : _pointer) (mlen : _size)
+        -> (s : _int) -> (> s 0)))
 
 ;; ============================================================
 ;; Random Numbers
