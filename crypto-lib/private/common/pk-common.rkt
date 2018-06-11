@@ -101,6 +101,8 @@
 
     (define/private (read-rkt-key sk)
       (define nat? exact-nonnegative-integer?)
+      (define (nat/f? x) (or (nat? x) (eq? x #f)))
+      (define (bytes/f? x) (or (bytes? x) (eq? x #f)))
       (define (oid? x) (and (list? x) (andmap nat? x)))
       (match sk
         ;; Public-only keys
@@ -118,13 +120,13 @@
         [(list 'rsa 'private 0 (? nat? n) (? nat? e) (? nat? d)
                (? nat? p) (? nat? q) (? nat? dp) (? nat? dq) (? nat? qInv))
          (-make-priv-rsa n e d p q dp dq qInv)]
-        [(list 'dsa 'private (? nat? p) (? nat? q) (? nat? g) (? nat? y) (? nat? x))
+        [(list 'dsa 'private (? nat? p) (? nat? q) (? nat? g) (? nat/f? y) (? nat? x))
          (-make-priv-dsa p q g y x)]
-        [(list 'dh 'private (? nat? p) (? nat? g) (? nat? y) (? nat? x))
+        [(list 'dh 'private (? nat? p) (? nat? g) (? nat/f? y) (? nat? x))
          (-make-priv-dh p g y x)]
-        [(list 'ec 'private (? oid? curve-oid) (? bytes? qB) (? nat? x))
+        [(list 'ec 'private (? oid? curve-oid) (? bytes/f? qB) (? nat? x))
          (-make-priv-ec curve-oid qB x)]
-        [(list 'eddsa 'private (? symbol? curve) (? bytes? qB) (? bytes? dB))
+        [(list 'eddsa 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
          (-make-priv-eddsa curve qB dB)]
         [_ #f]))
 
