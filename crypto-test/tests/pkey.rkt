@@ -139,6 +139,8 @@
 (define (pk-format-ok? factory kspec fmt)
   (define fname (send factory get-name))
   (not (or
+        ;; libcrypto cannot handle EdDSA OneAsymmetricKey
+        (and (memq fname '(libcrypto)) (memq kspec '(eddsa)) (memq fmt '(OneAsymmetricKey)))
         ;; gcrypto cannot roundtrip EdDSA key via PrivateKeyInfo (missing public key part)
         (and (memq fname '(gcrypt)) (memq kspec '(eddsa)) (memq fmt '(PrivateKeyInfo))))))
 
