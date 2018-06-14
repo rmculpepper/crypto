@@ -349,12 +349,9 @@
 
 ;; ============================================================
 
-(define allowed-dsa-paramgen
-  `((nbits #f ,exact-positive-integer? #f)))
-
 (define libcrypto-dsa-impl%
   (class libcrypto-pk-impl%
-    (inherit -known-digest?)
+    (inherit about -known-digest?)
     (super-new (spec 'dsa))
 
     (define/override (get-params-class) libcrypto-dsa-params%)
@@ -368,8 +365,14 @@
       (send p generate-key '()))
 
     (define/override (generate-params config)
-      (check-config config allowed-dsa-paramgen "DSA parameter generation")
-      (let ([nbits (config-ref config 'nbits 2048)])
+      (check-config config config:dsa-paramgen "DSA parameter generation")
+      (let ([nbits (config-ref config 'nbits 2048)]
+            [qbits (config-ref config 'qbits #f)])
+        (when qbits
+          (define actual-qbits (if (< nbits 2048) 160 256))
+          (unless (equal? qbits actual-qbits)
+            (crypto-error "implementation requires qbits = ~s for nbits ~a 2048\n  nbits: ~e\n  for: ~a"
+                          actual-qbits (if (< nbits 2048) "<" ">=") nbits (about))))
         (define dsa (DSA_new))
         (DSA_generate_parameters_ex dsa nbits)
         (define evp (EVP_PKEY_new))
