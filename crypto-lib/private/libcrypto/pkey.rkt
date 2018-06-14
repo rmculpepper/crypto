@@ -219,30 +219,25 @@
       (and (is-a? other libcrypto-pk-key%)
            (EVP_PKEY_cmp evp (get-field evp other))))
 
-    (define/override (-sign digest digest-spec pad)
-      (define di (send (send impl get-factory) get-digest digest-spec))
-      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
+    (define/override (-sign digest dspec pad)
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_sign_init ctx)
-      (-set-sign-padding ctx pad (send di get-size) #t)
-      (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
+      (-set-sign-options ctx #t pad dspec)
       (define siglen (EVP_PKEY_sign ctx #f 0 digest (bytes-length digest)))
       (define sigbuf (make-bytes siglen))
       (define siglen2 (EVP_PKEY_sign ctx sigbuf siglen digest (bytes-length digest)))
       (EVP_PKEY_CTX_free ctx)
       (shrink-bytes sigbuf siglen2))
 
-    (define/override (-verify digest digest-spec pad sig)
-      (define di (send (send impl get-factory) get-digest digest-spec))
-      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest digest-spec))
+    (define/override (-verify digest dspec pad sig)
       (define ctx (EVP_PKEY_CTX_new evp))
       (EVP_PKEY_verify_init ctx)
-      (-set-sign-padding ctx pad (send di get-size) #f)
-      (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
+      (-set-sign-options ctx #f pad dspec)
       (begin0 (EVP_PKEY_verify ctx sig (bytes-length sig) digest (bytes-length digest))
         (EVP_PKEY_CTX_free ctx)))
 
-    (define/public (-set-sign-padding ctx pad saltlen sign?)
+    (define/public (-set-sign-options ctx sign? pad dspec)
+      ;; Default: require pad=#f, ignore digest
       (case pad
         [(#f) (void)]
         [else (err/bad-signature-pad this pad)]))
@@ -328,7 +323,11 @@
              (i2d i2d_PrivateKey evp)]
             [else (super -write-key fmt)]))
 
-    (define/override (-set-sign-padding ctx pad saltlen sign?)
+    (define/override (-set-sign-options ctx sign? pad dspec)
+      (define di (send (send impl get-factory) get-digest dspec))
+      (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest dspec))
+      (define saltlen (send di get-size))
+      (EVP_PKEY_CTX_set_signature_md ctx (get-field md di))
       (case pad
         [(pkcs1-v1.5 #f)
          (EVP_PKEY_CTX_set_rsa_padding ctx RSA_PKCS1_PADDING)]
@@ -413,6 +412,15 @@
   (class libcrypto-pk-key%
     (inherit-field impl evp private?)
     (super-new)
+
+    (define/override (-set-sign-options ctx sign? pad dspec)
+      (unless (eq? dspec 'none)
+        (define di (send (send impl get-factory) get-digest dspec))
+        (unless (is-a? di libcrypto-digest-impl%) (err/missing-digest dspec))
+        (EVP_PKEY_CTX_set_signature_md ctx (get-field md di)))
+      (case pad
+        [(#f) (void)]
+        [else (err/bad-signature-pad this pad)]))
 
     (define/override (-write-key fmt)
       (cond [(and (eq? fmt 'DSAPrivateKey) private?)
