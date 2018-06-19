@@ -31,23 +31,27 @@ following PK systems are supported:
 
 @itemlist[
 
-@item{@racket['rsa] --- RSA keys with RSAES-* encryption and RSASSA-* signing.}
+@item{@racket['rsa] --- @as-index{RSA} keys with RSAES-* encryption
+and RSASSA-* signing.}
 
-@item{@racket['dsa] --- DSA keys with DSA signing.}
+@item{@racket['dsa] --- @as-index{DSA} keys with DSA signing.}
 
-@item{@racket['dh] --- Diffie-Helman keys with DH key agreement.}
+@item{@racket['dh] --- @as-index{Diffie-Hellman} keys with DH key agreement.}
 
-@item{@racket['ec] --- Elliptic curve keys with ECDSA signing and ECDH key
-agreement. Only named curves are supported, and different implementations
-support different curves; use @racket[factory-print-info] to see supported
-curves.}
+@item{@racket['ec] --- Elliptic curve keys with @as-index{ECDSA}
+signing and @as-index{ECDH} key agreement. Only named curves are
+supported, and different implementations support different curves; use
+@racket[factory-print-info] to see supported curves.}
 
-@item{@racket['eddsa] --- Edwards curve keys with EdDSA signing. Currently only
-@as-index{Ed25519} is supported.}
+@item{@racket['eddsa] --- Edwards curve keys with @as-index{EdDSA} signing,
+specifically @as-index{Ed25519} and @as-index{Ed448}.}
+
+@item{@racket['ecx] --- Montgomery curve keys with ECDH key agreement,
+specifically @as-index{X25519} and @as-index{X448}.}
 
 ]
 
-@history[#:changed "1.1" @elem{Added @racket['eddsa].}]
+@history[#:changed "1.1" @elem{Added @racket['eddsa] and @racket['ecx].}]
 }
 
 @defproc[(pk-impl? [v any/c]) boolean?]{
@@ -167,34 +171,36 @@ public-only key, the function may simply return @racket[pk].
          pk-parameters?]{
 
 Generate PK parameter values for the cryptosystem of @racket[pki]
-using the given configuration options. Unless otherwise specified, the
-configuration values are optional, and the default values are
-implementation-dependent.
+using the given configuration options. The default values of optional
+configuration arguments are implementation-dependent.
 
-The following configuration values are recognized for DSA
+The acceptable configuration values depend on @racket[pki].
+@itemlist[
+
+@item{The following configuration values are recognized for DSA
 (@racket['dsa]):
 @itemlist[
 
-@item{@racket[(list 'nbits _nbits)] --- Generate a prime modulus of
-size @racket[_nbits]. Examples include @racket[1024] and
+@item{@racket[(list 'nbits _nbits)] --- Optional. Generate a prime
+modulus of size @racket[_nbits]. Examples include @racket[1024] and
 @racket[2048].}
 
-]
+]}
 
-The following configuration values are recognized for DH
+@item{The following configuration values are recognized for DH
 (@racket['dh]): 
 @itemlist[
 
-@item{@racket[(list 'nbits _nbits)] --- Generate a prime modulus of
-size @racket[_nbits]. Examples include @racket[1024] and
+@item{@racket[(list 'nbits _nbits)] --- Optional. Generate a prime
+modulus of size @racket[_nbits]. Examples include @racket[1024] and
 @racket[2048].}
 
-@item{@racket[(list 'generator _generator)] --- Use the given
-@racket[_generator]; must be either @racket[2] or @racket[5].}
+@item{@racket[(list 'generator _generator)] --- Optional. Use the
+given @racket[_generator]; must be either @racket[2] or @racket[5].}
 
-]
+]}
 
-The following configuration values are recognized for EC
+@item{The following configuration values are recognized for EC
 (@racket['ec]):
 @itemlist[
 
@@ -202,36 +208,65 @@ The following configuration values are recognized for EC
 named @racket[_curve-name]. Examples include @racket["NIST P-256"] and
 @racket["secp192r1"]. Use @racket[factory-print-info] to show available curves.}
 
+]}
+
+@item{The following configuration values are recognized for EdDSA
+(@racket['eddsa]):
+@itemlist[
+
+@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key
+for the given curve. The @racket[_curve-sym] must be @racket['ed25519]
+or @racket['ed448].}
+
+]}
+
+@item{The following configuration values are recognized for @racket['ecx]:
+@itemlist[
+
+@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key
+for the given curve. The @racket[_curve-sym] must be @racket['x25519]
+or @racket['x448].}
+
+]}
+
 ]
+
+@history[#:changed "1.1" @elem{Added @racket['eddsa] and @racket['ecx] options.}]
 }
+
 
 @defproc[(generate-private-key [pki (or/c pk-spec? pk-impl? pk-parameters?)]
                                [keygen-config (listof (list/c symbol? any/c)) '()])
          private-key?]{
 
 Generate a private key from the given PK implementation or PK
-parameters. Unless otherwise specified, configuration values are
-optional, and the default values are implementation dependent.
+parameters. The default values of optional configuration arguments are
+implementation dependent.
 
-The following configuration values are recognized for RSA
+The accepted configuration arguments depend on @racket[pki]:
+@itemlist[
+
+@item{If @racket[pki] is a PK parameters object (@racket[pk-parameters?]),
+then @racket[keygen-config] must be empty.}
+
+@item{The following configuration values are recognized for RSA
 (@racket['rsa]):
 @itemlist[
 
-@item{@racket[(list 'nbits _nbits)] --- Generate a modulus of size
-@racket[_nbits]. Examples include @racket[1024] and @racket[2048].}
+@item{@racket[(list 'nbits _nbits)] --- Optional. Generate a modulus
+of size @racket[_nbits]. Examples include @racket[1024] and
+@racket[2048].}
 
-]
+]}
 
-The following configuration values are recognized for EdDSA
-(@racket['eddsa]):
-@itemlist[
+@item{If @racket[pki] is a PK specifier (@racket[pk-spec?]) or PK
+implementation (@racket[pk-impl?]), then the same configuration
+arguments are supported as for @racket[generate-parameters]. This is
+equivalent to @racket[(generate-private-key (generate-pk-parameters
+pki keygen-config) '())].
 
-@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key for the
-given curve. The @racket[_curve-sym] must be @racket['ed25519].}
+}]
 
-]
-
-@history[#:changed "1.1" @elem{Added @racket['eddsa] options.}]
 }
 
 
@@ -397,8 +432,8 @@ In PK key agreement (sometimes called key exchange) two parties derive
 a shared secret by exchanging public keys. Each party can compute the
 secret from their own private key and the other's public key, but it
 is believed infeasible for an observer to compute the secret from the
-two public keys alone. PK secret derivation is supported by the DH and
-ECDH cryptosystems.
+two public keys alone. PK secret derivation is supported by the
+@racket['dh], @racket['ec], and @racket['ecx] cryptosystems.
 
 @defproc[(pk-derive-secret [pk private-key?]
                            [peer-pk (or/c pk-key? bytes?)])
@@ -409,7 +444,7 @@ the public key @racket[peer-pk]. If @racket[peer-pk] is a PK key, it
 must be a key belonging to the same cryptosystem and implementation as
 @racket[pk]; otherwise an exception is raised. If @racket[peer-pk] is
 a bytestring, an exception is raised if it cannot be interpreted as
-public key data.
+raw public key data.
 
 Note that the derived secret is a deterministic function of the
 private keys: if two parties perform secret derivation twice, they
@@ -473,10 +508,38 @@ used by OpenSSL.}}
 representation of @racket[pk], which must be an EC private key. Only
 keys using named curves are supported.}}
 
-@history[#:changed "1.1" @elem{Added @racket['OneAsymmetricKey] support.}]
+@item{@racket['rkt-private] --- An S-expression of one of the following forms:
+
+@itemlist[
+
+@item{@racket[(list 'rsa 'private _n _e _d)]}
+@item{@racket[(list 'dsa 'private _p _q _g _y _d)]}
+@item{@racket[(list 'dh  'private _p _g _y _x)]}
+@item{@racket[(list 'ec  'private _curve-oid _q _x)]}
+@item{@racket[(list 'eddsa 'private _curve-sym _q _d)]}
+@item{@racket[(list 'ecx 'private _curve-sym _q _d)]}
+
+]}
+
+@item{@racket['rkt-public] --- An S-expression of one of the following forms:
+
+@itemlist[
+
+@item{@racket[(list 'rsa 'public _n _e)]}
+@item{@racket[(list 'dsa 'public _p _q _g _y)]}
+@item{@racket[(list 'dh  'public _p _g _y)]}
+@item{@racket[(list 'ec  'public _curve-oid _q)]}
+@item{@racket[(list 'eddsa 'public _curve-sym _q)]}
+@item{@racket[(list 'ecx 'private _curve-sym _q)]}
+
+]}
+
 ]
 
 More formats may be added in future versions of this library.
+
+@history[#:changed "1.1" @elem{Added @racket['OneAsymmetricKey],
+@racket['rkt-private], and @racket['rkt-public] support.}]
 }
 
 @defproc[(datum->pk-key [datum any/c]
@@ -522,9 +585,23 @@ format specified by PKIX.}
 @item{@racket['EcpkParameters] --- DER-encoded EcpkParameters
 @cite["PKIX-AlgId"] (called ECDomainParameters in @cite["SEC1"]).}
 
+@item{@racket['rkt-params] --- An S-expression of one of the following forms:
+
+@itemlist[
+
+@item{@racket[(list 'dsa 'params _p _q _g)]}
+@item{@racket[(list 'dh  'params _p _g)]}
+@item{@racket[(list 'ec  'params _curve-oid)]}
+@item{@racket[(list 'eddsa 'params _curve-sym)]}
+@item{@racket[(list 'ecx 'params _curve-sym)]}
+
+]}
+
 ]
 
 More formats may be added in future versions of this library.
+
+@history[#:changed "1.1" @elem{Added @racket['rkt-params] support.}]
 }
 
 @defproc[(datum->pk-parameters [datum any/c]
