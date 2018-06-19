@@ -120,7 +120,7 @@
 
 (define (test-pk-serialize key pubkey factory)
   ;; can serialize and deserialize private keys, and serialized format is canonical
-  (for ([fmt '(PrivateKeyInfo OneAsymmetricKey rkt)]
+  (for ([fmt '(PrivateKeyInfo OneAsymmetricKey rkt-private)]
         #:when (pk-format-ok? factory (send key get-spec) fmt))
     (define keydata (pk-key->datum key fmt))
     (define key2 (datum->pk-key keydata fmt factory))
@@ -128,7 +128,7 @@
     (check public-key=? key2 key)
     (check-equal? (pk-key->datum key2 fmt) keydata))
   ;; likewise for public keys
-  (for ([fmt '(SubjectPublicKeyInfo)])
+  (for ([fmt '(SubjectPublicKeyInfo rkt-public)])
     (define pubdata (pk-key->datum key fmt))
     (define pubkey2 (datum->pk-key pubdata fmt factory))
     (check-pred public-only-key? pubkey2)

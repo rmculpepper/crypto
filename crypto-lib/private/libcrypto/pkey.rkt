@@ -65,15 +65,12 @@
             [(ECPrivateKey)
              (check-bytes)
              (values (read-private-ec-key sk) #t)]
-            [(rkt)
-             (match sk
-               [(list* _ 'private _)
-                (let ([txkey (translate-key sk 'rkt 'PrivateKeyInfo)])
-                  (if txkey (loop txkey 'PrivateKeyInfo) (values #f #f)))]
-               [(list* _ 'public _)
-                (let ([txkey (translate-key sk 'rkt 'SubjectPublicKeyInfo)])
-                  (if txkey (loop txkey 'SubjectPublicKeyInfo) (values #f #f)))]
-               [_ (values #f #f)])]
+            [(rkt-private)
+             (let ([txkey (translate-key sk 'rkt-private 'PrivateKeyInfo)])
+               (if txkey (loop txkey 'PrivateKeyInfo) (values #f #f)))]
+            [(rkt-public)
+             (let ([txkey (translate-key sk 'rkt-public 'SubjectPublicKeyInfo)])
+               (if txkey (loop txkey 'SubjectPublicKeyInfo) (values #f #f)))]
             [else (values #f #f)])))
       (define impl (and evp (evp->impl evp)))
       (and evp impl (send impl make-key evp private?)))
@@ -212,13 +209,14 @@
                 (define p8 (EVP_PKEY2PKCS8 evp))
                 (i2d i2d_PKCS8_PRIV_KEY_INFO p8)]
                [else #f])]
-        [(rkt)
+        [(rkt-public)
          (define pub-spki (-write-key 'SubjectPublicKeyInfo))
-         (define pub-rkt (translate-key pub-spki 'SubjectPublicKeyInfo 'rkt))
-         (if private?
-             (let ([priv-pki (-write-key 'PrivateKeyInfo)])
-               (merge-rkt-private-key (translate-key priv-pki 'PrivateKeyInfo 'rkt) pub-rkt))
-             pub-rkt)]
+         (translate-key pub-spki 'SubjectPublicKeyInfo 'rkt-public)]
+        [(rkt-private)
+         (define pub-spki (-write-key 'SubjectPublicKeyInfo))
+         (define priv-pki (-write-key 'PrivateKeyInfo))
+         (merge-rkt-private-key (translate-key priv-pki 'PrivateKeyInfo 'rkt-private)
+                                (translate-key pub-spki 'SubjectPublicKeyInfo 'rkt-public))]
         [else #f]))
 
     (define/override (equal-to-key? other)

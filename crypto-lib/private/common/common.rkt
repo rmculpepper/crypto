@@ -700,7 +700,7 @@
           (crypto-error "key format not supported\n  format: ~e\n  key: ~a"
                         fmt (about))))
     (define/public (-write-key fmt)
-      (cond [(or (eq? fmt 'SubjectPublicKeyInfo) (not (is-private?)))
+      (cond [(or (memq fmt '(SubjectPublicKeyInfo rkt-public)) (not (is-private?)))
              (-write-public-key fmt)]
             [else
              (-write-private-key fmt)]))

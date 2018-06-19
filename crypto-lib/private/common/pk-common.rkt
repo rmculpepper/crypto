@@ -104,20 +104,20 @@
          (match (bytes->asn1/DER (SEQUENCE-OF INTEGER) sk)
            [(list 0 p q g y x) ;; FIXME!
             (-make-priv-dsa p q g y x)])]
-        [(rkt) (read-rkt-key sk)]
+        [(rkt-private) (read-rkt-private-key sk)]
+        [(rkt-public) (read-rkt-public-key sk)]
         [else #f]))
 
-    (define/private (read-rkt-key sk)
+    (define/private (read-rkt-public-key sk)
       (define nat? exact-nonnegative-integer?)
       (define (nat/f? x) (or (nat? x) (eq? x #f)))
       (define (bytes/f? x) (or (bytes? x) (eq? x #f)))
       (define (oid? x) (and (list? x) (andmap nat? x)))
       (match sk
-        ;; Public-only keys
         [(list 'rsa 'public (? nat? n) (? nat? e))
          (-make-pub-rsa n e)]
-        [(list 'dsa 'public (? nat? p) (? nat? q) (? nat? g))
-         (-make-pub-dsa p q g)]
+        [(list 'dsa 'public (? nat? p) (? nat? q) (? nat? g) (? nat? y))
+         (-make-pub-dsa p q g y)]
         [(list 'dh 'public (? nat? p) (? nat? g) (? nat? y))
          (-make-pub-dh p g y)]
         [(list 'ec 'public (? oid? curve-oid) (? bytes? qB))
@@ -126,7 +126,14 @@
          (-make-pub-eddsa curve qB)]
         [(list 'ecx 'public curve (? bytes? qB))
          (-make-pub-ecx curve qB)]
-        ;; Private keys
+        [_ #f]))
+
+    (define/private (read-rkt-private-key sk)
+      (define nat? exact-nonnegative-integer?)
+      (define (nat/f? x) (or (nat? x) (eq? x #f)))
+      (define (bytes/f? x) (or (bytes? x) (eq? x #f)))
+      (define (oid? x) (and (list? x) (andmap nat? x)))
+      (match sk
         [(list 'rsa 'private 0 (? nat? n) (? nat? e) (? nat? d)
                (? nat? p) (? nat? q) (? nat? dp) (? nat? dq) (? nat? qInv))
          (-make-priv-rsa n e d p q dp dq qInv)]
@@ -275,7 +282,7 @@
            [(list 'namedCurve curve-oid)
             (-make-params-ec curve-oid)]
            [_ #f])]
-        [(rkt) (read-rkt-params buf)]
+        [(rkt-params) (read-rkt-params buf)]
         [else #f]))
 
     (define/private (read-rkt-params p)
@@ -398,13 +405,11 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
               'subjectPublicKey (hasheq 'modulus n 'publicExponent e)))]
-    [(rkt) (list 'rsa 'public n e)]
+    [(rkt-public) (list 'rsa 'public n e)]
     [else #f]))
 
 (define (encode-priv-rsa fmt n e d p q dp dq qInv)
   (case fmt
-    [(SubjectPublicKeyInfo)
-     (encode-pub-rsa fmt n e)]
     [(PrivateKeyInfo OneAsymmetricKey)
      ;; OAK note: private key already contains public key fields
      (asn1->bytes/DER
@@ -414,8 +419,8 @@
               'privateKey (-priv-rsa n e d p q dp dq qInv)))]
     [(RSAPrivateKey)
      (asn1->bytes/DER RSAPrivateKey (-priv-rsa n e d p q dp dq qInv))]
-    [(rkt) (list 'rsa 'private 0 n e d p q dp dq qInv)]
-    [else #f]))
+    [(rkt-private) (list 'rsa 'private 0 n e d p q dp dq qInv)]
+    [else (encode-pub-rsa fmt n e)]))
 
 (define (-priv-rsa n e d p q dp dq qInv)
   (hasheq 'version 0
@@ -437,7 +442,7 @@
        (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g)))]
     [(DSAParameters Dss-Parms)
      (asn1->bytes/DER Dss-Parms (hasheq 'p p 'q q 'g g))]
-    [(rkt) (list 'dsa 'params p q g)]
+    [(rkt-params) (list 'dsa 'params p q g)]
     [else #f]))
 
 (define (encode-pub-dsa fmt p q g y)
@@ -447,13 +452,11 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g))
               'subjectPublicKey y))]
-    [(rkt) (list 'dsa 'public p q g y)]
+    [(rkt-public) (list 'dsa 'public p q g y)]
     [else #f]))
 
 (define (encode-priv-dsa fmt p q g y x)
   (case fmt
-    [(SubjectPublicKeyInfo)
-     (encode-pub-dsa fmt p q g y)]
     [(PrivateKeyInfo OneAsymmetricKey)
      (private-key->der
       fmt
@@ -465,8 +468,8 @@
      (asn1->bytes/DER
       (SEQUENCE-OF INTEGER)
       (list 0 p q g y x))]
-    [(rkt) (list 'dsa 'private p q g y x)]
-    [else #f]))
+    [(rkt-private) (list 'dsa 'private p q g y x)]
+    [else (encode-pub-dsa fmt p q g y)]))
 
 ;; ---- DH ----
 
@@ -479,7 +482,7 @@
     [(DHParameter)
      (asn1->bytes/DER DHParameter
        (hasheq 'prime p 'base g))]
-    [(rkt) (list 'dh 'params p g)]
+    [(rkt-params) (list 'dh 'params p g)]
     [else #f]))
 
 (define (encode-pub-dh fmt p g y)
@@ -490,13 +493,11 @@
       (hasheq 'algorithm (hasheq 'algorithm dhKeyAgreement
                                  'parameters (hasheq 'prime p 'base g))
               'subjectPublicKey y))]
-    [(rkt) (list 'dh 'public p g y)]
+    [(rkt-public) (list 'dh 'public p g y)]
     [else #f]))
 
 (define (encode-priv-dh fmt p g y x)
   (case fmt
-    [(SubjectPublicKeyInfo)
-     (encode-pub-dh fmt p g y x)]
     [(PrivateKeyInfo OneAsymmetricKey)
      (private-key->der
       fmt
@@ -504,8 +505,8 @@
                                            'parameters (hasheq 'prime p 'base g))
               'privateKey x)
       y)]
-    [(rkt) (list 'dh 'private p g y x)]
-    [else #f]))
+    [(rkt-private) (list 'dh 'private p g y x)]
+    [else (encode-pub-dh fmt p g y x)]))
 
 ;; ---- EC ----
 
@@ -517,7 +518,7 @@
                'parameters (list 'namedCurve curve-oid)))]
     [(EcpkParameters)
      (asn1->bytes/DER EcpkParameters (list 'namedCurve curve-oid))]
-    [(rkt) (list 'ec 'params curve-oid)]
+    [(rkt-params) (list 'ec 'params curve-oid)]
     [else #f]))
 
 (define (encode-pub-ec fmt curve-oid qB)
@@ -528,13 +529,11 @@
       (hasheq 'algorithm (hasheq 'algorithm id-ecPublicKey
                                  'parameters (list 'namedCurve curve-oid))
               'subjectPublicKey qB))]
-    [(rkt) (list 'ec 'public curve-oid qB)]
+    [(rkt-public) (list 'ec 'public curve-oid qB)]
     [else #f]))
 
 (define (encode-priv-ec fmt curve-oid qB d)
   (case fmt
-    [(SubjectPublicKeyInfo)
-     (encode-pub-ec fmt curve-oid qB)]
     [(PrivateKeyInfo OneAsymmetricKey)
      ;; OAK note: private key already contains public key
      (asn1->bytes/DER
@@ -545,23 +544,21 @@
               'privateKey (hasheq 'version 1
                                   'privateKey (unsigned->base256 d)
                                   'publicKey qB)))]
-    [(rkt) (list 'ec 'private curve-oid qB d)]
-    [else #f]))
+    [(rkt-private) (list 'ec 'private curve-oid qB d)]
+    [else (encode-pub-ec fmt curve-oid qB)]))
 
 ;; ---- EdDSA ----
 
 (define (encode-priv-eddsa fmt curve qB dB)
   (case fmt
-    [(SubjectPublicKeyInfo)
-     (encode-pub-eddsa fmt curve qB)]
     [(PrivateKeyInfo OneAsymmetricKey)
      (private-key->der
       fmt
       (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (ed-curve->oid curve))
               'privateKey dB)
       qB)]
-    [(rkt) (list 'eddsa 'private curve qB dB)]
-    [else #f]))
+    [(rkt-private) (list 'eddsa 'private curve qB dB)]
+    [else (encode-pub-eddsa fmt curve qB)]))
 
 (define (encode-pub-eddsa fmt curve qB)
   (case fmt
@@ -570,7 +567,7 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm (ed-curve->oid curve))
               'subjectPublicKey qB))]
-    [(rkt) (list 'eddsa 'public curve qB)]
+    [(rkt-public) (list 'eddsa 'public curve qB)]
     [else #f]))
 
 (define (ed-curve->oid curve)
@@ -586,21 +583,19 @@
      (asn1->bytes/DER
       AlgorithmIdentifier
       (hasheq 'algorithm (x-curve->oid curve)))]
-    [(rkt) (list 'ecx 'params curve)]
+    [(rkt-params) (list 'ecx 'params curve)]
     [else #f]))
 
 (define (encode-priv-ecx fmt curve qB dB)
   (case fmt
-    [(SubjectPublicKeyInfo)
-     (encode-pub-ecx fmt curve qB)]
     [(PrivateKeyInfo OneAsymmetricKey)
      (private-key->der
       fmt
       (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (x-curve->oid curve))
               'privateKey dB)
       qB)]
-    [(rkt) (list 'ecx 'private curve qB dB)]
-    [else #f]))
+    [(rkt-private) (list 'ecx 'private curve qB dB)]
+    [else (encode-pub-ecx fmt curve qB)]))
 
 (define (encode-pub-ecx fmt curve qB)
   (case fmt
@@ -609,7 +604,7 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm (x-curve->oid curve))
               'subjectPublicKey qB))]
-    [(rkt) (list 'ecx 'public curve qB)]
+    [(rkt-public) (list 'ecx 'public curve qB)]
     [else #f]))
 
 (define (x-curve->oid curve)
