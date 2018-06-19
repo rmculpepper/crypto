@@ -338,7 +338,9 @@ References:
         ;; BER-encoding of ECPoint
         (list id-ecPublicKey  EcpkParameters   #f)
         (list id-Ed25519      NULL             #f)
-        (list id-Ed448        NULL             #f)))
+        (list id-Ed448        NULL             #f)
+        (list id-X25519       NULL             #f)
+        (list id-X448         NULL             #f)))
 
 ;; for PKCS #8 PrivateKeyInfo and OneAsymmetricKey
 (define known-private-key-formats
@@ -348,4 +350,6 @@ References:
         (list dhKeyAgreement  INTEGER          INTEGER)
         (list id-ecPublicKey  ECPrivateKey     #f)
         (list id-Ed25519      OCTET-STRING     #f)
-        (list id-Ed448        OCTET-STRING     #f)))
+        (list id-Ed448        OCTET-STRING     #f)
+        (list id-X25519       OCTET-STRING     #f)
+        (list id-X448         OCTET-STRING     #f)))

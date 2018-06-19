@@ -54,6 +54,7 @@
          config:dsa-paramgen
          config:ec-paramgen
          config:eddsa-keygen
+         config:ecx-keygen
          version->list
          version->string
          version>=?
@@ -900,7 +901,10 @@
   `((curve #t ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)")))
 
 (define config:eddsa-keygen
-  `((curve #t ,symbol? #f)))
+  `((curve #t ,(lambda (x) (memq x '(ed25519 ed448))) "(or/c 'ed25519 'ed448)")))
+
+(define config:ecx-keygen
+  `((curve #t ,(lambda (x) (memq x '(x25519 x448))) "(or/c 'x25519 'x448)")))
 
 ;; ----------------------------------------
 

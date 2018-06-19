@@ -50,6 +50,10 @@
                    (-decode-pub-eddsa 'ed25519 subjectPublicKey)]
                   [(equal? alg-oid id-Ed448)
                    (-decode-pub-eddsa 'ed448 subjectPublicKey)]
+                  [(equal? alg-oid id-X25519)
+                   (-decode-pub-ecx 'x25519 subjectPublicKey)]
+                  [(equal? alg-oid id-X448)
+                   (-decode-pub-ecx 'x448 subjectPublicKey)]
                   [else #f])]
            [_ #f])]
         [(PrivateKeyInfo OneAsymmetricKey)
@@ -69,6 +73,10 @@
                   (-decode-priv-eddsa 'ed25519 publicKey privateKey)]
                  [(equal? alg-oid id-Ed448)
                   (-decode-priv-eddsa 'ed448 publicKey privateKey)]
+                 [(equal? alg-oid id-X25519)
+                  (-decode-priv-ecx 'x25519 publicKey privateKey)]
+                 [(equal? alg-oid id-X448)
+                  (-decode-priv-ecx 'x448 publicKey privateKey)]
                  [else #f]))
          (case fmt
            ;; Avoid attempting to parse the publicKey field (which could fail!)
@@ -116,6 +124,8 @@
          (-make-pub-ec curve-oid qB)]
         [(list 'eddsa 'public curve (? bytes? qB))
          (-make-pub-eddsa curve qB)]
+        [(list 'ecx 'public curve (? bytes? qB))
+         (-make-pub-ecx curve qB)]
         ;; Private keys
         [(list 'rsa 'private 0 (? nat? n) (? nat? e) (? nat? d)
                (? nat? p) (? nat? q) (? nat? dp) (? nat? dq) (? nat? qInv))
@@ -128,6 +138,8 @@
          (-make-priv-ec curve-oid qB x)]
         [(list 'eddsa 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
          (-make-priv-eddsa curve qB dB)]
+        [(list 'ecx 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
+         (-make-priv-ecx curve qB dB)]
         [_ #f]))
 
     ;; ---- RSA ----
@@ -219,6 +231,16 @@
     (define/public (-make-pub-eddsa curve qB) #f)
     (define/public (-make-priv-eddsa curve qB dB) #f)
 
+    ;; ---- ECX ----
+
+    (define/public (-decode-pub-ecx curve qB)
+      (-make-pub-ecx curve qB))
+    (define/public (-decode-priv-ecx curve qB dB)
+      (-make-priv-ecx curve qB dB))
+
+    (define/public (-make-pub-ecx curve qB) #f)
+    (define/public (-make-priv-ecx curve qB dB) #f)
+
     ;; ----------------------------------------
 
     (define/public (read-params buf fmt)
@@ -266,11 +288,14 @@
          (-make-params-dh p g)]
         [(list 'ec 'params (? oid? curve-oid))
          (-make-params-ec curve-oid)]
+        [(list 'ecx 'params (? symbol? curve))
+         (-make-params-ecx curve)]
         [_ #f]))
 
     (define/public (-make-params-dsa p q g) #f)
     (define/public (-make-params-dh prime base) #f)
     (define/public (-make-params-ec curve-oid) #f)
+    (define/public (-make-params-ecx curve) #f)
 
     ;; ----------------------------------------
 
@@ -310,6 +335,12 @@
       (encode-pub-eddsa fmt curve qB))
     (define/override (-make-priv-eddsa curve qB dB)
       (encode-priv-eddsa fmt curve qB dB))
+    (define/override (-make-params-ecx curve)
+      (encode-params-ecx fmt curve))
+    (define/override (-make-pub-ecx curve qB)
+      (encode-pub-ecx fmt curve qB))
+    (define/override (-make-priv-ecx curve qB dB)
+      (encode-priv-ecx fmt curve qB dB))
     ))
 
 ;; translate-key : Datum KeyFormat KeyFormat -> (U Datum #f)
@@ -339,6 +370,11 @@
          (match pub
            [(list 'eddsa 'public _ qB)
             (list 'eddsa 'private curve qB dB)]
+           [_ #f])]
+        [(list 'ecx 'private curve #f dB)
+         (match pub
+           [(list 'ecx 'public _ qB)
+            (list 'ecx 'private curve qB dB)]
            [_ #f])]
         [_ #f])
       priv))
@@ -541,6 +577,45 @@
   (case curve
     [(ed25519) id-Ed25519]
     [(ed448)   id-Ed448]))
+
+;; ---- ECX ----
+
+(define (encode-params-ecx fmt curve)
+  (case fmt
+    [(AlgorithmIdentifier)
+     (asn1->bytes/DER
+      AlgorithmIdentifier
+      (hasheq 'algorithm (x-curve->oid curve)))]
+    [(rkt) (list 'ecx 'params curve)]
+    [else #f]))
+
+(define (encode-priv-ecx fmt curve qB dB)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (encode-pub-ecx fmt curve qB)]
+    [(PrivateKeyInfo OneAsymmetricKey)
+     (private-key->der
+      fmt
+      (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (x-curve->oid curve))
+              'privateKey dB)
+      qB)]
+    [(rkt) (list 'ecx 'private curve qB dB)]
+    [else #f]))
+
+(define (encode-pub-ecx fmt curve qB)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (asn1->bytes/DER
+      SubjectPublicKeyInfo
+      (hasheq 'algorithm (hasheq 'algorithm (x-curve->oid curve))
+              'subjectPublicKey qB))]
+    [(rkt) (list 'ecx 'public curve qB)]
+    [else #f]))
+
+(define (x-curve->oid curve)
+  (case curve
+    [(x25519) id-X25519]
+    [(x448)   id-X448]))
 
 ;; ----------------------------------------
 
