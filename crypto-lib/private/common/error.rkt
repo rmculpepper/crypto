@@ -49,7 +49,7 @@
 ;; ----
 
 (define (err/no-impl [obj #f])
-  (internal-error "unimplemented~a" (if obj (format "in: ~a" (send obj about)) "")))
+  (internal-error "unimplemented~a" (if obj (format "\n  in: ~a" (send obj about)) "")))
 
 (define (err/bad-*-pad kind impl pad)
   (define factory (send impl get-factory))
