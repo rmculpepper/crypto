@@ -757,3 +757,55 @@
   (case curve
     [(ed25519) 64]
     [(ed448)  114]))
+
+;; ============================================================
+
+(define libcrypto-ecx-impl%
+  (class libcrypto-pk-impl%
+    (inherit -known-digest?)
+    (super-new (spec 'ecx))
+
+    (define/override (get-key-class) libcrypto-ecx-key%)
+    (define/override (can-key-agree?) #t)
+
+    (define/override (generate-key config)
+      (check-config config config:ecx-keygen "EC/X key generation")
+      (define curve-name (config-ref config 'curve))
+      (define curve-nid
+        (or (x-curve->nid curve-name)
+            (crypto-error "named curve not found\n  curve: ~e" curve-name)))
+      (define secret-key-size (x-curve->key-size curve-name))
+      (define secret-key (crypto-random-bytes secret-key-size))
+      (define evp (EVP_PKEY_new_raw_private_key curve-nid secret-key (bytes-length secret-key)))
+      (new libcrypto-ecx-key% (impl this) (evp evp) (private? #t)))
+    ))
+
+(define libcrypto-ecx-key%
+  (class libcrypto-pk-key%
+    (inherit-field impl evp private?)
+    (super-new)
+
+    (define/override (-convert-peer-pubkey peer-pubkey)
+      (EVP_PKEY_new_raw_public_key (EVP->type evp) peer-pubkey (bytes-length peer-pubkey)))
+
+    (define/override (-write-key fmt)
+      (super -write-key fmt))
+    ))
+
+;; ----------------------------------------
+
+(define (nid->x-curve nid)
+  (cond [(= nid NID_X25519) 'x25519]
+        [(= nid NID_X448)   'x448]
+        [else #f]))
+
+(define (x-curve->nid curve)
+  (case curve
+    [(x25519) NID_X25519]
+    [(x448)   NID_X448]
+    [else     #f]))
+
+(define (x-curve->key-size curve)
+  (case curve
+    [(x25519) 32]
+    [(x448)   56]))

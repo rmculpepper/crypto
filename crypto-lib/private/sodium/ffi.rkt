@@ -658,3 +658,18 @@
 (define-na crypto_sign_ed25519ph_final_verify
   (_fun (state : _pointer) (sig : _pointer) (pk : _pointer)
         -> _int))
+
+;; ============================================================
+;; x25519 (since ?)
+
+(define crypto_scalarmult_curve25519_BYTES 32)
+(define crypto_scalarmult_curve25519_SCALARBYTES 32)
+
+(define-na crypto_scalarmult_curve25519_bytes (_fun -> _size))
+(define-na crypto_scalarmult_curve25519_scalarbytes (_fun -> _size))
+
+(define-na crypto_scalarmult_curve25519
+  (_fun (q : _pointer) (n : _pointer) (p : _pointer) -> _int))
+
+(define-na crypto_scalarmult_curve25519_base
+  (_fun (q : _pointer) (n : _pointer) -> _int))

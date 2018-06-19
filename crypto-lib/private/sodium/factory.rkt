@@ -56,6 +56,7 @@
     (define/override (-get-pk spec)
       (case spec
         [(eddsa) (new sodium-eddsa-impl% (factory this))]
+        [(ecx) (new sodium-ecx-impl% (factory this))]
         [else #f]))
 
     (define/override (-get-pk-reader)

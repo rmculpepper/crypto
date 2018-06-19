@@ -996,6 +996,13 @@
   #:wrap (compose (allocator EVP_PKEY_free)
                   (err-wrap/pointer 'EVP_PKEY_new_raw_public_key)))
 
+;; (define-crypto EVP_PKEY_get_raw_private_key
+;;   (_fun (pkey : _EVP_PKEY) (priv : _pointer) (len : (_ptr io _size)) -> _int)
+;;   #:wrap (err-wrap 'EVP_PKEY_get_raw_private_key))
+;; (define-crypto EVP_PKEY_get_raw_public_key
+;;   (_fun (pkey : _EVP_PKEY) (pub : _pointer) (len : (_ptr io _size)) -> _int)
+;;   #:wrap (err-wrap 'EVP_PKEY_get_raw_public_key))
+
 (define-crypto EVP_DigestSignInit
   (_fun (ctx : _EVP_MD_CTX) (_pointer = #f) (md : _EVP_MD/null) (_pointer = #f) (k : _EVP_PKEY)
         -> _int)

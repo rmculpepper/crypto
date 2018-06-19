@@ -140,6 +140,7 @@
         [(dsa) (and new-dsa-ok? (new nettle-dsa-impl% (factory this)))]
         [(ec) (and ec-ok? (new nettle-ec-impl% (factory this)))]
         [(eddsa) (new nettle-eddsa-impl% (factory this))]
+        [(ecx) (new nettle-ecx-impl% (factory this))]
         [else #f]))
 
     (define/override (-get-pk-reader)

@@ -162,6 +162,28 @@
          (and impl (new nettle-ed25519-key% (impl impl) (pub pub) (priv priv)))]
         [else #f]))
 
+    ;; ---- ECX ----
+
+    (define/override (-make-pub-ecx curve qB)
+      (case curve
+        [(x25519)
+         (define pub (make-sized-copy X25519_KEY_SIZE qB))
+         (define impl (send factory get-pk 'ecx))
+         (and impl (new nettle-x25519-key% (impl impl) (pub pub) (priv #f)))]
+        [else #f]))
+
+    (define/override (-make-priv-ecx curve _qB dB)
+      ;; Note: qB (public key) might be missing, so just recompute
+      (case curve
+        [(x25519)
+         (define priv (make-sized-copy X25519_KEY_SIZE dB))
+         (define pub (make-bytes X25519_KEY_SIZE))
+         (bytes-copy! priv 0 dB 0 (min (bytes-length dB) X25519_KEY_SIZE))
+         (nettle_curve25519_mul_g pub priv)
+         (define impl (send factory get-pk 'ecx))
+         (and impl (new nettle-x25519-key% (impl impl) (pub pub) (priv priv)))]
+        [else #f]))
+
     (define/private (make-sized-copy size buf)
       (define copy (make-bytes size))
       (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
@@ -615,4 +637,57 @@
 
     (define/override (-verify msg _dspec pad sig)
       (nettle_ed25519_sha512_verify pub (bytes-length msg) msg sig))
+    ))
+
+;; ============================================================
+;; X25519
+
+(define nettle-ecx-impl%
+  (class nettle-pk-impl%
+    (inherit-field spec factory)
+    (inherit get-random-ctx)
+    (super-new (spec 'ecx))
+
+    (define/override (can-key-agree?) #t)
+
+    (define/override (generate-key config)
+      (check-config config config:ecx-keygen "EC/X key generation")
+      (define curve-name (config-ref config 'curve))
+      (case curve-name
+        [(x25519)
+         (define priv (crypto-random-bytes X25519_KEY_SIZE))
+         (define pub (make-bytes X25519_KEY_SIZE))
+         (nettle_curve25519_mul_g pub priv)
+         (new nettle-x25519-key% (impl this) (priv priv) (pub pub))]
+        [else (crypto-error "named curve not found\n  curve: ~e" curve-name)]))
+    ))
+
+(define nettle-x25519-key%
+  (class pk-key-base%
+    (init-field pub priv)
+    (inherit-field impl)
+    (super-new)
+
+    (define/override (is-private?) (and priv #t))
+
+    (define/override (get-public-key)
+      (if priv (new nettle-x25519-key% (impl impl) (pub pub) (priv #f)) this))
+
+    (define/override (-write-public-key fmt)
+      (encode-pub-ecx fmt 'x25519 pub))
+    (define/override (-write-private-key fmt)
+      (encode-priv-ecx fmt 'x25519 pub priv))
+
+    (define/override (equal-to-key? other)
+      (and (is-a? other nettle-ed25519-key%)
+           (equal? pub (get-field pub other))))
+
+    (define/override (-compute-secret peer-pubkey)
+      (define peer-pub
+        (cond [(bytes? peer-pubkey) peer-pubkey]
+              [else (get-field pub peer-pubkey)]))
+      ;; FIXME: check length
+      (define secret (make-bytes 32))
+      (nettle_curve25519_mul secret priv peer-pub)
+      secret)
     ))

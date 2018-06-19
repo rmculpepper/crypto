@@ -791,3 +791,13 @@
         (msg : _pointer)
         (sig : _pointer)
         -> _bool))
+
+;; ----------------------------------------
+;; X25519
+
+(define X25519_KEY_SIZE 32)
+
+(define-nettleHW nettle_curve25519_mul_g
+  (_fun (pub : _pointer) (priv : _pointer) -> _void))
+(define-nettleHW nettle_curve25519_mul
+  (_fun (key : _pointer) (priv : _pointer) (peer : _pointer) -> _void))
