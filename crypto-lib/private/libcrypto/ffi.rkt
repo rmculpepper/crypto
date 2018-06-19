@@ -674,7 +674,9 @@
     (,EVP_PKEY_DH  . dh)
     (,EVP_PKEY_EC  . ec)
     (,NID_ED25519  . eddsa)
-    (,NID_ED448    . eddsa)))
+    (,NID_ED448    . eddsa)
+    (,NID_X25519   . ecx)
+    (,NID_X448     . ecx)))
 
 (define-crypto EVP_PKEY_free
   (_fun _EVP_PKEY -> _void)

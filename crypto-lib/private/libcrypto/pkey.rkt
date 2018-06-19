@@ -123,6 +123,12 @@
                    (read-params parameters 'DHParameter)] ;; DHParameter
                   [(equal? alg-oid id-ecPublicKey)
                    (read-params parameters 'EcpkParameters)] ;; PcpkParameters
+                  [(equal? alg-oid id-X25519)
+                   (define impl (send factory get-pk 'ecx))
+                   (and impl (new libcrypto-ecx-params% (impl impl) (curve-nid NID_X25519)))]
+                  [(equal? alg-oid id-X448)
+                   (define impl (send factory get-pk 'ecx))
+                   (and impl (new libcrypto-ecx-params% (impl impl) (curve-nid NID_X448)))]
                   [else #f])]
            [_ #f])]
         [(DSAParameters)
@@ -765,25 +771,49 @@
     (inherit -known-digest?)
     (super-new (spec 'ecx))
 
+    (define/override (get-params-class) libcrypto-ecx-params%)
     (define/override (get-key-class) libcrypto-ecx-key%)
+
     (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
+
+    (define/override (generate-params config)
+      (check-config config config:ecx-keygen "EC/X parameters generation")
+      (define curve (config-ref config 'curve))
+      (define curve-nid
+        (or (x-curve->nid curve)
+            (crypto-error "named curve not found\n  curve: ~e" curve)))
+      (new libcrypto-ecx-params% (impl this) (curve-nid curve-nid)))
 
     (define/override (generate-key config)
-      (check-config config config:ecx-keygen "EC/X key generation")
-      (define curve-name (config-ref config 'curve))
-      (define curve-nid
-        (or (x-curve->nid curve-name)
-            (crypto-error "named curve not found\n  curve: ~e" curve-name)))
-      (define secret-key-size (x-curve->key-size curve-name))
+      (define p (generate-params config))
+      (send p generate-key '()))
+    ))
+
+(define libcrypto-ecx-params%
+  (class pk-params-base% ;; NOT libcrypto-params-base%
+    (inherit-field impl)
+    (init-field curve-nid)
+    (super-new)
+
+    (define/override (-write-params fmt)
+      (encode-params-ecx fmt (nid->x-curve curve-nid)))
+
+    (define/override (generate-key config)
+      (check-config config '() "EC/X key generation")
+      (define secret-key-size (x-curve->key-size (nid->x-curve curve-nid)))
       (define secret-key (crypto-random-bytes secret-key-size))
       (define evp (EVP_PKEY_new_raw_private_key curve-nid secret-key (bytes-length secret-key)))
-      (new libcrypto-ecx-key% (impl this) (evp evp) (private? #t)))
+      (new libcrypto-ecx-key% (impl impl) (evp evp) (private? #t)))
     ))
 
 (define libcrypto-ecx-key%
   (class libcrypto-pk-key%
     (inherit-field impl evp private?)
     (super-new)
+
+    (define/override (get-params)
+      (new libcrypto-ecx-params% (impl impl) (curve-nid (EVP->type evp))))
 
     (define/override (-convert-peer-pubkey peer-pubkey)
       (EVP_PKEY_new_raw_public_key (EVP->type evp) peer-pubkey (bytes-length peer-pubkey)))

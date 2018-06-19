@@ -649,17 +649,37 @@
     (super-new (spec 'ecx))
 
     (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
 
-    (define/override (generate-key config)
-      (check-config config config:ecx-keygen "EC/X key generation")
+    (define/override (generate-params config)
+      (check-config config config:ecx-keygen "EC/X parameter generation")
       (define curve-name (config-ref config 'curve))
       (case curve-name
+        [(x25519) (new nettle-ecx-params% (impl this) (curve curve-name))]
+        [else (crypto-error "named curve not found\n  curve: ~e" curve-name)]))
+
+    (define/override (generate-key config)
+      (define p (generate-params config))
+      (send p generate-key '()))
+    ))
+
+(define nettle-ecx-params%
+  (class pk-params-base%
+    (init-field curve)
+    (inherit-field impl)
+    (super-new)
+
+    (define/override (write-params fmt)
+      (encode-params-ecx fmt curve))
+
+    (define/override (generate-key config)
+      (check-config config '() "EC/X key generation")
+      (case curve
         [(x25519)
          (define priv (crypto-random-bytes X25519_KEY_SIZE))
          (define pub (make-bytes X25519_KEY_SIZE))
          (nettle_curve25519_mul_g pub priv)
-         (new nettle-x25519-key% (impl this) (priv priv) (pub pub))]
-        [else (crypto-error "named curve not found\n  curve: ~e" curve-name)]))
+         (new nettle-x25519-key% (impl impl) (priv priv) (pub pub))]))
     ))
 
 (define nettle-x25519-key%
@@ -670,6 +690,9 @@
 
     (define/override (is-private?) (and priv #t))
 
+    (define/override (get-params)
+      (new nettle-ecx-params% (impl impl) (curve 'x25519)))
+
     (define/override (get-public-key)
       (if priv (new nettle-x25519-key% (impl impl) (pub pub) (priv #f)) this))
 
@@ -679,7 +702,7 @@
       (encode-priv-ecx fmt 'x25519 pub priv))
 
     (define/override (equal-to-key? other)
-      (and (is-a? other nettle-ed25519-key%)
+      (and (is-a? other nettle-x25519-key%)
            (equal? pub (get-field pub other))))
 
     (define/override (-compute-secret peer-pubkey)
