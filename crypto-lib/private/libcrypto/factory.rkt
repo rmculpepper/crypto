@@ -107,8 +107,10 @@
         [(dsa) (new libcrypto-dsa-impl% (factory this))]
         [(dh)  (new libcrypto-dh-impl%  (factory this))]
         [(ec)  (new libcrypto-ec-impl%  (factory this))]
-        [(eddsa) (new libcrypto-eddsa-impl% (factory this))]
-        [(ecx) (new libcrypto-ecx-impl% (factory this))]
+        [(eddsa) (and (openssl-version>=? 1 1 1)
+                      (new libcrypto-eddsa-impl% (factory this)))]
+        [(ecx) (and (openssl-version>=? 1 1 1)
+                    (new libcrypto-ecx-impl% (factory this)))]
         [else #f]))
 
     (define/override (-get-pk-reader)
