@@ -150,10 +150,10 @@
   (values M N F P S))
 
 (define (openssl-version>=? a b c)
-  (define-values (va vb vc vd ve) (parse-version (SSLeay)))
-  (or (>= va a)
+  (define-values (va vb vc vd ve) (parse-version (OpenSSL_version_num)))
+  (or (> va a)
       (and (= va a)
-           (or (>= vb b)
+           (or (> vb b)
                (and (= vb b)
                     (>= vc c))))))
 
