@@ -555,4 +555,11 @@
   #:fail (lambda () (lambda (c) #f)))
 
 (define gcrypt-curves
-  (filter gcry-curve-ok? '(secp192r1 secp224r1 secp256r1 secp384r1 secp521r1)))
+  (filter gcry-curve-ok?
+          '(secp192r1 secp224r1 secp256r1 secp384r1 secp521r1
+            secp256k1
+            brainpoolP160r1 brainpoolP192r1 brainpoolP224r1 brainpoolP256r1
+            brainpoolP320r1 brainpoolP384r1 brainpoolP512r1)))
+
+(define ed25519-ok? (gcry-curve-ok? 'Ed25519))
+(define x25519-ok?  (gcry-curve-ok? 'Curve25519))
