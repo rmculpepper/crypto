@@ -479,15 +479,39 @@
     (super-new (spec 'ec))
 
     (define/override (can-sign? pad) (memq pad '(#f)))
+    (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
+
+    (define/override (generate-params config)
+      (check-config config config:ec-paramgen "EC parameter generation")
+      (define curve (config-ref config 'curve))
+      (define curve* (curve-alias->name curve))
+      (unless (assq curve* known-curves)
+        (crypto-error "unknown named curve\n  curve: ~e" curve))
+      (new gcrypt-ec-params% (impl this) (curve curve*)))
 
     (define/override (generate-key config)
-      (check-config config config:ec-paramgen "EC key generation")
-      (let ([curve (config-ref config 'curve)])
-        (*generate-key
-         (gcry_sexp_build "(genkey (ecc (curve %s)))"
-                          (let ([curve (if (symbol? curve) (symbol->string curve) curve)])
-                            (string->bytes/utf-8 curve)))
-         gcrypt-ec-key%)))
+      (define p (generate-params config))
+      (send p generate-key '()))
+    ))
+
+(define gcrypt-ec-params%
+  (class pk-params-base%
+    (inherit-field impl)
+    (init-field curve)
+    (super-new)
+
+    (define/override (-write-params fmt)
+      (define curve-oid (cond [(assq curve known-curves) => cdr] [else #f]))
+      (and curve-oid (encode-params-ec fmt curve-oid)))
+
+    (define/override (generate-key config)
+      (check-config config '() "EC key generation from parameters")
+      (send impl *generate-key
+            (gcry_sexp_build "(genkey (ecc (curve %s)))"
+                             (let ([curve (if (symbol? curve) (symbol->string curve) curve)])
+                               (string->bytes/utf-8 curve)))
+            gcrypt-ec-key%))
     ))
 
 (define gcrypt-ec-key%
@@ -495,6 +519,9 @@
     (inherit-field pub priv impl)
     (inherit is-private?)
     (super-new)
+
+    (define/override (get-params)
+      (new gcrypt-ec-params% (impl impl) (curve (get-curve))))
 
     (define/override (-write-private-key fmt)
       (define curve-oid (get-curve-oid priv))
@@ -509,18 +536,10 @@
            (let ([qB (sexp-get-data pub "ecc" "q")])
              (encode-pub-ec fmt curve-oid qB))))
 
+    (define/private (get-curve [sexp pub])
+      (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
     (define/private (get-curve-oid sexp)
-      (define curve (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
-      (cond [(assq (curve-alias->name curve) known-curves) => cdr] [else #f]))
-
-    (define/private (curve-alias->name curve-name)
-      (case curve-name
-        ['|NIST P-192| 'secp192r1]
-        ['|NIST P-224| 'secp224r1]
-        ['|NIST P-256| 'secp256r1]
-        ['|NIST P-384| 'secp384r1]
-        ['|NIST P-521| 'secp521r1]
-        [else curve-name]))
+      (curve->oid (get-curve sexp)))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       ;; When the digest is larger than the bits of the EC field, gcrypt is
@@ -551,7 +570,33 @@
                      ['s (? exact-nonnegative-integer? s)])
          (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
         [_ (crypto-error "signature is not well-formed")]))
+
+    ;; ECDH support is not documented, but described in comments in
+    ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
+    (define/override (-compute-secret peer-pubkey)
+      (define peer
+        (cond [(bytes? peer-pubkey) peer-pubkey]
+              [else (sexp-get-data (get-field pub peer-pubkey) "ecc" "q")]))
+      (define dh-sexp (gcry_sexp_build/%b "(enc-val (ecdh (e %b)))" peer))
+      (define sh (gcry_pk_decrypt dh-sexp priv))
+      (define shb (gcry_sexp_nth_data sh 1))
+      ;; shb is an EC point; decode and extract the x-coordinate
+      ;; cf (unsigned->base256 (car (bytes->ec-point shb)))
+      (define shblen (bytes-length shb))
+      (subbytes shb 1 (+ 1 (quotient shblen 2))))
     ))
+
+(define (curve->oid curve)
+  (cond [(assq (curve-alias->name curve) known-curves) => cdr] [else #f]))
+
+(define (curve-alias->name curve-name)
+  (case curve-name
+    ['|NIST P-192| 'secp192r1]
+    ['|NIST P-224| 'secp224r1]
+    ['|NIST P-256| 'secp256r1]
+    ['|NIST P-384| 'secp384r1]
+    ['|NIST P-521| 'secp521r1]
+    [else curve-name]))
 
 ;; ============================================================
 
