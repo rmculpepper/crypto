@@ -21,6 +21,7 @@
          asn1
          "../rkt/pk-asn1.rkt"
          "../common/interfaces.rkt"
+         "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
          "../common/error.rkt"
@@ -708,9 +709,9 @@
       (define curve-nid
         (or (ed-curve->nid curve-name)
             (crypto-error "named curve not found\n  curve: ~e" curve-name)))
-      (define secret-key-size (ed-curve->secret-key-size curve-name))
+      (define secret-key-size (ed-curve->key-size curve-name))
       (define secret-key (crypto-random-bytes secret-key-size))
-      (define evp (EVP_PKEY_new_raw_private_key curve-nid secret-key (bytes-length secret-key)))
+      (define evp (EVP_PKEY_new_raw_private_key curve-nid secret-key secret-key-size))
       (new libcrypto-eddsa-key% (impl this) (evp evp) (private? #t)))
     ))
 
@@ -752,16 +753,6 @@
     [(ed448)   NID_ED448]
     [else      #f]))
 
-(define (ed-curve->secret-key-size curve)
-  (case curve
-    [(ed25519) 32]
-    [(ed448)   57]))
-
-(define (ed-curve->sig-size curve)
-  (case curve
-    [(ed25519) 64]
-    [(ed448)  114]))
-
 ;; ============================================================
 
 (define libcrypto-ecx-impl%
@@ -799,7 +790,7 @@
 
     (define/override (generate-key config)
       (check-config config '() "EC/X key generation")
-      (define secret-key-size (x-curve->key-size (nid->x-curve curve-nid)))
+      (define secret-key-size (ecx-curve->key-size (nid->x-curve curve-nid)))
       (define secret-key (crypto-random-bytes secret-key-size))
       (define evp (EVP_PKEY_new_raw_private_key curve-nid secret-key (bytes-length secret-key)))
       (new libcrypto-ecx-key% (impl impl) (evp evp) (private? #t)))
@@ -832,8 +823,3 @@
     [(x25519) NID_X25519]
     [(x448)   NID_X448]
     [else     #f]))
-
-(define (x-curve->key-size curve)
-  (case curve
-    [(x25519) 32]
-    [(x448)   56]))

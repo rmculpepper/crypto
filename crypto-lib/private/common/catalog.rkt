@@ -395,6 +395,36 @@
 (define (list-known-pks)
   '(rsa dsa dh ec eddsa ecx))
 
+;; ----------------------------------------
+;; Elliptic Curve information
+
+;; The following functions return 0 for invalid curve names, so the
+;; result can be passed to make-bytes before the curve is checked.
+
+;; ed-curve->key-size : Symbol -> Nat
+;; Size of secret key and public key.
+(define (ed-curve->key-size curve)
+  (case curve
+    [(ed25519) 32]
+    [(ed448)   57]
+    [else 0]))
+
+;; ed-curve->sig-size : Symbol -> Nat
+;; Size of signature.
+(define (ed-curve->sig-size curve)
+  (case curve
+    [(ed25519) 64]
+    [(ed448)  114]
+    [else 0]))
+
+;; ecx-curve->key-size : Symbol -> Nat
+;; Size of secret key, public key, and shared secret.
+(define (ecx-curve->key-size curve)
+  (case curve
+    [(x25519) 32]
+    [(x448)   56]
+    [else 0]))
+
 ;; ============================================================
 ;; KDF
 
