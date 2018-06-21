@@ -77,13 +77,6 @@
          (define impl (send factory get-pk 'ecx))
          (and impl (new sodium-x25519-key% (impl impl) (pub pub) (priv priv)))]
         [else #f]))
-
-    ;; ----
-
-    (define/private (make-sized-copy size buf)
-      (define copy (make-bytes size))
-      (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
-      copy)
     ))
 
 ;; ============================================================
@@ -208,9 +201,9 @@
 
     (define/override (-compute-secret peer-pubkey)
       (define peer-pub
-        (cond [(bytes? peer-pubkey) peer-pubkey]
+        (cond [(bytes? peer-pubkey)
+               (make-sized-copy crypto_scalarmult_curve25519_BYTES peer-pubkey)]
               [else (get-field pub peer-pubkey)]))
-      ;; FIXME: check length
       (define secret (make-bytes crypto_scalarmult_curve25519_BYTES))
       (crypto_scalarmult_curve25519 secret priv peer-pub)
       secret)

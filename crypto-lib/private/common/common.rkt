@@ -44,6 +44,7 @@
          to-info
          to-spec
          shrink-bytes
+         make-sized-copy
          config/c
          check-config
          config-ref
@@ -836,10 +837,19 @@
   (cond [(to-impl src #t) => (lambda (impl) (send impl get-spec))]
         [else src]))
 
+;; ----
+
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))
     (subbytes bs 0 len)
     bs))
+
+;; make-sized-copy : Nat Bytes -> Bytes[size]
+;; Returns a fresh copy of buf extended or truncated to size.
+(define (make-sized-copy size buf)
+  (define copy (make-bytes size))
+  (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
+  copy)
 
 ;; ----
 

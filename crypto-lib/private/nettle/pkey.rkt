@@ -178,16 +178,10 @@
         [(x25519)
          (define priv (make-sized-copy X25519_KEY_SIZE dB))
          (define pub (make-bytes X25519_KEY_SIZE))
-         (bytes-copy! priv 0 dB 0 (min (bytes-length dB) X25519_KEY_SIZE))
          (nettle_curve25519_mul_g pub priv)
          (define impl (send factory get-pk 'ecx))
          (and impl (new nettle-x25519-key% (impl impl) (pub pub) (priv priv)))]
         [else #f]))
-
-    (define/private (make-sized-copy size buf)
-      (define copy (make-bytes size))
-      (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
-      copy)
     ))
 
 ;; ============================================================
@@ -726,10 +720,9 @@
 
     (define/override (-compute-secret peer-pubkey)
       (define peer-pub
-        (cond [(bytes? peer-pubkey) peer-pubkey]
+        (cond [(bytes? peer-pubkey) (make-sized-copy X25519_KEY_SIZE peer-pubkey)]
               [else (get-field pub peer-pubkey)]))
-      ;; FIXME: check length
-      (define secret (make-bytes 32))
+      (define secret (make-bytes X25519_KEY_SIZE))
       (nettle_curve25519_mul secret priv peer-pub)
       secret)
     ))
