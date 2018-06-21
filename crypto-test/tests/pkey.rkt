@@ -209,9 +209,10 @@
           [else (hprintf "  -skipping encrypt w/ pad = ~v\n" pad)])))
 
 (define (test-pk-key-agree key1 pubkey1)
-  (define params (pk-key->parameters key1))
-  (define key2 (generate-private-key params))
-  (define pubkey2 (pk-key->public-only-key key2))
+  (hprintf "  +testing key agreement\n")
+  (define key2 (generate-private-key (pk-key->parameters pubkey1)))
+  (define pubkey2 (datum->pk-key (pk-key->datum key2 'SubjectPublicKeyInfo)
+                                 'SubjectPublicKeyInfo (get-factory key1)))
   (check-equal? (pk-derive-secret key1 pubkey2)
                 (pk-derive-secret key2 pubkey1)
                 "pk-derive-secret"))
