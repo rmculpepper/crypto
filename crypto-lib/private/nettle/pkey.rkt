@@ -469,6 +469,7 @@
     (super-new (spec 'ec))
 
     (define/override (can-sign? pad) (memq pad '(#f)))
+    (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
@@ -543,6 +544,18 @@
     (define/override (-verify digest digest-spec pad sig-der)
       (define sig (der->dsa_signature sig-der))
       (nettle_ecdsa_verify pub digest sig))
+
+    (define/override (-compute-secret peer-pubkey)
+      (define ecc (ecc_scalar_struct-ecc priv))
+      (define peer-ecp
+        (cond [(bytes? peer-pubkey) (bytes->ecc_point ecc peer-pubkey)]
+              [else (get-field pub peer-pubkey)]))
+      (define shared-ecp (new-ecc_point ecc))
+      (nettle_ecc_point_mul shared-ecp priv peer-ecp)
+      (define x (mpz)) (define y (mpz))
+      (nettle_ecc_point_get shared-ecp x y)
+      (define ecc-size (quotient (+ (nettle_ecc_bit_size ecc) 7) 8))
+      (mpz->bytes x ecc-size #f #t))
     ))
 
 (define (ecc_point=? a b)
@@ -585,6 +598,12 @@
 
 (define (curve-oid->ecc curve-oid)
   (curve-name->ecc (curve-oid->name curve-oid)))
+
+(define (bytes->ecc_point ecc b)
+  (define ecp (new-ecc_point ecc))
+  (define x+y (bytes->ec-point b))
+  (nettle_ecc_point_set ecp (mpz (car x+y)) (mpz (cdr x+y)))
+  ecp)
 
 ;; ============================================================
 ;; Ed25519
