@@ -619,78 +619,25 @@
 
 ;; ----------------------------------------
 
-;; find-curve-nid-by-sn : String -> Nat/#f
-(define (find-curve-nid-by-sn sn)
-  (define nid (OBJ_sn2nid sn))
-  (and (member nid builtin-curve-nids) nid))
-
-;; Note about curve names and aliases:
-;;   http://tools.ietf.org/html/rfc4492#section-5.1.1
-;;   http://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf
-;;   https://bugs.launchpad.net/pyopenssl/+bug/1233810
-
 ;; find-curve-nid-by-name : Symbol/String -> Nat/#f
 (define (find-curve-nid-by-name name0)
-  (define name (if (symbol? name0) (symbol->string name0) name0))
-  (or (find-curve-nid-by-sn name)
-      (for/or ([alias-set (in-list curve-aliases)]
-               #:when (member name alias-set))
-        (for/or ([alias (in-list alias-set)])
-          (find-curve-nid-by-sn alias)))))
+  (for/or ([alias (curve-name->aliases name0)])
+    (define nid (OBJ_sn2nid (symbol->string alias)))
+    (and (positive? nid) nid)))
 
-(define curve-aliases
-  ;; Source: RFC4492
-  ;; [ SEC2/RFC4492 | NIST FIPS 186-4 | ANSI X9.62 ]
-  '(["sect163k1" "NIST K-163"]
-    ["sect163r1"]
-    ["sect163r2" "NIST B-163"]
-    ["sect193r1"]
-    ["sect193r2"]
-    ["sect233k1" "NIST K-233"]
-    ["sect233r1" "NIST B-233"]
-    ["sect239k1"]
-    ["sect283k1" "NIST K-283"]
-    ["sect283r1" "NIST B-283"]
-    ["sect409k1" "NIST K-409"]
-    ["sect409r1" "NIST B-409"]
-    ["sect571k1" "NIST K-571"]
-    ["sect571r1" "NIST B-571"]
-    ["secp160k1"]
-    ["secp160r1"]
-    ["secp160r2"]
-    ["secp192k1"]
-    ["secp192r1" "NIST P-192" "prime192v1"]
-    ["secp224k1"]
-    ["secp224r1" "NIST P-224"]
-    ["secp256k1"]
-    ["secp256r1" "NIST P-256" "prime256v1"]
-    ["secp384r1" "NIST P-384"]
-    ["secp521r1" "NIST P-521"]))
-
-;; curve-table : Hash[String => (cons Nat String/#f)]
-(define curve-table (make-hash))
-(let ()
-  ;; Add builtin curves
-  (define curve-count (EC_get_builtin_curves #f 0))
-  (define ci0 (cast (malloc curve-count _EC_builtin_curve 'atomic)
-                    _pointer _EC_builtin_curve-pointer))
-  (EC_get_builtin_curves ci0 curve-count)
-  (for ([i curve-count])
-    (define ci (ptr-add ci0 i _EC_builtin_curve))
-    (define nid (EC_builtin_curve-nid ci))
-    (hash-set! curve-table (OBJ_nid2sn nid) (cons nid (EC_builtin_curve-comment ci))))
-  ;; Add aliases
-  (for ([aliases (in-list curve-aliases)])
-    (define target
-      (for/or ([alias (in-list aliases)])
-        (hash-ref curve-table alias #f)))
-    (when target
-      (for ([alias (in-list aliases)])
-        (unless (hash-ref curve-table alias #f)
-          (hash-set! curve-table alias target))))))
-
-;; builtin-curve-nids : (Listof Nat)
-(define builtin-curve-nids (map car (hash-values curve-table)))
+;; curve-table : Hash[Symbol => (cons Nat String/#f)]
+(define curve-table
+  (let ()
+    ;; Add builtin curves
+    (define curve-count (EC_get_builtin_curves #f 0))
+    (define ci0 (cast (malloc curve-count _EC_builtin_curve 'atomic)
+                      _pointer _EC_builtin_curve-pointer))
+    (EC_get_builtin_curves ci0 curve-count)
+    (for/hash ([i (in-range curve-count)])
+      (define ci (ptr-add ci0 i _EC_builtin_curve))
+      (define nid (EC_builtin_curve-nid ci))
+      (values (string->symbol (OBJ_nid2sn nid))
+              (cons nid (EC_builtin_curve-comment ci))))))
 
 ;; ============================================================
 

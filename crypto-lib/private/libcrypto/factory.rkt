@@ -128,7 +128,7 @@
     (define/override (info key)
       (case key
         [(all-curves)
-         (and (get-pk 'ec) (sort (hash-keys curve-table) string<?))]
+         (and (get-pk 'ec) (sort (hash-keys curve-table) symbol<?))]
         [else (super info key)]))
 
     (define/override (print-info)

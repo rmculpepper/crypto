@@ -19,6 +19,7 @@
          ffi/unsafe
          asn1
          "../common/interfaces.rkt"
+         "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
          "../common/error.rkt"
@@ -26,8 +27,6 @@
          "../rkt/pk-asn1.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
-
-(define gcrypt-curve-names '(secp192r1 secp224r1 secp256r1 secp384r1 secp521r1))
 
 (define DSA-Sig-Val (SEQUENCE [r INTEGER] [s INTEGER]))
 
@@ -242,7 +241,7 @@
         (for/first ([entry (in-list known-curves)]
                     #:when (equal? (cdr entry) oid))
           (car entry)))
-      (and (memq name-sym gcrypt-curve-names)
+      (and (memq name-sym gcrypt-curves)
            (string->bytes/latin-1 (symbol->string name-sym))))
 
     (define/override (read-params sp) #f)
@@ -525,8 +524,8 @@
     (define/override (generate-params config)
       (check-config config config:ec-paramgen "EC parameter generation")
       (define curve (config-ref config 'curve))
-      (define curve* (curve-alias->name curve))
-      (unless (assq curve* known-curves)
+      (define curve* (alias->curve-name curve))
+      (unless (memq curve* gcrypt-curves)
         (crypto-error "unknown named curve\n  curve: ~e" curve))
       (new gcrypt-ec-params% (impl this) (curve curve*)))
 
@@ -627,16 +626,7 @@
     ))
 
 (define (curve->oid curve)
-  (cond [(assq (curve-alias->name curve) known-curves) => cdr] [else #f]))
-
-(define (curve-alias->name curve-name)
-  (case curve-name
-    ['|NIST P-192| 'secp192r1]
-    ['|NIST P-224| 'secp224r1]
-    ['|NIST P-256| 'secp256r1]
-    ['|NIST P-384| 'secp384r1]
-    ['|NIST P-521| 'secp521r1]
-    [else curve-name]))
+  (cond [(assq (alias->curve-name curve) known-curves) => cdr] [else #f]))
 
 ;; ============================================================
 

@@ -468,10 +468,9 @@
 
     (define/override (generate-params config)
       (check-config config config:ec-paramgen "EC parameter generation")
-      (define curve-name0 (config-ref config 'curve))
-      (define curve-name (if (string? curve-name0) (string->symbol curve-name0) curve-name0))
+      (define curve-name (alias->curve-name (config-ref config 'curve)))
       (define ecc (curve-name->ecc curve-name))
-      (unless ecc (crypto-error "named curve not found\n  curve: ~e" curve-name0))
+      (unless ecc (crypto-error "named curve not found\n  curve: ~e" (config-ref config 'curve)))
       (new nettle-ec-params% (impl this) (ecc ecc)))
 
     (define/override (generate-key config)
@@ -577,15 +576,8 @@
   (and curve-name (curve-name->oid curve-name)))
 
 (define (ecc->mlen ecc)
-  (define curve-name (ecc->curve-name ecc))
-  (define (f n) (quotient (+ n 7) 8)) ;; = ceil(n/8)
-  (case curve-name
-    [(secp192r1) (f 192)]
-    [(secp224r1) (f 224)]
-    [(secp256r1) (f 256)]
-    [(secp384r1) (f 384)]
-    [(secp521r1) (f 521)]
-    [else #f]))
+  (define bits (nettle_ecc_bit_size ecc))
+  (quotient (+ bits 7) 8) #| = ceil(n/8) |#)
 
 (define (curve-name->ecc curve-name)
   (cond [(assq curve-name nettle-curves) => cadr] [else #f]))

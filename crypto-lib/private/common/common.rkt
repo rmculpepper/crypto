@@ -175,9 +175,18 @@
           (for ([pk (in-list all-pks)]) (printf " ~v\n" pk))))
       ;; == EC named curves ==
       (let ([all-curves (info 'all-curves)])
+        (define all-curve-vs (for/list ([c (in-list all-curves)]) (format "~v" c)))
         (when (pair? all-curves)
-          (printf "Available EC named curves:\n")
-          (for ([curve (in-list all-curves)]) (printf " ~v\n" curve))))
+          (printf "Available 'ec named curves:\n")
+          (define curve-max-len (apply max 0 (map string-length all-curve-vs)))
+          (for ([curve (in-list all-curves)] [curve-v (in-list all-curve-vs)])
+            (define aliases (remove curve (curve-name->aliases curve)))
+            (cond [(null? aliases)
+                   (printf " ~a\n" curve-v)]
+                  [else
+                   (printf " ~a  with aliases ~s\n"
+                           (pad-to curve-v curve-max-len)
+                           aliases)]))))
       ;; == KDFs ==
       (let ([all-kdfs (info 'all-kdfs)])
         (when (pair? all-kdfs)
