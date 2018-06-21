@@ -195,6 +195,46 @@
       (gcry_pk_testkey priv)
       priv)
 
+    ;; ---- ECX ----
+
+    (define/override (-make-params-ecx curve)
+      (case curve
+        [(x25519)
+         (define impl (send factory get-pk 'ecx))
+         (and impl (new gcrypt-ecx-params% (impl impl) (curve curve)))]
+        [else #f]))
+
+    (define/override (-make-pub-ecx curve qB)
+      (case curve
+        [(x25519)
+         (define pub (make-x25519-public-key qB))
+         (define impl (send factory get-pk 'ecx))
+         (new gcrypt-x25519-key% (impl impl) (pub pub) (priv #f))]
+        [else #f]))
+
+    (define/private (make-x25519-public-key qB)
+      (gcry_sexp_build "(public-key (ecc (curve Curve25519) %S))"
+                       (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))))
+
+    (define/override (-make-priv-ecx curve qB d)
+      ;; FIXME: recover q if publicKey field not present
+      (and qB
+           (case curve
+             [(x25519)
+              (define pub (make-x25519-public-key qB))
+              (define priv (make-x25519-private-key qB d))
+              (define impl (send factory get-pk 'ecx))
+              (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv))]
+             [else #f])))
+
+    (define/private (make-x25519-private-key curve qB d)
+      (define priv
+        (gcry_sexp_build "(private-key (ecc (curve Curve25519) %S %S))"
+                         (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))
+                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
+      (gcry_pk_testkey priv)
+      priv)
+
     ;; ----
 
     (define/private (curve-oid->name oid)
@@ -664,3 +704,93 @@
                        (base256->mpi (subbytes sig-bytes 0 32))
                        (base256->mpi (subbytes sig-bytes 32 64))))
     ))
+
+;; ============================================================
+
+(define gcrypt-ecx-impl%
+  (class gcrypt-pk-impl%
+    (inherit-field spec factory)
+    (inherit *generate-key)
+    (super-new (spec 'ecx))
+
+    (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
+
+    (define/override (generate-params config)
+      (check-config config config:ecx-keygen "EC/X parameter generation")
+      (define curve (config-ref config 'curve))
+      (case curve
+        [(x25519)
+         (new gcrypt-ecx-params% (impl this) (curve curve))]
+        [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
+
+    (define/override (generate-key config)
+      (define p (generate-params config))
+      (send p generate-key '()))
+    ))
+
+(define gcrypt-ecx-params%
+  (class pk-params-base%
+    (inherit-field impl)
+    (init-field curve)
+    (super-new)
+
+    (define/override (-write-params fmt)
+      (encode-params-ecx fmt curve))
+
+    (define/override (generate-key config)
+      (check-config config '() "EC key generation from parameters")
+      (case curve
+        [(x25519)
+         (send impl *generate-key
+               ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
+               (gcry_sexp_build "(genkey (ecdh (flags no-keytest) (curve Curve25519)))")
+               gcrypt-x25519-key%)]))
+    ))
+
+(define gcrypt-x25519-key%
+  (class gcrypt-pk-key%
+    (inherit-field pub priv impl)
+    (inherit is-private?)
+    (super-new)
+
+    (define/override (get-params)
+      (new gcrypt-ecx-params% (impl impl) (curve 'x25519)))
+
+    (define/override (-write-private-key fmt)
+      (let ([qB (sexp-get-data priv "ecc" "q")]
+            [dB (sexp-get-data priv "ecc" "d")])
+        (encode-priv-eddsa fmt 'x25519 (ec-point->raw qB) dB)))
+
+    (define/override (-write-public-key fmt)
+      (let ([qB (sexp-get-data pub "ecc" "q")])
+        (encode-pub-ecx fmt 'x25519 (ec-point->raw qB))))
+
+    ;; ECDH support is not documented, but described in comments in
+    ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
+    (define/override (-compute-secret peer-pubkey)
+      (define peer
+        (cond [(bytes? peer-pubkey) peer-pubkey]
+              [else (sexp-get-data (get-field pub peer-pubkey) "ecc" "q")]))
+      (define dh-sexp (gcry_sexp_build/%b "(enc-val (ecdh (e %b)))" peer))
+      (define sh (gcry_pk_decrypt dh-sexp priv))
+      (define shb (gcry_sexp_nth_data sh 1))
+      ;; shb is (bytes #x40) + shared-secret; #x40 indicates Montgomery
+      ;; point (x-coord only), cf _gcry_ecc_mont_decodepoint
+      (unless (and (= (bytes-length shb) 33) (= (bytes-ref shb 0) #x40))
+        (crypto-error "failed; implementation returned ill-formed result"))
+      (subbytes shb 1))
+
+    (define/override (sign-make-data-sexp) #f)
+    (define/override (sign-unpack-sig-sexp) #f)
+    (define/override (verify-make-sig-sexp) #f)
+    (define/override (check-sig-pad) #f)
+    ))
+
+(define (ec-point->raw b)
+  (unless (and (> (bytes-length b) 0) (= (bytes-ref b 0) #x40))
+    (crypto-error "internal error; expected encoded Montgomery EC point"))
+  (subbytes b 1))
+
+(define (raw->ec-point b)
+  (bytes-append (bytes #x40) b))

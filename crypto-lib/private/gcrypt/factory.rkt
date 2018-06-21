@@ -186,6 +186,7 @@
         [(dsa) (new gcrypt-dsa-impl% (factory this))]
         [(ec)  (new gcrypt-ec-impl%  (factory this))]
         [(eddsa) (and ed25519-ok? (new gcrypt-eddsa-impl% (factory this)))]
+        [(ecx) (and x25519-ok? (new gcrypt-ecx-impl% (factory this)))]
         [else #f]))
 
     (define/override (-get-kdf spec)

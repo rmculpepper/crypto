@@ -142,7 +142,8 @@
         ;; libcrypto cannot handle EdDSA OneAsymmetricKey
         (and (memq fname '(libcrypto)) (memq kspec '(eddsa)) (memq fmt '(OneAsymmetricKey)))
         ;; gcrypto cannot roundtrip EdDSA key via PrivateKeyInfo (missing public key part)
-        (and (memq fname '(gcrypt)) (memq kspec '(eddsa)) (memq fmt '(PrivateKeyInfo))))))
+        (and (memq fname '(gcrypt)) (memq kspec '(eddsa ecx))
+             (memq fmt '(PrivateKeyInfo))))))
 
 (define (test-pk-key key pubkey)
   (when (and (pk-can-sign? key) (pk-can-sign? pubkey))
