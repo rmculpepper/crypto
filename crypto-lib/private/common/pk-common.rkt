@@ -25,6 +25,11 @@
          "../rkt/pk-asn1.rkt")
 (provide (all-defined-out))
 
+;; To avoid shared refs to mutable data:
+;; - read-key makes a copy of bytestrings before forwarding them to implementations
+;; - encode-*-* with 'rkt-* fmt makes a copy of bytestrings in arguments
+;;   (but only for arguments where bytestring are expected)
+
 (define pk-read-key-base%
   (class* impl-base% (pk-read-key<%>)
     (super-new)
@@ -121,11 +126,11 @@
         [(list 'dh 'public (? nat? p) (? nat? g) (? nat? y))
          (-make-pub-dh p g y)]
         [(list 'ec 'public (? oid? curve-oid) (? bytes? qB))
-         (-make-pub-ec curve-oid qB)]
+         (-make-pub-ec curve-oid (bcopy qB))]
         [(list 'eddsa 'public curve (? bytes? qB))
-         (-make-pub-eddsa curve qB)]
+         (-make-pub-eddsa curve (bcopy qB))]
         [(list 'ecx 'public curve (? bytes? qB))
-         (-make-pub-ecx curve qB)]
+         (-make-pub-ecx curve (bcopy qB))]
         [_ #f]))
 
     (define/private (read-rkt-private-key sk)
@@ -142,11 +147,11 @@
         [(list 'dh 'private (? nat? p) (? nat? g) (? nat/f? y) (? nat? x))
          (-make-priv-dh p g y x)]
         [(list 'ec 'private (? oid? curve-oid) (? bytes/f? qB) (? nat? x))
-         (-make-priv-ec curve-oid qB x)]
+         (-make-priv-ec curve-oid (bcopy qB) x)]
         [(list 'eddsa 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
-         (-make-priv-eddsa curve qB dB)]
+         (-make-priv-eddsa curve (bcopy qB) (bcopy dB))]
         [(list 'ecx 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
-         (-make-priv-ecx curve qB dB)]
+         (-make-priv-ecx curve (bcopy qB) (bcopy dB))]
         [_ #f]))
 
     ;; ---- RSA ----
@@ -386,6 +391,10 @@
         [_ #f])
       priv))
 
+;; bcopy : (U Bytes #f) -> (U Bytes #f)
+;; Makes a fresh copy when given bytes.
+(define (bcopy x) (if (bytes? x) (bytes-copy x) x))
+
 ;; ============================================================
 
 (define (private-key->der fmt priv pub)
@@ -529,7 +538,7 @@
       (hasheq 'algorithm (hasheq 'algorithm id-ecPublicKey
                                  'parameters (list 'namedCurve curve-oid))
               'subjectPublicKey qB))]
-    [(rkt-public) (list 'ec 'public curve-oid qB)]
+    [(rkt-public) (list 'ec 'public curve-oid (bcopy qB))]
     [else #f]))
 
 (define (encode-priv-ec fmt curve-oid qB d)
@@ -544,7 +553,7 @@
               'privateKey (hasheq 'version 1
                                   'privateKey (unsigned->base256 d)
                                   'publicKey qB)))]
-    [(rkt-private) (list 'ec 'private curve-oid qB d)]
+    [(rkt-private) (list 'ec 'private curve-oid (bcopy qB) d)]
     [else (encode-pub-ec fmt curve-oid qB)]))
 
 ;; ---- EdDSA ----
@@ -557,7 +566,7 @@
       (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (ed-curve->oid curve))
               'privateKey dB)
       qB)]
-    [(rkt-private) (list 'eddsa 'private curve qB dB)]
+    [(rkt-private) (list 'eddsa 'private curve (bcopy qB) (bcopy dB))]
     [else (encode-pub-eddsa fmt curve qB)]))
 
 (define (encode-pub-eddsa fmt curve qB)
@@ -567,7 +576,7 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm (ed-curve->oid curve))
               'subjectPublicKey qB))]
-    [(rkt-public) (list 'eddsa 'public curve qB)]
+    [(rkt-public) (list 'eddsa 'public curve (bcopy qB))]
     [else #f]))
 
 (define (ed-curve->oid curve)
@@ -594,7 +603,7 @@
       (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (x-curve->oid curve))
               'privateKey dB)
       qB)]
-    [(rkt-private) (list 'ecx 'private curve qB dB)]
+    [(rkt-private) (list 'ecx 'private curve (bcopy qB) (bcopy dB))]
     [else (encode-pub-ecx fmt curve qB)]))
 
 (define (encode-pub-ecx fmt curve qB)
@@ -604,7 +613,7 @@
       SubjectPublicKeyInfo
       (hasheq 'algorithm (hasheq 'algorithm (x-curve->oid curve))
               'subjectPublicKey qB))]
-    [(rkt-public) (list 'ecx 'public curve qB)]
+    [(rkt-public) (list 'ecx 'public curve (bcopy qB))]
     [else #f]))
 
 (define (x-curve->oid curve)
