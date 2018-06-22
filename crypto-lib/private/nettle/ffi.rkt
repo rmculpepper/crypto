@@ -794,6 +794,8 @@
         (sig : _pointer)
         -> _bool))
 
+(define ed25519-ok? (get-hw-ok? #"nettle_ed25519_sha512_sign"))
+
 ;; ----------------------------------------
 ;; X25519
 
@@ -803,3 +805,5 @@
   (_fun (pub : _pointer) (priv : _pointer) -> _void))
 (define-nettleHW nettle_curve25519_mul
   (_fun (key : _pointer) (priv : _pointer) (peer : _pointer) -> _void))
+
+(define x25519-ok? (get-hw-ok? #"nettle_curve25519_mul"))

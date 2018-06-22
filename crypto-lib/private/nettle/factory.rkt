@@ -139,8 +139,8 @@
         [(rsa) (and rsa-ok? (new nettle-rsa-impl% (factory this)))]
         [(dsa) (and new-dsa-ok? (new nettle-dsa-impl% (factory this)))]
         [(ec) (and ec-ok? (new nettle-ec-impl% (factory this)))]
-        [(eddsa) (new nettle-eddsa-impl% (factory this))]
-        [(ecx) (new nettle-ecx-impl% (factory this))]
+        [(eddsa) (and ed25519-ok? (new nettle-eddsa-impl% (factory this)))]
+        [(ecx) (and x25519-ok? (new nettle-ecx-impl% (factory this)))]
         [else #f]))
 
     (define/override (-get-pk-reader)
