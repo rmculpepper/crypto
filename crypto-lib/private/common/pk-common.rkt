@@ -300,6 +300,8 @@
          (-make-params-dh p g)]
         [(list 'ec 'params (? oid? curve-oid))
          (-make-params-ec curve-oid)]
+        [(list 'eddsa 'params (? symbol? curve))
+         (-make-params-eddsa curve)]
         [(list 'ecx 'params (? symbol? curve))
          (-make-params-ecx curve)]
         [_ #f]))
@@ -307,6 +309,7 @@
     (define/public (-make-params-dsa p q g) #f)
     (define/public (-make-params-dh prime base) #f)
     (define/public (-make-params-ec curve-oid) #f)
+    (define/public (-make-params-eddsa curve) #f)
     (define/public (-make-params-ecx curve) #f)
 
     ;; ----------------------------------------
@@ -343,6 +346,8 @@
       (encode-pub-ec fmt curve-oid qB))
     (define/override (-make-priv-ec curve-oid qB x)
       (encode-priv-ec fmt curve-oid qB x))
+    (define/override (-make-params-eddsa curve)
+      (encode-params-eddsa fmt curve))
     (define/override (-make-pub-eddsa curve qB)
       (encode-pub-eddsa fmt curve qB))
     (define/override (-make-priv-eddsa curve qB dB)
@@ -557,6 +562,15 @@
     [else (encode-pub-ec fmt curve-oid qB)]))
 
 ;; ---- EdDSA ----
+
+(define (encode-params-eddsa fmt curve)
+  (case fmt
+    [(AlgorithmIdentifier)
+     (asn1->bytes/DER
+      AlgorithmIdentifier
+      (hasheq 'algorithm (ed-curve->oid curve)))]
+    [(rkt-params) (list 'eddsa 'params curve)]
+    [else #f]))
 
 (define (encode-priv-eddsa fmt curve qB dB)
   (case fmt
