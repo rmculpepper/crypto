@@ -29,17 +29,12 @@
     (inherit-field spec)
     (inherit about)
     (super-new)
-    (define/public (kdf params pass salt)
-      (check-config params config:argon2 "argon2")
-      (define (getparam key [default #f])
-        (cond [(assq key params) => cadr]
-              [default default]
-              [else (crypto-error "missing parameter\n  parameter: ~v\n  given: ~e\n  kdf: ~a"
-                                  key params (about))]))
-      (define t (getparam 't))
-      (define m (getparam 'm)) ;; in kb
-      (define p (getparam 'p 1))
-      (define key-size (getparam 'key-size 32))
+    (define/public (kdf config pass salt)
+      (check-config config config:argon2 "argon2")
+      (define t (config-ref config 't))
+      (define m (config-ref config 'm)) ;; in kb
+      (define p (config-ref config 'p 1))
+      (define key-size (config-ref config 'key-size 32))
       (unless (equal? p 1)
         (crypto-error "parallelism must be 1\n  given: ~e\n  kdf: ~a" p (about)))
       (unless (= (bytes-length salt) crypto_pwhash_argon2id_SALTBYTES)
