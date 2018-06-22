@@ -144,10 +144,6 @@
     (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
 
-    (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
-
     (define/override (generate-params config)
       (check-config config config:ecx-keygen "EC/X parameters generation")
       (define curve (config-ref config 'curve))

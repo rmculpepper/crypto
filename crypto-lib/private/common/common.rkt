@@ -649,10 +649,10 @@
     (inherit about get-spec get-factory)
     (super-new)
     (define/public (generate-key config)
-      (crypto-error (string-append "direct key generation not supported;\n"
-                                   " generate parameters, then generate key\n"
-                                   "  algorithm: ~e")
-                    (get-spec)))
+      (cond [(has-params?)
+             (define p (generate-params config))
+             (send p generate-key '())]
+            [else (err/no-impl this)]))
     (define/public (generate-params config)
       (crypto-error "parameters not supported\n  algorithm: ~a" (about)))
 
@@ -703,7 +703,9 @@
     (abstract equal-to-key?)
 
     (define/public (get-params)
-      (crypto-error "key parameters not supported"))
+      (if (send impl has-params?)
+          (err/no-impl this)
+          (crypto-error "key parameters not supported")))
 
     (define/public (write-key fmt)
       (or (-write-key fmt)
@@ -793,7 +795,7 @@
       (unless (send impl can-key-agree?)
         (crypto-error "key agreement not supported\n  key: ~a" (about))))
 
-    (define/public (-compute-secret peer-pubkey) (err/no-impl))
+    (define/public (-compute-secret peer-pubkey) (err/no-impl this))
     ))
 
 ;; ============================================================

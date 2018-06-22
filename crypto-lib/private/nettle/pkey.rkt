@@ -373,16 +373,6 @@
         (define params (-genparams nbits qbits))
         (new nettle-dsa-params% (impl this) (params params))))
 
-    (define/override (generate-key config)
-      (check-config config config:dsa-paramgen "DSA key generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [qbits (config-ref config 'qbits 256)])
-        (define params (-genparams nbits qbits))
-        (define pub (new-mpz))
-        (define priv (new-mpz))
-        (nettle_dsa_generate_keypair params pub priv (get-random-ctx))
-        (new nettle-dsa-key% (impl this) (params params) (pub pub) (priv priv))))
-
     (define/private (-genparams nbits qbits)
       (define params (new-dsa_params))
       (or (nettle_dsa_generate_params params (get-random-ctx) nbits qbits)
@@ -472,10 +462,6 @@
       (define ecc (curve-name->ecc curve-name))
       (unless ecc (crypto-error "named curve not found\n  curve: ~e" (config-ref config 'curve)))
       (new nettle-ec-params% (impl this) (ecc ecc)))
-
-    (define/override (generate-key config)
-      (define params (generate-params config))
-      (send params generate-key '()))
     ))
 
 (define nettle-ec-params%
@@ -662,10 +648,6 @@
       (case curve-name
         [(x25519) (new nettle-ecx-params% (impl this) (curve curve-name))]
         [else (crypto-error "named curve not found\n  curve: ~e" curve-name)]))
-
-    (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
     ))
 
 (define nettle-ecx-params%

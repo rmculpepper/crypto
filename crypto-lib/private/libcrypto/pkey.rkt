@@ -365,10 +365,6 @@
     (define/override (can-sign? pad) (memq pad '(#f)))
     (define/override (has-params?) #t)
 
-    (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
-
     (define/override (generate-params config)
       (check-config config config:dsa-paramgen "DSA parameter generation")
       (let ([nbits (config-ref config 'nbits 2048)]
@@ -463,11 +459,6 @@
         (EVP_PKEY_set1_DH evp dh)
         (DH_free dh)
         (new libcrypto-dh-params% (impl this) (pevp evp))))
-
-    (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
-
     ))
 
 (define libcrypto-dh-params%
@@ -548,10 +539,6 @@
       (EVP_PKEY_set1_EC_KEY evp ec)
       (EC_KEY_free ec)
       (new libcrypto-ec-params% (impl this) (pevp evp)))
-
-    (define/override (generate-key config)
-      (define params (generate-params config))
-      (send params generate-key '()))
     ))
 
 (define libcrypto-ec-params%
@@ -720,10 +707,6 @@
         (or (x-curve->nid curve)
             (crypto-error "named curve not found\n  curve: ~e" curve)))
       (new libcrypto-ecx-params% (impl this) (curve-nid curve-nid)))
-
-    (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
     ))
 
 (define libcrypto-ecx-params%

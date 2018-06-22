@@ -440,10 +440,6 @@
 
 ;; TODO: implement DSA param support
 
-(define allowed-dsa-keygen
-  `((nbits #f ,exact-positive-integer? "exact-positive-integer?")
-    (qbits #f ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
-
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
@@ -453,7 +449,7 @@
     (define/override (can-sign? pad) (memq pad '(#f)))
 
     (define/override (generate-key config)
-      (check-config config allowed-dsa-keygen "DSA key generation")
+      (check-config config config:dsa-paramgen "DSA key generation")
       (let ([nbits (config-ref config 'nbits 2048)]
             [qbits (config-ref config 'qbits 256)])
         (*generate-key
@@ -528,10 +524,6 @@
       (unless (memq curve* gcrypt-curves)
         (crypto-error "unknown named curve\n  curve: ~e" curve))
       (new gcrypt-ec-params% (impl this) (curve curve*)))
-
-    (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
     ))
 
 (define gcrypt-ec-params%
@@ -713,10 +705,6 @@
         [(x25519)
          (new gcrypt-ecx-params% (impl this) (curve curve))]
         [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
-
-    (define/override (generate-key config)
-      (define p (generate-params config))
-      (send p generate-key '()))
     ))
 
 (define gcrypt-ecx-params%
