@@ -34,6 +34,10 @@
 
     ;; ---- EdDSA ----
 
+    (define/override (-make-params-eddsa curve)
+      (define impl (send factory get-pk 'eddsa))
+      (and impl (send impl curve->params curve)))
+
     (define/override (-make-pub-eddsa curve qB)
       (case curve
         [(ed25519)
@@ -59,6 +63,10 @@
         [else #f]))
 
     ;; ---- X25519 ----
+
+    (define/override (-make-params-ecx curve)
+      (define impl (send factory get-pk 'ecx))
+      (and impl (send impl curve->params curve)))
 
     (define/override (-make-pub-ecx curve qB)
       (case curve
@@ -88,19 +96,25 @@
     (super-new (spec 'eddsa))
 
     (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
-    (define/override (has-params?) #f)
+    (define/override (has-params?) #t)
 
-    (define/override (generate-key config)
-      (check-config config config:eddsa-keygen "EdDSA key generation")
-      (define curve (config-ref config 'curve))
+    (define/override (generate-params config)
+      (check-config config config:eddsa-keygen "EdDSA parameters generation")
+      (curve->params (config-ref config 'curve)))
+
+    (define/public (curve->params curve)
+      (case curve
+        [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
+        [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
+
+    (define/public (generate-key-from-params curve)
       (case curve
         [(ed25519)
          (define priv (make-bytes crypto_sign_ed25519_SECRETKEYBYTES))
          (define pub  (make-bytes crypto_sign_ed25519_PUBLICKEYBYTES))
          (define status (crypto_sign_ed25519_keypair pub priv))
          (unless status (crypto-error "key generation failed"))
-         (new sodium-ed25519-key% (impl this) (pub pub) (priv priv))]
-        [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
+         (new sodium-ed25519-key% (impl this) (pub pub) (priv priv))]))
     ))
 
 (define sodium-ed25519-key%
@@ -110,6 +124,9 @@
     (super-new)
 
     (define/override (is-private?) (and priv #t))
+
+    (define/override (get-params)
+      (send impl curve->params 'ed25519))
 
     (define/override (get-public-key)
       (if priv (new sodium-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
@@ -146,30 +163,21 @@
 
     (define/override (generate-params config)
       (check-config config config:ecx-keygen "EC/X parameters generation")
-      (define curve (config-ref config 'curve))
+      (curve->params (config-ref config 'curve)))
+
+    (define/public (curve->params curve)
       (case curve
-        [(x25519) (new sodium-ecx-params% (impl this) (curve curve))]
+        [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
         [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
-    ))
 
-(define sodium-ecx-params%
-  (class pk-params-base%
-    (init-field curve)
-    (inherit-field impl)
-    (super-new)
-
-    (define/override (-write-params fmt)
-      (encode-params-ecx fmt curve))
-
-    (define/override (generate-key config)
-      (check-config config '() "EC/X key generation")
+    (define/public (generate-key-from-params curve)
       (case curve
         [(x25519)
          (define priv (crypto-random-bytes crypto_scalarmult_curve25519_SCALARBYTES))
          (define pub  (make-bytes crypto_scalarmult_curve25519_BYTES))
          (define status (crypto_scalarmult_curve25519_base pub priv))
          (unless (zero? status) (crypto-error "key generation failed"))
-         (new sodium-x25519-key% (impl impl) (pub pub) (priv priv))]))
+         (new sodium-x25519-key% (impl this) (pub pub) (priv priv))]))
     ))
 
 (define sodium-x25519-key%
@@ -181,7 +189,7 @@
     (define/override (is-private?) (and priv #t))
 
     (define/override (get-params)
-      (new sodium-ecx-params% (impl impl) (curve 'x25519)))
+      (send impl curve->params 'x25519))
 
     (define/override (get-public-key)
       (if priv (new sodium-x25519-key% (impl impl) (pub pub) (priv #f)) this))

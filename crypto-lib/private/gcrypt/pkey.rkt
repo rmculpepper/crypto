@@ -126,6 +126,10 @@
 
     ;; ---- EC ----
 
+    (define/override (-make-params-ec curve-oid)
+      (define impl (send factory get-pk 'ec))
+      (send impl curve->params (curve-oid->curve curve-oid)))
+
     (define/override (-make-pub-ec curve-oid q)
       (cond [(curve-oid->name curve-oid)
              => (lambda (curve-name)
@@ -161,12 +165,16 @@
 
     ;; ---- EdDSA ----
 
+    (define/override (-make-params-eddsa curve)
+      (define impl (send factory get-pk 'eddsa))
+      (and impl (send impl curve->params curve)))
+
     (define/override (-make-pub-eddsa curve qB)
       (case curve
         [(ed25519)
          (define pub (make-ed25519-public-key qB))
          (define impl (send factory get-pk 'eddsa))
-         (new gcrypt-eddsa-key% (impl impl) (pub pub) (priv #f))]
+         (new gcrypt-ed25519-key% (impl impl) (pub pub) (priv #f))]
         [else #f]))
 
     (define/private (make-ed25519-public-key qB)
@@ -182,7 +190,7 @@
                 (define pub (make-ed25519-public-key qB))
                 (define priv (make-ed25519-private-key qB dB))
                 (define impl (send factory get-pk 'eddsa))
-                (new gcrypt-eddsa-key% (impl impl) (pub pub) (priv priv))]
+                (new gcrypt-ed25519-key% (impl impl) (pub pub) (priv priv))]
                [else #f])]
         [else #f]))
 
@@ -197,11 +205,8 @@
     ;; ---- ECX ----
 
     (define/override (-make-params-ecx curve)
-      (case curve
-        [(x25519)
-         (define impl (send factory get-pk 'ecx))
-         (and impl (new gcrypt-ecx-params% (impl impl) (curve curve)))]
-        [else #f]))
+      (define impl (send factory get-pk 'ecx))
+      (and impl (send impl curve->params curve)))
 
     (define/override (-make-pub-ecx curve qB)
       (case curve
@@ -236,15 +241,15 @@
 
     ;; ----
 
+    (define/private (curve-oid->curve oid)
+      (for/first ([entry (in-list known-curves)]
+                  #:when (equal? (cdr entry) oid))
+        (car entry)))
+
     (define/private (curve-oid->name oid)
-      (define name-sym
-        (for/first ([entry (in-list known-curves)]
-                    #:when (equal? (cdr entry) oid))
-          (car entry)))
+      (define name-sym (curve-oid->curve oid))
       (and (memq name-sym gcrypt-curves)
            (string->bytes/latin-1 (symbol->string name-sym))))
-
-    (define/override (read-params sp) #f)
     ))
 
 ;; ============================================================
@@ -520,6 +525,9 @@
     (define/override (generate-params config)
       (check-config config config:ec-paramgen "EC parameter generation")
       (define curve (config-ref config 'curve))
+      (curve->params curve))
+
+    (define/public (curve->params curve)
       (define curve* (alias->curve-name curve))
       (unless (memq curve* gcrypt-curves)
         (crypto-error "unknown named curve\n  curve: ~e" curve))
@@ -629,24 +637,35 @@
     (super-new (spec 'eddsa))
 
     (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
+    (define/override (has-params?) #t)
 
-    (define/override (generate-key config)
-      (check-config config config:eddsa-keygen "EdDSA key generation")
+    (define/override (generate-params config)
+      (check-config config config:eddsa-keygen "EdDSA parameter generation")
+      (curve->params (config-ref config 'curve)))
+
+    (define/public (curve->params curve)
+      (case curve
+        [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
+        [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
+
+    (define/public (generate-key-from-params curve)
       (define curve-name
-        (case (config-ref config 'curve)
+        (case curve
           [(ed25519) #"Ed25519"]
-          [else (crypto-error "unsupported curve\n  curve: ~e"
-                              (config-ref config 'curve))]))
+          [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
       (*generate-key
        (gcry_sexp_build "(genkey (ecc (curve %s) (flags eddsa)))" curve-name)
-       gcrypt-eddsa-key%))
+       gcrypt-ed25519-key%))
     ))
 
-(define gcrypt-eddsa-key%
+(define gcrypt-ed25519-key%
   (class gcrypt-pk-key%
     (inherit-field pub priv impl)
     (inherit is-private?)
     (super-new)
+
+    (define/override (get-params)
+      (send impl curve->params 'ed25519))
 
     (define/override (-write-private-key fmt)
       (let ([qB (sexp-get-data priv "ecc" "q")]
@@ -700,30 +719,20 @@
 
     (define/override (generate-params config)
       (check-config config config:ecx-keygen "EC/X parameter generation")
-      (define curve (config-ref config 'curve))
+      (curve->params (config-ref config 'curve)))
+
+    (define/public (curve->params curve)
       (case curve
-        [(x25519)
-         (new gcrypt-ecx-params% (impl this) (curve curve))]
+        [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
         [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
-    ))
 
-(define gcrypt-ecx-params%
-  (class pk-params-base%
-    (inherit-field impl)
-    (init-field curve)
-    (super-new)
-
-    (define/override (-write-params fmt)
-      (encode-params-ecx fmt curve))
-
-    (define/override (generate-key config)
-      (check-config config '() "EC key generation from parameters")
+    (define/public (generate-key-from-params curve)
       (case curve
         [(x25519)
-         (send impl *generate-key
-               ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
-               (gcry_sexp_build "(genkey (ecdh (flags no-keytest) (curve Curve25519)))")
-               gcrypt-x25519-key%)]))
+         (*generate-key
+          ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
+          (gcry_sexp_build "(genkey (ecdh (flags no-keytest) (curve Curve25519)))")
+          gcrypt-x25519-key%)]))
     ))
 
 (define gcrypt-x25519-key%
@@ -733,7 +742,7 @@
     (super-new)
 
     (define/override (get-params)
-      (new gcrypt-ecx-params% (impl impl) (curve 'x25519)))
+      (send impl curve->params 'x25519))
 
     (define/override (-write-private-key fmt)
       (let ([qB (sexp-get-data priv "ecc" "q")]
