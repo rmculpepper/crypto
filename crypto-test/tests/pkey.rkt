@@ -104,18 +104,30 @@
        (generate-private-key p)
        (generate-private-key impl '((nbits 512)))]
       [(ec)
-       (case factory-name
-         [(gcrypt) (void)]
-         [else
-          (check-true (pk-has-parameters? impl))
-          (define p1 (generate-pk-parameters impl '((curve "secp192r1"))))
-          (define p2 (generate-pk-parameters impl '((curve secp256r1))))
-          (generate-private-key p1)
-          (generate-private-key p2)])
+       (check-true (pk-has-parameters? impl))
+       (define p1 (generate-pk-parameters impl '((curve "secp192r1"))))
+       (define p2 (generate-pk-parameters impl '((curve secp256r1))))
+       (generate-private-key p1)
+       (generate-private-key p2)
        (generate-private-key impl '((curve secp192r1)))]
       [(eddsa)
        (define k (generate-private-key impl '((curve ed25519))))
-       (check-pred private-key? k)]
+       (check-pred private-key? k)
+       (define p (generate-pk-parameters impl '((curve ed25519))))
+       (check-pred pk-parameters? p)
+       (define k2 (generate-private-key p '()))
+       (check-pred private-key? k2)
+       (check-equal? (pk-parameters->datum p 'rkt-params)
+                     (pk-parameters->datum (pk-key->parameters k) 'rkt-params))]
+      [(ecx)
+       (define k (generate-private-key impl '((curve x25519))))
+       (check-pred private-key? k)
+       (define p (generate-pk-parameters impl '((curve x25519))))
+       (check-pred pk-parameters? p)
+       (define k2 (generate-private-key p '()))
+       (check-pred private-key? k2)
+       (check-equal? (pk-parameters->datum p 'rkt-params)
+                     (pk-parameters->datum (pk-key->parameters k) 'rkt-params))]
       [else (void)])))
 
 (define (test-pk-serialize key pubkey factory)
@@ -134,7 +146,14 @@
     (check-pred public-only-key? pubkey2)
     (check public-key=? pubkey2 key)
     (check public-key=? pubkey2 pubkey)
-    (check-equal? (pk-key->datum pubkey2 fmt) pubdata)))
+    (check-equal? (pk-key->datum pubkey2 fmt) pubdata))
+  ;; likewise for params, if available
+  (when (pk-has-parameters? key)
+    (define params (pk-key->parameters key))
+    (for ([fmt '(AlgorithmIdentifier rkt-params)])
+      (define pdata (pk-parameters->datum params fmt))
+      (define params2 (datum->pk-parameters pdata fmt factory))
+      (check-equal? (pk-parameters->datum params fmt) pdata))))
 
 (define (pk-format-ok? factory kspec fmt)
   (define fname (send factory get-name))
