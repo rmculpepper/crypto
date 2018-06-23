@@ -458,6 +458,10 @@
                    (read-params parameters 'DHParameter)] ;; DHParameter
                   [(equal? alg-oid id-ecPublicKey)
                    (read-params parameters 'EcpkParameters)] ;; EcpkParameters
+                  [(equal? alg-oid id-Ed25519) (-make-params-eddsa 'ed25519)]
+                  [(equal? alg-oid id-Ed448)   (-make-params-eddsa 'ed448)]
+                  [(equal? alg-oid id-X25519)  (-make-params-ecx   'x25519)]
+                  [(equal? alg-oid id-X448)    (-make-params-ecx   'x448)]
                   [else #f])]
            [_ #f])]
         [(DSAParameters Dss-Parms)
@@ -474,7 +478,7 @@
            [_ #f])]
         [(EcpkParameters)
          (-check-bytes fmt buf)
-         (match (bytes->asn1/DER EcpkParameters)
+         (match (bytes->asn1/DER EcpkParameters buf)
            [(list 'namedCurve curve-oid)
             (-make-params-ec curve-oid)]
            [_ #f])]
@@ -554,6 +558,10 @@
 ;; translate-key : Datum KeyFormat KeyFormat -> (U Datum #f)
 (define (translate-key key-datum from-fmt to-fmt)
   (send (new translate-key% (fmt to-fmt)) read-key key-datum from-fmt))
+
+;; translate-params : Datum ParamsFormat ParamsFormat -> (U Datum #f)
+(define (translate-params params-datum from-fmt to-fmt)
+  (send (new translate-key% (fmt to-fmt)) read-params params-datum from-fmt))
 
 ;; merge-rkt-private-key : Datum Datum -> Datum
 ;; Try to fill missing fields in priv with pub.
