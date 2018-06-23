@@ -64,16 +64,23 @@ References:
                #:encode (lambda (v) (bit-string v 0))
                #:decode (lambda (v) (bit-string-bytes v)))]))
 
+;; useful for giving SEQUENCE w/ optional fields a fixed shape for match
+(define (ensure-keys h keys)
+  (for/fold ([h h]) ([key (in-list keys)])
+    (if (hash-has-key? h key) h (hash-set h key #f))))
+
 ;; ============================================================
 
 (define-asn1-type AlgorithmIdentifier
   (let ([typemap known-public-key-algorithms])
-    (SEQUENCE [algorithm              OBJECT-IDENTIFIER]
-              [parameters #:dependent (get-type 1 algorithm typemap) #:optional])))
+    (WRAP (SEQUENCE [algorithm              OBJECT-IDENTIFIER]
+                    [parameters #:dependent (get-type 1 algorithm typemap) #:optional])
+          #:decode (lambda (h) (ensure-keys h '(parameters))))))
 
 (define AlgorithmIdentifier/DER
-  (SEQUENCE [algorithm  OBJECT-IDENTIFIER]
-            [parameters ANY/DER #:optional]))
+  (WRAP (SEQUENCE [algorithm  OBJECT-IDENTIFIER]
+                  [parameters ANY/DER #:optional])
+        #:decode (lambda (h) (ensure-keys h '(parameters)))))
 
 (define-asn1-type SubjectPublicKeyInfo
   (SEQUENCE [algorithm AlgorithmIdentifier]
