@@ -130,10 +130,11 @@
       (define impl (send factory get-pk 'ec))
       (send impl curve->params (curve-oid->curve curve-oid)))
 
-    (define/override (-make-pub-ec curve-oid q)
+    (define/override (-make-pub-ec curve-oid qB)
       (cond [(curve-oid->name curve-oid)
              => (lambda (curve-name)
-                  (define pub (make-ec-public-key curve-name q))
+                  (check-ec-q curve-name qB)
+                  (define pub (make-ec-public-key curve-name qB))
                   (define impl (send factory get-pk 'ec))
                   (new gcrypt-ec-key% (impl impl) (pub pub) (priv #f)))]
             [else #f]))
@@ -144,12 +145,13 @@
                        (gcry_sexp_build/%b "(q %b)" qB)))
 
     (define/override (-make-priv-ec curve-oid qB d)
-      ;; FIXME: recover q if publicKey field not present
-      ;;  -- grr, gcrypt doesn't seem to provide point<->bytes support
       (cond [(curve-oid->name curve-oid)
              => (lambda (curve-name)
-                  (define pub (make-ec-public-key curve-name qB))
-                  (define priv (make-ec-private-key curve-name qB d))
+                  (define qB*
+                    (cond [qB (begin0 qB (check-ec-q curve-name qB))]
+                          [else (recompute-ec-q curve-name d)]))
+                  (define pub (make-ec-public-key curve-name qB*))
+                  (define priv (make-ec-private-key curve-name qB* d))
                   (define impl (send factory get-pk 'ec))
                   (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv)))]
             [else #f]))
@@ -162,6 +164,24 @@
                          (gcry_sexp_build    "(d %M)" (int->mpi d))))
       (gcry_pk_testkey priv)
       priv)
+
+    (define/private (check-ec-q curve-name qB)
+      (when decode-point-ok?
+        (define ec (gcry_mpi_ec_new curve-name))
+        (define qpoint (gcry_mpi_point_new))
+        (gcry_mpi_ec_decode_point qpoint (base256->mpi qB) ec)
+        (begin0 (unless (gcry_mpi_ec_curve_point qpoint ec)
+                  (crypto-error "invalid public key (point not on curve)"))
+          (gcry_ctx_release ec)
+          (gcry_mpi_point_release qpoint))))
+
+    (define/private (recompute-ec-q curve-name d)
+      (define ec (gcry_mpi_ec_new curve-name))
+      (gcry_mpi_ec_set_mpi 'd (int->mpi d) ec)
+      (define pub-sexp (gcry_pubkey_get_sexp GCRY_PK_GET_PUBKEY ec))
+      (begin0 (sexp-get-data pub-sexp "ecc" "q")
+        (gcry_sexp_release pub-sexp)
+        (gcry_ctx_release ec)))
 
     ;; ---- EdDSA ----
 

@@ -595,6 +595,12 @@
     (inherit-field impl evp private?)
     (super-new)
 
+    ;; Check key (only in OpenSSL >= 1.1.1
+    (let ()
+      (define ctx (EVP_PKEY_CTX_new evp))
+      (if private? (EVP_PKEY_check ctx) (EVP_PKEY_public_check ctx))
+      (EVP_PKEY_CTX_free ctx))
+
     (define/override (-write-key fmt)
       (cond [(and (eq? fmt 'ECPrivateKey) private?)
              (define ec (EVP_PKEY_get1_EC_KEY evp))

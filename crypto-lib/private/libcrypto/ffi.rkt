@@ -914,6 +914,14 @@
                    (lambda (r) (member r '(0 1)))
                    #:convert (lambda (r) (case r ((0) #f) ((1) #t)))))
 
+;; EVP_PKEY_*_check since v1.1.1
+(define-crypto EVP_PKEY_check (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_check) #:fail (K (K 1)))
+(define-crypto EVP_PKEY_public_check (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_public_check) #:fail (K (K 1)))
+(define-crypto EVP_PKEY_param_check (_fun _EVP_PKEY_CTX -> _int)
+  #:wrap (err-wrap 'EVP_PKEY_param_check) #:fail (K (K 1)))
+
 (define-crypto d2i_PublicKey
   (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
   #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PublicKey)))

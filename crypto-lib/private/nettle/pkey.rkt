@@ -131,7 +131,8 @@
                   (define x (integer->mpz (car x+y)))
                   (define y (integer->mpz (cdr x+y)))
                   (define pub (new-ecc_point ecc))
-                  (nettle_ecc_point_set pub x y)
+                  (unless (nettle_ecc_point_set pub x y)
+                    (crypto-error "invalid public key (point not on curve)"))
                   pub)]
             [else #f]))
 
@@ -454,6 +455,9 @@
 ;; ============================================================
 ;; EC
 
+;; On rejecting points not on curve as (untrusted) public keys:
+;; nettle_ecc_point_set checks the point, indicates whether okay.
+
 (define nettle-ec-impl%
   (class nettle-pk-impl%
     (inherit-field spec factory)
@@ -582,7 +586,8 @@
 (define (bytes->ecc_point ecc b)
   (define ecp (new-ecc_point ecc))
   (define x+y (bytes->ec-point b))
-  (nettle_ecc_point_set ecp (mpz (car x+y)) (mpz (cdr x+y)))
+  (unless (nettle_ecc_point_set ecp (mpz (car x+y)) (mpz (cdr x+y)))
+    (crypto-error "invalid public key (point not on curve)"))
   ecp)
 
 ;; ============================================================

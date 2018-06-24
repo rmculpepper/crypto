@@ -563,3 +563,64 @@
 
 (define ed25519-ok? (gcry-curve-ok? 'Ed25519))
 (define x25519-ok?  (gcry-curve-ok? 'Curve25519))
+
+;; ----------------------------------------
+
+(define-cpointer-type _gcry_ctx)
+(define-cpointer-type _gcry_mpi_point)
+
+(define-gcrypt gcry_mpi_point_release
+  (_fun (point : _gcry_mpi_point) -> _void)
+  #:wrap (deallocator))
+(define-gcrypt gcry_mpi_point_new
+  (_fun (nbits : _uint = 0) -> _gcry_mpi_point)
+  #:wrap (allocator gcry_mpi_point_release))
+
+(define-gcrypt gcry_ctx_release
+  (_fun (ctx : _gcry_ctx) -> _void)
+  #:wrap (deallocator))
+(define-gcrypt gcry_mpi_ec_new
+  (_fun (ctx : (_ptr o _gcry_ctx)) (kparam : _pointer = #f) (curve : _bytes)
+        -> (s : _gcry_error) -> (values s ctx))
+  #:wrap (compose (allocator gcry_ctx_release) check2))
+
+(define-gcrypt gcry_mpi_ec_get_mpi
+  (_fun (name : _symbol) (ctx : _gcry_ctx) (copy : _int = 1)
+        -> _gcry_mpi)
+  #:wrap (allocator gcry_mpi_release))
+(define-gcrypt gcry_mpi_ec_get_point
+  (_fun (name : _symbol) (ctx : _gcry_ctx) (copy : _int = 1)
+        -> _gcry_mpi_point)
+  #:wrap (allocator gcry_mpi_point_release))
+(define-gcrypt gcry_mpi_ec_set_mpi
+  (_fun (name : _symbol) (value : _gcry_mpi) (ctx : _gcry_ctx)
+        -> _gcry_error)
+  #:wrap check)
+(define-gcrypt gcry_mpi_ec_set_point
+  (_fun (name : _symbol) (value : _gcry_mpi_point) (ctx : _gcry_ctx)
+        -> _gcry_error)
+  #:wrap check)
+
+(define-gcrypt gcry_mpi_ec_mul
+  (_fun _gcry_mpi_point _gcry_mpi _gcry_mpi_point _gcry_ctx
+        -> _void))
+
+(define-gcrypt gcry_mpi_ec_decode_point
+  (_fun (point : _gcry_mpi_point) (value : _gcry_mpi) (ctx : _gcry_ctx)
+        -> (s : _gcry_error))
+  #:wrap check)
+
+(define-gcrypt decode-point-ok? _fpointer
+  #:c-id gcry_mpi_ec_decode_point
+  #:fail (lambda () #f) #:wrap (lambda (v) (and v #t)))
+
+(define-gcrypt gcry_mpi_ec_curve_point
+  (_fun (w : _gcry_mpi_point) (ctx : _gcry_ctx) -> _bool))
+
+(define GCRY_PK_GET_PUBKEY 1)
+(define GCRY_PK_GET_SECKEY 2)
+
+(define-gcrypt gcry_pubkey_get_sexp
+  (_fun (sexp : (_ptr o _gcry_sexp)) (mode : _int) (ctx : _gcry_ctx)
+        -> (s : _gcry_error) -> (values s sexp))
+  #:wrap (compose (allocator gcry_sexp_release) check2))

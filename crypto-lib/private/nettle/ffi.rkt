@@ -720,7 +720,7 @@
      (nettle_ecc_scalar_init s ecc)
      s)))
 
-(define-nettleHW nettle_ecc_scalar_set (_fun _ecc_scalar _mpz_t -> _int)) ;; 0=err
+(define-nettleHW nettle_ecc_scalar_set (_fun _ecc_scalar _mpz_t -> _bool)) ;; #f=err
 (define-nettleHW nettle_ecc_scalar_get (_fun _ecc_scalar _mpz_t -> _void))
 
 (define-nettleHW nettle_ecc_scalar_random
