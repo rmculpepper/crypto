@@ -602,6 +602,9 @@
 ;; ============================================================
 ;; Writing Keys
 
+;; Only use OneAsymmetricKey format if public key supplied and
+;; PrivateKeyInfo can't represent it.
+
 (define (private-key->der fmt priv pub)
   (cond [(and (eq? fmt 'OneAsymmetricKey) pub)
          (asn1->bytes/DER OneAsymmetricKey

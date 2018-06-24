@@ -53,6 +53,10 @@
             [(SubjectPublicKeyInfo)
              (check-bytes)
              (values (d2i_PUBKEY sk (bytes-length sk)) #f)]
+            [(OneAsymmetricKey)
+             (check-bytes)
+             (let ([txkey (translate-key sk 'OneAsymmetricKey 'PrivateKeyInfo)])
+               (if txkey (loop txkey 'PrivateKeyInfo) (values #f #f)))]
             [(PrivateKeyInfo OneAsymmetricKey)
              (check-bytes)
              (define p8 (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk)))
