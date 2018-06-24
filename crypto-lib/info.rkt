@@ -2,7 +2,7 @@
 
 ;; pkg info
 
-(define version "1.3")
+(define version "1.4")
 (define collection "crypto")
 (define deps '("base" "asn1-lib" "binaryio-lib" ["gmp-lib" #:version "1.1"]))
 (define pkg-authors '(ryanc))

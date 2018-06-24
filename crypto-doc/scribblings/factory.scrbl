@@ -177,3 +177,17 @@ tiny library implementing the Argon2 password hashing (and key
 derivation) function. The @tt{libargon2.so.{1,0}} foreign library is
 required.
 }
+
+@section[#:tag "decaf-factory"]{Decaf}
+
+@defmodule[crypto/decaf]
+
+@history[#:added "1.4"]
+
+@defthing[decaf-factory crypto-factory?]{
+
+Factory for
+@hyperlink["https://sourceforge.net/projects/ed448goldilocks/"]{libdecaf},
+a library implementing Curve25519 and Curve448. The @tt{libdecaf.so}
+foreign library is required.
+}
