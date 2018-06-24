@@ -127,8 +127,12 @@
 
     (define/override (info key)
       (case key
-        [(all-curves)
+        [(all-ec-curves)
          (and (get-pk 'ec) (sort (hash-keys curve-table) symbol<?))]
+        [(all-eddsa-curves)
+         (and (get-pk 'eddsa) '(ed25519 ed448))]
+        [(all-ecx-curves)
+         (and (get-pk 'ecx) '(x25519 x448))]
         [else (super info key)]))
 
     (define/override (print-info)

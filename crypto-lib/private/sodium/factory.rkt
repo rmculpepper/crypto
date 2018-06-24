@@ -77,6 +77,9 @@
     (define/override (info key)
       (case key
         [(version-string) (and sodium-ok? (sodium_version_string))]
+        [(all-ec-curves) '()]
+        [(all-eddsa-curves) '(ed25519)]
+        [(all-ecx-curves) '(x25519)]
         [else (super info key)]))
 
     (define/override (print-info)

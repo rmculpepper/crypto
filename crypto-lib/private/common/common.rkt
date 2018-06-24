@@ -135,7 +135,9 @@
         [(all-digests) (filter (lambda (s) (get-digest s)) (list-known-digests))]
         [(all-ciphers) (filter (lambda (x) (get-cipher x)) (list-known-ciphers))]
         [(all-pks)     (filter (lambda (x) (get-pk x))     (list-known-pks))]
-        [(all-curves)  '()]
+        [(all-ec-curves)    '()]
+        [(all-eddsa-curves) '()]
+        [(all-ecx-curves)   '()]
         [(all-kdfs)    (filter (lambda (k) (get-kdf k))    (list-known-kdfs))]
         [else #f]))
 
@@ -171,7 +173,7 @@
           (printf "Available PKs:\n")
           (for ([pk (in-list all-pks)]) (printf " ~v\n" pk))))
       ;; == EC named curves ==
-      (let ([all-curves (info 'all-curves)])
+      (let ([all-curves (info 'all-ec-curves)])
         (define all-curve-vs (for/list ([c (in-list all-curves)]) (format "~v" c)))
         (when (pair? all-curves)
           (printf "Available 'ec named curves:\n")
@@ -184,6 +186,18 @@
                    (printf " ~a  with aliases ~s\n"
                            (pad-to curve-v curve-max-len)
                            aliases)]))))
+      ;; == EdDSA named curves ==
+      (let ([all-curves (info 'all-eddsa-curves)])
+        (when (pair? all-curves)
+          (printf "Available 'eddsa named curves:\n")
+          (for ([curve (in-list all-curves)])
+            (printf " ~v\n" curve))))
+      ;; == EC/X named curves ==
+      (let ([all-curves (info 'all-ecx-curves)])
+        (when (pair? all-curves)
+          (printf "Available 'ecx named curves:\n")
+          (for ([curve (in-list all-curves)])
+            (printf " ~v\n" curve))))
       ;; == KDFs ==
       (let ([all-kdfs (info 'all-kdfs)])
         (when (pair? all-kdfs)

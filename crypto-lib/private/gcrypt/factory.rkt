@@ -204,7 +204,9 @@
 
     (define/override (info key)
       (case key
-        [(all-curves) gcrypt-curves]
+        [(all-ec-curves) gcrypt-curves]
+        [(all-eddsa-curves) (if ed25519-ok? '(ed25519) '())]
+        [(all-ecx-curves) (if x25519-ok? '(x25519) '())]
         [else (super info key)]))
 
     (define/override (print-info)

@@ -179,8 +179,12 @@
 
     (define/override (info key)
       (case key
-        [(all-curves)
+        [(all-ec-curves)
          (map car nettle-curves)]
+        [(all-eddsa-curves)
+         (if ed25519-ok? '(ed25519) '())]
+        [(all-ecx-curves)
+         (if x25519-ok? '(x25519) '())]
         [else (super info key)]))
 
     (define/override (print-info)
