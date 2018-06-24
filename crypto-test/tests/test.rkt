@@ -51,6 +51,7 @@
      (make-factory-tests b2-factory)
      (make-factory-tests sodium-factory)
      (make-factory-tests argon2-factory)
+     (make-factory-tests decaf-factory)
      (when (test-cross?)
        (when #t (hprintf 0 "Digest agreement\n"))
        (test-suite "digest agreement"
@@ -65,7 +66,8 @@
          (test-pk libcrypto-factory the-factories)
          (test-pk gcrypt-factory the-factories)
          (test-pk nettle-factory the-factories)
-         (test-pk sodium-factory the-factories)))
+         (test-pk sodium-factory the-factories)
+         (test-pk decaf-factory the-factories)))
      (when (test-cross?)
        (when #t (hprintf 0 "KDF agreement\n"))
        (test-suite "kdf agreement"
