@@ -47,230 +47,7 @@
 (define gcrypt-read-key%
   (class pk-read-key-base%
     (inherit-field factory)
-    (super-new (spec 'gcrypt-read-key))
-
-    ;; ---- RSA ----
-
-    (define/override (-make-pub-rsa n e)
-      (define pub (make-rsa-public-key n e))
-      (define impl (send factory get-pk 'rsa))
-      (new gcrypt-rsa-key% (impl impl) (pub pub) (priv #f)))
-
-    (define/private (make-rsa-public-key n e)
-      (gcry_sexp_build "(public-key (rsa %S %S))"
-                       (gcry_sexp_build "(n %M)" (int->mpi n))
-                       (gcry_sexp_build "(e %M)" (int->mpi e))))
-
-    (define/override (-make-priv-rsa n e d p q dp dq qInv)
-      ;; Note: gcrypt requires q < p (swap if needed)
-      (define-values (p* q* qInv*)
-        (cond [(< p q)
-               (values p q qInv)]
-              [else
-               (define qInv*-mpi (gcry_mpi_new))
-               (or (gcry_mpi_invm qInv*-mpi (int->mpi q) (int->mpi p))
-                   (internal-error "failed to calculate qInv"))
-               (values q p (mpi->int qInv*-mpi))]))
-      (define pub (make-rsa-public-key n e))
-      (define priv (make-rsa-private-key n e d p* q* qInv*))
-      (define impl (send factory get-pk 'rsa))
-      (new gcrypt-rsa-key% (impl impl) (pub pub) (priv priv)))
-
-    (define/private (make-rsa-private-key n e d p q u)
-      (define priv
-        (gcry_sexp_build "(private-key (rsa %S %S %S %S %S %S))"
-                         (gcry_sexp_build "(n %M)" (int->mpi n))
-                         (gcry_sexp_build "(e %M)" (int->mpi e))
-                         (gcry_sexp_build "(d %M)" (int->mpi d))
-                         (gcry_sexp_build "(p %M)" (int->mpi p))
-                         (gcry_sexp_build "(q %M)" (int->mpi q))
-                         (gcry_sexp_build "(u %M)" (int->mpi u))))
-      (gcry_pk_testkey priv)
-      priv)
-
-    ;; ---- DSA ----
-
-    (define/override (-make-pub-dsa p q g y)
-      (define pub (make-dsa-public-key p q g y))
-      (define impl (send factory get-pk 'dsa))
-      (new gcrypt-dsa-key% (impl impl) (pub pub) (priv #f)))
-
-    (define/private (make-dsa-public-key p q g y)
-      (gcry_sexp_build "(public-key (dsa %S %S %S %S))"
-                       (gcry_sexp_build "(p %M)" (int->mpi p))
-                       (gcry_sexp_build "(q %M)" (int->mpi q))
-                       (gcry_sexp_build "(g %M)" (int->mpi g))
-                       (gcry_sexp_build "(y %M)" (int->mpi y))))
-
-    (define/override (-make-priv-dsa p q g y0 x)
-      (define y  ;; g^x mod p
-        (or y0
-            (let ([y (gcry_mpi_new)])
-              (gcry_mpi_powm y (int->mpi g) (int->mpi x) (int->mpi p))
-              (mpi->int y))))
-      (define pub (make-dsa-public-key p q g y))
-      (define priv (make-dsa-private-key p q g y x))
-      (define impl (send factory get-pk 'dsa))
-      (new gcrypt-dsa-key% (impl impl) (pub pub) (priv priv)))
-
-    (define/private (make-dsa-private-key p q g y x)
-      (define priv
-        (gcry_sexp_build "(private-key (dsa %S %S %S %S %S))"
-                         (gcry_sexp_build "(p %M)" (int->mpi p))
-                         (gcry_sexp_build "(q %M)" (int->mpi q))
-                         (gcry_sexp_build "(g %M)" (int->mpi g))
-                         (gcry_sexp_build "(y %M)" (int->mpi y))
-                         (gcry_sexp_build "(x %M)" (int->mpi x))))
-      (gcry_pk_testkey priv)
-      priv)
-
-    ;; ---- EC ----
-
-    (define/override (-make-params-ec curve-oid)
-      (define impl (send factory get-pk 'ec))
-      (send impl curve->params (curve-oid->curve curve-oid)))
-
-    (define/override (-make-pub-ec curve-oid qB)
-      (cond [(curve-oid->name curve-oid)
-             => (lambda (curve-name)
-                  (check-ec-q curve-name qB)
-                  (define pub (make-ec-public-key curve-name qB))
-                  (define impl (send factory get-pk 'ec))
-                  (new gcrypt-ec-key% (impl impl) (pub pub) (priv #f)))]
-            [else #f]))
-
-    (define/private (make-ec-public-key curve qB)
-      (gcry_sexp_build "(public-key (ecc %S %S))"
-                       (gcry_sexp_build/%b "(curve %b)" curve)
-                       (gcry_sexp_build/%b "(q %b)" qB)))
-
-    (define/override (-make-priv-ec curve-oid qB d)
-      (cond [(curve-oid->name curve-oid)
-             => (lambda (curve-name)
-                  (define qB*
-                    (cond [qB (begin0 qB (check-ec-q curve-name qB))]
-                          [else (recompute-ec-q curve-name d)]))
-                  (define pub (make-ec-public-key curve-name qB*))
-                  (define priv (make-ec-private-key curve-name qB* d))
-                  (define impl (send factory get-pk 'ec))
-                  (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv)))]
-            [else #f]))
-
-    (define/private (make-ec-private-key curve qB d)
-      (define priv
-        (gcry_sexp_build "(private-key (ecc %S %S %S))"
-                         (gcry_sexp_build/%b "(curve %b)" curve)
-                         (gcry_sexp_build/%b "(q %b)" qB)
-                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
-      (gcry_pk_testkey priv)
-      priv)
-
-    (define/private (check-ec-q curve-name qB)
-      (when decode-point-ok?
-        (define ec (gcry_mpi_ec_new curve-name))
-        (define qpoint (gcry_mpi_point_new))
-        (gcry_mpi_ec_decode_point qpoint (base256->mpi qB) ec)
-        (begin0 (unless (gcry_mpi_ec_curve_point qpoint ec)
-                  (crypto-error "invalid public key (point not on curve)"))
-          (gcry_ctx_release ec)
-          (gcry_mpi_point_release qpoint))))
-
-    (define/private (recompute-ec-q curve-name d)
-      (define ec (gcry_mpi_ec_new curve-name))
-      (gcry_mpi_ec_set_mpi 'd (int->mpi d) ec)
-      (define pub-sexp (gcry_pubkey_get_sexp GCRY_PK_GET_PUBKEY ec))
-      (begin0 (sexp-get-data pub-sexp "ecc" "q")
-        (gcry_sexp_release pub-sexp)
-        (gcry_ctx_release ec)))
-
-    ;; ---- EdDSA ----
-
-    (define/override (-make-params-eddsa curve)
-      (define impl (send factory get-pk 'eddsa))
-      (and impl (send impl curve->params curve)))
-
-    (define/override (-make-pub-eddsa curve qB)
-      (case curve
-        [(ed25519)
-         (define pub (make-ed25519-public-key qB))
-         (define impl (send factory get-pk 'eddsa))
-         (new gcrypt-ed25519-key% (impl impl) (pub pub) (priv #f))]
-        [else #f]))
-
-    (define/private (make-ed25519-public-key qB)
-      (gcry_sexp_build "(public-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
-                       (gcry_sexp_build/%b "(q %b)" qB)))
-
-    (define/override (-make-priv-eddsa curve qB dB)
-      ;; It doesn't seem to be possible to recover qB if it is missing,
-      ;; so just fail.
-      (case curve
-        [(ed25519)
-         (cond [qB
-                (define pub (make-ed25519-public-key qB))
-                (define priv (make-ed25519-private-key qB dB))
-                (define impl (send factory get-pk 'eddsa))
-                (new gcrypt-ed25519-key% (impl impl) (pub pub) (priv priv))]
-               [else #f])]
-        [else #f]))
-
-    (define/private (make-ed25519-private-key qB dB)
-      (define priv
-        (gcry_sexp_build "(private-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
-                         (gcry_sexp_build/%b "(q %b)" qB)
-                         (gcry_sexp_build/%b "(d %b)" dB)))
-      (gcry_pk_testkey priv)
-      priv)
-
-    ;; ---- ECX ----
-
-    (define/override (-make-params-ecx curve)
-      (define impl (send factory get-pk 'ecx))
-      (and impl (send impl curve->params curve)))
-
-    (define/override (-make-pub-ecx curve qB)
-      (case curve
-        [(x25519)
-         (define pub (make-x25519-public-key qB))
-         (define impl (send factory get-pk 'ecx))
-         (new gcrypt-x25519-key% (impl impl) (pub pub) (priv #f))]
-        [else #f]))
-
-    (define/private (make-x25519-public-key qB)
-      (gcry_sexp_build "(public-key (ecc (curve Curve25519) %S))"
-                       (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))))
-
-    (define/override (-make-priv-ecx curve qB d)
-      ;; FIXME: recover q if publicKey field not present
-      (and qB
-           (case curve
-             [(x25519)
-              (define pub (make-x25519-public-key qB))
-              (define priv (make-x25519-private-key qB d))
-              (define impl (send factory get-pk 'ecx))
-              (new gcrypt-ec-key% (impl impl) (pub pub) (priv priv))]
-             [else #f])))
-
-    (define/private (make-x25519-private-key curve qB d)
-      (define priv
-        (gcry_sexp_build "(private-key (ecc (curve Curve25519) %S %S))"
-                         (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))
-                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
-      (gcry_pk_testkey priv)
-      priv)
-
-    ;; ----
-
-    (define/private (curve-oid->curve oid)
-      (for/first ([entry (in-list known-curves)]
-                  #:when (equal? (cdr entry) oid))
-        (car entry)))
-
-    (define/private (curve-oid->name oid)
-      (define name-sym (curve-oid->curve oid))
-      (and (memq name-sym gcrypt-curves)
-           (string->bytes/latin-1 (symbol->string name-sym))))
-    ))
+    (super-new (spec 'gcrypt-read-key))))
 
 ;; ============================================================
 
@@ -357,6 +134,43 @@
                           (gcry_sexp_build/%u "(nbits %u)" nbits)
                           (gcry_sexp_build/%u "(rsa-use-e %u)" e))
          gcrypt-rsa-key%)))
+
+    ;; ----
+
+    (define/override (make-public-key n e)
+      (define pub (make-rsa-public-key n e))
+      (new gcrypt-rsa-key% (impl this) (pub pub) (priv #f)))
+
+    (define/private (make-rsa-public-key n e)
+      (gcry_sexp_build "(public-key (rsa %S %S))"
+                       (gcry_sexp_build "(n %M)" (int->mpi n))
+                       (gcry_sexp_build "(e %M)" (int->mpi e))))
+
+    (define/override (make-private-key n e d p q dp dq qInv)
+      ;; Note: gcrypt requires q < p (swap if needed)
+      (define-values (p* q* qInv*)
+        (cond [(< p q)
+               (values p q qInv)]
+              [else
+               (define qInv*-mpi (gcry_mpi_new))
+               (or (gcry_mpi_invm qInv*-mpi (int->mpi q) (int->mpi p))
+                   (internal-error "failed to calculate qInv"))
+               (values q p (mpi->int qInv*-mpi))]))
+      (define pub (make-rsa-public-key n e))
+      (define priv (make-rsa-private-key n e d p* q* qInv*))
+      (new gcrypt-rsa-key% (impl this) (pub pub) (priv priv)))
+
+    (define/private (make-rsa-private-key n e d p q u)
+      (define priv
+        (gcry_sexp_build "(private-key (rsa %S %S %S %S %S %S))"
+                         (gcry_sexp_build "(n %M)" (int->mpi n))
+                         (gcry_sexp_build "(e %M)" (int->mpi e))
+                         (gcry_sexp_build "(d %M)" (int->mpi d))
+                         (gcry_sexp_build "(p %M)" (int->mpi p))
+                         (gcry_sexp_build "(q %M)" (int->mpi q))
+                         (gcry_sexp_build "(u %M)" (int->mpi u))))
+      (gcry_pk_testkey priv)
+      priv)
     ))
 
 (define gcrypt-rsa-key%
@@ -482,6 +296,41 @@
                           (gcry_sexp_build/%u "(nbits %u)" nbits)
                           (gcry_sexp_build/%u "(qbits %u)" qbits))
          gcrypt-dsa-key%)))
+
+    ;; ----
+
+    (define/override (make-public-key p q g y)
+      (define pub (make-dsa-public-key p q g y))
+      (new gcrypt-dsa-key% (impl this) (pub pub) (priv #f)))
+
+    (define/private (make-dsa-public-key p q g y)
+      (gcry_sexp_build "(public-key (dsa %S %S %S %S))"
+                       (gcry_sexp_build "(p %M)" (int->mpi p))
+                       (gcry_sexp_build "(q %M)" (int->mpi q))
+                       (gcry_sexp_build "(g %M)" (int->mpi g))
+                       (gcry_sexp_build "(y %M)" (int->mpi y))))
+
+    (define/override (make-private-key p q g y0 x)
+      (define y  ;; g^x mod p
+        (or y0
+            (let ([y (gcry_mpi_new)])
+              (gcry_mpi_powm y (int->mpi g) (int->mpi x) (int->mpi p))
+              (mpi->int y))))
+      (define pub (make-dsa-public-key p q g y))
+      (define priv (make-dsa-private-key p q g y x))
+      (define impl (send factory get-pk 'dsa))
+      (new gcrypt-dsa-key% (impl this) (pub pub) (priv priv)))
+
+    (define/private (make-dsa-private-key p q g y x)
+      (define priv
+        (gcry_sexp_build "(private-key (dsa %S %S %S %S %S))"
+                         (gcry_sexp_build "(p %M)" (int->mpi p))
+                         (gcry_sexp_build "(q %M)" (int->mpi q))
+                         (gcry_sexp_build "(g %M)" (int->mpi g))
+                         (gcry_sexp_build "(y %M)" (int->mpi y))
+                         (gcry_sexp_build "(x %M)" (int->mpi x))))
+      (gcry_pk_testkey priv)
+      priv)
     ))
 
 (define gcrypt-dsa-key%
@@ -552,6 +401,72 @@
       (unless (memq curve* gcrypt-curves)
         (crypto-error "unknown named curve\n  curve: ~e" curve))
       (new gcrypt-ec-params% (impl this) (curve curve*)))
+
+    ;; ----
+
+    (define/override (make-params curve-oid)
+      (curve->params (curve-oid->curve curve-oid)))
+
+    (define/override (make-public-key curve-oid qB)
+      (cond [(curve-oid->name curve-oid)
+             => (lambda (curve-name)
+                  (check-ec-q curve-name qB)
+                  (define pub (make-ec-public-key curve-name qB))
+                  (new gcrypt-ec-key% (impl this) (pub pub) (priv #f)))]
+            [else #f]))
+
+    (define/private (make-ec-public-key curve qB)
+      (gcry_sexp_build "(public-key (ecc %S %S))"
+                       (gcry_sexp_build/%b "(curve %b)" curve)
+                       (gcry_sexp_build/%b "(q %b)" qB)))
+
+    (define/override (make-private-key curve-oid qB d)
+      (cond [(curve-oid->name curve-oid)
+             => (lambda (curve-name)
+                  (define qB*
+                    (cond [qB (begin0 qB (check-ec-q curve-name qB))]
+                          [else (recompute-ec-q curve-name d)]))
+                  (define pub (make-ec-public-key curve-name qB*))
+                  (define priv (make-ec-private-key curve-name qB* d))
+                  (new gcrypt-ec-key% (impl this) (pub pub) (priv priv)))]
+            [else #f]))
+
+    (define/private (make-ec-private-key curve qB d)
+      (define priv
+        (gcry_sexp_build "(private-key (ecc %S %S %S))"
+                         (gcry_sexp_build/%b "(curve %b)" curve)
+                         (gcry_sexp_build/%b "(q %b)" qB)
+                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
+      (gcry_pk_testkey priv)
+      priv)
+
+    (define/private (check-ec-q curve-name qB)
+      (when decode-point-ok?
+        (define ec (gcry_mpi_ec_new curve-name))
+        (define qpoint (gcry_mpi_point_new))
+        (gcry_mpi_ec_decode_point qpoint (base256->mpi qB) ec)
+        (begin0 (unless (gcry_mpi_ec_curve_point qpoint ec)
+                  (crypto-error "invalid public key (point not on curve)"))
+          (gcry_ctx_release ec)
+          (gcry_mpi_point_release qpoint))))
+
+    (define/private (recompute-ec-q curve-name d)
+      (define ec (gcry_mpi_ec_new curve-name))
+      (gcry_mpi_ec_set_mpi 'd (int->mpi d) ec)
+      (define pub-sexp (gcry_pubkey_get_sexp GCRY_PK_GET_PUBKEY ec))
+      (begin0 (sexp-get-data pub-sexp "ecc" "q")
+        (gcry_sexp_release pub-sexp)
+        (gcry_ctx_release ec)))
+
+    (define/private (curve-oid->curve oid)
+      (for/first ([entry (in-list known-curves)]
+                  #:when (equal? (cdr entry) oid))
+        (car entry)))
+
+    (define/private (curve-oid->name oid)
+      (define name-sym (curve-oid->curve oid))
+      (and (memq name-sym gcrypt-curves)
+           (string->bytes/latin-1 (symbol->string name-sym))))
     ))
 
 (define gcrypt-ec-params%
@@ -676,6 +591,44 @@
       (*generate-key
        (gcry_sexp_build "(genkey (ecc (curve %s) (flags eddsa)))" curve-name)
        gcrypt-ed25519-key%))
+
+    ;; ----
+
+    (define/override (make-params curve)
+      (case curve
+        [(ed25519) (curve->params curve)]
+        [else #f]))
+
+    (define/override (make-public-key curve qB)
+      (case curve
+        [(ed25519)
+         (define pub (make-ed25519-public-key qB))
+         (new gcrypt-ed25519-key% (impl this) (pub pub) (priv #f))]
+        [else #f]))
+
+    (define/private (make-ed25519-public-key qB)
+      (gcry_sexp_build "(public-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
+                       (gcry_sexp_build/%b "(q %b)" qB)))
+
+    (define/override (make-private-key curve qB dB)
+      ;; It doesn't seem to be possible to recover qB if it is missing,
+      ;; so just fail.
+      (case curve
+        [(ed25519)
+         (cond [qB
+                (define pub (make-ed25519-public-key qB))
+                (define priv (make-ed25519-private-key qB dB))
+                (new gcrypt-ed25519-key% (impl this) (pub pub) (priv priv))]
+               [else #f])]
+        [else #f]))
+
+    (define/private (make-ed25519-private-key qB dB)
+      (define priv
+        (gcry_sexp_build "(private-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
+                         (gcry_sexp_build/%b "(q %b)" qB)
+                         (gcry_sexp_build/%b "(d %b)" dB)))
+      (gcry_pk_testkey priv)
+      priv)
     ))
 
 (define gcrypt-ed25519-key%
@@ -753,6 +706,42 @@
           ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
           (gcry_sexp_build "(genkey (ecdh (flags no-keytest) (curve Curve25519)))")
           gcrypt-x25519-key%)]))
+
+    ;; ----
+
+    (define/override (make-params curve)
+      (case curve
+        [(x25519) (curve->params curve)]
+        [else #f]))
+
+    (define/override (make-public-key curve qB)
+      (case curve
+        [(x25519)
+         (define pub (make-x25519-public-key qB))
+         (new gcrypt-x25519-key% (impl this) (pub pub) (priv #f))]
+        [else #f]))
+
+    (define/private (make-x25519-public-key qB)
+      (gcry_sexp_build "(public-key (ecc (curve Curve25519) %S))"
+                       (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))))
+
+    (define/override (make-private-key curve qB d)
+      ;; FIXME: recover q if publicKey field not present
+      (and qB
+           (case curve
+             [(x25519)
+              (define pub (make-x25519-public-key qB))
+              (define priv (make-x25519-private-key qB d))
+              (new gcrypt-ec-key% (impl this) (pub pub) (priv priv))]
+             [else #f])))
+
+    (define/private (make-x25519-private-key curve qB d)
+      (define priv
+        (gcry_sexp_build "(private-key (ecc (curve Curve25519) %S %S))"
+                         (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))
+                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
+      (gcry_pk_testkey priv)
+      priv)
     ))
 
 (define gcrypt-x25519-key%

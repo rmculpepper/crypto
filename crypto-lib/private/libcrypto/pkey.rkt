@@ -78,7 +78,10 @@
                (if txkey (loop txkey 'SubjectPublicKeyInfo) (values #f #f)))]
             [else (values #f #f)])))
       (define impl (and evp (evp->impl evp)))
-      (and evp impl (send impl make-key evp private?)))
+      (and evp impl
+           (if private?
+               (send impl make-private-key evp)
+               (send impl make-public-key evp))))
 
     (define/private (evp->impl evp)
       (define type (EVP->type evp))
@@ -177,9 +180,11 @@
     (define/public (-known-digest? dspec)
       (or (not dspec) (and (send factory get-digest dspec) #t)))
 
-    (define/public (make-key evp private?)
-      (new (get-key-class) (impl this) (evp evp) (private? private?)))
-    (define/public (make-params evp)
+    (define/override (make-private-key evp)
+      (new (get-key-class) (impl this) (evp evp) (private? #t)))
+    (define/override (make-public-key evp)
+      (new (get-key-class) (impl this) (evp evp) (private? #f)))
+    (define/override (make-params evp)
       (new (get-params-class) (impl this) (pevp evp)))
     (abstract get-key-class)
     (define/public (get-params-class) (internal-error "params not supported"))
@@ -213,7 +218,7 @@
     (define/override (get-public-key)
       (define pub (i2d i2d_PUBKEY evp))
       (define pub-evp (d2i_PUBKEY pub (bytes-length pub)))
-      (send impl make-key pub-evp #f))
+      (send impl make-public-key pub-evp))
 
     (define/override (get-params)
       ;; Note: EVP_PKEY_copy_parameters doesn't work! (Probably used
@@ -417,7 +422,7 @@
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_DSA kevp kdsa)
       (DSA_free kdsa)
-      (send impl make-key kevp #t))
+      (send impl make-private-key kevp))
 
     (define/override (-write-params fmt)
       (case fmt
@@ -508,7 +513,7 @@
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_DH kevp kdh)
       (DH_free kdh)
-      (send impl make-key kevp #t))
+      (send impl make-private-key kevp))
     ))
 
 (define libcrypto-dh-key%
@@ -591,7 +596,7 @@
       (define kevp (EVP_PKEY_new))
       (EVP_PKEY_set1_EC_KEY kevp kec)
       (EC_KEY_free kec)
-      (send impl make-key kevp #t))
+      (send impl make-private-key kevp))
     ))
 
 (define libcrypto-ec-key%

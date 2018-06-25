@@ -30,62 +30,7 @@
 (define sodium-read-key%
   (class pk-read-key-base%
     (inherit-field factory)
-    (super-new (spec 'sodium-read-key))
-
-    ;; ---- EdDSA ----
-
-    (define/override (-make-params-eddsa curve)
-      (define impl (send factory get-pk 'eddsa))
-      (and impl (send impl curve->params curve)))
-
-    (define/override (-make-pub-eddsa curve qB)
-      (case curve
-        [(ed25519)
-         (define pub (make-sized-copy crypto_sign_ed25519_PUBLICKEYBYTES qB))
-         (define impl (send factory get-pk 'eddsa))
-         (and impl (new sodium-ed25519-key% (impl impl) (pub qB) (priv #f)))]
-        [else #f]))
-
-    (define/override (-make-priv-eddsa curve qB dB)
-      ;; AFAICT, libsodium calls the secret part of the key the "seed",
-      ;; and seed_keypair can be used to recompute the public key.
-      (case curve
-        [(ed25519)
-         (define seed (make-sized-copy crypto_sign_ed25519_SEEDBYTES dB))
-         (define priv (make-bytes crypto_sign_ed25519_SECRETKEYBYTES))
-         (define pub (make-bytes crypto_sign_ed25519_PUBLICKEYBYTES))
-         (crypto_sign_ed25519_seed_keypair pub priv seed)
-         ;; FIXME: check against qB, dB
-         (unless (equal? seed (subbytes priv 0 32))
-           (crypto-error "failed to recompute key from seed"))
-         (define impl (send factory get-pk 'eddsa))
-         (and impl (new sodium-ed25519-key% (impl impl) (pub pub) (priv priv)))]
-        [else #f]))
-
-    ;; ---- X25519 ----
-
-    (define/override (-make-params-ecx curve)
-      (define impl (send factory get-pk 'ecx))
-      (and impl (send impl curve->params curve)))
-
-    (define/override (-make-pub-ecx curve qB)
-      (case curve
-        [(x25519)
-         (define pub (make-sized-copy crypto_scalarmult_curve25519_BYTES qB))
-         (define impl (send factory get-pk 'ecx))
-         (and impl (new sodium-x25519-key% (impl impl) (pub qB) (priv #f)))]
-        [else #f]))
-
-    (define/override (-make-priv-ecx curve _qB dB)
-      (case curve
-        [(x25519)
-         (define priv (make-sized-copy crypto_scalarmult_curve25519_SCALARBYTES dB))
-         (define pub (make-bytes crypto_scalarmult_curve25519_BYTES))
-         (crypto_scalarmult_curve25519_base pub priv)
-         (define impl (send factory get-pk 'ecx))
-         (and impl (new sodium-x25519-key% (impl impl) (pub pub) (priv priv)))]
-        [else #f]))
-    ))
+    (super-new (spec 'sodium-read-key))))
 
 ;; ============================================================
 ;; Ed25519
@@ -115,6 +60,35 @@
          (define status (crypto_sign_ed25519_keypair pub priv))
          (unless status (crypto-error "key generation failed"))
          (new sodium-ed25519-key% (impl this) (pub pub) (priv priv))]))
+
+    ;; ---- EdDSA ----
+
+    (define/override (make-params curve)
+      (case curve
+        [(ed25519) (curve->params curve)]
+        [else #f]))
+
+    (define/override (make-public-key curve qB)
+      (case curve
+        [(ed25519)
+         (define pub (make-sized-copy crypto_sign_ed25519_PUBLICKEYBYTES qB))
+         (new sodium-ed25519-key% (impl this) (pub qB) (priv #f))]
+        [else #f]))
+
+    (define/override (make-private-key curve qB dB)
+      ;; AFAICT, libsodium calls the secret part of the key the "seed",
+      ;; and seed_keypair can be used to recompute the public key.
+      (case curve
+        [(ed25519)
+         (define seed (make-sized-copy crypto_sign_ed25519_SEEDBYTES dB))
+         (define priv (make-bytes crypto_sign_ed25519_SECRETKEYBYTES))
+         (define pub (make-bytes crypto_sign_ed25519_PUBLICKEYBYTES))
+         (crypto_sign_ed25519_seed_keypair pub priv seed)
+         ;; FIXME: check against qB, dB
+         (unless (equal? seed (subbytes priv 0 32))
+           (crypto-error "failed to recompute key from seed"))
+         (new sodium-ed25519-key% (impl this) (pub pub) (priv priv))]
+        [else #f]))
     ))
 
 (define sodium-ed25519-key%
@@ -178,6 +152,29 @@
          (define status (crypto_scalarmult_curve25519_base pub priv))
          (unless (zero? status) (crypto-error "key generation failed"))
          (new sodium-x25519-key% (impl this) (pub pub) (priv priv))]))
+
+    ;; ----
+
+    (define/override (make-params curve)
+      (case curve
+        [(x25519) (curve->params curve)]
+        [else #f]))
+
+    (define/override (make-public-key curve qB)
+      (case curve
+        [(x25519)
+         (define pub (make-sized-copy crypto_scalarmult_curve25519_BYTES qB))
+         (new sodium-x25519-key% (impl this) (pub qB) (priv #f))]
+        [else #f]))
+
+    (define/override (make-private-key curve _qB dB)
+      (case curve
+        [(x25519)
+         (define priv (make-sized-copy crypto_scalarmult_curve25519_SCALARBYTES dB))
+         (define pub (make-bytes crypto_scalarmult_curve25519_BYTES))
+         (crypto_scalarmult_curve25519_base pub priv)
+         (new sodium-x25519-key% (impl this) (pub pub) (priv priv))]
+        [else #f]))
     ))
 
 (define sodium-x25519-key%

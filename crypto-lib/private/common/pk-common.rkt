@@ -59,6 +59,11 @@
 
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
+
+    ;; Called by pk-read-key%; signature depends on spec
+    (define/public (make-params . _) #f)
+    (define/public (make-public-key . _) #f)
+    (define/public (make-private-key . _) #f)
     ))
 
 (define pk-params-base%
@@ -223,6 +228,7 @@
 
 (define pk-read-key-base%
   (class* impl-base% (pk-read-key<%>)
+    (inherit-field factory)
     (super-new)
 
     (define/public (read-key sk fmt)
@@ -345,6 +351,10 @@
          (-make-priv-ecx curve (bcopy qB) (bcopy dB))]
         [_ #f]))
 
+    (define-syntax-rule (send-to-impl spec method arg ...)
+      (let ([impl (send factory get-pk spec)])
+        (and impl (send impl method arg ...))))
+
     ;; ---- RSA ----
 
     (define/public (-decode-pub-rsa subjectPublicKey)
@@ -367,8 +377,10 @@
          (-make-priv-rsa n e d p q dp dq qInv)]
         [_ #f]))
 
-    (define/public (-make-pub-rsa n e) #f)
-    (define/public (-make-priv-rsa n e d p q dp dq qInv) #f)
+    (define/public (-make-pub-rsa n e)
+      (send-to-impl 'rsa make-public-key n e))
+    (define/public (-make-priv-rsa n e d p q dp dq qInv)
+      (send-to-impl 'rsa make-private-key n e d p q dp dq qInv))
 
     ;; ---- DSA ----
 
@@ -384,8 +396,10 @@
          (-make-priv-dsa p q g publicKey privateKey)]
         [_ #f]))
 
-    (define/public (-make-pub-dsa p q g y) #f)
-    (define/public (-make-priv-dsa p q g y x) #f)
+    (define/public (-make-pub-dsa p q g y)
+      (send-to-impl 'dsa make-public-key p q g y))
+    (define/public (-make-priv-dsa p q g y x)
+      (send-to-impl 'dsa make-private-key p q g y x))
 
     ;; ---- DH ----
 
@@ -401,8 +415,10 @@
          (-make-priv-dh p g y x)]
         [_ #f]))
 
-    (define/public (-make-pub-dh p g y) #f)
-    (define/public (-make-priv-dh p g y x) #f)
+    (define/public (-make-pub-dh p g y)
+      (send-to-impl 'dh make-public-key p g y))
+    (define/public (-make-priv-dh p g y x)
+      (send-to-impl 'dh make-private-key p g y x))
 
     ;; ---- EC ----
 
@@ -421,8 +437,10 @@
            [_ #f])]
         [_ #f]))
 
-    (define/public (-make-pub-ec curve-oid qB) #f)
-    (define/public (-make-priv-ec curve-oid qB x) #f)
+    (define/public (-make-pub-ec curve-oid qB)
+      (send-to-impl 'ec make-public-key curve-oid qB))
+    (define/public (-make-priv-ec curve-oid qB x)
+      (send-to-impl 'ec make-private-key curve-oid qB x))
 
     ;; ---- EdDSA ----
 
@@ -431,8 +449,10 @@
     (define/public (-decode-priv-eddsa curve qB dB)
       (-make-priv-eddsa curve qB dB))
 
-    (define/public (-make-pub-eddsa curve qB) #f)
-    (define/public (-make-priv-eddsa curve qB dB) #f)
+    (define/public (-make-pub-eddsa curve qB)
+      (send-to-impl 'eddsa make-public-key curve qB))
+    (define/public (-make-priv-eddsa curve qB dB)
+      (send-to-impl 'eddsa make-private-key curve qB dB))
 
     ;; ---- ECX ----
 
@@ -441,8 +461,10 @@
     (define/public (-decode-priv-ecx curve qB dB)
       (-make-priv-ecx curve qB dB))
 
-    (define/public (-make-pub-ecx curve qB) #f)
-    (define/public (-make-priv-ecx curve qB dB) #f)
+    (define/public (-make-pub-ecx curve qB)
+      (send-to-impl 'ecx make-public-key curve qB))
+    (define/public (-make-priv-ecx curve qB dB)
+      (send-to-impl 'ecx make-private-key curve qB dB))
 
     ;; ----------------------------------------
 
@@ -501,11 +523,16 @@
          (-make-params-ecx curve)]
         [_ #f]))
 
-    (define/public (-make-params-dsa p q g) #f)
-    (define/public (-make-params-dh prime base) #f)
-    (define/public (-make-params-ec curve-oid) #f)
-    (define/public (-make-params-eddsa curve) #f)
-    (define/public (-make-params-ecx curve) #f)
+    (define/public (-make-params-dsa p q g)
+      (send-to-impl 'dsa make-params p q g))
+    (define/public (-make-params-dh p g)
+      (send-to-impl 'dh make-params p g))
+    (define/public (-make-params-ec curve-oid)
+      (send-to-impl 'ec make-params curve-oid))
+    (define/public (-make-params-eddsa curve)
+      (send-to-impl 'eddsa make-params curve))
+    (define/public (-make-params-ecx curve)
+      (send-to-impl 'ecx make-params curve))
 
     ;; ----------------------------------------
 

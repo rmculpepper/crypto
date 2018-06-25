@@ -42,155 +42,6 @@
   (class pk-read-key-base%
     (inherit-field factory)
     (super-new (spec 'nettle-read-key))
-
-    ;; ---- RSA ----
-
-    (define/override (-make-pub-rsa n e)
-      (define pub (new-rsa_public_key))
-      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
-      (mpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
-      (unless (nettle_rsa_public_key_prepare pub) (crypto-error "bad public key"))
-      (define impl (send factory get-pk 'rsa))
-      (and impl (new nettle-rsa-key% (impl impl) (pub pub) (priv #f))))
-
-    (define/override (-make-priv-rsa n e d p q dp dq qInv)
-      (define pub (new-rsa_public_key))
-      (define priv (new-rsa_private_key))
-      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
-      (mpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
-      (mpz_set (rsa_private_key_struct-d priv) (integer->mpz d))
-      (mpz_set (rsa_private_key_struct-p priv) (integer->mpz p))
-      (mpz_set (rsa_private_key_struct-q priv) (integer->mpz q))
-      (mpz_set (rsa_private_key_struct-a priv) (integer->mpz dp))
-      (mpz_set (rsa_private_key_struct-b priv) (integer->mpz dq))
-      (mpz_set (rsa_private_key_struct-c priv) (integer->mpz qInv))
-      (unless (nettle_rsa_public_key_prepare pub)
-        (crypto-error "bad public key"))
-      (unless (nettle_rsa_private_key_prepare priv)
-        (crypto-error "bad private key"))
-      (define impl (send factory get-pk 'rsa))
-      (and impl (new nettle-rsa-key% (impl impl) (pub pub) (priv priv))))
-
-    ;; ---- DSA ----
-
-    (define/override (-make-pub-dsa p q g y)
-      (define params (-params-dsa p q g))
-      (define pub (integer->mpz y))
-      (define impl (send factory get-pk 'dsa))
-      (and impl (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f))))
-
-    (define/override (-make-priv-dsa p q g y x)
-      (define params (-params-dsa p q g))
-      (define priv (integer->mpz x))
-      (define pub
-        (cond [y (integer->mpz y)]
-              [else ;; must recompute public key, y = g^x mod p
-               (define yz (new-mpz))
-               (mpz_powm yz
-                         (dsa_params_struct-g params)
-                         priv
-                         (dsa_params_struct-p params))
-               yz]))
-      (define impl (send factory get-pk 'dsa))
-      (and impl (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv))))
-
-    (define/override (-make-params-dsa p q g)
-      (define impl (send factory get-pk 'dsa))
-      (and impl (new nettle-dsa-params% (impl impl) (params (-params-dsa p q g)))))
-
-    (define/private (-params-dsa p q g)
-      (define params (new-dsa_params))
-      (mpz_set (dsa_params_struct-p params) (integer->mpz p))
-      (mpz_set (dsa_params_struct-q params) (integer->mpz q))
-      (mpz_set (dsa_params_struct-g params) (integer->mpz g))
-      params)
-
-    ;; ---- EC ----
-
-    (define/override (-make-pub-ec curve-oid qB)
-      (define ecc (curve-oid->ecc curve-oid))
-      (define pub (and ecc (make-ec-public-key ecc qB)))
-      (cond [(and ecc pub)
-             (define impl (send factory get-pk 'ec))
-             (and impl (new nettle-ec-key% (impl impl) (pub pub) (priv #f)))]
-            [else #f]))
-
-    (define/override (-make-priv-ec curve-oid qB d)
-      (define ecc (curve-oid->ecc curve-oid))
-      (define pub (and ecc (make-ec-public-key ecc qB)))
-      (cond [(and ecc pub)
-             (define priv (new-ecc_scalar ecc))
-             (nettle_ecc_scalar_set priv (integer->mpz d))
-             (define impl (send factory get-pk 'ec))
-             (and impl (new nettle-ec-key% (impl impl) (pub pub) (priv priv)))]
-            [else #f]))
-
-    (define/private (make-ec-public-key ecc qB)
-      (cond [(bytes->ec-point qB)
-             => (lambda (x+y)
-                  (define x (integer->mpz (car x+y)))
-                  (define y (integer->mpz (cdr x+y)))
-                  (define pub (new-ecc_point ecc))
-                  (unless (nettle_ecc_point_set pub x y)
-                    (crypto-error "invalid public key (point not on curve)"))
-                  pub)]
-            [else #f]))
-
-    (define/override (-make-params-ec curve-oid)
-      (define ecc (curve-oid->ecc curve-oid))
-      (define impl (send factory get-pk 'ec))
-      (and ecc impl (new nettle-ec-params% (impl impl) (ecc ecc))))
-
-    ;; ---- EdDSA ----
-
-    (define/override (-make-params-eddsa curve)
-      (define impl (send factory get-pk 'eddsa))
-      (and impl (send impl curve->params curve)))
-
-    (define/override (-make-pub-eddsa curve qB)
-      (case curve
-        [(ed25519)
-         (define pub (make-sized-copy ED25519_KEY_SIZE qB))
-         (define impl (send factory get-pk 'eddsa))
-         (and impl (new nettle-ed25519-key% (impl impl) (pub pub) (priv #f)))]
-        [else #f]))
-
-    (define/override (-make-priv-eddsa curve _qB dB)
-      ;; Note: qB (public key) might be missing, so just recompute
-      (case curve
-        [(ed25519)
-         (define priv (make-sized-copy ED25519_KEY_SIZE dB))
-         (define pub (make-bytes ED25519_KEY_SIZE))
-         (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED25519_KEY_SIZE))
-         (nettle_ed25519_sha512_public_key pub priv)
-         (define impl (send factory get-pk 'eddsa))
-         (and impl (new nettle-ed25519-key% (impl impl) (pub pub) (priv priv)))]
-        [else #f]))
-
-    ;; ---- ECX ----
-
-    (define/override (-make-params-ecx curve)
-      (define impl (send factory get-pk 'ecx))
-      (and impl (send impl curve->params curve)))
-
-    (define/override (-make-pub-ecx curve qB)
-      (case curve
-        [(x25519)
-         (define pub (make-sized-copy X25519_KEY_SIZE qB))
-         (define impl (send factory get-pk 'ecx))
-         (and impl (new nettle-x25519-key% (impl impl) (pub pub) (priv #f)))]
-        [else #f]))
-
-    (define/override (-make-priv-ecx curve _qB dB)
-      ;; Note: qB (public key) might be missing, so just recompute
-      (case curve
-        [(x25519)
-         (define priv (make-sized-copy X25519_KEY_SIZE dB))
-         (define pub (make-bytes X25519_KEY_SIZE))
-         (nettle_curve25519_mul_g pub priv)
-         (define impl (send factory get-pk 'ecx))
-         (and impl (new nettle-x25519-key% (impl impl) (pub pub) (priv priv)))]
-        [else #f]))
     ))
 
 ;; ============================================================
@@ -233,6 +84,32 @@
         (or (nettle_rsa_generate_keypair pub priv (get-random-ctx) nbits 0)
             (crypto-error "RSA key generation failed"))
         (new nettle-rsa-key% (impl this) (pub pub) (priv priv))))
+
+    ;; ----
+
+    (define/override (make-public-key n e)
+      (define pub (new-rsa_public_key))
+      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
+      (mpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
+      (unless (nettle_rsa_public_key_prepare pub) (crypto-error "bad public key"))
+      (new nettle-rsa-key% (impl this) (pub pub) (priv #f)))
+
+    (define/override (make-private-key n e d p q dp dq qInv)
+      (define pub (new-rsa_public_key))
+      (define priv (new-rsa_private_key))
+      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
+      (mpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
+      (mpz_set (rsa_private_key_struct-d priv) (integer->mpz d))
+      (mpz_set (rsa_private_key_struct-p priv) (integer->mpz p))
+      (mpz_set (rsa_private_key_struct-q priv) (integer->mpz q))
+      (mpz_set (rsa_private_key_struct-a priv) (integer->mpz dp))
+      (mpz_set (rsa_private_key_struct-b priv) (integer->mpz dq))
+      (mpz_set (rsa_private_key_struct-c priv) (integer->mpz qInv))
+      (unless (nettle_rsa_public_key_prepare pub)
+        (crypto-error "bad public key"))
+      (unless (nettle_rsa_private_key_prepare priv)
+        (crypto-error "bad private key"))
+      (new nettle-rsa-key% (impl this) (pub pub) (priv priv)))
     ))
 
 (define nettle-rsa-key%
@@ -387,6 +264,37 @@
       (or (nettle_dsa_generate_params params (get-random-ctx) nbits qbits)
           (crypto-error "failed to generate parameters"))
       params)
+
+    ;; ----
+
+    (define/override (make-params p q g)
+      (new nettle-dsa-params% (impl this) (params (-params-dsa p q g))))
+
+    (define/override (make-public-key p q g y)
+      (define params (-params-dsa p q g))
+      (define pub (integer->mpz y))
+      (new nettle-dsa-key% (impl this) (params params) (pub pub) (priv #f)))
+
+    (define/override (make-private-key p q g y x)
+      (define params (-params-dsa p q g))
+      (define priv (integer->mpz x))
+      (define pub
+        (cond [y (integer->mpz y)]
+              [else ;; must recompute public key, y = g^x mod p
+               (define yz (new-mpz))
+               (mpz_powm yz
+                         (dsa_params_struct-g params)
+                         priv
+                         (dsa_params_struct-p params))
+               yz]))
+      (new nettle-dsa-key% (impl this) (params params) (pub pub) (priv priv)))
+
+    (define/private (-params-dsa p q g)
+      (define params (new-dsa_params))
+      (mpz_set (dsa_params_struct-p params) (integer->mpz p))
+      (mpz_set (dsa_params_struct-q params) (integer->mpz q))
+      (mpz_set (dsa_params_struct-g params) (integer->mpz g))
+      params)
     ))
 
 (define nettle-dsa-params%
@@ -474,6 +382,37 @@
       (define ecc (curve-name->ecc curve-name))
       (unless ecc (crypto-error "named curve not found\n  curve: ~e" (config-ref config 'curve)))
       (new nettle-ec-params% (impl this) (ecc ecc)))
+
+    ;; ---- EC ----
+
+    (define/override (make-params curve-oid)
+      (define ecc (curve-oid->ecc curve-oid))
+      (and ecc (new nettle-ec-params% (impl this) (ecc ecc))))
+
+    (define/override (make-public-key curve-oid qB)
+      (define ecc (curve-oid->ecc curve-oid))
+      (define pub (and ecc (make-ec-public-key ecc qB)))
+      (and ecc pub (new nettle-ec-key% (impl this) (pub pub) (priv #f))))
+
+    (define/override (make-private-key curve-oid qB d)
+      (define ecc (curve-oid->ecc curve-oid))
+      (define pub (and ecc (make-ec-public-key ecc qB)))
+      (cond [(and ecc pub)
+             (define priv (new-ecc_scalar ecc))
+             (nettle_ecc_scalar_set priv (integer->mpz d))
+             (new nettle-ec-key% (impl this) (pub pub) (priv priv))]
+            [else #f]))
+
+    (define/private (make-ec-public-key ecc qB)
+      (cond [(bytes->ec-point qB)
+             => (lambda (x+y)
+                  (define x (integer->mpz (car x+y)))
+                  (define y (integer->mpz (cdr x+y)))
+                  (define pub (new-ecc_point ecc))
+                  (unless (nettle_ecc_point_set pub x y)
+                    (crypto-error "invalid public key (point not on curve)"))
+                  pub)]
+            [else #f]))
     ))
 
 (define nettle-ec-params%
@@ -618,6 +557,31 @@
          (define pub (make-bytes ED25519_KEY_SIZE))
          (nettle_ed25519_sha512_public_key pub priv)
          (new nettle-ed25519-key% (impl this) (pub pub) (priv priv))]))
+
+    ;; ----
+
+    (define/override (make-params curve)
+      (case curve
+        [(ed25519) (curve->params curve)]
+        [else #f]))
+
+    (define/override (make-public-key curve qB)
+      (case curve
+        [(ed25519)
+         (define pub (make-sized-copy ED25519_KEY_SIZE qB))
+         (new nettle-ed25519-key% (impl this) (pub pub) (priv #f))]
+        [else #f]))
+
+    (define/override (make-private-key curve _qB dB)
+      ;; Note: qB (public key) might be missing, so just recompute
+      (case curve
+        [(ed25519)
+         (define priv (make-sized-copy ED25519_KEY_SIZE dB))
+         (define pub (make-bytes ED25519_KEY_SIZE))
+         (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED25519_KEY_SIZE))
+         (nettle_ed25519_sha512_public_key pub priv)
+         (new nettle-ed25519-key% (impl this) (pub pub) (priv priv))]
+        [else #f]))
     ))
 
 (define nettle-ed25519-key%
@@ -680,6 +644,30 @@
          (define pub (make-bytes X25519_KEY_SIZE))
          (nettle_curve25519_mul_g pub priv)
          (new nettle-x25519-key% (impl this) (priv priv) (pub pub))]))
+
+    ;; ---- ECX ----
+
+    (define/override (make-params curve)
+      (case curve
+        [(x25519) (curve->params curve)]
+        [else #f]))
+
+    (define/override (make-public-key curve qB)
+      (case curve
+        [(x25519)
+         (define pub (make-sized-copy X25519_KEY_SIZE qB))
+         (new nettle-x25519-key% (impl this) (pub pub) (priv #f))]
+        [else #f]))
+
+    (define/override (make-private-key curve _qB dB)
+      ;; Note: qB (public key) might be missing, so just recompute
+      (case curve
+        [(x25519)
+         (define priv (make-sized-copy X25519_KEY_SIZE dB))
+         (define pub (make-bytes X25519_KEY_SIZE))
+         (nettle_curve25519_mul_g pub priv)
+         (new nettle-x25519-key% (impl this) (pub pub) (priv priv))]
+        [else #f]))
     ))
 
 (define nettle-x25519-key%
