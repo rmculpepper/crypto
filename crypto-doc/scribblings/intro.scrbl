@@ -184,31 +184,7 @@ derivation. Two parties exchange public keys, and each party uses
 their own private key together with their peer's public key to derive
 a shared secret.
 
-Here's traditional Diffie-Hellman key agreement:
-
-@interaction[#:eval the-eval
-(define dhparams (generate-pk-parameters 'dh '((nbits 128))))
-(define priv1 (generate-private-key dhparams))
-(define priv2 (generate-private-key dhparams))
-(define pub1 (pk-key->public-only-key priv1))
-(define pub2 (pk-key->public-only-key priv2))
-(define shared-secret (pk-derive-secret priv1 pub2))
-(equal? shared-secret
-        (pk-derive-secret priv2 pub1))
-]
-
-And here's ECDH (Diffie-Hellman on elliptic curves):
-
-@interaction[#:eval the-eval
-(define ecparams (generate-pk-parameters 'ec '((curve "NIST P-192")))) ;;  714 #|415|#
-(define priv1 (generate-private-key ecparams))
-(define priv2 (generate-private-key ecparams))
-(define pub1 (pk-key->public-only-key priv1))
-(define pub2 (pk-key->public-only-key priv2))
-(define shared-secret (pk-derive-secret priv1 pub2))
-(equal? shared-secret
-        (pk-derive-secret priv2 pub1))
-]
-
+For additional examples, see the @tt{crypto/examples} directory
+(@hyperlink["https://github.com/rmculpepper/crypto/tree/master/crypto-doc/examples"]{online here}).
 
 @(close-eval the-eval)
