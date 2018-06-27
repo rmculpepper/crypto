@@ -22,7 +22,7 @@
 (provide
  (contract-out
   [crypto-factories
-   (parameter/c (listof crypto-factory?))]
+   (parameter/c factories/c (listof crypto-factory?))]
   [get-factory
    (-> (or/c digest-impl? digest-ctx?
              cipher-impl? cipher-ctx?
@@ -44,8 +44,11 @@
 
 (define factories/c (or/c crypto-factory? (listof crypto-factory?)))
 
+;; coerce-list : (or/c X (listof X) -> (listof X)
+(define (coerce-list xs) (if (list? xs) xs (list xs)))
+
 ;; crypto-factories : parameter of (listof factory<%>)
-(define crypto-factories (make-parameter null))
+(define crypto-factories (make-parameter null coerce-list))
 
 (define (get-factory i)
   (with-crypto-entry 'get-factory
@@ -55,22 +58,22 @@
 
 (define (get-digest di [factory/s (crypto-factories)])
   (with-crypto-entry 'get-digest
-    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+    (for/or ([f (in-list (coerce-list factory/s))])
       (send f get-digest di))))
 
 (define (get-cipher ci [factory/s (crypto-factories)])
   (with-crypto-entry 'get-cipher
-    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+    (for/or ([f (in-list (coerce-list factory/s))])
       (send f get-cipher ci))))
 
 (define (get-pk pki [factory/s (crypto-factories)])
   (with-crypto-entry 'get-pk
-    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+    (for/or ([f (in-list (coerce-list factory/s))])
       (send f get-pk pki))))
 
 (define (get-kdf k [factory/s (crypto-factories)])
   (with-crypto-entry 'get-kdf
-    (for/or ([f (in-list (if (list? factory/s) factory/s (list factory/s)))])
+    (for/or ([f (in-list (coerce-list factory/s))])
       (send f get-kdf k))))
 
 (define (factory-print-info factory)

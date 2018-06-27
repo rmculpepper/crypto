@@ -35,7 +35,9 @@ Returns @racket[#t] if @racket[v] is a crypto factory, @racket[#f]
 otherwise.
 }
 
-@defparam[crypto-factories factories (listof crypto-factory?)]{
+@defparam*[crypto-factories factories
+           (or/c crypto-factory? (listof crypto-factory?))
+           (listof crypto-factory?)]{
 
 The list of crypto factories used when implicitly finding an
 implementation of a cryptographic algorithm from an algorithm
