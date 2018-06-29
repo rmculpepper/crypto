@@ -1,4 +1,10 @@
-# crypto - Cryptogrphy library for Racket
+# crypto - Cryptography library for Racket
+
+## Installation
+
+The `crypto` package is available through Racket's package manager (pkgs.racket-lang.org).
+- Install via command line with `raco pkg install crypto`
+- Or install via DrRacket (`File` > `Package Manager`).
 
 ## Documentation
 
