@@ -32,7 +32,7 @@
     (let ([di (send factory get-digest name)])
       (when di
         (test-case (format "~s" name)
-          (when #t (hprintf "+  testing ~v\n" name))
+          (when #t (hprintf 1 "testing ~v\n" name))
           (test-digest-meta di)
           (for ([in+out (dict-ref digest-test-vectors name null)])
             (test-digest/in+out di (car in+out) (hex->bytes (cadr in+out)) #f))
@@ -94,13 +94,13 @@
                    (for/list ([factory factories])
                      (send factory get-digest name)))])
       (when (zero? (length impls))
-        (hprintf "-  no impl for digest ~e\n" name))
+        (hprintf -1 "no impl for digest ~e\n" name))
       (when (= (length impls) 1)
-        (hprintf "-  only one impl for digest ~e (~s)\n" name
+        (hprintf -1 "only one impl for digest ~e (~s)\n" name
                  (send (send (car impls) get-factory) get-name)))
       (when (> (length impls) 1)
         (when #t
-          (hprintf "+  testing agreement ~e\n" name))
+          (hprintf 1 "testing agreement ~e\n" name))
         (define impl0 (car impls))
         (for ([impl (cdr impls)])
           (for ([in digest-inputs])

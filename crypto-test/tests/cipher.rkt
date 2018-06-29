@@ -39,14 +39,14 @@
 (define (test-cipher/spec factory spec)
   (define ci (send factory get-cipher spec))
   (cond [ci
-         (hprintf "+  testing ~e\n" spec)
+         (hprintf 1 "testing ~e\n" spec)
          (test-cipher-meta spec)
          (test-cipher-meta ci)
          (for ([in plaintexts])
            (test-cipher ci in))]
         [else
          (when #f
-           (hprintf "-  skipping cipher ~e\n" spec))]))
+           (hprintf -1 "skipping cipher ~e\n" spec))]))
 
 (define (test-cipher-meta ci)
   (cipher-default-key-size ci)
@@ -179,12 +179,12 @@
     (define factories (map car factories+impls))
     (define impls (map cdr factories+impls))
     (when (zero? (length impls))
-      (hprintf "-  no impl for cipher ~e\n" spec))
+      (hprintf -1 "no impl for cipher ~e\n" spec))
     (when (= (length impls) 1)
-      (hprintf "-  only one impl for cipher ~e\n" spec))
+      (hprintf -1 "only one impl for cipher ~e\n" spec))
     (when (> (length impls) 1)
       (when #t
-        (hprintf "+  testing agreement ~e (~s impls)\n" spec (length impls)))
+        (hprintf 1 "testing agreement ~e (~s impls)\n" spec (length impls)))
       (test-case (format "cipher agreement for ~e\n" spec)
         (define key (generate-cipher-key spec))
         (define iv (generate-cipher-iv spec))

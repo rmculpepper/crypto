@@ -33,7 +33,7 @@
        (define impl (send factory get-kdf name))
        (define dimpl (send factory get-kdf di))
        (when impl
-         (hprintf "+  testing ~v\n" name)
+         (hprintf 1 "testing ~v\n" name)
          (check-equal? (kdf impl key salt '((iterations 2000) (key-size 89)))
                        (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
       [_ (void)])))
@@ -47,12 +47,12 @@
                 (send factory get-kdf name))))
     (when #f
       (when (zero? (length impls))
-        (hprintf "-  no impl for kdf ~e\n" name)))
+        (hprintf -1 "no impl for kdf ~e\n" name)))
     (when (= (length impls) 1)
-      (hprintf "-  only one impl for kdf ~e (~s)\n" name
+      (hprintf -1 "only one impl for kdf ~e (~s)\n" name
                (send (send (car impls) get-factory) get-name)))
     (when (> (length impls) 1)
-      (hprintf "+  testing agreement ~e\n" name)
+      (hprintf 1 "testing agreement ~e\n" name)
       (test-case (format "~a" name)
         (define impl0 (car impls))
         (define r0 (kdf impl0 key salt config))

@@ -53,11 +53,11 @@
     (define pubkey (and key (pk-key->public-only-key key)))
     (unless key
       (when #t
-        (hprintf "-  ERROR: ~a cannot read ~s\n" (send factory get-name) desc)))
+        (hprintf -1 "ERROR: ~a cannot read ~s\n" (send factory get-name) desc)))
     (when key
       (when #t
-        (hprintf "+  testing ~s (~a)\n" desc factory-name)
-        (hprintf " + self-test (~a => ~a)\n" factory-name factory-name))
+        (hprintf 1 "testing ~s (~a)\n" desc factory-name)
+        (hprintf 2 "self-test (~a => ~a)\n" factory-name factory-name))
       (test-case (format "~a ~a ~a" factory-name desc fmt)
         (check-pred private-key? key)
         (check-pred public-only-key? pubkey)
@@ -72,11 +72,11 @@
             (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
         (unless pubkey*
           (when #t
-            (hprintf " - ERROR: ~a cannot read public key for ~s\n"
+            (hprintf -2 "ERROR: ~a cannot read public key for ~s\n"
                      (send pub-factory get-name) desc)))
         (when pubkey*
           (when #t
-            (hprintf " + cross-testing (~a => ~a)\n"
+            (hprintf 2 "cross-testing (~a => ~a)\n"
                      factory-name (send pub-factory get-name)))
           (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name) fmt desc)
             (test-pk-key key pubkey*)))))))
@@ -84,7 +84,7 @@
 (define (test-keygen factory spec impl)
   (test-case (format "~a ~a keygen" (send factory get-name) spec)
     (define factory-name (send factory get-name))
-    (hprintf "+  testing keygen for ~s (~a)\n" spec factory-name)
+    (hprintf 1 "testing keygen for ~s (~a)\n" spec factory-name)
     (case spec
       [(rsa)
        (check-false (pk-has-parameters? impl))
@@ -181,7 +181,7 @@
     [else  (test-pk-sign* key pubkey '(#f))]))
 
 (define (test-eddsa-sign key pubkey)
-  (hprintf "  +testing sign direct\n")
+  (hprintf 3 "testing sign direct\n")
   (define sig (pk-sign key msg))
   (check-true (pk-verify key msg sig))
   (check-true (pk-verify pubkey msg sig))
@@ -192,11 +192,11 @@
   (for* ([pad pads])
     (define pad-ok? (and (pk-can-sign? key pad) (pk-can-sign? pubkey pad)))
     (unless pad-ok?
-      (hprintf "  -skipping sign w/ pad = ~v\n" pad))
+      (hprintf -3 "skipping sign w/ pad = ~v\n" pad))
     (when pad-ok?
       (for ([di '(sha1 sha256)])
         (cond [(and (pk-can-sign? key pad di) (pk-can-sign? pubkey pad di))
-               (hprintf "  +testing sign w/ pad = ~v, digest = ~v\n" pad di)
+               (hprintf 3 "testing sign w/ pad = ~v, digest = ~v\n" pad di)
                (define di* (get-digest di (get-factory key)))
                (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
                (define sig2 (digest/sign key di msg #:pad pad))
@@ -209,7 +209,7 @@
                (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
                (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
                (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")]
-              [else (hprintf "  -skipping sign w/ pad = ~v, digest = ~v\n" pad di)])))))
+              [else (hprintf -3 "skipping sign w/ pad = ~v, digest = ~v\n" pad di)])))))
 
 (define (encrypt-pad-ok? key pad)
   (case pad
@@ -220,14 +220,14 @@
   (define rsa? (eq? (send (send key get-impl) get-spec) 'rsa))
   (for ([pad (if rsa? '(pkcs1-v1.5 oaep) '(#f))])
     (cond [(and (pk-can-encrypt? key pad) (pk-can-encrypt? pubkey pad))
-           (hprintf "  +testing encrypt w/ pad = ~v\n" pad)
+           (hprintf 3 "testing encrypt w/ pad = ~v\n" pad)
            (define skey (semirandom-bytes 16))
            (define wkey (pk-encrypt pubkey skey #:pad pad))
            (check-equal? (pk-decrypt key wkey #:pad pad) skey "pk-decrypt")]
-          [else (hprintf "  -skipping encrypt w/ pad = ~v\n" pad)])))
+          [else (hprintf -3 "skipping encrypt w/ pad = ~v\n" pad)])))
 
 (define (test-pk-key-agree key1 pubkey1)
-  (hprintf "  +testing key agreement\n")
+  (hprintf 3 "testing key agreement\n")
   (define key2 (generate-private-key (pk-key->parameters pubkey1)))
   (define pubkey2 (datum->pk-key (pk-key->datum key2 'SubjectPublicKeyInfo)
                                  'SubjectPublicKeyInfo (get-factory key1)))
