@@ -36,6 +36,12 @@
          (hprintf 1 "testing ~v\n" name)
          (check-equal? (kdf impl key salt '((iterations 2000) (key-size 89)))
                        (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
+      [(or 'argon2i 'argon2d 'argon2id 'scrypt)
+       (define impl (send factory get-kdf name))
+       (when impl
+         (hprintf 1 "testing ~v\n" name)
+         (define k (kdf impl key salt (get-config name)))
+         (check-pred bytes? k))]
       [_ (void)])))
 
 (define (test-kdfs-agree factories)
