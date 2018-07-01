@@ -119,6 +119,8 @@
          ;; kdf
          (recontract-out
           kdf
+          pwhash
+          pwhash-verify
           pbkdf2-hmac
           scrypt)
 

@@ -30,6 +30,13 @@
          bytes?]
         [(listof (list/c symbol? any/c))]
         bytes?)]
+  [pwhash
+   (->* [(or/c kdf-spec? kdf-impl?) bytes?]
+        [(listof (list/c symbol? any/c))]
+        string?)]
+  [pwhash-verify
+   (-> (or/c kdf-impl? #f) bytes? string?
+       boolean?)]
   [pbkdf2-hmac
    (->* [digest-spec? bytes? bytes? #:iterations exact-positive-integer?]
         [#:key-size exact-positive-integer?]
@@ -57,6 +64,29 @@
   (with-crypto-entry 'kdf
     (let ([k (-get-impl k)])
       (send k kdf params pass salt))))
+
+(define (pwhash k pass [params '()])
+  (with-crypto-entry 'pwhash
+    (let ([k (-get-impl k)])
+      (send k pwhash params pass))))
+
+(define (pwhash-verify k pass cred)
+  (with-crypto-entry 'pwhash-verify
+    (define k* (or k (-get-impl (pwcred->kdf-spec cred))))
+    (send k* pwhash-verify pass cred)))
+
+(define (pwcred->kdf-spec cred)
+  ;; see also crypto/private/rkt/pwhash
+  (define m (regexp-match #rx"^[$]([a-z0-9-]*)[$]" cred))
+  (define id (and m (string->symbol (cadr m))))
+  (case id
+    [(argon2i argon2d argon2id scrypt) id]
+    [(pbkdf2) '(pbkdf2 hmac sha1)]
+    [(pbkdf2-sha256) '(pbkdf2 hmac sha256)]
+    [(pbkdf2-sha512) '(pbkdf2 hmac sha512)]
+    [(#f) (crypto-error "invalid password hash format")]
+    [else (crypto-error "unknown password hash identifier\n  id: ~e" id)]))
+
 
 (define (pbkdf2-hmac di pass salt
                      #:iterations iterations
