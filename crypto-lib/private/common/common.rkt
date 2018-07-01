@@ -36,6 +36,7 @@
          cipher-impl-base%
          multikeylen-cipher-impl%
          cipher-ctx%
+         kdf-impl-base%
          process-input
          to-impl
          to-info
@@ -650,6 +651,20 @@
                              (pop-ufp (split-right-ufp auth-len ufp))
                              ufp)])
                ufp)]))
+    ))
+
+;; ============================================================
+;; KDF and Password Hashing
+
+(define kdf-impl-base%
+  (class* impl-base% (kdf-impl<%>)
+    (super-new)
+    (define/public (kdf params pass salt)
+      (err/no-impl this))
+    (define/public (pwhash params pass)
+      (err/no-impl this))
+    (define/public (pwhash-verify pass cred)
+      (err/no-impl this))
     ))
 
 ;; ============================================================
