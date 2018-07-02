@@ -77,7 +77,7 @@
                                        saltlen hashlen type)))
         (encodedlen : _size = (bytes-length encoded))
         -> (r : _int)
-        -> (cond [(zero? r) (subbytes encoded 0 (sub1 encodedlen))] ;; remove NUL
+        -> (cond [(zero? r) (bytes->string/latin-1 encoded #f 0 (sub1 encodedlen))] ;; remove NUL
                  [else r])))
 
 (define-argon2 argon2i_hash_encoded  (argon2-enc-type 'Argon2_i))
@@ -86,7 +86,7 @@
 
 (define argon2-verify-type
   (_fun (encoded pwd) ::
-        (encodedz : _bytes = (bytes-append encoded #"\0"))
+        (encodedz : _string/latin-1 = (string-append encoded "\0"))
         (pwd : _bytes)
         (pwdlen : _size = (bytes-length pwd))
         -> (r : _int) -> (zero? r)))

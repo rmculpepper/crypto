@@ -1,4 +1,4 @@
-;; Copyright 2014 Ryan Culpepper
+;; Copyright 2014-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -18,20 +18,26 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
+         "../rkt/pwhash.rkt"
          "ffi.rkt")
 (provide libcrypto-pbkdf2-impl%)
 
 (define libcrypto-pbkdf2-impl%
-  (class* impl-base% (kdf-impl<%>)
+  (class kdf-impl-base%
     (init-field di)
     (inherit-field spec)
     (super-new)
 
-    (define/public (kdf config pass salt)
+    (define/override (kdf config pass salt)
       (check-config config config:pbkdf2 "PBKDF2")
       (define iters (config-ref config 'iterations))
       (define key-size (config-ref config 'key-size))
       (define key (make-bytes key-size))
       (PKCS5_PBKDF2_HMAC pass salt iters (get-field md di) key)
       key)
+
+    (define/override (pwhash config pass)
+      (kdf-pwhash-pbkdf2 this spec config pass))
+    (define/override (pwhash-verify pass cred)
+      (kdf-pwhash-verify-pbkdf2 this spec pass cred))
     ))

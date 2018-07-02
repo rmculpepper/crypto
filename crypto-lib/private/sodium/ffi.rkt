@@ -421,13 +421,13 @@
         -> _int))
 
 (define-na crypto_pwhash_argon2id_str_verify
-  (_fun (str    : _pointer)
+  (_fun (str    : _string/latin-1)
         (passwd : _pointer)
         (pwdlen : _ullong)
         -> _int))
 
 (define-na crypto_pwhash_argon2id_str_needs_rehash
-  (_fun (str      : _pointer)
+  (_fun (str      : _string/latin-1)
         (opslimit : _ullong)
         (memlimit : _size)
         -> _int))
@@ -505,13 +505,13 @@
         -> _int))
 
 (define-na crypto_pwhash_str_verify
-  (_fun (str : _pointer) ;;const char str[crypto_pwhash_STRBYTES],
+  (_fun (str : _string/latin-1) ;;const char str[crypto_pwhash_STRBYTES],
         (passwd : _pointer)
         (pwdlen : _ullong)
         -> _int))
 
 (define-na crypto_pwhash_str_needs_rehash
-  (_fun (str : _pointer) ;;const char str[crypto_pwhash_STRBYTES],
+  (_fun (str : _string/latin-1) ;;const char str[crypto_pwhash_STRBYTES],
         (opslimit : _ullong)
         (memlimit : _size)
         -> _int))
@@ -571,7 +571,7 @@
         -> _int))
 
 (define-na crypto_pwhash_scryptsalsa208sha256_str_verify
-  (_fun (str    : _pointer) ;;const char str[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
+  (_fun (str    : _string/latin-1) ;;const char str[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
         (passwd : _pointer)
         (pwdlen : _ullong)
         -> _int))
@@ -590,7 +590,7 @@
   #:fail (lambda () #f))
 
 (define-na crypto_pwhash_scryptsalsa208sha256_str_needs_rehash
-  (_fun (str : _pointer) ;;const char str[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
+  (_fun (str : _string/latin-1) ;;const char str[crypto_pwhash_scryptsalsa208sha256_STRBYTES],
         (opslimit : _ullong)
         (memlimit : _size)
         -> _int))

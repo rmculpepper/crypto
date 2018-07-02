@@ -15,9 +15,13 @@
 
 #lang racket/base
 (require racket/class
+         racket/match
+         ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
+         "../common/util.rkt"
+         "../rkt/pwhash.rkt"
          "ffi.rkt")
 (provide sodium-argon2-impl%
          sodium-scrypt-impl%)
@@ -25,39 +29,59 @@
 ;; ----------------------------------------
 
 (define sodium-argon2-impl%
-  (class* impl-base% (kdf-impl<%>)
+  (class kdf-impl-base%
     (inherit-field spec)
     (inherit about)
     (super-new)
-    (define/public (kdf config pass salt)
+
+    (define/override (kdf config pass salt)
+      (define-values (t m p key-size) (get-params config))
+      (unless (= (bytes-length salt) crypto_pwhash_argon2id_SALTBYTES)
+        (crypto-error "salt must be ~s bytes\n  given: ~s bytes\n  kdf: ~a"
+                      crypto_pwhash_argon2id_SALTBYTES (about)))
+      (define out (make-bytes key-size))
+      (define alg (get-alg))
+      (define status (crypto_pwhash out key-size pass (bytes-length pass) salt t m alg))
+      (unless (zero? status)
+        (crypto-error "key derivation failed\n  kdf: ~a" (about)))
+      out)
+
+   (define/override (pwhash config pass)
+      (define-values (t m p key-size) (get-params config))
+      (define alg (get-alg))
+      (define out (make-bytes (crypto_pwhash_strbytes)))
+      (define status (crypto_pwhash_str_alg out pass (bytes-length pass) t m alg))
+      (unless (zero? status) (crypto-error "failed: ~e" status))
+      (cast out _bytes _string/latin-1))
+
+    (define/override (pwhash-verify pass cred)
+      (define alg (get-alg))
+      (define status (crypto_pwhash_str_verify cred pass (bytes-length pass)))
+      (zero? status))
+
+    (define/private (get-params config)
       (check-config config config:argon2 "argon2")
       (define t (config-ref config 't))
       (define m (config-ref config 'm)) ;; in kb
       (define p (config-ref config 'p 1))
       (define key-size (config-ref config 'key-size 32))
       (unless (equal? p 1)
-        (crypto-error "parallelism must be 1\n  given: ~e\n  kdf: ~a" p (about)))
-      (unless (= (bytes-length salt) crypto_pwhash_argon2id_SALTBYTES)
-        (crypto-error "salt must be ~s bytes\n  given: ~s bytes\n  kdf: ~a"
-                      crypto_pwhash_argon2id_SALTBYTES (about)))
-      (define out (make-bytes key-size))
-      (define status
-        (crypto_pwhash out key-size
-                       pass (bytes-length pass)
-                       salt
-                       t (* m 1024)
-                       (case spec
-                         [(argon2i) crypto_pwhash_ALG_ARGON2I13]
-                         [(argon2id) crypto_pwhash_ALG_ARGON2ID13])))
-      (unless (zero? status)
-        (crypto-error "key derivation failed\n  kdf: ~a" (about)))
-      out)))
+        (crypto-error "implementation restriction;\n parallelism must be 1\n  given: ~e\n  kdf: ~a"
+                      p (about)))
+      (values t (* m 1024) p key-size))
+
+    (define/private (get-alg)
+      (case spec
+        [(argon2i) crypto_pwhash_ALG_ARGON2I13]
+        [(argon2id) crypto_pwhash_ALG_ARGON2ID13]))
+    ))
 
 (define sodium-scrypt-impl%
-  (class* impl-base% (kdf-impl<%>)
+  (class kdf-impl-base%
     (inherit about)
     (super-new)
-    (define/public (kdf config pass salt)
+
+    (define/override (kdf config pass salt)
       (check-config config config:scrypt "scrypt")
       (define N (config-ref config 'N))
       (define p (config-ref config 'p 1))
@@ -71,4 +95,10 @@
                                                out key-size))
       (unless (zero? status)
         (crypto-error "key derivation failed\n  kdf: ~a" (about)))
-      out)))
+      out)
+
+    (define/override (pwhash config pass)
+      (kdf-pwhash-scrypt this config pass))
+    (define/override (pwhash-verify pass cred)
+      (kdf-pwhash-verify-scrypt this pass cred))
+    ))

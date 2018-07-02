@@ -24,23 +24,42 @@
 ;; ----------------------------------------
 
 (define argon2-kdf-impl%
-  (class* impl-base% (kdf-impl<%>)
+  (class kdf-impl-base%
     (inherit-field spec)
     (super-new)
-    (define/public (kdf params pass salt)
+
+    (define/override (kdf params pass salt)
       (check-config params config:argon2 "argon2")
-      (define (getparam key [default #f])
-        (cond [(assq key params) => cadr]
-              [default default]
-              [else (crypto-error "missing parameter\n  parameter: ~v" key)]))
-      (define t (getparam 't))
-      (define m (getparam 'm))
-      (define p (getparam 'p 1))
-      (define key-size (getparam 'key-size 32))
+      (define t (config-ref params 't))
+      (define m (config-ref params 'm))
+      (define p (config-ref params 'p 1))
+      (define key-size (config-ref params 'key-size 32))
       (case spec
         [(argon2d)  (argon2d_hash_raw  t m p pass salt key-size)]
         [(argon2i)  (argon2i_hash_raw  t m p pass salt key-size)]
-        [(argon2id) (argon2id_hash_raw t m p pass salt key-size)]))))
+        [(argon2id) (argon2id_hash_raw t m p pass salt key-size)]))
+
+    (define/override (pwhash params pass)
+      (check-config params config:argon2 "argon2")
+      (define t (config-ref params 't))
+      (define m (config-ref params 'm))
+      (define p (config-ref params 'p 1))
+      (define key-size (config-ref params 'key-size 32))
+      (define salt (crypto-random-bytes 16))
+      (define cred
+        (case spec
+          [(argon2d)  (argon2d_hash_encoded  t m p pass salt key-size)]
+          [(argon2i)  (argon2i_hash_encoded  t m p pass salt key-size)]
+          [(argon2id) (argon2id_hash_encoded t m p pass salt key-size)]))
+      (cond [(string? cred) cred]
+            [else (crypto-error "failed")]))
+
+    (define/override (pwhash-verify pass cred)
+      (case spec
+        [(argon2d)  (argon2d_verify  cred pass)]
+        [(argon2i)  (argon2i_verify  cred pass)]
+        [(argon2id) (argon2id_verify cred pass)]))
+    ))
 
 ;; ----------------------------------------
 

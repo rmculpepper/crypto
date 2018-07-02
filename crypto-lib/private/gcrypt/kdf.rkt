@@ -1,4 +1,4 @@
-;; Copyright 2014 Ryan Culpepper
+;; Copyright 2014-2018 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -18,29 +18,35 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
+         "../rkt/pwhash.rkt"
          "ffi.rkt")
 (provide gcrypt-pbkdf2-impl%
          gcrypt-scrypt-impl%)
 
 (define gcrypt-pbkdf2-impl%
-  (class* impl-base% (kdf-impl<%>)
+  (class kdf-impl-base%
     (init-field di)
     (inherit-field spec)
     (super-new)
 
-    (define/public (kdf config pass salt)
+    (define/override (kdf config pass salt)
       (check-config config config:pbkdf2 "PBKDF2")
       (define iters    (config-ref config 'iterations))
       (define key-size (config-ref config 'key-size))
       (define md (get-field md di))
       (gcry_kdf_derive pass GCRY_KDF_PBKDF2 md salt iters key-size))
+
+    (define/override (pwhash config pass)
+      (kdf-pwhash-pbkdf2 this spec config pass))
+    (define/override (pwhash-verify pass cred)
+      (kdf-pwhash-verify-pbkdf2 this spec pass cred))
     ))
 
 (define gcrypt-scrypt-impl%
-  (class* impl-base% (kdf-impl<%>)
+  (class kdf-impl-base%
     (super-new)
 
-    (define/public (kdf config pass salt)
+    (define/override (kdf config pass salt)
       (check-config config config:scrypt "scrypt")
       (define N (config-ref config 'N))
       (define p (config-ref config 'p 1))
@@ -49,4 +55,9 @@
       (unless (equal? r 8)
         (crypto-error "bad value for scrypt r parameter\n  r: ~e" r))
       (gcry_kdf_derive pass GCRY_KDF_SCRYPT N salt p key-size))
+
+    (define/override (pwhash config pass)
+      (kdf-pwhash-scrypt this config pass))
+    (define/override (pwhash-verify pass cred)
+      (kdf-pwhash-verify-scrypt this pass cred))
     ))

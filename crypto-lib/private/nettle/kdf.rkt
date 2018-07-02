@@ -18,6 +18,7 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
+         "../rkt/pwhash.rkt"
          "ffi.rkt")
 (provide nettle-pbkdf2-impl%)
 
@@ -25,10 +26,12 @@
 ;; not feasible (or at least not easy).
 
 (define nettle-pbkdf2-impl%
-  (class* impl-base% (kdf-impl<%>)
+  (class kdf-impl-base%
     (init-field di)
+    (inherit-field spec)
     (super-new)
-    (define/public (kdf config pass salt)
+
+    (define/override (kdf config pass salt)
       (check-config config config:pbkdf2 "PBKDF2")
       (define iters    (config-ref config 'iterations))
       (define key-size (config-ref config 'key-size))
@@ -36,4 +39,9 @@
         [(sha1) (nettle_pbkdf2_hmac_sha1 pass salt iters key-size)]
         [(sha256) (nettle_pbkdf2_hmac_sha256 pass salt iters key-size)]
         [else #f]))
+
+    (define/override (pwhash config pass)
+      (kdf-pwhash-pbkdf2 this spec config pass))
+    (define/override (pwhash-verify pass cred)
+      (kdf-pwhash-verify-pbkdf2 this spec pass cred))
     ))
