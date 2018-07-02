@@ -18,7 +18,6 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
-         "../rkt/pwhash.rkt"
          "ffi.rkt")
 (provide gcrypt-pbkdf2-impl%
          gcrypt-scrypt-impl%)
@@ -39,7 +38,7 @@
     (define/override (pwhash config pass)
       (kdf-pwhash-pbkdf2 this spec config pass))
     (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify-pbkdf2 this spec pass cred))
+      (kdf-pwhash-verify this pass cred))
     ))
 
 (define gcrypt-scrypt-impl%
@@ -59,5 +58,5 @@
     (define/override (pwhash config pass)
       (kdf-pwhash-scrypt this config pass))
     (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify-scrypt this pass cred))
+      (kdf-pwhash-verify this pass cred))
     ))

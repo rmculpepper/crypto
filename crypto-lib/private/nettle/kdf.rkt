@@ -18,7 +18,6 @@
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/error.rkt"
-         "../rkt/pwhash.rkt"
          "ffi.rkt")
 (provide nettle-pbkdf2-impl%)
 
@@ -43,5 +42,5 @@
     (define/override (pwhash config pass)
       (kdf-pwhash-pbkdf2 this spec config pass))
     (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify-pbkdf2 this spec pass cred))
+      (kdf-pwhash-verify this pass cred))
     ))

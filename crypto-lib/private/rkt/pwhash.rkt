@@ -15,13 +15,9 @@
 
 #lang racket/base
 (require (only-in racket/base [exact-nonnegative-integer? nat?])
-         racket/class
          racket/string
          racket/match
-         racket/random
-         "../common/common.rkt"
          "../common/error.rkt"
-         "../common/util.rkt"
          "base64.rkt")
 (provide (all-defined-out))
 
@@ -68,7 +64,7 @@
        (CS (P (V 'rounds ($Nat 1000 10^6-1)))
            (V 'salt Raw)
            (V 'pwhash Raw))]
-      [else #f])))
+      [else (crypto-error "unsupported algorithm\n  algorithm: ~e" id)])))
 
 ;; ============================================================
 
@@ -232,114 +228,3 @@
      (ab64-encode/utf-8 v)]))
 
 ;; ============================================================
-
-(define (kdf-pwhash-scrypt ki config pass)
-  (define ln (config-ref config 'ln))
-  (define p (config-ref config 'p 1))
-  (define r (config-ref config 'r 8))
-  (define salt (crypto-random-bytes 16))
-  (define pwh (send ki kdf `((N ,(expt 2 ln)) (r ,r) (p ,p) (key-size 32)) pass salt))
-  (encode (hash '$id 'scrypt 'ln ln 'r r 'p p 'salt salt 'pwhash pwh)))
-
-(define (kdf-pwhash-verify-scrypt ki pass cred)
-  (match (parse cred)
-    [(hash-table ['$id 'scrypt] ['ln ln] ['r r] ['p p] ['salt salt] ['pwhash pwh])
-     (define pwh* (send ki kdf `((N ,(expt 2 ln)) (r ,r) (p ,p) (key-size 32)) pass salt))
-     (crypto-bytes=? pwh pwh*)]))
-
-(define (kdf-pwhash-pbkdf2 ki spec config pass)
-  (define id (or (hash-ref pbkdf2-spec=>id spec #f)
-                 (crypto-error "unsupported spec")))
-  (define iters (config-ref config 'iterations))
-  (define salt (crypto-random-bytes 16))
-  (define pwh (send ki kdf `((iterations ,iters) (key-size 32)) pass salt))
-  (encode (hash '$id id 'rounds iters 'salt salt 'pwhash pwh)))
-
-(define (kdf-pwhash-verify-pbkdf2 ki spec pass cred)
-  (match (parse cred)
-    [(hash-table ['$id id] ['rounds rounds] ['salt salt] ['pwhash pwh])
-     (unless (eq? id (hash-ref pbkdf2-spec=>id spec #f))
-       (crypto-error "wrong id"))
-     (define pwh* (send ki kdf `((iterations ,rounds) (key-size 32)) pass salt))
-     (crypto-bytes=? pwh pwh*)]))
-
-(define pbkdf2-spec=>id
-  (hash '(pbkdf2 hmac sha1)   'pbkdf2-sha
-        '(pbkdf2 hmac sha256) 'pbkdf2-sha256
-        '(pbkdf2 hmac sha512) 'pbkdf2-sha512))
-
-;; ============================================================
-
-#|
-(require ffi/unsafe ffi/unsafe/define)
-
-(define-ffi-definer define-c (ffi-lib "libcrypt" '("1" #f))
-  #:default-make-fail make-not-available)
-
-(define SIZEOF-crypt_data (* 5 32768)) ;; this seems excessive :(
-(define crypt-data (make-bytes SIZEOF-crypt_data))
-
-(define-c crypt_r (_fun _bytes _string/latin-1 _pointer -> _string/latin-1))
-
-(define (libc-sha256-crypt password salt rounds)
-  (crypt_r password (format "$5$rounds=~s$~a$" rounds salt) crypt-data))
-
-(define (libc-sha512-crypt password salt rounds)
-  (crypt_r password (format "$6$rounds=~s$~a$" rounds salt) crypt-data))
-
-;; ============================================================
-
-(define (pwhash-argon2i password t m p)
-  (define salt (crypto-random-bytes 16))
-  (define pwh (kdf 'argon2i password salt `((m ,m) (t ,t) (p ,p) (key-size 32))))
-  (encode (hash '$id 'argon2i 'v #x13 't t 'm m 'p p 'salt salt 'pwhash pwh)))
-
-(define (pwhash-scrypt password ln r p)
-  (define salt (crypto-random-bytes 16))
-  (define pwh (kdf 'scrypt password salt `((n ,(expt 2 ln)) (r ,r) (p ,p) (key-size 32))))
-  (encode (hash '$id 'scrypt 'ln ln 'r r 'p p 'salt salt 'pwhash pwh)))
-
-(define (pwhash-pbkdf2-sha256 password rounds)
-  (define salt (crypto-random-bytes 16))
-  (define pwh (kdf '(pbkdf2 hmac sha256) password salt `((iterations ,rounds) (key-size 32))))
-  (encode (hash '$id 'pbkdf2-sha256 'rounds rounds 'salt salt 'pwhash pwh)))
-
-(define (pwhash-sha256-crypt password rounds)
-  (define salt (ab64-encode (crypto-random-bytes 12)))
-  (libc-sha256-crypt password salt rounds))
-
-(define (pwhash-sha512-crypt password rounds)
-  (define salt (ab64-encode (crypto-random-bytes 12)))
-  (libc-sha512-crypt password salt rounds))
-
-(define (pwhash-verify cred password)
-  (define env (parse cred))
-  (case (hash-ref env '$id)
-    [(argon2i argon2id argon2d)
-     (match-define (hash-table ['m m] ['t t] ['p p] ['salt salt] ['pwhash pwh]) env)
-     (define alg (hash-ref env '$id))
-     (define pwh* (kdf alg password salt `((m ,m) (t ,t) (p ,p) (key-size 32))))
-     (crypto-bytes=? pwh pwh*)]
-    [(scrypt)
-     (match-define (hash-table ['ln ln] ['r r] ['p p] ['salt salt] ['pwhash pwh]) env)
-     (define pwh* (kdf 'scrypt password salt `((n ,(expt 2 ln)) (r ,r) (p ,p) (key-size 32))))
-     (crypto-bytes=? pwh pwh*)]
-    [(pbkdf2 pbkdf2-sha256 pbkdf2-sha512)
-     (define alg
-       (case (hash-ref env '$id)
-         [(pbkdf2) '(pbkdf2 hmac sha1)]
-         [(pbkdf2-sha256) '(pbkdf2 hmac sha256)]
-         [(pbkdf2-sha512) '(pbkdf2 hmac sha512)]))
-     (match-define (hash-table ['rounds rounds] ['salt salt] ['pwhash pwh]) env)
-     (define pwh* (kdf alg password salt `((iterations ,rounds) (key-size 32))))
-     (crypto-bytes=? pwh pwh*)]
-    [(|5|)
-     (match-define (hash-table ['rounds rounds] ['salt salt] ['pwhash pwh]) env)
-     (define cred* (libc-sha256-crypt password salt rounds))
-     (crypto-bytes=? cred cred*)]
-    [(|6|)
-     (match-define (hash-table ['rounds rounds] ['salt salt] ['pwhash pwh]) env)
-     (define cred* (libc-sha512-crypt password salt rounds))
-     (crypto-bytes=? (string->bytes/latin-1 cred) (string->bytes/latin-1 cred*))]
-    [else (error 'unsupported)]))
-|#

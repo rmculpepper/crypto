@@ -21,7 +21,6 @@
          "../common/common.rkt"
          "../common/error.rkt"
          "../common/util.rkt"
-         "../rkt/pwhash.rkt"
          "ffi.rkt")
 (provide sodium-argon2-impl%
          sodium-scrypt-impl%)
@@ -100,5 +99,5 @@
     (define/override (pwhash config pass)
       (kdf-pwhash-scrypt this config pass))
     (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify-scrypt this pass cred))
+      (kdf-pwhash-verify this pass cred))
     ))
