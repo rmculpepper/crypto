@@ -52,11 +52,16 @@
          config/c
          check-config
          config-ref
-         config:pbkdf2
-         config:scrypt
-         config:argon2
+         check/ref-config
+         config:pbkdf2-base
+         config:pbkdf2-kdf
+         config:scrypt-pwhash
+         config:scrypt-kdf
+         config:argon2-base
+         config:argon2-kdf
          config:rsa-keygen
          config:dsa-paramgen
+         config:dh-paramgen
          config:ec-paramgen
          config:eddsa-keygen
          config:ecx-keygen
@@ -798,65 +803,108 @@
 ;; A Config is (listof (list Symbol Any))
 (define config/c (listof (list/c symbol? any/c)))
 
-;; A ConfigSpec is (listof (list Symbol Required? Predicate String/#f))
+;; A ConfigSpec is (listof ConfigSpecEntry)
+;; A ConfigSpecEntry is one of
+;; - (list Symbol Predicate String/#f '#:req)     -- required
+;; - (list Symbol Predicate String/#f '#:opt Any) -- optional w/ default
+;; - (list Symbol Predicate String/#f '#:alt Symbol) -- requires this or alt but not both
 
 (define (check-config config spec what)
   ;; Assume already checked config/c, now check entries
   (for ([entry (in-list config)])
     (match-define (list key value) entry)
     (cond [(assq key spec)
-           => (lambda (aentry)
-                (match-define (list _ required? pred? expected) aentry)
-                (unless (pred? value)
-                  (crypto-error "bad option value for ~a\n  key: ~e\n  expected: ~a\n  given: ~e"
-                                what key (or expected (object-name pred?)) value)))]
+           => (match-lambda
+                [(list* _ pred? expected _)
+                 (unless (pred? value)
+                   (crypto-error "bad option value for ~a\n  option: ~e\n  expected: ~a\n  given: ~e"
+                                 what key (or expected (object-name pred?)) value))])]
           [else
-           (crypto-error "unsupported option for ~a\n  key: ~e\n  value: ~e"
+           (crypto-error "unsupported option for ~a\n  option: ~e\n  value: ~e"
                          what key value)]))
-  (for ([aentry (in-list spec)] #:when (match aentry [(list _ required? _ _) required?]))
-    (match-define (list key required? pred? expected) aentry)
-    (unless (assq key config)
-      (crypto-error "missing required option for ~a\n  key: ~e\n  given: ~e"
-                    what key config)))
-  (void))
+  (for/fold ([config config]) ([aentry (in-list spec)])
+    (match aentry
+      [(list key _ _ '#:req)
+       (unless (assq key config)
+         (crypto-error "missing required option for ~a\n  option: ~e\n  given: ~e"
+                       what key config))
+       config]
+      [(list key _ _ '#:opt default)
+       (if (assq key config)
+           config
+           (cons (list key default) config))]
+      [(list key _ _ '#:alt key2)
+       (if (assq key config)
+           (when (assq key2 config)
+             (crypto-error "conflicting options for ~a\n  options: ~e and ~e\n  given: ~e"
+                           what key key2 config))
+           (unless (assq key2 config)
+             (crypto-error "missing required option for ~a\n  option: either ~e or ~e\n  given: ~e"
+                           what key key2 config)))
+       config])))
 
-(define (config-ref spec key [default #f])
-  (cond [(assq key spec) => cadr] [else default]))
+(define (config-ref config key [default #f])
+  (cond [(assq key config) => (lambda (e) (or (cadr e) default))]
+        [else default]))
+
+(define (check/ref-config keys config spec what)
+  (define config* (check-config config spec what))
+  (apply values (for/list ([key (in-list keys)]) (config-ref config* key))))
 
 ;; ----
 
-(define config:pbkdf2
-  `((iterations #t ,exact-positive-integer? #f)
-    (key-size   #t ,exact-positive-integer? #f)))
+;; FIXME: make key-size a param to kdf instead?
+(define config:kdf-key-size
+  `((key-size   ,exact-positive-integer? #f #:opt 32)))
 
-(define config:scrypt
-  `((N #t ,exact-positive-integer? #f)
-    (p #f ,exact-positive-integer? #f)
-    (r #f ,exact-positive-integer? #f)
-    (key-size #f ,exact-positive-integer? #f)))
+(define config:pbkdf2-base
+  `((iterations ,exact-positive-integer? #f #:req)))
 
-(define config:argon2
-  `((t #t ,exact-positive-integer? #f)
-    (m #t ,exact-positive-integer? #f)
-    (p #f ,exact-positive-integer? #f)
-    (key-size #f ,exact-positive-integer? #f)))
+(define config:pbkdf2-kdf
+  `(,@config:kdf-key-size
+    ,@config:pbkdf2-base))
+
+(define config:scrypt-pwhash
+  `((ln ,exact-positive-integer? #f #:req)
+    (p  ,exact-positive-integer? #f #:opt 1)
+    (r  ,exact-positive-integer? #f #:opt 8)))
+
+(define config:scrypt-kdf
+  `(,@config:kdf-key-size
+    (N  ,exact-positive-integer? #f #:alt ln)
+    (ln ,exact-positive-integer? #f #:alt N)
+    (p  ,exact-positive-integer? #f #:opt 1)
+    (r  ,exact-positive-integer? #f #:opt 8)))
+
+(define config:argon2-base
+  `((t ,exact-positive-integer? #f #:req)
+    (m ,exact-positive-integer? #f #:req)
+    (p ,exact-positive-integer? #f #:opt 1)))
+
+(define config:argon2-kdf
+  `(,@config:kdf-key-size
+    ,@config:argon2-base))
 
 (define config:rsa-keygen
-  `((nbits #f ,exact-positive-integer? #f)
-    (e     #f ,exact-positive-integer? #f)))
+  `((nbits ,exact-positive-integer? #f #:opt 2048)
+    (e     ,exact-positive-integer? #f #:opt #f)))
 
 (define config:dsa-paramgen
-  `((nbits #f ,exact-positive-integer? "exact-positive-integer?")
-    (qbits #f ,(lambda (x) (member x '(160 256))) "(or/c 160 256)")))
+  `((nbits ,exact-positive-integer? "exact-positive-integer?"    #:opt 2048)
+    (qbits ,(lambda (x) (member x '(160 256))) "(or/c 160 256)"  #:opt #f)))
+
+(define config:dh-paramgen
+  `((nbits     ,exact-positive-integer? #f                  #:opt 2048)
+    (generator ,(lambda (x) (member x '(2 5))) "(or/c 2 5)" #:opt 2)))
 
 (define config:ec-paramgen
-  `((curve #t ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)")))
+  `((curve ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)" #:req)))
 
 (define config:eddsa-keygen
-  `((curve #t ,(lambda (x) (memq x '(ed25519 ed448))) "(or/c 'ed25519 'ed448)")))
+  `((curve ,(lambda (x) (memq x '(ed25519 ed448))) "(or/c 'ed25519 'ed448)" #:req)))
 
 (define config:ecx-keygen
-  `((curve #t ,(lambda (x) (memq x '(x25519 x448))) "(or/c 'x25519 'x448)")))
+  `((curve ,(lambda (x) (memq x '(x25519 x448))) "(or/c 'x25519 'x448)" #:req)))
 
 ;; ----------------------------------------
 

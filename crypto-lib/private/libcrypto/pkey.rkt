@@ -330,9 +330,9 @@
            (-known-digest? dspec)))
 
     (define/override (generate-key config)
-      (check-config config config:rsa-keygen "RSA key generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [e     (config-ref config 'e     65537)])
+      (define-values (nbits e)
+        (check/ref-config '(nbits e) config config:rsa-keygen "RSA key generation"))
+      (let ([e (or e 65537)])
         (define rsa (RSA_new))
         (define bn-e (BN_new))
         (BN_add_word bn-e e)
@@ -391,9 +391,9 @@
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-config config config:dsa-paramgen "DSA parameter generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [qbits (config-ref config 'qbits #f)])
+      (define-values (nbits qbits)
+        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA parameter generation"))
+      (let ()
         (when qbits
           (define actual-qbits (if (< nbits 2048) 160 256))
           (unless (equal? qbits actual-qbits)
@@ -459,10 +459,6 @@
 
 ;; ============================================================
 
-(define allowed-dh-paramgen
-  `((nbits     #f ,exact-positive-integer? #f)
-    (generator #f ,(lambda (x) (member x '(2 5))) "(or/c 2 5)")))
-
 (define libcrypto-dh-impl%
   (class libcrypto-pk-impl%
     (super-new (spec 'dh))
@@ -474,11 +470,11 @@
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-config config allowed-dh-paramgen "DH parameter generation")
-      (let ([nbits     (config-ref config 'nbits 2048)]
-            [generator (config-ref config 'generator 2)])
+      (define-values (nbits generator)
+        (check/ref-config '(nbits generator) config config:dh-paramgen "DH parameter generation"))
+      (let ()
         (define dh (DH_new))
-        (DH_generate_parameters_ex dh nbits generator)
+        (DH_generate_parameters_ex dh nbits (or generator 2))
         ;; FIXME: DH_check ???
         (define evp (EVP_PKEY_new))
         (EVP_PKEY_set1_DH evp dh)
@@ -550,8 +546,8 @@
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-config config config:ec-paramgen "EC parameter generation")
-      (define curve-name (config-ref config 'curve))
+      (define-values (curve-name)
+        (check/ref-config '(curve) config config:ec-paramgen "EC parameter generation"))
       (define curve-nid (find-curve-nid-by-name curve-name))
       (unless curve-nid (crypto-error "named curve not found\n  curve: ~e" curve-name))
       (define ec (EC_KEY_new_by_curve_name curve-nid))
@@ -670,8 +666,9 @@
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-config config config:eddsa-keygen "EdDSA parameter generation")
-      (curve->params (config-ref config 'curve)))
+      (define-values (curve-name)
+        (check/ref-config '(curve) config config:eddsa-keygen "EdDSA parameter generation"))
+      (curve->params curve-name))
 
     (define/public (curve->params curve)
       (unless (ed-curve->nid curve)
@@ -740,8 +737,9 @@
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-config config config:ecx-keygen "EC/X parameters generation")
-      (curve->params (config-ref config 'curve)))
+      (define-values (curve-name)
+        (check/ref-config '(curve) config config:ecx-keygen "EC/X parameters generation"))
+      (curve->params curve-name))
 
     (define/public (curve->params curve)
       (unless (x-curve->nid curve)

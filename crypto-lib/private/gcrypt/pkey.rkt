@@ -125,10 +125,10 @@
     (define/override (can-sign2? pad dspec) (-known-digest? dspec))
 
     (define/override (generate-key config)
-      (check-config config config:rsa-keygen "RSA key generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            ;; e default 0 means use gcrypt default "secure and fast value"
-            [e     (config-ref config 'e 0)])
+      (define-values (nbits e)
+        (check/ref-config '(nbits e) config config:rsa-keygen "RSA key generation"))
+      (let (;; e default 0 means use gcrypt default "secure and fast value"
+            [e (or e 0)])
         (*generate-key 
          (gcry_sexp_build "(genkey (rsa %S %S))"
                           (gcry_sexp_build/%u "(nbits %u)" nbits)
@@ -288,9 +288,9 @@
     (define/override (can-sign? pad) (memq pad '(#f)))
 
     (define/override (generate-key config)
-      (check-config config config:dsa-paramgen "DSA key generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [qbits (config-ref config 'qbits 256)])
+      (define-values (nbits qbits)
+        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA parameters generation"))
+      (let ([qbits (or qbits 256)])
         (*generate-key
          (gcry_sexp_build "(genkey (dsa %S %S))" 
                           (gcry_sexp_build/%u "(nbits %u)" nbits)

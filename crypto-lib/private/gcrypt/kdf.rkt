@@ -29,9 +29,8 @@
     (super-new)
 
     (define/override (kdf config pass salt)
-      (check-config config config:pbkdf2 "PBKDF2")
-      (define iters    (config-ref config 'iterations))
-      (define key-size (config-ref config 'key-size))
+      (define-values (iters key-size)
+        (check/ref-config '(iterations key-size) config config:pbkdf2-kdf "PBKDF2"))
       (define md (get-field md di))
       (gcry_kdf_derive pass GCRY_KDF_PBKDF2 md salt iters key-size))
 
@@ -46,14 +45,12 @@
     (super-new)
 
     (define/override (kdf config pass salt)
-      (check-config config config:scrypt "scrypt")
-      (define N (config-ref config 'N))
-      (define p (config-ref config 'p 1))
-      (define r (config-ref config 'r 8))
-      (define key-size (config-ref config 'key-size))
+      (define-values (N ln p r key-size)
+        (check/ref-config '(N ln p r key-size) config config:scrypt-kdf "scrypt"))
+      (define N* (or N (expt 2 ln)))
       (unless (equal? r 8)
         (crypto-error "bad value for scrypt r parameter\n  r: ~e" r))
-      (gcry_kdf_derive pass GCRY_KDF_SCRYPT N salt p key-size))
+      (gcry_kdf_derive pass GCRY_KDF_SCRYPT N* salt p key-size))
 
     (define/override (pwhash config pass)
       (kdf-pwhash-scrypt this config pass))

@@ -34,7 +34,12 @@
     (super-new)
 
     (define/override (kdf config pass salt)
-      (define-values (t m p key-size) (get-params config))
+      (define-values (t mkb p key-size)
+        (check/ref-config '(t m p key-size) config config:argon2-kdf "argon2"))
+      (unless (equal? p 1)
+        (crypto-error "implementation restriction;\n parallelism must be 1\n  given: ~e\n  kdf: ~a"
+                      p (about)))
+      (define m (* mkb 1024))
       (unless (= (bytes-length salt) crypto_pwhash_argon2id_SALTBYTES)
         (crypto-error "salt must be ~s bytes\n  given: ~s bytes\n  kdf: ~a"
                       crypto_pwhash_argon2id_SALTBYTES (bytes-length salt) (about)))
@@ -45,8 +50,13 @@
         (crypto-error "key derivation failed\n  kdf: ~a" (about)))
       out)
 
-   (define/override (pwhash config pass)
-      (define-values (t m p key-size) (get-params config))
+    (define/override (pwhash config pass)
+      (define-values (t mkb p)
+        (check/ref-config '(t m p) config config:argon2-base "argon2"))
+      (unless (equal? p 1)
+        (crypto-error "implementation restriction;\n parallelism must be 1\n  given: ~e\n  kdf: ~a"
+                      p (about)))
+      (define m (* 1024 mkb))
       (define alg (get-alg))
       (define out (make-bytes (crypto_pwhash_strbytes)))
       (define status (crypto_pwhash_str_alg out pass (bytes-length pass) t m alg))
@@ -57,17 +67,6 @@
       (define alg (get-alg))
       (define status (crypto_pwhash_str_verify cred pass (bytes-length pass)))
       (zero? status))
-
-    (define/private (get-params config)
-      (check-config config config:argon2 "argon2")
-      (define t (config-ref config 't))
-      (define m (config-ref config 'm)) ;; in kb
-      (define p (config-ref config 'p 1))
-      (define key-size (config-ref config 'key-size 32))
-      (unless (equal? p 1)
-        (crypto-error "implementation restriction;\n parallelism must be 1\n  given: ~e\n  kdf: ~a"
-                      p (about)))
-      (values t (* m 1024) p key-size))
 
     (define/private (get-alg)
       (case spec
@@ -81,11 +80,9 @@
     (super-new)
 
     (define/override (kdf config pass salt)
-      (check-config config config:scrypt "scrypt")
-      (define N (config-ref config 'N))
-      (define p (config-ref config 'p 1))
-      (define r (config-ref config 'r 8))
-      (define key-size (config-ref config 'key-size))
+      (define-values (N ln p r key-size)
+        (check/ref-config '(N ln p r key-size) config config:scrypt-kdf "scrypt"))
+      (define N* (or N (expt 2 ln)))
       (define out (make-bytes key-size))
       (define status
         (crypto_pwhash_scryptsalsa208sha256_ll pass (bytes-length pass)

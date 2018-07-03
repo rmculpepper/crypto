@@ -28,23 +28,18 @@
     (inherit-field spec)
     (super-new)
 
-    (define/override (kdf params pass salt)
-      (check-config params config:argon2 "argon2")
-      (define t (config-ref params 't))
-      (define m (config-ref params 'm))
-      (define p (config-ref params 'p 1))
-      (define key-size (config-ref params 'key-size 32))
+    (define/override (kdf config pass salt)
+      (define-values (t m p key-size)
+        (check/ref-config '(t m p key-size) config config:argon2-kdf "argon2"))
       (case spec
         [(argon2d)  (argon2d_hash_raw  t m p pass salt key-size)]
         [(argon2i)  (argon2i_hash_raw  t m p pass salt key-size)]
         [(argon2id) (argon2id_hash_raw t m p pass salt key-size)]))
 
-    (define/override (pwhash params pass)
-      (check-config params config:argon2 "argon2")
-      (define t (config-ref params 't))
-      (define m (config-ref params 'm))
-      (define p (config-ref params 'p 1))
-      (define key-size (config-ref params 'key-size 32))
+    (define/override (pwhash config pass)
+      (define-values (t m p)
+        (check/ref-config '(t m p) config config:argon2-base "argon2"))
+      (define key-size 32)
       (define salt (crypto-random-bytes 16))
       (define cred
         (case spec

@@ -75,9 +75,9 @@
         [else #f]))
 
     (define/override (generate-key config)
-      (check-config config config:rsa-keygen "RSA key generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [e     (config-ref config 'e 65537)])
+      (define-values (nbits e)
+        (check/ref-config '(nbits e) config config:rsa-keygen "RSA key generation"))
+      (let ([e (or e 65537)])
         (define pub (new-rsa_public_key))
         (define priv (new-rsa_private_key))
         (mpz_set_si (rsa_public_key_struct-e pub) e)
@@ -253,9 +253,9 @@
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
-      (check-config config config:dsa-paramgen "DSA parameter generation")
-      (let ([nbits (config-ref config 'nbits 2048)]
-            [qbits (config-ref config 'qbits 256)])
+      (define-values (nbits qbits)
+        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA parameters generation"))
+      (let ([qbits (or qbits 256)])
         (define params (-genparams nbits qbits))
         (new nettle-dsa-params% (impl this) (params params))))
 

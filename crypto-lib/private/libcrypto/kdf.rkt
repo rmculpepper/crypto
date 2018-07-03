@@ -28,9 +28,8 @@
     (super-new)
 
     (define/override (kdf config pass salt)
-      (check-config config config:pbkdf2 "PBKDF2")
-      (define iters (config-ref config 'iterations))
-      (define key-size (config-ref config 'key-size))
+      (define-values (iters key-size)
+        (check/ref-config '(iterations key-size) config config:pbkdf2-kdf "PBKDF2"))
       (define key (make-bytes key-size))
       (PKCS5_PBKDF2_HMAC pass salt iters (get-field md di) key)
       key)
