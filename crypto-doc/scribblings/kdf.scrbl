@@ -11,8 +11,8 @@
 
 @(define-runtime-path log-file "eval-logs/kdf.rktd")
 @(define the-eval (make-log-based-eval log-file 'replay))
-@(the-eval '(require crypto crypto/libcrypto))
-@(the-eval '(crypto-factories (list libcrypto-factory)))
+@(the-eval '(require crypto crypto/all racket/random))
+@(the-eval '(crypto-factories (list argon2-factory libcrypto-factory sodium-factory)))
 
 @title[#:tag "kdf"]{Key Derivation and Password Hashing}
 
@@ -66,7 +66,7 @@ key-derivation function, @racket[#f] otherwise.
 @defproc[(get-kdf [k kdf-spec?]
                   [factories (or/c crypto-factory? (listof crypto-factory?))
                              (crypto-factories)])
-         kdf-impl?]{
+         (or/c kdf-impl? #f)]{
 
 Returns an implementation of KDF @racket[k] from the given
 @racket[factories]. If no factory in @racket[factories] implements
@@ -88,8 +88,8 @@ The following parameters are recognized for @racket[(list 'pbkdf2
 'hmac _digest)]:
 
 @itemlist[
-@item{@racket[(list 'iterations _iterations)] --- number of iterations of the 
-@racket[(list 'hmac _digest)] pseudo-random function}
+@item{@racket[(list 'iterations _iterations)] --- number of iterations
+of the HMAC-@racket[_digest] pseudo-random function}
 @item{@racket[(list 'key-size _key-size)] --- derive a key of
 @racket[_key-size] bytes}
 ]
@@ -116,18 +116,77 @@ The following parameters are recognized for @racket['argon2d],
 
 @itemlist[
 @item{@racket[(list 't _t)] --- the time cost}
-@item{@racket[(list 'm _m)] --- the memory cost}
+@item{@racket[(list 'm _m)] --- the memory cost (in kb)}
 @item{@racket[(list 'p _p)] --- the parallelism}
 @item{@racket[(list 'key-size _key-size)] -- the size of the output}
 ]
 
 @examples[#:eval the-eval
 (kdf '(pbkdf2 hmac sha256)
-     #"I am the walrus"
-     #"abcd"
+     #"I am the eggman"
+     (crypto-random-bytes 16)
      '((iterations #e1e5) (key-size 32)))
+(kdf 'argon2id
+     #"I am the walrus"
+     #"googoogjoob"
+     '((t 100) (m 2048) (p 1) (key-size 32)))
 ]
 }
+
+@defproc[(pwhash [k (or/c kdf-spec? kdf-impl?)]
+                 [password bytes?]
+                 [config (listof (list/c symbol? any/c))])
+         string?]{
+
+Computes a ``password hash'' from @racket[password] suitable for
+storage, using the KDF algorithm @racket[k]. The resulting string
+contains an identifier for the algorithm as well as the parameters from
+@racket[config]. The formats are intended to be compatible with
+@hyperlink["https://passlib.readthedocs.io/en/stable/modular_crypt_format.html"]{Modular
+Crypt Format}.
+
+The @racket[config] parameters are nearly the same as for @racket[kdf],
+with the following exceptions:
+
+@itemlist[
+
+@item{The @racket['scrypt] algorithm requires a parameter @racket['ln]
+specifying the log (base 2) of the iteration count, instead of the
+@racket['N] parameter expected by the @racket[kdf] function.}
+
+@item{The @racket['key-size] parameter is not allowed. This library
+always generates password hashes with 32 bytes of raw output (before
+encoding).}
+]
+
+@examples[#:eval the-eval
+(define pwcred (pwhash 'argon2id #"mypassword" '((t 1000) (m 4096) (p 1))))
+pwcred
+]
+}
+
+@defproc[(pwhash-verify [k (or/c kdf-impl? #f)]
+                        [password bytes?]
+                        [pwh string?])
+         boolean?]{
+
+Check @racket[password] against the password hash @racket[pwh].
+
+If @racket[k] is a KDF implementation (@racket[kdf-impl?]),
+@racket[pwh] must have been generated with the same KDF algorithm
+(but not necessarily the same implementation); otherwise an exception
+is raised. If @racket[k] is @racket[#f], then the KDF algorithm is
+extracted from @racket[pwh] and the @racket[(crypto-factories)] list
+is searched for an implementation; if no implementation is found an
+exception is raised.
+
+@examples[#:eval the-eval
+(pwhash-verify #f #"mypassword" pwcred)
+(pwhash-verify #f #"wildguess" pwcred)
+]
+}
+
+@; ----------------------------------------
 
 @defproc[(pbkdf2-hmac [di digest-spec?]
                       [pass bytes?]
@@ -168,6 +227,10 @@ memory resources).
 
 @bibliography[
 #:tag "kdf-bibliography"
+
+@bib-entry[#:key "OWASP"
+           #:title "Password Storage Cheat Sheet"
+           #:url "https://www.owasp.org/index.php/Password_Storage_Cheat_Sheet"]
 
 @bib-entry[#:key "HtSSaP"
            #:title "How to Safely Store a Password: Use bcrypt"
