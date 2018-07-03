@@ -37,7 +37,7 @@
       (define-values (t m p key-size) (get-params config))
       (unless (= (bytes-length salt) crypto_pwhash_argon2id_SALTBYTES)
         (crypto-error "salt must be ~s bytes\n  given: ~s bytes\n  kdf: ~a"
-                      crypto_pwhash_argon2id_SALTBYTES (about)))
+                      crypto_pwhash_argon2id_SALTBYTES (bytes-length salt) (about)))
       (define out (make-bytes key-size))
       (define alg (get-alg))
       (define status (crypto_pwhash out key-size pass (bytes-length pass) salt t m alg))
