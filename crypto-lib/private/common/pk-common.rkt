@@ -904,3 +904,26 @@
 ;; curve-name->oid : Symbol -> OID/#f
 (define (curve-name->oid name)
   (cond [(assq name known-curves) => cdr] [else #f]))
+
+;; ============================================================
+
+(define config:rsa-keygen
+  `((nbits ,exact-positive-integer? #f #:opt 2048)
+    (e     ,exact-positive-integer? #f #:opt #f)))
+
+(define config:dsa-paramgen
+  `((nbits ,exact-positive-integer? "exact-positive-integer?"    #:opt 2048)
+    (qbits ,(lambda (x) (member x '(160 256))) "(or/c 160 256)"  #:opt #f)))
+
+(define config:dh-paramgen
+  `((nbits     ,exact-positive-integer? #f                  #:opt 2048)
+    (generator ,(lambda (x) (member x '(2 5))) "(or/c 2 5)" #:opt 2)))
+
+(define config:ec-paramgen
+  `((curve ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)" #:req)))
+
+(define config:eddsa-keygen
+  `((curve ,(lambda (x) (memq x '(ed25519 ed448))) "(or/c 'ed25519 'ed448)" #:req)))
+
+(define config:ecx-keygen
+  `((curve ,(lambda (x) (memq x '(x25519 x448))) "(or/c 'x25519 'x448)" #:req)))

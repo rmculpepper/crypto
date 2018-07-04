@@ -46,12 +46,6 @@
          check-config
          config-ref
          check/ref-config
-         config:rsa-keygen
-         config:dsa-paramgen
-         config:dh-paramgen
-         config:ec-paramgen
-         config:eddsa-keygen
-         config:ecx-keygen
          version->list
          version->string
          version>=?
@@ -701,7 +695,7 @@
   (cond [(to-impl src #t) => (lambda (impl) (send impl get-spec))]
         [else src]))
 
-;; ----
+;; ============================================================
 
 (define (shrink-bytes bs len)
   (if (< len (bytes-length bs))
@@ -715,7 +709,7 @@
   (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
   copy)
 
-;; ----
+;; ============================================================
 
 ;; A Config is (listof (list Symbol Any))
 (define config/c (listof (list/c symbol? any/c)))
@@ -767,29 +761,6 @@
 (define (check/ref-config keys config spec what)
   (define config* (check-config config spec what))
   (apply values (for/list ([key (in-list keys)]) (config-ref config* key))))
-
-;; ----
-
-(define config:rsa-keygen
-  `((nbits ,exact-positive-integer? #f #:opt 2048)
-    (e     ,exact-positive-integer? #f #:opt #f)))
-
-(define config:dsa-paramgen
-  `((nbits ,exact-positive-integer? "exact-positive-integer?"    #:opt 2048)
-    (qbits ,(lambda (x) (member x '(160 256))) "(or/c 160 256)"  #:opt #f)))
-
-(define config:dh-paramgen
-  `((nbits     ,exact-positive-integer? #f                  #:opt 2048)
-    (generator ,(lambda (x) (member x '(2 5))) "(or/c 2 5)" #:opt 2)))
-
-(define config:ec-paramgen
-  `((curve ,(lambda (x) (or (symbol? x) (string? x))) "(or/c symbol? string?)" #:req)))
-
-(define config:eddsa-keygen
-  `((curve ,(lambda (x) (memq x '(ed25519 ed448))) "(or/c 'ed25519 'ed448)" #:req)))
-
-(define config:ecx-keygen
-  `((curve ,(lambda (x) (memq x '(x25519 x448))) "(or/c 'x25519 'x448)" #:req)))
 
 ;; ----------------------------------------
 
