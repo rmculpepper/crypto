@@ -17,7 +17,8 @@
 (require racket/class
          "../common/interfaces.rkt"
          "../common/error.rkt"
-         "../common/common.rkt")
+         "../common/common.rkt"
+         "../common/digest.rkt")
 (provide rkt-hmac-ctx%)
 
 ;; Reference: http://www.ietf.org/rfc/rfc2104.txt

@@ -18,6 +18,7 @@
 (require ffi/unsafe
          racket/class
          "../common/common.rkt"
+         "../common/digest.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide (all-defined-out))

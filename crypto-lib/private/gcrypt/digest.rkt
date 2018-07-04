@@ -18,6 +18,7 @@
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/digest.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide gcrypt-digest-impl%)
