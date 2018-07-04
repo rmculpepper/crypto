@@ -14,7 +14,7 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require "private/common/factory.rkt"
+(require "main.rkt"
          "libcrypto.rkt"
          "gcrypt.rkt"
          "nettle.rkt"

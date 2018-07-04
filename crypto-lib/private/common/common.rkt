@@ -24,7 +24,6 @@
          "catalog.rkt"
          "interfaces.rkt"
          "error.rkt"
-         "factory.rkt"
          "ufp.rkt"
          "util.rkt"
          (prefix-in pw: "../rkt/pwhash.rkt"))
