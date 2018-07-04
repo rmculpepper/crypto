@@ -19,6 +19,7 @@
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/kdf.rkt"
          "../common/error.rkt"
          "../common/util.rkt"
          "ffi.rkt")

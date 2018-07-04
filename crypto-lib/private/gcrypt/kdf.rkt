@@ -17,6 +17,7 @@
 (require racket/class
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/kdf.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide gcrypt-pbkdf2-impl%
