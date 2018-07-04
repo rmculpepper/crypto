@@ -15,7 +15,7 @@
 
 #lang racket/base
 (require rackunit
-         crypto/private/rkt/padding)
+         crypto/private/common/cipher)
 
 (check-equal? (pad-bytes/pkcs7 (bytes 1 2 3) 4)
               (bytes 1 2 3 1))

@@ -19,7 +19,6 @@
          "../common/common.rkt"
          "../common/cipher.rkt"
          "../common/error.rkt"
-         "../common/ufp.rkt"
          "ffi.rkt")
 (provide sodium-cipher-impl%)
 
