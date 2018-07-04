@@ -15,4 +15,4 @@
 (define name "crypto")
 (define scribblings '(("scribblings/crypto.scrbl" (multi-page))))
 
-(define compile-omit-paths '("examples"))
+(define test-omit-paths '("examples"))
