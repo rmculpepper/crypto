@@ -17,6 +17,7 @@
 (require racket/class
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/factory.rkt"
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"

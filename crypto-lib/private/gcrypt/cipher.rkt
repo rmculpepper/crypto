@@ -18,6 +18,7 @@
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/cipher.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide gcrypt-cipher-impl%)

@@ -17,6 +17,7 @@
 (require racket/class
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/factory.rkt"
          "../common/kdf.rkt"
          "../common/error.rkt"
          "ffi.rkt")

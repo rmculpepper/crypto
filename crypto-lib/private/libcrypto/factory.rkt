@@ -19,6 +19,7 @@
          racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/factory.rkt"
          "digest.rkt"
          "cipher.rkt"
          "pkey.rkt"

@@ -19,6 +19,7 @@
          "../common/interfaces.rkt"
          "../common/catalog.rkt"
          "../common/common.rkt"
+         "../common/factory.rkt"
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"

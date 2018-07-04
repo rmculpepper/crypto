@@ -20,6 +20,7 @@
          racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/cipher.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
