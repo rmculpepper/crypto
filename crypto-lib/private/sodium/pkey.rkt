@@ -14,12 +14,9 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require ffi/unsafe
-         racket/class
-         "../common/interfaces.rkt"
+(require racket/class
          "../common/common.rkt"
          "../common/pk-common.rkt"
-         "../common/catalog.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide (all-defined-out))

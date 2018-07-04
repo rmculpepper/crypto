@@ -15,7 +15,6 @@
 
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/alloc
          ffi/unsafe/define)
 (provide (protect-out (all-defined-out)))
 

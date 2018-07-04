@@ -16,7 +16,6 @@
 #lang racket/base
 (require racket/class
          "../common/interfaces.rkt"
-         "../common/common.rkt"
          "../common/cipher.rkt"
          "../common/error.rkt"
          "ffi.rkt")

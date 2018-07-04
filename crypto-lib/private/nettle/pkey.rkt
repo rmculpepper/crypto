@@ -16,10 +16,8 @@
 #lang racket/base
 (require ffi/unsafe
          asn1
-         binaryio/integer
          racket/class
          racket/match
-         "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
          "../common/catalog.rkt"

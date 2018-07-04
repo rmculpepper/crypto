@@ -16,10 +16,7 @@
 #lang racket/base
 (require racket/class
          ffi/unsafe
-         "../common/interfaces.rkt"
-         "../common/common.rkt"
          "../common/digest.rkt"
-         "../common/error.rkt"
          "ffi.rkt")
 (provide b2s-digest-impl%
          b2b-digest-impl%)

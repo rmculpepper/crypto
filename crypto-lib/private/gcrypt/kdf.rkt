@@ -15,7 +15,6 @@
 
 #lang racket/base
 (require racket/class
-         "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/kdf.rkt"
          "../common/error.rkt"

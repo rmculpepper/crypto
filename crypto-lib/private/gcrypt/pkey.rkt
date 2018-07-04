@@ -18,7 +18,6 @@
          racket/match
          ffi/unsafe
          asn1
-         "../common/interfaces.rkt"
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"

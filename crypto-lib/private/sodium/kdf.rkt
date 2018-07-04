@@ -15,13 +15,10 @@
 
 #lang racket/base
 (require racket/class
-         racket/match
          ffi/unsafe
-         "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/kdf.rkt"
          "../common/error.rkt"
-         "../common/util.rkt"
          "ffi.rkt")
 (provide sodium-argon2-impl%
          sodium-scrypt-impl%)
