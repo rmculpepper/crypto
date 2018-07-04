@@ -23,7 +23,7 @@
          "common.rkt"
          "error.rkt"
          "base256.rkt"
-         "../rkt/pk-asn1.rkt")
+         "pk-asn1.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================

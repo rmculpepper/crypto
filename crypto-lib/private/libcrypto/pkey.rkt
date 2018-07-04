@@ -19,11 +19,11 @@
          racket/class
          racket/match
          asn1
-         "../rkt/pk-asn1.rkt"
          "../common/interfaces.rkt"
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
+         "../common/pk-asn1.rkt"
          "../common/error.rkt"
          "ffi.rkt"
          "digest.rkt")

@@ -22,9 +22,9 @@
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
+         "../common/pk-asn1.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
-         "../rkt/pk-asn1.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 
