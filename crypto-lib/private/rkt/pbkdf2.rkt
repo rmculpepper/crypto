@@ -15,7 +15,6 @@
 
 #lang racket/base
 (require racket/class
-         "../common/digest.rkt"
          "../common/common.rkt")
 (provide pbkdf2-hmac
          pbkdf2)
@@ -27,7 +26,7 @@
 ;; Performance: for nettle and gcrypt, about x6 or x7 slowdown
 
 (define (pbkdf2-hmac dimpl pass salt iterations key-size)
-  (define hlen (digest-size dimpl))
+  (define hlen (send dimpl get-size)) ;; (digest-size dimpl)
   ;;(define (PRF text) (send dimpl hmac pass text))
   (define outbuf (make-bytes hlen))
   (define root-hctx (send dimpl new-hmac-ctx pass))
