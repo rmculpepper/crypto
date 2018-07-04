@@ -20,7 +20,6 @@
          "../common/common.rkt"
          "../common/digest.rkt"
          "../common/error.rkt"
-         "../rkt/hmac.rkt"
          "ffi.rkt")
 (provide sodium-blake2-digest-impl%
          sodium-sha256-digest-impl%

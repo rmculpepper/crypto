@@ -20,7 +20,6 @@
          "../common/common.rkt"
          "../common/digest.rkt"
          "../common/error.rkt"
-         "../rkt/hmac.rkt"
          "ffi.rkt")
 (provide b2s-digest-impl%
          b2b-digest-impl%)
