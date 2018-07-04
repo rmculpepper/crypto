@@ -16,13 +16,10 @@
 
 #lang racket/base
 (require racket/class
-         racket/dict
-         racket/port
          rackunit
+         crypto
          crypto/private/common/interfaces
-         crypto/private/common/cipher
          crypto/private/common/catalog
-         crypto/private/common/util
          "util.rkt")
 (provide (all-defined-out))
 

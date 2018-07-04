@@ -17,10 +17,8 @@
 (require racket/class
          racket/match
          rackunit
-         crypto/private/common/interfaces
+         crypto
          crypto/private/common/catalog
-         crypto/private/common/kdf
-         crypto/private/common/util
          (prefix-in rkt: crypto/private/rkt/pbkdf2)
          "util.rkt")
 (provide test-kdfs

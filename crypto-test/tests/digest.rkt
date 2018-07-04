@@ -18,10 +18,9 @@
 (require racket/class
          racket/dict
          rackunit
+         crypto
          crypto/private/common/interfaces
          crypto/private/common/catalog
-         crypto/private/common/digest
-         crypto/private/common/util
          "util.rkt")
 (provide test-digests
          test-digests-agree

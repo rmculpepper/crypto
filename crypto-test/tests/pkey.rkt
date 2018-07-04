@@ -17,10 +17,8 @@
 #lang racket/base
 (require racket/class
          racket/match
-         racket/port
          rackunit
          crypto
-         "digest.rkt"
          "util.rkt")
 (provide (all-defined-out))
 
