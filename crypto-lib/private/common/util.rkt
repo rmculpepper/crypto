@@ -74,17 +74,3 @@
   (and (= (bytes-length a) (bytes-length b))
        (for/fold ([same? #t]) ([ax (in-bytes a)] [bx (in-bytes b)])
          (and (= ax bx) same?))))
-
-;; Goal: timing-leak only the length of b (ie, b's length should be public)
-(define (crypto-bytes=?/2 a b)
-  (let* ([la (bytes-length a)]
-         [lb (bytes-length b)]
-         ;; If a is zero-length, replace with dummy value
-         ;; just so bytes-ref works. The final (= la lb) check corrects.
-         [a (if (= la 0) '#"\0" a)])
-    (let loop ([same? #t] [ai 0] [bi 0])
-      (cond [(< bi lb)
-             (let* ([ai (if (< ai la) ai 0)]
-                    [same? (and (= (bytes-ref a ai) (bytes-ref b bi)) same?)])
-               (loop same? (add1 ai) (add1 bi)))]
-            [else (and (= la lb) same?)]))))
