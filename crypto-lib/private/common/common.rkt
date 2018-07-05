@@ -33,6 +33,7 @@
          to-spec
          shrink-bytes
          make-sized-copy
+         ceil/
          config/c
          check-config
          config-ref
@@ -165,6 +166,11 @@
   (define copy (make-bytes size))
   (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
   copy)
+
+;; ceil/ : Nat PosNat -> Nat
+;; Equivalent to (ceiling (/ a b)).
+(define (ceil/ a b)
+  (quotient (+ a b -1) b))
 
 ;; ============================================================
 

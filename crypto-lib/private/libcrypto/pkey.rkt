@@ -617,7 +617,7 @@
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (define group (EC_KEY_get0_group ec))
       (define group-degree (EC_GROUP_get_degree group))
-      (define buf (make-bytes (quotient (+ group-degree 7) 8)))
+      (define buf (make-bytes (ceil/ group-degree 8)))
       (define peer-pubkey-point (EC_POINT_new group))
       (EC_POINT_oct2point group peer-pubkey-point peer-pubkey0 (bytes-length peer-pubkey0))
       (define peer-ec (EC_KEY_new))

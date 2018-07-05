@@ -482,7 +482,7 @@
       (nettle_ecc_point_mul shared-ecp priv peer-ecp)
       (define x (mpz)) (define y (mpz))
       (nettle_ecc_point_get shared-ecp x y)
-      (define ecc-size (quotient (+ (nettle_ecc_bit_size ecc) 7) 8))
+      (define ecc-size (ceil/ (nettle_ecc_bit_size ecc) 8))
       (mpz->bytes x ecc-size #f #t))
     ))
 
@@ -511,8 +511,7 @@
   (and curve-name (curve-name->oid curve-name)))
 
 (define (ecc->mlen ecc)
-  (define bits (nettle_ecc_bit_size ecc))
-  (quotient (+ bits 7) 8) #| = ceil(n/8) |#)
+  (ceil/ (nettle_ecc_bit_size ecc) 8))
 
 (define (curve-name->ecc curve-name)
   (cond [(assq curve-name nettle-curves) => cadr] [else #f]))
