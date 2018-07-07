@@ -42,6 +42,7 @@
 
 (define gcrypt-scrypt-impl%
   (class kdf-impl-base%
+    (inherit about)
     (super-new)
 
     (define/override (kdf config pass salt)
@@ -49,7 +50,7 @@
         (check/ref-config '(N ln p r key-size) config config:scrypt-kdf "scrypt"))
       (define N* (or N (expt 2 ln)))
       (unless (equal? r 8)
-        (crypto-error "bad value for scrypt r parameter\n  r: ~e" r))
+        (impl-limit-error "r parameter must be 8\n  given: ~e\n  in: ~a" r (about)))
       (gcry_kdf_derive pass GCRY_KDF_SCRYPT N* salt p key-size))
 
     (define/override (pwhash config pass)

@@ -173,9 +173,9 @@
       (mpz->bin sigz))
 
     (define/private (nosupport/digest+pad op digest-spec pad)
-      (crypto-error (string-append "unsupported digest and padding combination for ~a"
-                                   "\n  digest: ~s\n  padding: ~s\n  key: ~a")
-                    op digest-spec (or pad 'pkcs1-v1.5) (about)))
+      (impl-limit-error (string-append "unsupported digest and padding combination for ~a"
+                                       "\n  digest: ~s\n  padding: ~s\n  key: ~a")
+                        op digest-spec (or pad 'pkcs1-v1.5) (about)))
 
     (define/override (-verify digest digest-spec pad sig)
       (define sigz (bin->mpz sig))
@@ -204,7 +204,7 @@
         [(pkcs1-v1.5 #f)
          (define enc-z (new-mpz))
          (or (nettle_rsa_encrypt pub (send impl get-random-ctx) buf enc-z)
-             (crypto-error "encyption failed"))
+             (crypto-error "encryption failed"))
          (mpz->bin enc-z)]
         [else (err/bad-encrypt-pad impl pad)]))
 
@@ -378,7 +378,7 @@
       (check-config config config:ec-paramgen "EC parameter generation")
       (define curve-name (alias->curve-name (config-ref config 'curve)))
       (define ecc (curve-name->ecc curve-name))
-      (unless ecc (crypto-error "named curve not found\n  curve: ~e" (config-ref config 'curve)))
+      (unless ecc (err/no-curve (config-ref config 'curve) this))
       (new nettle-ec-params% (impl this) (ecc ecc)))
 
     ;; ---- EC ----
@@ -408,7 +408,7 @@
                   (define y (integer->mpz (cdr x+y)))
                   (define pub (new-ecc_point ecc))
                   (unless (nettle_ecc_point_set pub x y)
-                    (crypto-error "invalid public key (point not on curve)"))
+                    (err/off-curve "public key"))
                   pub)]
             [else #f]))
     ))
@@ -523,7 +523,7 @@
   (define ecp (new-ecc_point ecc))
   (define x+y (bytes->ec-point b))
   (unless (nettle_ecc_point_set ecp (mpz (car x+y)) (mpz (cdr x+y)))
-    (crypto-error "invalid public key (point not on curve)"))
+    (err/off-curve "public key"))
   ecp)
 
 ;; ============================================================
@@ -545,7 +545,7 @@
     (define/public (curve->params curve)
       (case curve
         [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
-        [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
+        [else (err/no-curve curve this)]))
 
     (define/public (generate-key-from-params curve)
       (case curve
@@ -632,7 +632,7 @@
     (define/public (curve->params curve)
       (case curve
         [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
-        [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
+        [else (err/no-curve curve this)]))
 
     (define/public (generate-key-from-params curve)
       (case curve

@@ -83,7 +83,8 @@
   (define spec (send ki get-spec))
   (define id (peek-id cred))
   (unless (equal? spec (id->kdf-spec id))
-    (crypto-error "kdf impl does not support cred id"))
+    (crypto-error "KDF algorithm does not match given password hash algorithm\n  given: ~a"
+                  (format "$~a$ password hash" id)))
   (define env (parse-pwhash cred))
   (define config
     (match env

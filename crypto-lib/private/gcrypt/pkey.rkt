@@ -398,7 +398,7 @@
     (define/public (curve->params curve)
       (define curve* (alias->curve-name curve))
       (unless (memq curve* gcrypt-curves)
-        (crypto-error "unknown named curve\n  curve: ~e" curve))
+        (err/no-curve curve this))
       (new gcrypt-ec-params% (impl this) (curve curve*)))
 
     ;; ----
@@ -445,7 +445,7 @@
         (define qpoint (gcry_mpi_point_new))
         (gcry_mpi_ec_decode_point qpoint (base256->mpi qB) ec)
         (begin0 (unless (gcry_mpi_ec_curve_point qpoint ec)
-                  (crypto-error "invalid public key (point not on curve)"))
+                  (err/off-curve "public key"))
           (gcry_ctx_release ec)
           (gcry_mpi_point_release qpoint))))
 
@@ -580,13 +580,13 @@
     (define/public (curve->params curve)
       (case curve
         [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
-        [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
+        [else (err/no-curve curve this)]))
 
     (define/public (generate-key-from-params curve)
       (define curve-name
         (case curve
           [(ed25519) #"Ed25519"]
-          [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
+          [else (err/no-curve curve this)]))
       (*generate-key
        (gcry_sexp_build "(genkey (ecc (curve %s) (flags eddsa)))" curve-name)
        gcrypt-ed25519-key%))
@@ -696,7 +696,7 @@
     (define/public (curve->params curve)
       (case curve
         [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
-        [else (crypto-error "unknown named curve\n  curve: ~e" curve)]))
+        [else (err/no-curve curve this)]))
 
     (define/public (generate-key-from-params curve)
       (case curve

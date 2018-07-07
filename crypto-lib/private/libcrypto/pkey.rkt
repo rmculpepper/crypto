@@ -397,8 +397,8 @@
         (when qbits
           (define actual-qbits (if (< nbits 2048) 160 256))
           (unless (equal? qbits actual-qbits)
-            (crypto-error "implementation requires qbits = ~s for nbits ~a 2048\n  nbits: ~e\n  for: ~a"
-                          actual-qbits (if (< nbits 2048) "<" ">=") nbits (about))))
+            (impl-limit-error "qbits must be ~s for nbits ~a 2048\n  nbits: ~e\n  for: ~a"
+                              actual-qbits (if (< nbits 2048) "<" ">=") nbits (about))))
         (define dsa (DSA_new))
         (DSA_generate_parameters_ex dsa nbits)
         (define evp (EVP_PKEY_new))
@@ -549,9 +549,9 @@
       (define-values (curve-name)
         (check/ref-config '(curve) config config:ec-paramgen "EC parameter generation"))
       (define curve-nid (find-curve-nid-by-name curve-name))
-      (unless curve-nid (crypto-error "named curve not found\n  curve: ~e" curve-name))
+      (unless curve-nid (err/no-curve curve-name this))
       (define ec (EC_KEY_new_by_curve_name curve-nid))
-      (unless ec (crypto-error "named curve not found\n  curve: ~e" curve-name))
+      (unless ec (err/no-curve curve-name this))
       (begin
         ;; See http://wiki.openssl.org/index.php/Elliptic_Curve_Diffie_Hellman
         ;; in section "ECDH and Named Curves"
@@ -671,8 +671,7 @@
       (curve->params curve-name))
 
     (define/public (curve->params curve)
-      (unless (ed-curve->nid curve)
-        (crypto-error "named curve not found\n  curve: ~e" curve))
+      (unless (ed-curve->nid curve) (err/no-curve curve this))
       (new pk-eddsa-params% (impl this) (curve curve)))
 
     (define/public (generate-key-from-params curve)
@@ -742,8 +741,7 @@
       (curve->params curve-name))
 
     (define/public (curve->params curve)
-      (unless (x-curve->nid curve)
-        (crypto-error "named curve not found\n  curve: ~e" curve))
+      (unless (x-curve->nid curve) (err/no-curve curve this))
       (new pk-ecx-params% (impl this) (curve curve)))
 
     (define/public (generate-key-from-params curve)

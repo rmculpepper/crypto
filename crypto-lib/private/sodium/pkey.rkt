@@ -47,7 +47,7 @@
     (define/public (curve->params curve)
       (case curve
         [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
-        [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
+        [else (err/no-curve curve this)]))
 
     (define/public (generate-key-from-params curve)
       (case curve
@@ -139,7 +139,7 @@
     (define/public (curve->params curve)
       (case curve
         [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
-        [else (crypto-error "unsupported curve\n  curve: ~e" curve)]))
+        [else (err/no-curve curve this)]))
 
     (define/public (generate-key-from-params curve)
       (case curve

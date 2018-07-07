@@ -22,13 +22,16 @@
          crypto-who
          crypto-error
          internal-error
+         impl-limit-error
 
          err/no-impl
          err/bad-signature-pad
          err/bad-encrypt-pad
          err/missing-digest
          err/crypt-failed
-         err/auth-decrypt-failed)
+         err/auth-decrypt-failed
+         err/no-curve
+         err/off-curve)
 
 (define crypto-entry-point (gensym))
 
@@ -45,6 +48,9 @@
 
 (define (internal-error fmt . args)
   (apply error (crypto-who) (string-append "internal error: " fmt) args))
+
+(define (impl-limit-error fmt . args)
+  (apply error (crypto-who) (string-append "implementation limitation: " fmt) args))
 
 ;; ----
 
@@ -70,3 +76,11 @@
 
 (define (err/auth-decrypt-failed)
   (err/crypt-failed #f #t))
+
+(define (err/no-curve curve [obj #f])
+  (crypto-error "given named curve not supported\n  curve: ~e~a"
+                curve
+                (if obj (format "\n  for: ~a" (send obj about)) "")))
+
+(define (err/off-curve what)
+  (crypto-error "invalid ~a (point not on curve)" what))

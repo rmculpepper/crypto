@@ -35,12 +35,12 @@
       (define-values (t mkb p key-size)
         (check/ref-config '(t m p key-size) config config:argon2-kdf "argon2"))
       (unless (equal? p 1)
-        (crypto-error "implementation restriction;\n parallelism must be 1\n  given: ~e\n  kdf: ~a"
-                      p (about)))
+        (impl-limit-error "parallelism parameter must be 1\n  given: ~e\n  kdf: ~a"
+                          p (about)))
       (define m (* mkb 1024))
       (unless (= (bytes-length salt) crypto_pwhash_argon2id_SALTBYTES)
-        (crypto-error "salt must be ~s bytes\n  given: ~s bytes\n  kdf: ~a"
-                      crypto_pwhash_argon2id_SALTBYTES (bytes-length salt) (about)))
+        (impl-limit-error "salt must be ~s bytes\n  given: ~s bytes\n  kdf: ~a"
+                          crypto_pwhash_argon2id_SALTBYTES (bytes-length salt) (about)))
       (define out (make-bytes key-size))
       (define alg (get-alg))
       (define status (crypto_pwhash out key-size pass (bytes-length pass) salt t m alg))
@@ -52,8 +52,8 @@
       (define-values (t mkb p)
         (check/ref-config '(t m p) config config:argon2-base "argon2"))
       (unless (equal? p 1)
-        (crypto-error "implementation restriction;\n parallelism must be 1\n  given: ~e\n  kdf: ~a"
-                      p (about)))
+        (impl-limit-error "parallelism parameter must be 1\n  given: ~e\n  kdf: ~a"
+                          p (about)))
       (define m (* 1024 mkb))
       (define alg (get-alg))
       (define out (make-bytes (crypto_pwhash_strbytes)))
