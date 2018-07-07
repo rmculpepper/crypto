@@ -46,7 +46,11 @@
         (hprintf 1 "testing ~v pwhash\n" name)
         (define cred (pwhash impl key pwconfig))
         (check-equal? (pwhash-verify impl key cred) #t)
-        (check-equal? (pwhash-verify impl badkey cred) #f)))))
+        (check-equal? (pwhash-verify impl badkey cred) #f)
+        (check-exn #rx"algorithm does not match"
+                   (lambda () (pwhash-verify impl key bad-pwh)))
+        (check-exn #rx"algorithm does not match"
+                   (lambda () (pwhash-verify impl key unsupported-pwh)))))))
 
 (define (test-kdfs-agree factories)
   (for ([name (list-known-kdfs)])
@@ -98,3 +102,6 @@
 (define key #"the morning sun is shining like a red rubber ball")
 (define badkey #"row row row your boat")
 (define salt #"1234567890123456")
+
+(define bad-pwh "$invalid$abc=123$1234$5678")
+(define unsupported-pwh "$2b$12$GhvMmNVjRW29ulnudl.LbuAnUtN/LRfe1JsBm1Xu6LE3059z5Tr8m")

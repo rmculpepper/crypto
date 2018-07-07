@@ -62,6 +62,7 @@
       (cast out _bytes _string/latin-1))
 
     (define/override (pwhash-verify pass cred)
+      (check-pwhash/kdf-spec cred spec)
       (define alg (get-alg))
       (define status (crypto_pwhash_str_verify cred pass (bytes-length pass)))
       (zero? status))

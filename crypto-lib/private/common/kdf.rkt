@@ -27,6 +27,7 @@
          kdf-pwhash-scrypt
          kdf-pwhash-pbkdf2
          kdf-pwhash-verify
+         check-pwhash/kdf-spec
          parse-pwhash
          encode-pwhash
          config:pbkdf2-base
@@ -79,12 +80,14 @@
         '(pbkdf2 hmac sha256) 'pbkdf2-sha256
         '(pbkdf2 hmac sha512) 'pbkdf2-sha512))
 
-(define (kdf-pwhash-verify ki pass cred)
-  (define spec (send ki get-spec))
+(define (check-pwhash/kdf-spec cred spec)
   (define id (peek-id cred))
   (unless (equal? spec (id->kdf-spec id))
     (crypto-error "KDF algorithm does not match given password hash algorithm\n  given: ~a"
-                  (format "$~a$ password hash" id)))
+                  (format "$~.a$ password hash" id))))
+
+(define (kdf-pwhash-verify ki pass cred)
+  (check-pwhash/kdf-spec cred (send ki get-spec))
   (define env (parse-pwhash cred))
   (define config
     (match env

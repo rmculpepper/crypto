@@ -52,6 +52,7 @@
             [else (crypto-error "failed")]))
 
     (define/override (pwhash-verify pass cred)
+      (check-pwhash/kdf-spec cred spec)
       (case spec
         [(argon2d)  (argon2d_verify  cred pass)]
         [(argon2i)  (argon2i_verify  cred pass)]
