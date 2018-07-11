@@ -163,7 +163,8 @@ encoding).}
 (define pwcred (pwhash 'argon2id #"mypassword" '((t 1000) (m 4096) (p 1))))
 pwcred
 ]
-}
+
+@history[#:added "1.2"]}
 
 @defproc[(pwhash-verify [k (or/c kdf-impl? #f)]
                         [password bytes?]
@@ -184,7 +185,8 @@ exception is raised.
 (pwhash-verify #f #"mypassword" pwcred)
 (pwhash-verify #f #"wildguess" pwcred)
 ]
-}
+
+@history[#:added "1.2"]}
 
 @; ----------------------------------------
 

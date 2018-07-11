@@ -174,6 +174,6 @@ digest and MAC algorithm. The @tt{libb2.so.1} foreign library is required.
 Factory for
 @hyperlink["https://github.com/P-H-C/phc-winner-argon2"]{Argon2}, a
 tiny library implementing the Argon2 password hashing (and key
-derivation) function. The @tt{libargon2.so.1} foreign library is
+derivation) function. The @tt{libargon2.so.{1,0}} foreign library is
 required.
 }
