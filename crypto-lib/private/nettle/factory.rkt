@@ -158,11 +158,15 @@
     ;; ----
 
     (define random-ctx #f)
+    (define until-reseed (get-reseed-limit))
+
     (define/public (get-random-ctx)
+      (set! until-reseed (sub1 until-reseed))
       (unless random-ctx
         (set! random-ctx (make-yarrow256-ctx)))
-      (unless (nettle_yarrow256_is_seeded random-ctx)
-        (nettle_yarrow256_seed random-ctx (crypto-random-bytes YARROW256_SEED_FILE_SIZE)))
+      (unless (and (nettle_yarrow256_is_seeded random-ctx) (> until-reseed 0))
+        (nettle_yarrow256_seed random-ctx (crypto-random-bytes YARROW256_SEED_FILE_SIZE))
+        (set! until-reseed (get-reseed-limit)))
       random-ctx)
 
     (define/private (make-yarrow256-ctx)
@@ -175,6 +179,10 @@
       ;; If random-ctx doesn't exist, it doesn't need reseeding.
       (when random-ctx
         (nettle_yarrow256_seed random-ctx (crypto-random-bytes YARROW256_SEED_FILE_SIZE))))
+
+    ;; Number of *requests* between reseeds. (Each request represents a variable
+    ;; (potentially large) number of random bytes produced.)
+    (define/private (get-reseed-limit) 100)
 
     ;; ----
 

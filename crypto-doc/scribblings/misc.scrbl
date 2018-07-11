@@ -60,10 +60,10 @@ described here}).
 default CSPRNG initialization, but I don't know the details.
 
 @bold{nettle} The @racketmodname[crypto] library creates a Yarrow-256
-instance and seeds it once with entropy obtained from
-@racket[crypto-random-bytes]. The instance does not automatically
-update its entropy pool, so it does @bold{not} enjoy Yarrow's
-key-compromise recovery properties.
+instance and seeds it with entropy obtained from
+@racket[crypto-random-bytes]. The instance is reseeded when a certain
+number of entropy-consuming operations have been performed since the
+last reseed.
 
 
 @subsection[#:tag "libcrypto-notes"]{Libcrypto Quirks}
