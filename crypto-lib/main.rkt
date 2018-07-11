@@ -17,6 +17,7 @@
 #lang racket/base
 (require racket/contract/base
          racket/class
+         racket/random
          "private/common/interfaces.rkt"
          "private/common/catalog.rkt"
          "private/common/common.rkt"
@@ -44,7 +45,10 @@
           hex->bytes
           bytes->hex
           bytes->hex-string
-          crypto-bytes=?))
+          crypto-bytes=?)
+
+         ;; racket/random
+         crypto-random-bytes)
 
 ;; Common abbrevs
 (define nat? exact-nonnegative-integer?)
