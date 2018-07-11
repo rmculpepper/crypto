@@ -16,10 +16,12 @@ CSPRNG using entropy obtained from the operating system
 (<a href="http://wiki.openssl.org/index.php/Random_Numbers">as
 described here</a>).</p><p><span style="font-weight: bold">gcrypt</span> The libgcrypt foreign library seems to perform some
 default CSPRNG initialization, but I don&rsquo;t know the details.</p><p><span style="font-weight: bold">nettle</span> The <a href="index.html" class="RktModLink" data-pltdoc="x"><span class="RktSym">crypto</span></a> library creates a Yarrow-256
-instance and seeds it once with entropy obtained from
-<span class="RktSym"><a href="http://docs.racket-lang.org/reference/generic-numbers.html#%28def._%28%28lib._racket%2Frandom..rkt%29._crypto-random-bytes%29%29" class="RktValLink" data-pltdoc="x">crypto-random-bytes</a></span>. The instance does not automatically
-update its entropy pool, so it does <span style="font-weight: bold">not</span> enjoy Yarrow&rsquo;s
-key-compromise recovery properties.</p><h5>7.2.2<tt>&nbsp;</tt><a name="(part._libcrypto-notes)"></a>Libcrypto Quirks</h5><p>PSS padding for RSA signatures is, in principle, parameterized by the
+instance and seeds it with entropy obtained from
+<span class="RktSym"><a href="http://docs.racket-lang.org/reference/generic-numbers.html#%28def._%28%28lib._racket%2Frandom..rkt%29._crypto-random-bytes%29%29" class="RktValLink" data-pltdoc="x">crypto-random-bytes</a></span>. The instance is reseeded when a certain
+number of entropy-consuming operations have been performed since the
+last reseed.</p><p class="SHistory">Changed in version 1.2 of package <span class="stt">crypto-lib</span>: The <a href="index.html" class="RktModLink" data-pltdoc="x"><span class="RktSym">crypto</span></a> module now
+also re-exports <span class="RktSym"><a href="http://docs.racket-lang.org/reference/generic-numbers.html#%28def._%28%28lib._racket%2Frandom..rkt%29._crypto-random-bytes%29%29" class="RktValLink" data-pltdoc="x">crypto-random-bytes</a></span> from
+<a href="http://docs.racket-lang.org/reference/generic-numbers.html#%28mod-path._racket%2Frandom%29" class="RktModLink" data-pltdoc="x"><span class="RktSym">racket/random</span></a>.</p><h5>7.2.2<tt>&nbsp;</tt><a name="(part._libcrypto-notes)"></a>Libcrypto Quirks</h5><p>PSS padding for RSA signatures is, in principle, parameterized by the
 salt length. A standard choice is the length of the digest to be
 signed. By default, libcrypto uses the maximum possible salt length
 when signing and infers the salt length when verifying, as documented
