@@ -363,6 +363,18 @@
         -> _int)
   #:wrap (err-wrap 'PKCS5_PBKDF2_HMAC))
 
+(define-crypto EVP_PBE_scrypt
+  (_fun (pass salt N r p maxmem out) ::
+        (pass : _bytes) (passlen : _size = (bytes-length pass))
+        (salt : _bytes) (saltlen : _size = (bytes-length salt))
+        (N : _uint64)
+        (r : _uint64)
+        (p : _uint64)
+        (maxmem : _uint64)
+        (out : _bytes)  (outlen : _size = (bytes-length out))
+        -> _int)
+  #:wrap (err-wrap 'EVP_PBE_scrypt))
+
 ;; ============================================================
 ;; Cipher
 

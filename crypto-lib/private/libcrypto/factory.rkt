@@ -118,6 +118,9 @@
 
     (define/override (-get-kdf spec)
       (match spec
+        ['scrypt
+         (and (openssl-version>=? 1 1 0)
+              (new libcrypto-scrypt-impl% (spec spec) (factory this)))]
         [(list 'pbkdf2 'hmac di-spec)
          (let ([di (get-digest di-spec)])
            (and di (new libcrypto-pbkdf2-impl% (spec spec) (factory this) (di di))))]

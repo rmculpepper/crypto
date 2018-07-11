@@ -18,7 +18,8 @@
          "../common/common.rkt"
          "../common/kdf.rkt"
          "ffi.rkt")
-(provide libcrypto-pbkdf2-impl%)
+(provide libcrypto-pbkdf2-impl%
+         libcrypto-scrypt-impl%)
 
 (define libcrypto-pbkdf2-impl%
   (class kdf-impl-base%
@@ -35,6 +36,26 @@
 
     (define/override (pwhash config pass)
       (kdf-pwhash-pbkdf2 this spec config pass))
+    (define/override (pwhash-verify pass cred)
+      (kdf-pwhash-verify this pass cred))
+    ))
+
+(define MAX-SCRYPT-MEM (expt 2 30)) ;; FIXME: make configurable?
+
+(define libcrypto-scrypt-impl%
+  (class kdf-impl-base%
+    (super-new)
+
+    (define/override (kdf config pass salt)
+      (define-values (N ln p r key-size)
+        (check/ref-config '(N ln p r key-size) config config:scrypt-kdf "scrypt"))
+      (define N* (or N (expt 2 ln)))
+      (define key (make-bytes key-size))
+      (EVP_PBE_scrypt pass salt N* r p MAX-SCRYPT-MEM key)
+      key)
+
+    (define/override (pwhash config pass)
+      (kdf-pwhash-scrypt this config pass))
     (define/override (pwhash-verify pass cred)
       (kdf-pwhash-verify this pass cred))
     ))
