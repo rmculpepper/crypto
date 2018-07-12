@@ -24,6 +24,7 @@
          internal-error
          impl-limit-error
 
+         check-bytes-length
          err/no-impl
          err/bad-signature-pad
          err/bad-encrypt-pad
@@ -53,6 +54,12 @@
   (apply error (crypto-who) (string-append "implementation limitation: " fmt) args))
 
 ;; ----
+
+(define (check-bytes-length what buf wantlen [obj #f])
+  (unless (= (bytes-length buf) wantlen)
+    (crypto-error "wrong size for ~a\n  expected: ~s bytes\n  given: ~s bytes~a"
+                  what wantlen (bytes-length buf)
+                  (if obj (format "\n  for: ~a" (send obj about)) ""))))
 
 (define (err/no-impl [obj #f])
   (internal-error "unimplemented~a" (if obj (format "\n  in: ~a" (send obj about)) "")))
