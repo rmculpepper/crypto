@@ -288,7 +288,9 @@
              (let* ([ufp (-make-crypt-sink)]
                     [ufp (if attached-tag? (add-right-ufp (push-ufp #f ufp)) ufp)]
                     [ufp (-make-crypt-ufp #t ufp)]
-                    [ufp (if pad? (pad-ufp (get-block-size) ufp) ufp)]
+                    [ufp (cond [pad? (pad-ufp (get-block-size) ufp)]
+                               [(= (get-block-size) 1) ufp]
+                               [else (check-aligned-ufp (get-block-size) impl ufp)])]
                     [ufp (chunk-ufp (get-chunk-size) ufp)])
                ufp)]
             [else ;; decrypt
@@ -307,6 +309,8 @@
                                   ufp)]
                                [else ufp])]
                     [ufp (-make-crypt-ufp #f ufp)]
+                    [ufp (cond [(= (get-block-size) 1) ufp]
+                               [else (check-aligned-ufp (get-block-size) impl ufp)])]
                     [ufp (chunk-ufp (get-chunk-size) ufp)]
                     ;; FIXME: need to delay until we have auth-len ...
                     [ufp (if (and attached-tag? (positive? auth-len))
@@ -573,6 +577,20 @@
       (send/apply next update/finish in instart (+ instart ulen)
                   (subbytes (+ instart ulen) inend) a))))
 
+;; check-aligned-ufp%
+(define check-aligned-ufp%
+  (class chain-ufp%
+    (init-field block-size cipher)
+    (inherit-field next)
+    (super-new)
+    (define/override (finish buf a)
+      (unless (zero? (remainder (bytes-length buf) block-size))
+        (crypto-error
+         (string-append "input size not a multiple of block size"
+                        "\n  block-size: ~s bytes\n  remainder: ~s bytes\n  cipher: ~a")
+         block-size (remainder (bytes-length buf) block-size) (send cipher about)))
+      (send next finish buf a))))
+
 ;; pad          : bytes,a => bytes,a    ;; |a| = 1
 ;; Add PKCS7 padding
 ;; FIXME: fix case when block-size != chunk-size
@@ -629,6 +647,8 @@
   (new add-right-ufp% (next next)))
 (define (split-right-ufp suffix-size next)
   (new split-right-ufp% (suffix-size suffix-size) (next next)))
+(define (check-aligned-ufp block-size cipher next)
+  (new check-aligned-ufp% (block-size block-size) (cipher cipher) (next next)))
 (define (pad-ufp block-size next)
   (new pad-ufp% (block-size block-size) (next next)))
 (define (unpad-ufp next)

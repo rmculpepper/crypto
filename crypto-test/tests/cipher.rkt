@@ -88,6 +88,14 @@
                      (cipher-final dctx))
                     msg))
 
+    (when (> (cipher-block-size ci) 1)
+      (define msg (make-bytes (+ (* (cipher-block-size ci) 4) 1) (char->integer #\a)))
+      (check-exn #rx"input size not a multiple of block size"
+                 (lambda () (encrypt ci key iv msg #:pad #f)))
+      (unless (cipher-aead? ci)
+        (check-exn #rx"input size not a multiple of block size"
+                   (lambda () (decrypt ci key iv msg #:pad #f)))))
+
     ;; Other keys produce different output, can't decrypt
     (when (positive? (bytes-length msg))
       (define key2 (generate-cipher-key ci))

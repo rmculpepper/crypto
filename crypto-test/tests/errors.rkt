@@ -73,6 +73,12 @@
              (cipher-final ctx)
              (cipher-get-auth-tag ctx)))
 
+(check-exn #rx"input size not a multiple of block size"
+           (lambda () (encrypt '(aes ecb) key16 #f #"short" #:pad #f)))
+
+(check-exn #rx"input size not a multiple of block size"
+           (lambda () (decrypt '(aes ecb) key16 #f #"short" #:pad #f)))
+
 ;; ============================================================
 ;; KDF
 
