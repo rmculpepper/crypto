@@ -57,7 +57,7 @@
 
     (define/public (check-key-size keysize)
       (unless (key-size-ok? keysize)
-        (crypto-error "bad key size\n  key: ~s bytes\n  digest: ~a"
+        (crypto-error "bad key size\n  given: ~s bytes\n  digest: ~a"
                       keysize (about))))
 
     (abstract -new-ctx)       ;; Bytes/#f -> digest-ctx<%>

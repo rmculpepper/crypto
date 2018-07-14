@@ -130,22 +130,21 @@
         [(#f)
          (unless (send impl can-sign? #f)
            (crypto-error "sign/verify not supported\n  key: ~a" (about)))
-         (crypto-error "sign/verify padding not supported\n  key: ~a\n  padding: ~e"
-                       (about) pad)]
+         (crypto-error "sign/verify padding not supported\n  padding: ~e\n  key: ~a"
+                       pad (about))]
         [(depends)
          (unless (send impl can-sign2? pad dspec)
-           (crypto-error "sign/verify options not supported\n  key: ~a\n  padding: ~e\n  digest: ~e"
-                         (about) pad dspec))]
+           (crypto-error "sign/verify options not supported\n  padding: ~e\n  digest: ~e\n  key: ~a"
+                         pad dspec (about)))]
         [(nodigest)
          (unless (memq dspec '(none))
-           (crypto-error "sign/verify digest not supported\n  key: ~a\n  digest: ~e"
-                         (about) dspec))]
+           (crypto-error "sign/verify digest not supported\n  digest: ~e\n  key: ~a"
+                         dspec (about)))]
         [else (void)]))
 
     (define/private (-check-msg-size msg dspec)
-      (unless (= (bytes-length msg) (digest-spec-size dspec))
-        (crypto-error "wrong size for digest\n  digest: ~e\n  expected:  ~s\n  given: ~s"
-                      dspec (digest-spec-size dspec) (bytes-length msg))))
+      (check-bytes-length "digest" (digest-spec-size dspec) msg
+                          #:fmt "\n  digest: ~e" #:args dspec))
 
     (define/public (-sign msg dspec pad) (err/no-impl this))
     (define/public (-verify msg dspec pad sig) (err/no-impl this))
@@ -165,7 +164,7 @@
       (-check-key-agree)
       (when (pk-key? peer-pubkey)
         (unless (eq? (send peer-pubkey get-impl) impl)
-          (crypto-error "peer key has different implementation\n  key: ~a\n  peer: ~a"
+          (crypto-error "peer key has different implementation\n  peer: ~a\n  key: ~a"
                         (about) (send peer-pubkey about))))
       (-compute-secret peer-pubkey))
 
@@ -173,8 +172,8 @@
       (unless (send impl can-encrypt? #f)
         (crypto-error "encrypt/decrypt not supported\n  key: ~a" (about)))
       (unless (send impl can-encrypt? pad)
-        (crypto-error "encrypt/decrypt not supported\n  key: ~a\n  padding: ~e"
-                      (about) pad)))
+        (crypto-error "encrypt/decrypt not supported\n  padding: ~e\n  key: ~a"
+                      pad (about))))
 
     (define/public (-encrypt buf pad) (err/no-impl this))
     (define/public (-decrypt buf pad) (err/no-impl this))
@@ -538,8 +537,8 @@
 
     (define/private (-check-bytes fmt v)
       (unless (bytes? v)
-        (crypto-error "bad value for key format\n  format: ~e\n  expected: bytes?\n  got: ~e"
-                      fmt v)))
+        (crypto-error "bad value for key format\n  expected: bytes?\n  got: ~e\n  format: ~e"
+                      v fmt)))
     ))
 
 (define translate-key%

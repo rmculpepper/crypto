@@ -47,8 +47,8 @@
         (let loop ([sk sk] [fmt fmt])
           (define (check-bytes)
             (unless (bytes? sk)
-              (crypto-error "bad value for key format\n  format: ~e\n  expected: ~s\n  got: ~e"
-                            fmt 'bytes? sk)))
+              (crypto-error "bad value for key format\n  expected: ~s\n  got: ~e\n  format: ~e"
+                            'bytes? sk fmt)))
           (case fmt
             [(SubjectPublicKeyInfo)
              (check-bytes)

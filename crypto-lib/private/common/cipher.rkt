@@ -78,23 +78,25 @@
 
     (define/public (check-key-size size)
       (unless (key-size-ok? size)
-        (crypto-error "bad key size for cipher\n  cipher: ~a\n  given: ~e\n  allowed: ~a"
-                      (about) size
-                      (match (get-key-sizes)
-                        [(? list? allowed)
-                         (string-join (map number->string allowed) ", ")]
-                        [(varsize min max step)
-                         (format "from ~a to ~a in multiples of ~a" min max step)]))))
+        (crypto-error
+         "bad key size for cipher\n  expected: ~s bytes\n  given: ~s bytes\n  cipher: ~a"
+         (match (get-key-sizes)
+           [(? list? allowed)
+            (string-join (map number->string allowed) ", ")]
+           [(varsize min max step)
+            (format "from ~a to ~a in multiples of ~a" min max step)])
+         size (about))))
 
     (define/public (check-iv-size iv-size)
       (unless (iv-size-ok? iv-size)
-        (crypto-error "bad IV size for cipher\n  cipher: ~a\n  expected: ~s bytes\n  got: ~s bytes"
-                      (about) (get-iv-size) iv-size)))
+        (crypto-error
+         "bad IV size for cipher\n  expected: ~s bytes\n  given: ~s bytes\n  cipher: ~a"
+         (get-iv-size) iv-size (about))))
 
     (define/public (check-auth-size auth-size)
       (unless (auth-size-ok? auth-size)
-        (crypto-error "bad authentication tag size\n  cipher: ~a\n  given: ~e"
-                      (about) auth-size)))
+        (crypto-error "bad authentication tag size\n  given: ~a bytes\n  cipher: ~a"
+                      auth-size (about))))
     ))
 
 (define multikeylen-cipher-impl%
@@ -112,11 +114,8 @@
              => (lambda (keylen+impl)
                   (send/apply (cdr keylen+impl) new-ctx key args))]
             [else
-             (check-key-size (bytes-length key))
-             (internal-error (string-append "no implementation for key length"
-                                            "\n  cipher: ~a\n  given: ~s bytes\n  available: ~a")
-                             (about) (bytes-length key)
-                             (string-join (map number->string (map car impls)) ", "))]))
+             (check-key-size (bytes-length key)) ;; <- should raise error
+             (internal-error "no implementation for given key size\n  cipher: ~a" (about))]))
     (define/override (-new-ctx . args) (internal-error "unreachable"))
     ))
 
@@ -145,13 +144,11 @@
     ;; 1 - ready for AAD
     ;; 2 - AAD done, ready for {plain,cipher}text
     ;; 3 - closed (but can read auth tag)
-    (define/override (bad-state state ok-states msg)
-      (crypto-error "wrong state\n  state: ~a~a"
-                    (case state
-                      [(1) "ready for AAD or input"]
-                      [(2) "ready for input"]
-                      [(3) "closed"])
-                    msg))
+    (define/override (describe-state state)
+      (case state
+        [(1) "ready for AAD or input"]
+        [(2) "ready for input"]
+        [(3) "closed"]))
 
     (define/public (get-encrypt?) encrypt?)
     (define/public (get-block-size) (send impl get-block-size))
@@ -180,9 +177,7 @@
                (crypto-error "cannot set authentication tag for decryption context with attached tag"))]
             [else ;; decrypt w/ detached tag
              (let ([tag (or tag #"")])
-               (unless (= (bytes-length tag) auth-len)
-                 (crypto-error "wrong authentication tag size\n  expected: ~s\n  given: ~s\n  cipher: ~a"
-                               auth-len (bytes-length tag) (about))))])
+               (check-bytes-length "authentication tag" auth-len tag this))])
       (with-state #:ok '(1 2) #:post 3
         (lambda ()
           (when (member state '(1)) (-finish-aad))

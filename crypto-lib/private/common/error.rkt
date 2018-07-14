@@ -34,6 +34,10 @@
          err/no-curve
          err/off-curve)
 
+;; Error conventions:
+;; - use (about) for reporting context
+;; - order: EXPECTED, GIVEN, CONTEXT
+
 (define crypto-entry-point (gensym))
 
 (define-syntax-rule (with-crypto-entry who body ...)
@@ -55,10 +59,11 @@
 
 ;; ----
 
-(define (check-bytes-length what buf wantlen [obj #f])
+(define (check-bytes-length what wantlen buf [obj #f] #:fmt [fmt ""] #:args [args null])
   (unless (= (bytes-length buf) wantlen)
-    (crypto-error "wrong size for ~a\n  expected: ~s bytes\n  given: ~s bytes~a"
+    (crypto-error "wrong size for ~a\n  expected: ~s bytes\n  given: ~s bytes~a~a"
                   what wantlen (bytes-length buf)
+                  (apply format fmt (if (list? args) args (list args)))
                   (if obj (format "\n  for: ~a" (send obj about)) ""))))
 
 (define (err/no-impl [obj #f])
@@ -66,8 +71,8 @@
 
 (define (err/bad-*-pad kind impl pad)
   (define factory (send impl get-factory))
-  (crypto-error "~a padding not supported\n  key: ~a key\n  padding: ~e"
-                kind (send impl -about) pad))
+  (crypto-error "~a padding not supported\n  padding: ~e\n  key: ~a key"
+                kind pad (send impl -about)))
 (define (err/bad-signature-pad impl pad)
   (err/bad-*-pad "signature" impl pad))
 (define (err/bad-encrypt-pad impl pad)

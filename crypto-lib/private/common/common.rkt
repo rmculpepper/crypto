@@ -98,7 +98,9 @@
       (unless (equal? state new-state) (set! state new-state)))
 
     (define/public (bad-state state ok-states msg)
-      (crypto-error "wrong state\n  state: ~s~a" state (or msg "")))
+      (crypto-error "wrong state\n  state: ~a~a" (describe-state state) (or msg "")))
+    (define/public (describe-state state)
+      (format "~s" state))
     ))
 
 (define state-ctx% (state-mixin ctx-base%))
@@ -183,8 +185,9 @@
 ;; - (list Symbol Predicate String/#f '#:opt Any) -- optional w/ default
 ;; - (list Symbol Predicate String/#f '#:alt Symbol) -- requires this or alt but not both
 
-(define (check-config config spec what)
+(define (check-config config0 spec what)
   ;; Assume already checked config/c, now check entries
+  (define config config0)
   (for ([entry (in-list config)])
     (match-define (list key value) entry)
     (cond [(assq key spec)
@@ -201,7 +204,7 @@
       [(list key _ _ '#:req)
        (unless (assq key config)
          (crypto-error "missing required option for ~a\n  option: ~e\n  given: ~e"
-                       what key config))
+                       what key config0))
        config]
       [(list key _ _ '#:opt default)
        (if (assq key config)
@@ -211,10 +214,10 @@
        (if (assq key config)
            (when (assq key2 config)
              (crypto-error "conflicting options for ~a\n  options: ~e and ~e\n  given: ~e"
-                           what key key2 config))
+                           what key key2 config0))
            (unless (assq key2 config)
              (crypto-error "missing required option for ~a\n  option: either ~e or ~e\n  given: ~e"
-                           what key key2 config)))
+                           what key key2 config0)))
        config])))
 
 (define (config-ref config key [default #f])
