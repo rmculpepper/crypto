@@ -749,7 +749,7 @@
               'privateKey x)
       y)]
     [(rkt-private) (list 'dh 'private p g y x)]
-    [else (encode-pub-dh fmt p g y x)]))
+    [else (encode-pub-dh fmt p g y)]))
 
 ;; ---- EC ----
 

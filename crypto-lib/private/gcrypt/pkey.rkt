@@ -734,7 +734,7 @@
               (new gcrypt-ec-key% (impl this) (pub pub) (priv priv))]
              [else #f])))
 
-    (define/private (make-x25519-private-key curve qB d)
+    (define/private (make-x25519-private-key qB d)
       (define priv
         (gcry_sexp_build "(private-key (ecc (curve Curve25519) %S %S))"
                          (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))
