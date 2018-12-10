@@ -50,7 +50,7 @@ specifiers.
 
 @defproc[(digest-impl? [v any/c]) boolean?]{
 
-Returns @racket[#f] if @racket[v] represents a digest implementation,
+Returns @racket[#t] if @racket[v] represents a digest implementation,
 @racket[#f] otherwise.
 }
 
