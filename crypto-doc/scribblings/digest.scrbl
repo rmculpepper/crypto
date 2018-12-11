@@ -32,7 +32,7 @@ and low-level, incremental operations.
 
 @defproc[(digest-spec? [v any/c]) boolean?]{
 
-Returns @racket[#f] if @racket[v] represents a digest
+Returns @racket[#t] if @racket[v] represents a digest
 specifier, @racket[#f] otherwise.
 
 A digest specifier is a symbol, which is interpreted as the name of a
