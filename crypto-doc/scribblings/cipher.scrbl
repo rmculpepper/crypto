@@ -235,7 +235,7 @@ rules of their conversion to bytes.
 
 If @racket[ci] is a block cipher and if @racket[pad-mode] is
 @racket[#t], then the input is padded using PKCS#7 padding during
-decryption, and the padding is checked and removed during decryption;
+encryption, and the padding is checked and removed during decryption;
 otherwise if @racket[pad-mode] is @racket[#f], then the input is not
 padded, and its length must by divisible by @racket[ci]'s block
 size. If @racket[ci] is a stream cipher (including block ciphers using
