@@ -80,13 +80,22 @@
             (test-pk-key key pubkey*)))))))
 
 (define (test-keygen factory spec impl)
+  (define (test-rt-equal privkey)
+    (when (pk-format-ok? factory (send privkey get-spec) 'rkt-private)
+      (define privkey2
+        (datum->pk-key (pk-key->datum privkey 'rkt-private) 'rkt-private factory))
+      (check public-key=? privkey privkey2))
+    (when (pk-format-ok? factory (send privkey get-spec) 'rkt-public)
+      (define pubkey2
+        (datum->pk-key (pk-key->datum privkey 'rkt-public) 'rkt-public factory))
+      (check public-key=? privkey pubkey2)))
   (test-case (format "~a ~a keygen" (send factory get-name) spec)
     (define factory-name (send factory get-name))
     (hprintf 1 "testing keygen for ~s (~a)\n" spec factory-name)
     (case spec
       [(rsa)
        (check-false (pk-has-parameters? impl))
-       (generate-private-key impl '((nbits 512)))]
+       (test-rt-equal (generate-private-key impl '((nbits 512))))]
       [(dsa)
        (case factory-name
          [(gcrypt)  ;; params not implemented
@@ -94,36 +103,40 @@
          [else
           (check-true (pk-has-parameters? impl))
           (define p (generate-pk-parameters impl '((nbits 1024))))
-          (generate-private-key p)])
-       (generate-private-key impl '((nbits 1024)))]
+          (test-rt-equal (generate-private-key p))])
+       (test-rt-equal (generate-private-key impl '((nbits 1024))))]
       [(dh)
        (check-true (pk-has-parameters? impl))
        (define p (generate-pk-parameters impl '((nbits 512))))
-       (generate-private-key p)
-       (generate-private-key impl '((nbits 512)))]
+       (test-rt-equal (generate-private-key p))
+       (test-rt-equal (generate-private-key impl '((nbits 512))))]
       [(ec)
        (check-true (pk-has-parameters? impl))
        (define p1 (generate-pk-parameters impl '((curve "secp192r1"))))
        (define p2 (generate-pk-parameters impl '((curve secp256r1))))
-       (generate-private-key p1)
-       (generate-private-key p2)
-       (generate-private-key impl '((curve secp192r1)))]
+       (test-rt-equal (generate-private-key p1))
+       (test-rt-equal (generate-private-key p2))
+       (test-rt-equal (generate-private-key impl '((curve secp192r1))))]
       [(eddsa)
        (define k (generate-private-key impl '((curve ed25519))))
        (check-pred private-key? k)
+       (test-rt-equal k)
        (define p (generate-pk-parameters impl '((curve ed25519))))
        (check-pred pk-parameters? p)
        (define k2 (generate-private-key p '()))
        (check-pred private-key? k2)
+       (test-rt-equal k)
        (check-equal? (pk-parameters->datum p 'rkt-params)
                      (pk-parameters->datum (pk-key->parameters k) 'rkt-params))]
       [(ecx)
        (define k (generate-private-key impl '((curve x25519))))
        (check-pred private-key? k)
+       (test-rt-equal k)
        (define p (generate-pk-parameters impl '((curve x25519))))
        (check-pred pk-parameters? p)
        (define k2 (generate-private-key p '()))
        (check-pred private-key? k2)
+       (test-rt-equal k2)
        (check-equal? (pk-parameters->datum p 'rkt-params)
                      (pk-parameters->datum (pk-key->parameters k) 'rkt-params))]
       [else (void)])))
