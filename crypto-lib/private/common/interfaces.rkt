@@ -126,7 +126,7 @@
   (interface (impl<%> digest-info<%>)
     new-ctx        ;; -> digest-ctx<%>
     new-hmac-ctx   ;; Bytes -> digest-ctx<%>
-    digest         ;; Input -> Bytes
+    digest         ;; Input (U Bytes #f) -> Bytes
     hmac           ;; Bytes Input -> Bytes
     ))
 
