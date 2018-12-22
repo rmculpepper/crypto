@@ -52,7 +52,7 @@
             [(<= bA c bF) (+ 10 (- c bA))]
             [(<= ba c bf) (+ 10 (- c ba))]
             [else (bad)])))
-  (let* ([bs (if (string? bs0) (bytes->string/latin-1 bs0) bs0)]
+  (let* ([bs (if (string? bs0) (string->bytes/latin-1 bs0) bs0)]
          [len (bytes-length bs)])
     (unless (even? len) (bad))
     (let* ([olen (quotient len 2)]
