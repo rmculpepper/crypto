@@ -42,13 +42,30 @@
 
 (define kdf-impl-base%
   (class* impl-base% (kdf-impl<%>)
+    (inherit about)
     (super-new)
+    (define/public (kdf0 params pass salt)
+      (kdf params pass (check-salt salt)))
     (define/public (kdf params pass salt)
       (err/no-impl this))
     (define/public (pwhash params pass)
       (err/no-impl this))
     (define/public (pwhash-verify pass cred)
       (err/no-impl this))
+    (define/public (salt-allowed?) #t)
+    (define/public (check-salt salt)
+      (unless salt (crypto-error "salt required for KDF\n  KDF: ~a" (about)))
+      salt)
+    ))
+
+(define kdf-impl-base/no-salt%
+  (class kdf-impl-base%
+    (inherit about)
+    (super-new)
+    (define/override (salt-allowed?) #f)
+    (define/override (check-salt salt)
+      (when salt (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)))
+      #f)
     ))
 
 (define (kdf-pwhash-argon2 ki config pass)

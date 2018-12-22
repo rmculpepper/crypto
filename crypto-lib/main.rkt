@@ -426,7 +426,7 @@
   [kdf
    (->* [(or/c kdf-spec? kdf-impl?)
          bytes?
-         bytes?]
+         (or/c bytes? #f)]
         [(listof (list/c symbol? any/c))]
         bytes?)]
   [pwhash
@@ -454,7 +454,7 @@
 (define (kdf k pass salt [params '()])
   (with-crypto-entry 'kdf
     (let ([k (-get-kdf-impl k)])
-      (send k kdf params pass salt))))
+      (send k kdf0 params pass salt))))
 
 (define (pwhash k pass [params '()])
   (with-crypto-entry 'pwhash

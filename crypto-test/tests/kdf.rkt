@@ -30,7 +30,7 @@
     (when impl
       ;; Test KDF
       (define config (get-config name))
-      (let ()
+      (let ([salt (and (send impl salt-allowed?) salt)])
         (hprintf 1 "testing ~v kdf\n" name)
         (check-pred bytes? (kdf impl key salt config))
         (match name
@@ -67,10 +67,11 @@
       (hprintf 1 "testing agreement ~e\n" name)
       (test-case (format "~a" name)
         (define impl0 (car impls))
-        (define r0 (kdf impl0 key salt config))
+        (define salt* (and (send impl0 salt-allowed?) salt))
+        (define r0 (kdf impl0 key salt* config))
         (define cred0 (and pwconfig (pwhash impl0 key pwconfig)))
         (for ([impl (cdr impls)])
-          (check-equal? (kdf impl key salt config) r0)
+          (check-equal? (kdf impl key salt* config) r0)
           (when pwconfig
             (hprintf 2 "testing pwhash agreement\n")
             (check-equal? (pwhash-verify impl key cred0) #t)

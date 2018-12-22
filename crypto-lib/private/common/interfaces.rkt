@@ -223,14 +223,9 @@
 ;; ============================================================
 ;; KDFs
 
-;; A KDFSpec is one of
-;;  - (list 'pbkdf2 'hmac DigestSpec)
-;;  - 'bcrypt
-;;  - 'scrypt
-
 (define kdf-impl<%>
   (interface (impl<%>)
-    kdf ;; KDFParams bytes bytes -> bytes
+    kdf0 ;; KDFParams bytes (U bytes #f) -> bytes
     ))
 
 (define (kdf-impl? x) (is-a? x kdf-impl<%>))
