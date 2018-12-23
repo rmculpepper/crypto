@@ -725,21 +725,21 @@
       (gcry_sexp_build "(public-key (ecc (curve Curve25519) %S))"
                        (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))))
 
-    (define/override (make-private-key curve qB d)
+    (define/override (make-private-key curve qB dB)
       ;; FIXME: recover q if publicKey field not present
       (and qB
            (case curve
              [(x25519)
               (define pub (make-x25519-public-key qB))
-              (define priv (make-x25519-private-key qB d))
-              (new gcrypt-ec-key% (impl this) (pub pub) (priv priv))]
+              (define priv (make-x25519-private-key qB dB))
+              (new gcrypt-x25519-key% (impl this) (pub pub) (priv priv))]
              [else #f])))
 
-    (define/private (make-x25519-private-key qB d)
+    (define/private (make-x25519-private-key qB dB)
       (define priv
         (gcry_sexp_build "(private-key (ecc (curve Curve25519) %S %S))"
                          (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))
-                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
+                         (gcry_sexp_build/%b "(d %b)" dB)))
       (gcry_pk_testkey priv)
       priv)
     ))
@@ -756,7 +756,7 @@
     (define/override (-write-private-key fmt)
       (let ([qB (sexp-get-data priv "ecc" "q")]
             [dB (sexp-get-data priv "ecc" "d")])
-        (encode-priv-eddsa fmt 'x25519 (ec-point->raw qB) dB)))
+        (encode-priv-ecx fmt 'x25519 (ec-point->raw qB) dB)))
 
     (define/override (-write-public-key fmt)
       (let ([qB (sexp-get-data pub "ecc" "q")])
