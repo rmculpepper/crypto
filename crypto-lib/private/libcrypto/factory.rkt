@@ -124,7 +124,7 @@
         [(list 'pbkdf2 'hmac di-spec)
          (let ([di (get-digest di-spec)])
            (and di (new libcrypto-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-        [_ #f]))
+        [_ (super -get-kdf spec)]))
 
     ;; ----
 

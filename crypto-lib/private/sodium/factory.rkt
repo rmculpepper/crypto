@@ -71,7 +71,7 @@
          (and argon2id-ok? (new sodium-argon2-impl% (factory this) (spec 'argon2id)))]
         [(scrypt)
          (and scrypt-ok? (new sodium-scrypt-impl% (factory this) (spec 'scrypt)))]
-        [else #f]))
+        [else (super -get-kdf spec)]))
 
     ;; ----
 

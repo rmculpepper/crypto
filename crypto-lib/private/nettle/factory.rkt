@@ -153,7 +153,7 @@
          (let ([di (get-digest di-spec)])
            (and di (memq di-spec '(sha1 sha256))
                 (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-        [_ #f]))
+        [_ (super -get-kdf spec)]))
 
     ;; ----
 

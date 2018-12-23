@@ -199,7 +199,7 @@
         ['scrypt
          (and (version>=? (get-version) '(1 6))
               (new gcrypt-scrypt-impl% (spec spec) (factory this)))]
-        [_ #f]))
+        [_ (super -get-kdf spec)]))
 
     ;; ----
 
