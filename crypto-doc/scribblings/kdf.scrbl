@@ -16,16 +16,17 @@
 
 @title[#:tag "kdf"]{Key Derivation and Password Hashing}
 
-A key derivation function can be used to derive a secret key from a
-master secret such as a passphrase. Typically, KDFs have additional
-parameters such as salts and work factors.
+A key derivation function can be used to derive keys from secret
+material that is not directly suitable for use as a key, such as a
+passphrase or the result of a key agreement algorithm. Differnt KDFs
+have different additional parameters such as work factors and context
+information fields.
 
-KDFs are also used to store passwords @cite["HtSSaP" "DUB"]. A KDF is
-preferable to a simple digest function (even with a salt) because the
-work factor can be chosen to make exhaustively searching the space of
-likely passwords (typically short and composed of alpha-numeric
-characters) costly. Different KDFs have different parameters, which
-may control time or space requirements.
+KDFs with adjustable work factors are also used to store passwords
+@cite["HtSSaP" "DUB"]. A KDF is preferable to a simple digest function
+(even with a salt) because the work factor can be chosen to make
+exhaustively searching the space of likely passwords (typically short
+and composed of alpha-numeric characters) costly.
 
 
 @defproc[(kdf-spec? [v any/c])
@@ -34,7 +35,9 @@ may control time or space requirements.
 Returns @racket[#t] if @racket[v] is a KDF specifier, @racket[#f]
 otherwise.
 
-A KDF specifier is one of the following:
+There are two groups of KDF specifiers. The following KDFs have work
+factors and are suitable for producing keys from passwords and storing
+passwords:
 
 @itemlist[
 
@@ -53,6 +56,37 @@ variants of Argon2, designed primarily for password hashing
 @cite["Argon2" "PHC"]}
 
 ]
+
+The following KDFs are suitable for producing keys from the results of
+key-agreement algorithms. They are not suitable for storing passwords.
+
+@itemlist[
+
+@item{@racket[(list 'hkdf _digest-spec)] --- the HKDF
+extract-then-expand function @cite{HKDF}}
+
+@item{@racket[(list 'concat _digest-spec)] --- the Concatentation
+(also called One-Step) KDF from NIST SP 800-56C @cite{SP800-56C} using
+a plain digest}
+
+@item{@racket[(list 'concat 'hmac _digest-spec)] --- the
+Concatentation KDF @cite{SP800-56C} using HMAC-@racket[_digest-spec]}
+
+@item{@racket[(list 'sp800-108-counter 'hmac _digest-spec)],
+@racket[(list 'sp800-108-feedback 'hmac _digest-spec)], and
+@racket[(list 'sp800-108-double-pipeline 'hmac _digest-spec)] --- KDF
+constructions from NIST SP 800-108 @cite{SP800-108}; this library only
+supports 32-bit counters and the standard ordering of components}
+
+@item{@racket[(list 'ans-x9.63 _digest-spec)] --- similar to the
+concatenation KDF but with a different order of components, defined by
+ANSI @cite{X963}}
+
+]
+
+@history[#:changed "1.3" @elem{Added support for @racket['hkdf],
+@racket['concat], @racket['sp800-108-*], and @racket['ans-x9.63]
+algorithms.}]
 }
 
 
@@ -75,7 +109,7 @@ Returns an implementation of KDF @racket[k] from the given
 
 @defproc[(kdf [k (or/c kdf-spec? kdf-impl?)]
               [pass bytes?]
-              [salt bytes?]
+              [salt (or/c bytes? #f)]
               [params (listof (list/c symbol? any/c)) '()])
          bytes?]{
 
@@ -84,14 +118,19 @@ Runs the KDF specified by @racket[k] on the password or passphrase
 (or password hash). Additional parameters such as iteration count are
 passed via @racket[params].
 
+The salt must be a bytestring (@racket[bytes?]) except in the
+following cases: if the KDF is @racket['ans-x9.63], @racket['concat]
+with a digest, @racket['sp800-108-counter], or
+@racket['sp800-108-double-pipeline], then @racket[salt] must be
+@racket[#f]; if the KDF is @racket['hkdf] or @racket['concat] with
+HMAC, then @racket[salt] may be either @racket[#f] or a bytestring.
+
 The following parameters are recognized for @racket[(list 'pbkdf2
 'hmac _digest)]:
 
 @itemlist[
-@item{@racket[(list 'iterations _iterations)] --- number of iterations
-of the HMAC-@racket[_digest] pseudo-random function}
-@item{@racket[(list 'key-size _key-size)] --- derive a key of
-@racket[_key-size] bytes}
+@item{@racket[(list 'iterations _iterations)] --- number of iterations}
+@item{@racket[(list 'key-size _key-size)] --- the size of the output}
 ]
 
 In 2000 PKCS#5 @cite["PKCS5"] recommended a minimum of 1000
@@ -103,8 +142,7 @@ The following parameters are recognized for @racket['scrypt]:
 @item{@racket[(list 'N _N)] --- the CPU/memory cost}
 @item{@racket[(list 'p _p)] --- the parallelization factor}
 @item{@racket[(list 'r _r)] --- the block size}
-@item{@racket[(list 'key-size _key-size)] --- derive a key of
-@racket[_key-size] bytes}
+@item{@racket[(list 'key-size _key-size)] --- the size of the output}
 ]
 
 In 2009 the original scrypt paper @cite["scrypt"] used parameters such
@@ -121,7 +159,22 @@ The following parameters are recognized for @racket['argon2d],
 @item{@racket[(list 'key-size _key-size)] -- the size of the output}
 ]
 
+The following parameters are recognized for the @racket['hkdf],
+@racket['concat], @racket['sp800-108-*], and @racket['asn-x9.63]
+families of KDFs:
+
+@itemlist[
+
+@item{@racket[(list 'info _info-bytes)] --- additional contextual
+information; see @cite["HKDF" "SP800-56A" "SP800-108"] for
+recommendations regarding the contents and format of this field}
+
+@item{@racket[(list 'key-size _key-size)] --- the size of the output}
+
+]
+
 @examples[#:eval the-eval
+#:escape unsyntax
 (kdf '(pbkdf2 hmac sha256)
      #"I am the eggman"
      (crypto-random-bytes 16)
@@ -130,6 +183,13 @@ The following parameters are recognized for @racket['argon2d],
      #"I am the walrus"
      #"googoogjoob"
      '((t 100) (m 2048) (p 1) (key-size 32)))
+(eval:alts
+ (define pre-key (.... #, @italic{do key agreement} ....))
+ (define pre-key (crypto-random-bytes 16)))
+(list (kdf '(hkdf sha256) pre-key #f
+           '((info #"enc") (key-size 16)))
+      (kdf '(hkdf sha256) pre-key #f
+           '((info #"mac") (key-size 16))))
 ]
 }
 
@@ -267,4 +327,26 @@ memory resources).
 @bib-entry[#:key "PHC"
            #:title "Password Hashing Competition"
            #:url "https://password-hashing.net/"]
+
+@bib-entry[#:key "HKDF"
+           #:title "RFC 5869: HMAC-based Extract-and-Expand Key Derivation Function (HKDF)"
+           #:url "https://tools.ietf.org/html/rfc5869"]
+
+@bib-entry[#:key "SP800-56A"
+           #:title "NIST Special Publication 800-56A Rev. 3: Recommendation for Pair-Wise Key-Establishment Schemes Using Discrete Logarithm Cryptography"
+           #:url "https://csrc.nist.gov/publications/detail/sp/800-56a/rev-3/final"]
+
+@bib-entry[#:key "SP800-56C"
+           #:title "NIST Special Publication 800-56C Rev. 1: Recommendation for Key-Derivation Methods in Key-Establishment Schemes"
+           #:url "https://csrc.nist.gov/publications/detail/sp/800-56c/rev-1/final"]
+
+@bib-entry[#:key "SP800-108"
+           #:title "NIST Special Publication 800-108: Recommendation for Key Derivation Using Pseudorandom Functions (Revised)"
+           #:url "https://csrc.nist.gov/publications/detail/sp/800-108/final"]
+
+@bib-entry[#:key "X963"
+           #:title "Public Key Cryptography for the Financial Services Industry - Key Agreement and Key Transport Using Elliptic Curve Cryptography"
+           #:note @elem{ --- Not freely available. The KDF definition can be found in Section
+                        3.6.1 of @cite{SEC1}.}]
+
 ]

@@ -23,7 +23,7 @@
    c
    (u
     .
-    #"^\225?\a\315A\366\245\205\3A\207?\233_\235E\316\304\275\373\252\207\362\260\3518\v\240\a\243m")))
+    #"M\275\226\361\355\272@\231\37\365}9\354<81$3O\256\270\331\346QFZ_5?9\312\5")))
  #""
  #"")
 ((kdf
@@ -45,6 +45,28 @@
     #"\30V\214|i\2072VE\242\345`+A\262\352Ni\230|6\365\227M\364\2\326y{\256\271\21")))
  #""
  #"")
+((define pre-key (crypto-random-bytes 16))
+ ((3) 0 () 0 () () (c values c (void)))
+ #""
+ #"")
+((list
+  (kdf '(hkdf sha256) pre-key #f '((info #"enc") (key-size 16)))
+  (kdf '(hkdf sha256) pre-key #f '((info #"mac") (key-size 16))))
+ ((3)
+  0
+  ()
+  0
+  ()
+  ()
+  (c
+   values
+   c
+   (c
+    (u . #"\265\361c&2\361\301\26\273\271\264\255\334\365\313\212")
+    c
+    (u . #"\235\t\220s\246C\f\230if'\303M\210\314\236"))))
+ #""
+ #"")
 ((define pwcred (pwhash 'argon2id #"mypassword" '((t 1000) (m 4096) (p 1))))
  ((3) 0 () 0 () () (c values c (void)))
  #""
@@ -61,7 +83,7 @@
    c
    (u
     .
-    "$argon2id$v=19$m=4096,t=1000,p=1$ZDVdF0LT1XFZ+5vcNtNBxA$S+5b8J57xaqdtK37F4E4Bgmgd/4STtd6JeuFjSI7n9k")))
+    "$argon2id$v=19$m=4096,t=1000,p=1$m+clolnAitzUfS2LdXAecw$tk4bWb9R4qjzOexnJVVkdCdKjSaZIVzjD7x7QBKZGeE")))
  #""
  #"")
 ((pwhash-verify #f #"mypassword" pwcred)
