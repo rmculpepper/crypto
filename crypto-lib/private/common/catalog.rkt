@@ -465,12 +465,43 @@
     [(? symbol?) (and (memq x '(bcrypt scrypt argon2d argon2i argon2id)) #t)]
     [(list 'pbkdf2 'hmac di)
      (digest-spec? di)]
+    [(list 'hkdf di)
+     (digest-spec? di)]
+    [(list 'concat di)
+     (digest-spec? di)]
+    [(list 'concat 'hmac di)
+     (digest-spec? di)]
+    [(list 'ans-x9.63 di)
+     (digest-spec? di)]
+    [(list 'sp800-108-counter 'hmac di)
+     (digest-spec? di)]
+    [(list 'sp800-108-feedback 'hmac di)
+     (digest-spec? di)]
+    [(list 'sp800-108-double-pipeline 'hmac di)
+     (digest-spec? di)]
     [_ #f]))
 
 (define (list-known-kdfs)
   (append (list-known-simple-kdfs)
           (for/list ([di (in-list (list-known-digests))])
-            `(pbkdf2 hmac ,di))))
+            `(pbkdf2 hmac ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(hkdf ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(concat ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(concat hmac ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(concat hmac ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(ans-x9.63 ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(sp800-108-counter hmac ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(sp800-108-feedback hmac ,di))
+          (for/list ([di (in-list (list-known-digests))])
+            `(sp800-108-double-pipeline hmac ,di))
+          ))
 
 (define (list-known-simple-kdfs) ;; no `(pbkdf2 hmac ,digest)
   '(argon2d argon2i argon2id bcrypt scrypt))

@@ -15,10 +15,12 @@
 
 #lang racket/base
 (require racket/class
+         racket/match
          racket/list
          "catalog.rkt"
          "interfaces.rkt"
-         "cipher.rkt")
+         "cipher.rkt"
+         "kdf.rkt")
 (provide factory-base%)
 
 ;; ============================================================
@@ -107,13 +109,31 @@
           (printf "Available KDFs:\n")
           (for ([kdf (in-list all-kdfs)] #:when (symbol? kdf))
             (printf " ~v\n" kdf))
-          (let ([all-digests (info 'all-digests)])
+          (define all-digests (info 'all-digests))
+          (define (show-complex label dspec->kdfspec)
             (cond [(null? all-digests) (void)]
-                  [(for/and ([di (in-list all-digests)]) (get-kdf `(pbkdf2 hmac ,di)))
-                   (printf " `(pbkdf2 hmac ,digest)  for all available digests\n")]
+                  [(for/and ([di (in-list all-digests)]) (get-kdf (dspec->kdfspec di)))
+                   (printf " ~a  for all available digests\n" label)]
                   [else
-                   (for ([di (in-list all-digests)] #:when (get-kdf `(pbkdf2 hmac ,di)))
-                     (printf " ~v\n" `(pbkdf2 hmac ,di)))]))))
+                   (for ([di (in-list all-digests)] #:when (get-kdf (dspec->kdfspec di)))
+                     (printf " ~v\n" (dspec->kdfspec di)))]))
+          (show-complex "`(pbkdf2 hmac ,digest)                   "
+                        (lambda (ds) `(pbkdf2 hmac ,ds)))
+          (show-complex "`(hkdf ,digest)                          "
+                        (lambda (ds) `(hkdf ,ds)))
+          (show-complex "`(concat ,digest)                        "
+                        (lambda (ds) `(concat ,ds)))
+          (show-complex "`(concat hmac ,digest)                   "
+                        (lambda (ds) `(concat hmac ,ds)))
+          (show-complex "`(ans-x9.63 ,digest)                     "
+                        (lambda (ds) `(ans-x9.63 ,ds)))
+          (show-complex "`(sp800-108-counter hmac ,digest)        "
+                        (lambda (ds) `(sp800-108-counter hmac ,ds)))
+          (show-complex "`(sp800-108-feedback hmac ,digest)       "
+                        (lambda (ds) `(sp800-108-counter hmac ,ds)))
+          (show-complex "`(sp800-108-double-pipeline hmac ,digest)"
+                        (lambda (ds) `(sp800-108-counter hmac ,ds)))
+          (void)))
       (void))
 
     ;; table : Hash[*Spec => *Impl]
@@ -165,5 +185,28 @@
     (define/public (-get-pk-reader) #f)
 
     ;; -get-kdf : -> (U kdf-impl #f)
-    (define/public (-get-kdf spec) #f)
+    (define/public (-get-kdf spec)
+      (match spec
+        [(list 'hkdf (? symbol? dspec))
+         (define di (get-digest dspec))
+         (and di (new hkdf-impl% (spec spec) (factory this) (di di)))]
+        [(list 'concat (? symbol? dspec))
+         (define di (get-digest dspec))
+         (and di (new concat-kdf-impl% (spec spec) (factory this) (di di) (hmac? #f)))]
+        [(list 'concat 'hmac (? symbol? dspec))
+         (define di (get-digest dspec))
+         (and di (new concat-kdf-impl% (spec spec) (factory this) (di di) (hmac? #t)))]
+        [(list 'ans-x9.63 (? symbol? dspec))
+         (define di (get-digest dspec))
+         (and di (new ans-x9.63-kdf-impl% (spec spec) (factory this) (di di)))]
+        [(list 'sp800-108-counter 'hmac (? symbol? dspec))
+         (define di (get-digest dspec))
+         (and di (new sp800-108-counter-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
+        [(list 'sp800-108-feedback 'hmac (? symbol? dspec))
+         (define di (get-digest dspec))
+         (and di (new sp800-108-feedback-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
+        [(list 'sp800-108-double-pipeline 'hmac (? symbol? dspec))
+         (define di (get-digest dspec))
+         (and di (new sp800-108-double-pipeline-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
+        [_ #f]))
     ))
