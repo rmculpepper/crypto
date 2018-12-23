@@ -53,7 +53,7 @@ IV, <span class="RktSym"><a href="#%28def._%28%28lib._crypto%2Fmain..rkt%29._gen
 <span class="RktVar">input</span> and <span class="RktVar">additional-authenticated-data</span> and the
 rules of their conversion to bytes.</div></p><p>If <span class="RktVar">ci</span> is a block cipher and if <span class="RktVar">pad-mode</span> is
 <span class="RktVal">#t</span>, then the input is padded using PKCS#7 padding during
-decryption, and the padding is checked and removed during decryption;
+encryption, and the padding is checked and removed during decryption;
 otherwise if <span class="RktVar">pad-mode</span> is <span class="RktVal">#f</span>, then the input is not
 padded, and its length must by divisible by <span class="RktVar">ci</span>&rsquo;s block
 size. If <span class="RktVar">ci</span> is a stream cipher (including block ciphers using
