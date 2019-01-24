@@ -21,7 +21,6 @@
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
-         "../common/pk-asn1.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
          "ffi.rkt")
@@ -405,10 +404,10 @@
     ;; ----
 
     (define/override (make-params curve-oid)
-      (curve->params (curve-oid->curve curve-oid)))
+      (curve->params (curve-oid->name curve-oid)))
 
     (define/override (make-public-key curve-oid qB)
-      (cond [(curve-oid->name curve-oid)
+      (cond [(curve-oid->name-string curve-oid)
              => (lambda (curve-name)
                   (check-ec-q curve-name qB)
                   (define pub (make-ec-public-key curve-name qB))
@@ -421,7 +420,7 @@
                        (gcry_sexp_build/%b "(q %b)" qB)))
 
     (define/override (make-private-key curve-oid qB d)
-      (cond [(curve-oid->name curve-oid)
+      (cond [(curve-oid->name-string curve-oid)
              => (lambda (curve-name)
                   (define qB*
                     (cond [qB (begin0 qB (check-ec-q curve-name qB))]
@@ -458,13 +457,8 @@
         (gcry_sexp_release pub-sexp)
         (gcry_ctx_release ec)))
 
-    (define/private (curve-oid->curve oid)
-      (for/first ([entry (in-list known-curves)]
-                  #:when (equal? (cdr entry) oid))
-        (car entry)))
-
-    (define/private (curve-oid->name oid)
-      (define name-sym (curve-oid->curve oid))
+    (define/private (curve-oid->name-string oid)
+      (define name-sym (curve-oid->name oid))
       (and (memq name-sym gcrypt-curves)
            (string->bytes/latin-1 (symbol->string name-sym))))
     ))
@@ -476,7 +470,7 @@
     (super-new)
 
     (define/override (-write-params fmt)
-      (define curve-oid (cond [(assq curve known-curves) => cdr] [else #f]))
+      (define curve-oid (curve-name->oid curve))
       (and curve-oid (encode-params-ec fmt curve-oid)))
 
     (define/override (generate-key config)
@@ -513,7 +507,7 @@
     (define/private (get-curve [sexp pub])
       (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
     (define/private (get-curve-oid sexp)
-      (curve->oid (get-curve sexp)))
+      (curve-alias->oid (get-curve sexp)))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       ;; When the digest is larger than the bits of the EC field, gcrypt is
@@ -559,9 +553,6 @@
       (define shblen (bytes-length shb))
       (subbytes shb 1 (+ 1 (quotient shblen 2))))
     ))
-
-(define (curve->oid curve)
-  (cond [(assq (alias->curve-name curve) known-curves) => cdr] [else #f]))
 
 ;; ============================================================
 

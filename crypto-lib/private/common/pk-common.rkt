@@ -904,6 +904,10 @@
 (define (curve-name->oid name)
   (cond [(assq name known-curves) => cdr] [else #f]))
 
+;; curve-alias->oid : Symbol/String -> OID/#f
+(define (curve-alias->oid alias)
+  (curve-name->oid (alias->curve-name alias)))
+
 ;; ============================================================
 
 (define config:rsa-keygen
