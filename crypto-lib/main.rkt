@@ -444,7 +444,8 @@
    (->* [bytes?
          bytes?
          #:N exact-positive-integer?]
-        [#:p exact-positive-integer?
+        [#:r exact-positive-integer?
+         #:p exact-positive-integer?
          #:key-size exact-positive-integer?]
         bytes?)]
   ))
