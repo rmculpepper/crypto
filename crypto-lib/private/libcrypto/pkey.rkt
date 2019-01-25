@@ -23,7 +23,7 @@
          "../common/catalog.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
-         "../common/pk-asn1.rkt"
+         "../common/asn1.rkt"
          "../common/error.rkt"
          "ffi.rkt"
          "digest.rkt")

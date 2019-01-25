@@ -23,8 +23,11 @@
          "common.rkt"
          "error.rkt"
          "base256.rkt"
-         "pk-asn1.rkt")
-(provide (all-defined-out))
+         "asn1.rkt")
+(provide (all-defined-out)
+         curve-name->oid
+         curve-alias->oid
+         curve-oid->name)
 
 ;; ============================================================
 ;; Base classes
@@ -681,7 +684,7 @@
 (define (encode-params-dsa fmt p q g)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER AlgorithmIdentifier
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY
        (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g)))]
     [(DSAParameters Dss-Parms)
      (asn1->bytes/DER Dss-Parms (hasheq 'p p 'q q 'g g))]
@@ -719,7 +722,7 @@
 (define (encode-params-dh fmt p g)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER AlgorithmIdentifier
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY
        (hasheq 'algorithm dhKeyAgreement
                'parameters (hasheq 'prime p 'base g)))]
     [(DHParameter)
@@ -756,7 +759,7 @@
 (define (encode-params-ec fmt curve-oid)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER AlgorithmIdentifier
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY
        (hasheq 'algorithm id-ecPublicKey
                'parameters (list 'namedCurve curve-oid)))]
     [(EcpkParameters)
@@ -796,7 +799,7 @@
   (case fmt
     [(AlgorithmIdentifier)
      (asn1->bytes/DER
-      AlgorithmIdentifier
+      AlgorithmIdentifier/PUBKEY
       (hasheq 'algorithm (ed-curve->oid curve)))]
     [(rkt-params) (list 'eddsa 'params curve)]
     [else #f]))
@@ -833,7 +836,7 @@
   (case fmt
     [(AlgorithmIdentifier)
      (asn1->bytes/DER
-      AlgorithmIdentifier
+      AlgorithmIdentifier/PUBKEY
       (hasheq 'algorithm (x-curve->oid curve)))]
     [(rkt-params) (list 'ecx 'params curve)]
     [else #f]))
@@ -893,16 +896,6 @@
      ;; (eprintf "decode\n mlen=~v\n x=~v\n y=~v\n" len x y)
      (cons x y)]
     [else (bad)]))
-
-;; curve-oid->name : OID -> Symbol/#f
-(define (curve-oid->name oid)
-  (for/first ([entry (in-list known-curves)]
-              #:when (equal? (cdr entry) oid))
-    (car entry)))
-
-;; curve-name->oid : Symbol -> OID/#f
-(define (curve-name->oid name)
-  (cond [(assq name known-curves) => cdr] [else #f]))
 
 ;; curve-alias->oid : Symbol/String -> OID/#f
 (define (curve-alias->oid alias)
