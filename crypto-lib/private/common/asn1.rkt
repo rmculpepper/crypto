@@ -26,7 +26,9 @@
 ;;     - 3274, 3779, 6019, 4073, 4231, 4334, 5083, 5652, 5752
 ;; - RFC 5915: EC private key structure
 ;; - RFC 5958: PKCS #8 private key info
+;; - RFC 7914: scrypt
 ;; - RFC 8018: PKCS #5 password-based cryptography
+;; - RFC 8103: Chacha20-Poly1305
 ;; - RFC 8410: {Ed,X}{25519,448}
 ;; - NIST: AES, SHA2, SHA3
 ;;   - https://csrc.nist.gov/projects/computer-security-objects-register/algorithm-registration
@@ -204,7 +206,7 @@
 ;; (define id-alg-SSDH (build-OID pkcs-9 (smime 16) (alg 3) 10))
 ;; (define id-alg-CMS3DESwrap (build-OID pkcs-9 (smime 16) (alg 3) 6))
 ;; (define id-alg-CMSRC2wrap (build-OID pkcs-9 (smime 16) (alg 3) 7))
-;; (define des-ede3-cbc (build-OID rsadsi (encryptionAlgorithm 3) 7))
+(define des-ede3-cbc (build-OID rsadsi (encryptionAlgorithm 3) 7))
 ;; (define rc2-cbc (build-OID rsadsi (encryptionAlgorithm 3) 2))
 ;; (define id-PBKDF2 (build-OID rsadsi (pkcs 1) (pkcs-5 5) 12))
 
@@ -322,6 +324,10 @@
 
 (define dhKeyAgreement (build-OID pkcs-3 1))
 
+;; from scrypt-0 (1.3.6.1.4.1.11591.4.10)
+
+(define id-scrypt (OID 1 3 6 1 4 1 11591 4 11))
+
 ;; from PKCS5v2-1 (1.2.840.113549.1.5.16.2)
 
 (define id-PBKDF2 (build-OID pkcs-5 12))
@@ -350,6 +356,10 @@
 (define aes128-CBC-PAD (build-OID aes 2))
 (define aes192-CBC-PAD (build-OID aes 22))
 (define aes256-CBC-PAD (build-OID aes 42))
+
+;; from CMS-AEADChaCha20Poly1305 (1.2.840.113549.1.9.16.0.66)
+
+(define id-alg-AEADChaCha20Poly1305 (build-OID pkcs-9 (smime 16) (alg 3) 18))
 
 ;; from Safecurves-pkix-18 (1.3.6.1.5.5.7.0.93)
 
@@ -628,4 +638,94 @@
                     #:decode (lambda (v) (bytes->asn1/DER type v))))]
         [else OCTET-STRING]))
 
+
 ;; ------------------------------------------------------------
+;; PKCS #5 Types and Relations
+
+(define GCMParameters
+  (SEQUENCE [aes-nonce          OCTET-STRING] ;; 12 octets
+            [aes-ICVlen         INTEGER #:default 12]))
+
+(define algid-hmacWithSHA1
+  (hasheq 'algorithm id-hmacWithSHA1 'parameters #f))
+
+(define PBKDF2-PRFs
+  (relation
+   #:heading
+   ['oid                 'params  'digest]
+   #:tuples
+   [id-hmacWithSHA1      NULL     'sha1]
+   [id-hmacWithSHA224    NULL     'sha224]
+   [id-hmacWithSHA256    NULL     'sha256]
+   [id-hmacWithSHA384    NULL     'sha384]
+   [id-hmacWithSHA512    NULL     'sha512]
+   ;; [id-hmacWithSHA512-224 NULL _]
+   ;; [id-hmacWithSHA512-256 NULL _]
+   ;; Not "standard"!
+   [id-hmacWithSHA3-224  NULL     'sha3-224]
+   [id-hmacWithSHA3-256  NULL     'sha3-256]
+   [id-hmacWithSHA3-384  NULL     'sha3-384]
+   [id-hmacWithSHA3-512  NULL     'sha3-512]
+   ))
+
+(define PBKDF2-params
+  (SEQUENCE
+   [salt                OCTET-STRING] ;; actually, CHOICE with PBKDF2-SaltSources
+   [iterationCount      INTEGER]
+   [keyLength           INTEGER #:optional]
+   [prf                 (AlgorithmIdentifier PBKDF2-PRFs)
+                        #:default algid-hmacWithSHA1]))
+
+(define scrypt-params ;; from scrypt-0
+  (SEQUENCE
+   [salt                OCTET-STRING]
+   [costParameter       INTEGER]
+   [blockSize           INTEGER]
+   [parallelizationParameter INTEGER]
+   [keyLength           INTEGER #:optional]))
+
+;; -- PBES2
+
+(define PBES2-KDFs
+  (relation
+   #:heading
+   ['oid        'params]
+   #:tuples
+   [id-PBKDF2   PBKDF2-params]
+   [id-scrypt   scrypt-params]))
+
+(define PBES2-Encs
+  (relation
+   #:heading
+   ['oid           'params       'spec]
+   #:tuples
+   [des-ede3-cbc   OCTET-STRING  '((des-ede3 cbc) 24)]
+   [aes128-CBC-PAD OCTET-STRING  '((aes cbc) 16)]
+   [aes192-CBC-PAD OCTET-STRING  '((aes cbc) 24)]
+   [aes256-CBC-PAD OCTET-STRING  '((aes cbc) 32)]
+   ;; Not "standard"!
+   [id-aes128-GCM  GCMParameters '((aes gcm) 16)]
+   [id-aes192-GCM  GCMParameters '((aes gcm) 24)]
+   [id-aes256-GCM  GCMParameters '((aes gcm) 32)]
+   [id-alg-AEADChaCha20Poly1305 OCTET-STRING '((chacha20-poly1305 stream) 32)]
+   ))
+
+(define PBES2-params
+  (SEQUENCE
+   [keyDerivationFunc   (AlgorithmIdentifier PBES2-KDFs)]
+   [encryptionScheme    (AlgorithmIdentifier PBES2-Encs)]))
+
+;; ------------------------------------------------------------
+;; PKCS #8 (https://tools.ietf.org/html/rfc5208)
+
+(define KeyEncryptionAlgorithms
+  (relation
+   #:heading
+   ['oid        'params]
+   #:tuples
+   [id-PBES2    PBES2-params]))
+
+(define EncryptedPrivateKeyInfo
+  (SEQUENCE
+   [encryptionAlgorithm  (AlgorithmIdentifier KeyEncryptionAlgorithms)]
+   [encryptedData        OCTET-STRING]))
