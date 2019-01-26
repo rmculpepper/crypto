@@ -625,30 +625,30 @@ found that accepts @racket[fmt], an exception is raised.
 
 @bib-entry[#:key "PKCS1"
            #:title "PKCS #1: RSA Cryptography, version 2.1"
-           #:url "http://www.ietf.org/rfc/rfc3447.txt"]
+           #:url "https://tools.ietf.org/html/rfc3447"]
 
 @bib-entry[#:key "PKCS3"
            #:title "PKCS #3: Diffie-Hellman Key-Agreement Standard"]
 
 @bib-entry[#:key "PKCS8"
            #:title "PKCS #8: Private-Key Information Syntax Specification, version 1.2"
-           #:url "http://www.ietf.org/rfc/rfc5208.txt"]
+           #:url "https://tools.ietf.org/html/rfc5208"]
 
 @bib-entry[#:key "PKIX"
-           #:title "RFC 3280: Internet X.509 Public Key Infrastructure: Certificate and CRL Profile"
-           #:url "http://www.ietf.org/rfc/rfc3280.txt"]
+           #:title "RFC 5280: Internet X.509 Public Key Infrastructure: Certificate and CRL Profile"
+           #:url "https://tools.ietf.org/html/rfc5280"]
 
 @bib-entry[#:key "PKIX-AlgId"
            #:title "RFC 3279: Algorithms and Identifiers for the Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile"
-           #:url "http://www.ietf.org/rfc/rfc3279.txt"]
+           #:url "https://tools.ietf.org/html/rfc3279"]
 
 @bib-entry[#:key "PKIX-EdC"
-           #:title "(Draft) Algorithm Identifiers for Ed25519, Ed448, X25519 and X448 for use in the Internet X.509 Public Key Infrastructure"
-           #:url "https://tools.ietf.org/html/draft-ietf-curdle-pkix-07"]
+           #:title "RFC 8410: Algorithm Identifiers for Ed25519, Ed448, X25519 and X448 for use in the Internet X.509 Public Key Infrastructure"
+           #:url "https://tools.ietf.org/html/rfc8410"]
 
 @bib-entry[#:key "RFC2631"
            #:title "RFC 2631: Diffie-Hellman Key Agreement Method"
-           #:url "http://www.ietf.org/rfc/rfc2631.txt"]
+           #:url "https://tools.ietf.org/html/rfc2631"]
 
 @bib-entry[#:key "SEC1"
            #:title "SEC 1: Elliptic Curve Cryptography"
