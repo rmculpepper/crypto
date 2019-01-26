@@ -5,7 +5,7 @@
           crypto/private/common/catalog
           (for-label racket/base
                      racket/contract
-                     crypto))
+                     crypto crypto/pkcs8))
 
 @title[#:tag "pk"]{Public-Key Cryptography}
 
@@ -614,7 +614,80 @@ Parses @racket[datum] and returns a key-parameters value associated
 with an implementation in @racket[factories]. If no implementation is
 found that accepts @racket[fmt], an exception is raised.
 }
-        
+
+
+@section[#:tag "pkcs8"]{PKCS #8 Encrypted Private Keys}
+
+@defmodule[crypto/pkcs8]
+@history[#:added "1.5"]
+
+@deftogether[[
+@defproc[(pkcs8-encrypt/pbkdf2-hmac
+                        [password bytes?]
+                        [pk (or/c private-key? bytes?)]
+                        [#:digest digest-spec digest-spec? 'sha512]
+                        [#:iterations iterations exact-positive-integer? (expt 2 16)]
+                        [#:cipher cipher-spec cipher-spec? '(aes cbc)]
+                        [#:key-size key-size exact-positive-integer?
+                                    (cipher-default-key-size cipher-spec)])
+         bytes?]
+@defproc[(pkcs8-encrypt/scrypt
+                        [password bytes?]
+                        [pk (or/c private-key? bytes?)]
+                        [#:N N exact-positive-integer? (expt 2 14)]
+                        [#:r r exact-positive-integer? 8]
+                        [#:p p exact-positive-integer? 1]
+                        [#:cipher cipher-spec cipher-spec? '(aes cbc)]
+                        [#:key-size key-size exact-positive-integer?
+                                    (cipher-default-key-size cipher-spec)])
+         bytes?]
+]]{
+
+Produce a DER-encoded EncryptedPrivateKeyInfo @cite["PKCS8"]
+containing the private key @racket[pk] encrypted with a key derived
+from @racket[password]. If @racket[pk] is a private key object
+(@racket[private-key?]), it is converted to a byte string using
+OneAsymmetricKey format. If @racket[pk] is a byte string, it should be
+a OneAsymmetricKey or PrivateKeyInfo encoding, but the structure of
+the byte string is not inspected.
+
+See @racket[pbkdf2-hmac] for the meaning of the @racket[iterations]
+argument, and see @racket[scrypt] for the meanings of the @racket[N],
+@racket[r], and @racket[p] arguments.
+
+The following values of @racket[cipher-spec] are currently supported:
+@racket['(aes cbc)], @racket['(des-ede3 cbc)], @racket['(aes gcm)],
+and @racket['(chacha20-poly1305 stream)].
+
+The following values of @racket[digest-spec] are currently supported:
+@racket['sha1], @racket['sha224], @racket['sha256], @racket['sha384],
+and @racket['sha512].
+
+Compatibility with OpenSSL 1.1.0 has been tested with @racket['(aes cbc)]
+and @racket['(des-ede3 cbc)].
+}
+
+@defproc[(pkcs8-decrypt-bytes [password bytes?] [p8-epki bytes?]) bytes?]{
+
+Decrypts the DER-encoded EncryptedPrivateKeyInfo @racket[p8-epki]
+using @racket[password] and returns the unencrypted private key as a
+byte string. The structure of the decrypted byte string is not inspected.
+
+If the wrong password is given, then an exception will @emph{probably}
+be raised, but for non-AEAD ciphers (such as AES-CBC), there is a
+possibility that the decryption will succeed and return nonsense.
+}
+
+@defproc[(pkcs8-decrypt-key [password bytes?] [p8-epki bytes?]) private-key?]{
+
+Decrypts the DER-encodedEncryptedPrivateKeyInfo @racket[p8-epki] using
+@racket[password] and parses the unencrypted private key as
+OneAsymmetricKey.
+
+Equivalent to the following:
+@racketblock[(datum->pk-key (pkcs8-decrypt-bytes password p8-epki) 'OneAsymmetricKey)]
+}
+
 
 @bibliography[
 #:tag "pk-bibliography"

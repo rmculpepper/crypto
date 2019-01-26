@@ -7,6 +7,12 @@
                      racket/random
                      crypto))
 
+@(module racket-links racket/base
+   (require scribble/manual (for-label racket/random))
+   (define racket:crypto-random-bytes-id @racket[crypto-random-bytes])
+   (provide racket:crypto-random-bytes-id))
+@(require (submod "." racket-links))
+
 @title[#:tag "misc"]{Miscellaneous Notes and Utilities}
 
 @section[#:tag "input"]{Input to Cryptographic Operations}
@@ -37,6 +43,16 @@ Represents a subsequence of a bytestring. See also @racket[input/c].
 
 Equivalent to @racket[(subbytes bs start end)] if @racket[bs] is not
 subsequently mutated, but avoids making a copy.
+}
+
+@section[#:tag "crypto-random-bytes"]{Random Bytes}
+
+@(declare-exporting crypto)
+
+@defproc[(crypto-random-bytes [n exact-nonnegative-integer?]) bytes?]{
+
+For convenience, this library re-exports @racket:crypto-random-bytes-id
+from @racketmodname[racket/random].
 }
 
 @section[#:tag "provider-notes"]{Notes on Cryptography Providers}
