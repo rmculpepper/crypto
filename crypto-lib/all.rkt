@@ -33,11 +33,11 @@
 
 (define all-factories
   (list nettle-factory
+        libcrypto-factory
         gcrypt-factory
         b2-factory
         argon2-factory
-        sodium-factory
-        libcrypto-factory))
+        sodium-factory))
 
 (define (use-all-factories!)
   (crypto-factories all-factories))
