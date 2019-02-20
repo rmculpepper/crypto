@@ -63,12 +63,12 @@
 (define alice:bobs-pubkey
   (datum->pk-key `(ecx public x25519 ,alice:bobs-pub-raw) 'rkt-public))
 
-;; Step 6: Alice derives the secret key using her private key and
+;; Step 7: Alice derives the secret key using her private key and
 ;; Bob's ephemeral public key.
 
 (define alice:shared-secret (pk-derive-secret alice:privkey alice:bobs-pubkey))
 (define alice:shared-key (kdf '(hkdf sha256) alice:shared-secret #f))
 
-;; Step 7: Alice decrypts the message using the shared key and nonce.
+;; Step 8: Alice decrypts the message using the shared key and nonce.
 
 (decrypt '(xchacha20-poly1305 stream) alice:shared-key alice:nonce alice:ciphertext)
