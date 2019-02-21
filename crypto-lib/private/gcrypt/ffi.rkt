@@ -30,9 +30,6 @@
 
 ;; ----
 
-(define-ffi-definer define-racket #f)
-(define-racket scheme_make_sized_byte_string (_fun _pointer _intptr _bool -> _racket))
-
 (define _gcry_error _uint)
 
 (define (gcry_error-code e)

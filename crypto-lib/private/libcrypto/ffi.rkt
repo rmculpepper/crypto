@@ -24,11 +24,6 @@
 (provide (protect-out (all-defined-out))
          libcrypto)
 
-(define-ffi-definer define-racket #f)
-
-(define-racket scheme_make_utf8_string
-  (_fun _pointer -> _racket))
-
 (define ((K v) . args) v)
 
 ;; ============================================================
@@ -173,35 +168,11 @@
   (_fun -> _BIGNUM/null)
   #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_new)))
 
-(define-crypto BN_copy
-  (_fun _BIGNUM _BIGNUM -> _BIGNUM)
-  #:wrap (err-wrap/pointer 'BN_copy))
-
 (define-crypto BN_add_word
   (_fun _BIGNUM
         _ulong
         -> _int)
   #:wrap (err-wrap 'BN_add_word))
-
-(define-crypto BN_num_bits
-  (_fun _BIGNUM -> _int))
-
-(define (BN_num_bytes bn)
-  (quotient (+ (BN_num_bits bn) 7) 8))
-
-(define-crypto BN_hex2bn
-  (_fun (bn : (_ptr o _BIGNUM/null)) _string/utf-8
-        -> (status : _int)
-        -> (and (positive? status) bn))
-  #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_hex2bin)))
-
-(define-crypto BN_bn2hex
-  (_fun _BIGNUM ->
-        (s : _pointer)
-        -> (and s
-                (begin0 (scheme_make_utf8_string s)
-                  (CRYPTO_free s))))
-  #:wrap (err-wrap/pointer 'BN_bn2hex))
 
 (define-crypto BN_bn2bin
   (_fun _BIGNUM _bytes -> _int))
@@ -212,12 +183,6 @@
         (_pointer = #f)
         -> _BIGNUM/null)
   #:wrap (compose (allocator BN_free) (err-wrap/pointer 'BN_bin2bn)))
-
-(define (BN->bytes/bin bn)
-  (define len (BN_num_bytes bn))
-  (define buf (make-bytes len))
-  (BN_bn2bin bn buf)
-  buf)
 
 ;; ============================================================
 ;; Digest
