@@ -15,7 +15,7 @@
 This library relies on foreign libraries for the implementations of
 cryptographic primitives. Each foreign library is called a
 @emph{cryptography provider} and it has an associated @emph{factory}
-that map cryptographic @emph{algorithm specifiers} to
+that maps cryptographic @emph{algorithm specifiers} to
 @emph{implementations}.
 
 Cryptography providers may be used to obtain algorithm implementations
