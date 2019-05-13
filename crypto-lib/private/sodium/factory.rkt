@@ -79,8 +79,8 @@
       (case key
         [(version-string) (and sodium-ok? (sodium_version_string))]
         [(all-ec-curves) '()]
-        [(all-eddsa-curves) '(ed25519)]
-        [(all-ecx-curves) '(x25519)]
+        [(all-eddsa-curves) (if sodium-ok? '(ed25519) '())]
+        [(all-ecx-curves) (if sodium-ok? '(x25519) '())]
         [else (super info key)]))
 
     (define/override (print-info)
