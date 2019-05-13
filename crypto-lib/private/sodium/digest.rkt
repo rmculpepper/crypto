@@ -76,6 +76,10 @@
       (define ctx (make-ctx (crypto_auth_hmacsha256_statebytes)))
       (crypto_auth_hmacsha256_init ctx key (bytes-length key))
       (new sodium-hmac-sha256-digest-ctx% (impl this) (ctx ctx)))
+    (define/override (-digest-buffer in start end)
+      (define out (make-bytes (get-size)))
+      (crypto_hash_sha256 out (ptr-add in start) (- end start))
+      out)
     ))
 
 (define sodium-sha256-digest-ctx%
@@ -124,6 +128,10 @@
       (define ctx (make-ctx (crypto_auth_hmacsha512_statebytes)))
       (crypto_auth_hmacsha512_init ctx key (bytes-length key))
       (new sodium-hmac-sha512-digest-ctx% (impl this) (ctx ctx)))
+    (define/override (-digest-buffer in start end)
+      (define out (make-bytes (get-size)))
+      (crypto_hash_sha512 out (ptr-add in start) (- end start))
+      out)
     ))
 
 (define sodium-sha512-digest-ctx%
