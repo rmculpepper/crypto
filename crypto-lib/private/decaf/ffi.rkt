@@ -65,6 +65,64 @@
   (_fun _decaf_sha512_ctx (out : _pointer) (olen : _size) -> _void))
 
 ;; ============================================================
+;; sha-3
+
+(define-cstruct _decaf_keccak_sponge_s
+  ([opaque (_array _uint64 26)]))
+
+(define (new-decaf_keccak_sponge)
+  (define p (malloc _decaf_keccak_sponge_s))
+  (cpointer-push-tag! p decaf_keccak_sponge_s-tag)
+  p)
+
+(define _decaf_keccak_sponge _decaf_keccak_sponge_s-pointer)
+
+(define-cpointer-type _decaf_kparams)
+
+(define-decaf decaf_sha3_init
+  (_fun _decaf_keccak_sponge _decaf_kparams -> _void))
+
+(define-decaf decaf_sha3_update
+  (_fun _decaf_keccak_sponge _pointer _size
+        -> (err : _decaf_error) -> (decaf-ok? err)))
+
+(define-decaf decaf_sha3_output
+  (_fun _decaf_keccak_sponge _pointer _size
+        -> (err : _decaf_error) -> (decaf-ok? err)))
+
+(define-decaf decaf_sha3_final
+  (_fun _decaf_keccak_sponge _pointer _size
+        -> (err : _decaf_error) -> (decaf-ok? err)))
+
+(define-decaf decaf_sha3_reset
+  (_fun _decaf_keccak_sponge -> _void))
+
+(define-decaf decaf_sha3_default_output_bytes
+  (_fun _decaf_keccak_sponge -> _size))
+
+(define-decaf decaf_sha3_max_output_bytes
+  (_fun _decaf_keccak_sponge -> _size))
+
+(define-decaf decaf_sha3_destroy
+  (_fun _decaf_keccak_sponge -> _void))
+
+(define-decaf decaf_sha3_hash
+  (_fun (out : _pointer) (outlen : _size)
+        (in : _pointer)  (inlen : _size)
+        (params : _decaf_kparams)
+        -> (err : _decaf_error) -> (decaf-ok? err)))
+
+(define (get-sha3-params name)
+  (define p (ffi-obj-ref name libdecaf (K #f)))
+  (and p (cast p _pointer _decaf_kparams)))
+
+(define DECAF_SHA3_512 (get-sha3-params 'DECAF_SHA3_512_params_s))
+(define DECAF_SHA3_384 (get-sha3-params 'DECAF_SHA3_384_params_s))
+(define DECAF_SHA3_256 (get-sha3-params 'DECAF_SHA3_256_params_s))
+(define DECAF_SHA3_224 (get-sha3-params 'DECAF_SHA3_224_params_s))
+
+
+;; ============================================================
 ;; ed25519
 
 (define-decaf DECAF_ED25519_NO_CONTEXT _pointer

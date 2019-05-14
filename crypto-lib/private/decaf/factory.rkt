@@ -36,6 +36,8 @@
       (case (send info get-spec)
         [(sha512)
          (new decaf-sha512-impl% (info info) (factory this))]
+        [(sha3-512 sha3-384 sha3-256 sha3-224)
+         (new decaf-sha3-impl% (info info) (factory this))]
         [else #f]))
 
     (define/override (-get-pk spec)
