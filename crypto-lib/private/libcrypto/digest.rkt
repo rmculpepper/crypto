@@ -18,6 +18,7 @@
 (require ffi/unsafe
          racket/class
          "../common/digest.rkt"
+         "../common/error.rkt"
          "ffi.rkt")
 (provide (all-defined-out))
 
@@ -41,7 +42,8 @@
       (HMAC_Init_ex ctx key (bytes-length key) md)
       (new libcrypto-hmac-ctx% (impl this) (ctx ctx)))
 
-    (define/override (-digest-buffer buf start end)
+    (define/override (-digest-buffer key buf start end)
+      (when key (internal-error "unexpected key for digest"))
       (define outbuf (make-bytes (get-size)))
       (EVP_Digest (ptr-add buf start) (- end start) outbuf md)
       outbuf)

@@ -64,9 +64,9 @@
   #:fail (lambda () (lambda () crypto_generichash_blake2b_STATEBYTES)))
 
 (define-na crypto_generichash_blake2b
-  (_fun (out : _bytes)  (_size = (bytes-length out))
-        (in : _pointer) (inlen : _ullong)
-        (key : _bytes)  (_size = (bytes-length key))
+  (_fun (out : _bytes)   (_size = (bytes-length out))
+        (in : _pointer)  (inlen : _ullong)
+        (key : _pointer) (keylen : _size)
         -> _int))
 
 (define-na crypto_generichash_blake2b_salt_personal

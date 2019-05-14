@@ -39,7 +39,10 @@
         (gcry_md_setkey ctx key (bytes-length key))
         (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 
-    (define/override (-digest-buffer buf start end)
+    (define/override (-digest-buffer key buf start end)
+      (if key #f (-digest-buffer1 buf start end)))
+
+    (define/private (-digest-buffer1 buf start end)
       ;; FIXME: docs say "will abort the process if an unavailable algorithm is used"
       ;; so maybe not worth the trouble?
       (define outbuf (make-bytes (get-size)))
