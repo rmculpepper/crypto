@@ -16,7 +16,7 @@
 #lang racket/base
 (require racket/class
          racket/match
-         rackunit
+         checktest
          crypto
          crypto/private/common/catalog
          (prefix-in rkt: crypto/private/rkt/pbkdf2)
@@ -30,27 +30,27 @@
     (when impl
       ;; Test KDF
       (define config (get-config name))
-      (let ([salt (and (send impl salt-allowed?) salt)])
-        (hprintf 1 "testing ~v kdf\n" name)
-        (check-pred bytes? (kdf impl key salt config))
-        (match name
-          [(list 'pbkdf2 'hmac di)
-           (define dimpl (send factory get-digest di))
-           (when dimpl
-             (check-equal? (kdf impl key salt '((iterations 2000) (key-size 89)))
-                           (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
-          [_ (void)]))
+      (test #:name (format "kdf ~v" name)
+        (let ([salt (and (send impl salt-allowed?) salt)])
+          (check (kdf impl key salt config) bytes?)
+          (match name
+            [(list 'pbkdf2 'hmac di)
+             (define dimpl (send factory get-digest di))
+             (when dimpl
+               (check-equal (kdf impl key salt '((iterations 2000) (key-size 89)))
+                            (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
+            [_ (void)])))
       ;; Test pwhash
       (define pwconfig (get-pwhash-config name))
       (when pwconfig
-        (hprintf 1 "testing ~v pwhash\n" name)
-        (define cred (pwhash impl key pwconfig))
-        (check-equal? (pwhash-verify impl key cred) #t)
-        (check-equal? (pwhash-verify impl badkey cred) #f)
-        (check-exn #rx"algorithm does not match"
-                   (lambda () (pwhash-verify impl key bad-pwh)))
-        (check-exn #rx"algorithm does not match"
-                   (lambda () (pwhash-verify impl key unsupported-pwh)))))))
+        (test #:name (format "pwhash ~v" name)
+          (define cred (pwhash impl key pwconfig))
+          (check-equal (pwhash-verify impl key cred) #t)
+          (check-equal (pwhash-verify impl badkey cred) #f)
+          (check-raise (pwhash-verify impl key bad-pwh)
+                       #rx"algorithm does not match")
+          (check-raise (pwhash-verify impl key unsupported-pwh)
+                       #rx"algorithm does not match"))))))
 
 (define (test-kdfs-agree factories)
   (for ([name (list-known-kdfs)])
@@ -60,25 +60,23 @@
       (filter values
               (for/list ([factory factories])
                 (send factory get-kdf name))))
-    (when (= (length impls) 1)
-      (hprintf -1 "only one impl for kdf ~e (~s)\n" name
-               (send (send (car impls) get-factory) get-name)))
-    (when (> (length impls) 1)
-      (hprintf 1 "testing agreement ~e\n" name)
-      (test-case (format "~a" name)
-        (define impl0 (car impls))
-        (define salt* (and (send impl0 salt-allowed?) salt))
-        (define r0 (kdf impl0 key salt* config))
-        (define cred0 (and pwconfig (pwhash impl0 key pwconfig)))
-        (for ([impl (cdr impls)])
-          (check-equal? (kdf impl key salt* config) r0)
-          (when pwconfig
-            (hprintf 2 "testing pwhash agreement\n")
-            (check-equal? (pwhash-verify impl key cred0) #t)
-            (check-equal? (pwhash-verify impl badkey cred0) #f)
+    (test #:name (format "agreement for kdf ~v" name)
+      #:pre (case (length impls)
+              [(0) (skip-test "no impl")]
+              [(1) (skip-test (format "only one impl: ~v" (car impls)))])
+      (define impl0 (car impls))
+      (define salt* (and (send impl0 salt-allowed?) salt))
+      (define r0 (kdf impl0 key salt* config))
+      (define cred0 (and pwconfig (pwhash impl0 key pwconfig)))
+      (for ([impl (cdr impls)])
+        (check-equal (kdf impl key salt* config) r0)
+        (when pwconfig
+          (test #:name "pwhash agreement"
+            (check-equal (pwhash-verify impl key cred0) #t)
+            (check-equal (pwhash-verify impl badkey cred0) #f)
             (define cred1 (pwhash impl key pwconfig))
-            (check-equal? (pwhash-verify impl0 key cred1) #t)
-            (check-equal? (pwhash-verify impl0 badkey cred1) #f)))))))
+            (check-equal (pwhash-verify impl0 key cred1) #t)
+            (check-equal (pwhash-verify impl0 badkey cred1) #f)))))))
 
 (define (get-config name)
   (match name

@@ -16,13 +16,14 @@
 
 #lang racket/base
 (require racket/class
-         rackunit
-         rackunit/text-ui
+         checktest
+         #;rackunit
+         #;rackunit/text-ui
          crypto
          crypto/all
          "digest.rkt"
          "cipher.rkt"
-         "pkey.rkt"
+         #;"pkey.rkt"
          "kdf.rkt"
          "util.rkt")
 (provide (all-defined-out))
@@ -31,47 +32,38 @@
 (define test-pk-keygen? (make-parameter #t))
 (define factory-filter (make-parameter (lambda (f) #t)))
 
-(define (make-factory-tests factory #:keygen? [keygen? #f])
+(define (test-factory factory #:keygen? [keygen? #f])
   (when ((factory-filter) factory)
-    (when #t (hprintf 0 "Testing ~a\n" (send factory get-name)))
-    (test-suite (format "~a" (send factory get-name))
-      (test-suite "digests" (test-digests factory))
-      (test-suite "ciphers" (test-ciphers factory))
-      (test-suite "pkey"    (test-pk factory #:keygen? (test-pk-keygen?)))
-      (test-suite "kdfs"    (test-kdfs factory))
+    (test #:name (format "~a" (send factory get-name))
+      (test #:name "digests" (test-digests factory))
+      (test #:name "ciphers" (test-ciphers factory))
+      #;(test #:name "pkey"    (test-pk factory #:keygen? (test-pk-keygen?)))
+      (test #:name "kdfs"    (test-kdfs factory))
       )))
 
 (define (go)
   (define the-factories (filter (factory-filter) all-factories))
-  (run-tests
-   (test-suite "crypto tests"
-     (make-factory-tests libcrypto-factory)
-     (make-factory-tests gcrypt-factory)
-     (make-factory-tests nettle-factory)
-     (make-factory-tests b2-factory)
-     (make-factory-tests sodium-factory)
-     (make-factory-tests argon2-factory)
-     (make-factory-tests decaf-factory)
-     (when (test-cross?)
-       (when #t (hprintf 0 "Digest agreement\n"))
-       (test-suite "digest agreement"
-         (test-digests-agree the-factories)))
-     (when (test-cross?)
-       (when #t (hprintf 0 "Cipher agreement\n"))
-       (test-suite "cipher agreement"
-         (test-ciphers-agree the-factories)))
-     (when (test-cross?)
-       (when #t (hprintf 0 "PKey agreement\n"))
-       (test-suite "pkey agreement"
-         (test-pk libcrypto-factory the-factories)
-         (test-pk gcrypt-factory the-factories)
-         (test-pk nettle-factory the-factories)
-         (test-pk sodium-factory the-factories)
-         (test-pk decaf-factory the-factories)))
-     (when (test-cross?)
-       (when #t (hprintf 0 "KDF agreement\n"))
-       (test-suite "kdf agreement"
-         (test-kdfs-agree the-factories))))))
+  (test-factory libcrypto-factory)
+  (test-factory gcrypt-factory)
+  (test-factory nettle-factory)
+  (test-factory b2-factory)
+  (test-factory sodium-factory)
+  (test-factory argon2-factory)
+  (test-factory decaf-factory)
+  (when (test-cross?)
+    (test #:name "digest agreement"
+      (test-digests-agree the-factories))
+    (test #:name "cipher agreement"
+      (test-ciphers-agree the-factories))
+    #;
+    (test #:name "pkey agreement"
+      (test-pk libcrypto-factory the-factories)
+      (test-pk gcrypt-factory the-factories)
+      (test-pk nettle-factory the-factories)
+      (test-pk sodium-factory the-factories)
+      (test-pk decaf-factory the-factories))
+    (test #:name "kdf agreement"
+      (test-kdfs-agree the-factories))))
 
 (module+ main
   (require racket/cmdline)

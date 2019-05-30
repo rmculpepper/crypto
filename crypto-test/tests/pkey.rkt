@@ -17,7 +17,7 @@
 #lang racket/base
 (require racket/class
          racket/match
-         rackunit
+         checktest
          crypto
          "util.rkt")
 (provide (all-defined-out))
@@ -49,14 +49,9 @@
     (match-define (list fmt pkspec desc keydata) key-sexpr)
     (define key (readkey key-sexpr factory))
     (define pubkey (and key (pk-key->public-only-key key)))
-    (unless key
-      (when #t
-        (hprintf -1 "ERROR: ~a cannot read ~s\n" (send factory get-name) desc)))
-    (when key
-      (when #t
-        (hprintf 1 "testing ~s (~a)\n" desc factory-name)
-        (hprintf 2 "self-test (~a => ~a)\n" factory-name factory-name))
-      (test-case (format "~a ~a ~a" factory-name desc fmt)
+    (test #:name (format "pkey ~a" desc)
+      #:pre (unless key (skip-test "cannot read key"))
+      (test #:name (format "self ~a, ~a ~a" factory-name desc fmt)
         (check-pred private-key? key)
         (check-pred public-only-key? pubkey)
         (check public-key=? key pubkey)
@@ -68,16 +63,11 @@
         (define pubkey*
           (with-handlers ([exn:fail? (lambda (e) #f)])
             (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory)))
-        (unless pubkey*
-          (when #t
-            (hprintf -2 "ERROR: ~a cannot read public key for ~s\n"
-                     (send pub-factory get-name) desc)))
-        (when pubkey*
-          (when #t
-            (hprintf 2 "cross-testing (~a => ~a)\n"
-                     factory-name (send pub-factory get-name)))
-          (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name) fmt desc)
-            (test-pk-key key pubkey*)))))))
+        (test #:name "cross (~a => ~a)" factory-name (send pub-factory get-name)
+          #:pre (unless pubkey*
+                  (skip-test (format "~a cannot read public key"
+                                     (send pub-factory get-name))))
+          (test-pk-key key pubkey*))))))
 
 (define (test-keygen factory spec impl)
   (define (test-rt-equal privkey)
@@ -89,9 +79,8 @@
       (define pubkey2
         (datum->pk-key (pk-key->datum privkey 'rkt-public) 'rkt-public factory))
       (check public-key=? privkey pubkey2)))
-  (test-case (format "~a ~a keygen" (send factory get-name) spec)
+  (test #:name (format "~a ~a keygen" (send factory get-name) spec)
     (define factory-name (send factory get-name))
-    (hprintf 1 "testing keygen for ~s (~a)\n" spec factory-name)
     (case spec
       [(rsa)
        (check-false (pk-has-parameters? impl))
@@ -145,26 +134,29 @@
   ;; can serialize and deserialize private keys, and serialized format is canonical
   (for ([fmt '(PrivateKeyInfo OneAsymmetricKey rkt-private)]
         #:when (pk-format-ok? factory (send key get-spec) fmt))
-    (define keydata (pk-key->datum key fmt))
-    (define key2 (datum->pk-key keydata fmt factory))
-    (check-pred private-key? key2)
-    (check public-key=? key2 key)
-    (check-equal? (pk-key->datum key2 fmt) keydata))
+    (test #:name (format "serialize private ~v" fmt)
+      (define keydata (pk-key->datum key fmt))
+      (define key2 (datum->pk-key keydata fmt factory))
+      (check-pred private-key? key2)
+      (check public-key=? key2 key)
+      (check-equal? (pk-key->datum key2 fmt) keydata)))
   ;; likewise for public keys
   (for ([fmt '(SubjectPublicKeyInfo rkt-public)])
-    (define pubdata (pk-key->datum key fmt))
-    (define pubkey2 (datum->pk-key pubdata fmt factory))
-    (check-pred public-only-key? pubkey2)
-    (check public-key=? pubkey2 key)
-    (check public-key=? pubkey2 pubkey)
-    (check-equal? (pk-key->datum pubkey2 fmt) pubdata))
+    (test #:name (format "serialize public ~v" fmt)
+      (define pubdata (pk-key->datum key fmt))
+      (define pubkey2 (datum->pk-key pubdata fmt factory))
+      (check-pred public-only-key? pubkey2)
+      (check public-key=? pubkey2 key)
+      (check public-key=? pubkey2 pubkey)
+      (check-equal? (pk-key->datum pubkey2 fmt) pubdata)))
   ;; likewise for params, if available
   (when (pk-has-parameters? key)
     (define params (pk-key->parameters key))
     (for ([fmt '(AlgorithmIdentifier rkt-params)])
-      (define pdata (pk-parameters->datum params fmt))
-      (define params2 (datum->pk-parameters pdata fmt factory))
-      (check-equal? (pk-parameters->datum params fmt) pdata))))
+      (test #:name (format "serialize params ~v" fmt)
+        (define pdata (pk-parameters->datum params fmt))
+        (define params2 (datum->pk-parameters pdata fmt factory))
+        (check-equal? (pk-parameters->datum params fmt) pdata)))))
 
 (define (pk-format-ok? factory kspec fmt)
   (define fname (send factory get-name))
