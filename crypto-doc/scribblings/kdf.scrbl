@@ -201,7 +201,8 @@ recommendations regarding the contents and format of this field}
 Computes a ``password hash'' from @racket[password] suitable for
 storage, using the KDF algorithm @racket[k]. The resulting string
 contains an identifier for the algorithm as well as the parameters from
-@racket[config]. The formats are intended to be compatible with
+@racket[config]. The result also contains an automatically generated salt.
+The formats are intended to be compatible with
 @hyperlink["https://passlib.readthedocs.io/en/stable/modular_crypt_format.html"]{Modular
 Crypt Format}.
 
