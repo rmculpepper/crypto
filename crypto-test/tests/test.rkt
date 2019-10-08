@@ -23,7 +23,7 @@
          crypto/all
          "digest.rkt"
          "cipher.rkt"
-         #;"pkey.rkt"
+         "pkey.rkt"
          "kdf.rkt"
          "util.rkt")
 (provide (all-defined-out))
@@ -37,7 +37,7 @@
     (test #:name (format "~a" (send factory get-name))
       (test #:name "digests" (test-digests factory))
       (test #:name "ciphers" (test-ciphers factory))
-      #;(test #:name "pkey"    (test-pk factory #:keygen? (test-pk-keygen?)))
+      (test #:name "pkey"    (test-pk factory #:keygen? (test-pk-keygen?)))
       (test #:name "kdfs"    (test-kdfs factory))
       )))
 
@@ -55,7 +55,6 @@
       (test-digests-agree the-factories))
     (test #:name "cipher agreement"
       (test-ciphers-agree the-factories))
-    #;
     (test #:name "pkey agreement"
       (test-pk libcrypto-factory the-factories)
       (test-pk gcrypt-factory the-factories)
