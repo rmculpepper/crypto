@@ -17,8 +17,6 @@
 #lang racket/base
 (require racket/class
          checktest
-         #;rackunit
-         #;rackunit/text-ui
          crypto
          crypto/all
          "digest.rkt"

@@ -37,16 +37,16 @@
             [(list 'pbkdf2 'hmac di)
              (define dimpl (send factory get-digest di))
              (when dimpl
-               (check-equal (kdf impl key salt '((iterations 2000) (key-size 89)))
-                            (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
+               (check-equal? (kdf impl key salt '((iterations 2000) (key-size 89)))
+                             (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
             [_ (void)])))
       ;; Test pwhash
       (define pwconfig (get-pwhash-config name))
       (when pwconfig
         (test #:name (format "pwhash ~v" name)
           (define cred (pwhash impl key pwconfig))
-          (check-equal (pwhash-verify impl key cred) #t)
-          (check-equal (pwhash-verify impl badkey cred) #f)
+          (check-equal? (pwhash-verify impl key cred) #t)
+          (check-equal? (pwhash-verify impl badkey cred) #f)
           (check-raise (pwhash-verify impl key bad-pwh)
                        #rx"algorithm does not match")
           (check-raise (pwhash-verify impl key unsupported-pwh)
@@ -69,14 +69,14 @@
       (define r0 (kdf impl0 key salt* config))
       (define cred0 (and pwconfig (pwhash impl0 key pwconfig)))
       (for ([impl (cdr impls)])
-        (check-equal (kdf impl key salt* config) r0)
+        (check-equal? (kdf impl key salt* config) r0)
         (when pwconfig
           (test #:name "pwhash agreement"
-            (check-equal (pwhash-verify impl key cred0) #t)
-            (check-equal (pwhash-verify impl badkey cred0) #f)
+            (check-equal? (pwhash-verify impl key cred0) #t)
+            (check-equal? (pwhash-verify impl badkey cred0) #f)
             (define cred1 (pwhash impl key pwconfig))
-            (check-equal (pwhash-verify impl0 key cred1) #t)
-            (check-equal (pwhash-verify impl0 badkey cred1) #f)))))))
+            (check-equal? (pwhash-verify impl0 key cred1) #t)
+            (check-equal? (pwhash-verify impl0 badkey cred1) #f)))))))
 
 (define (get-config name)
   (match name

@@ -14,7 +14,7 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require rackunit
+(require checktest
          crypto/private/common/cipher)
 
 (check-equal? (pad-bytes/pkcs7 (bytes 1 2 3) 4)
@@ -28,7 +28,7 @@
 (check-equal? (unpad-bytes/pkcs7 (bytes 4 4 4 4))
               (bytes))
 
-(check-exn #rx"bad PKCS7 padding" (lambda () (unpad-bytes/pkcs7 (bytes))))
-(check-exn #rx"bad PKCS7 padding" (lambda () (unpad-bytes/pkcs7 (bytes 1 2 3 4))))
-(check-exn #rx"bad PKCS7 padding" (lambda () (unpad-bytes/pkcs7 (bytes 1 2 3 5))))
-(check-exn #rx"bad PKCS7 padding" (lambda () (unpad-bytes/pkcs7 (bytes 1 2 1 2))))
+(check-raise (unpad-bytes/pkcs7 (bytes)) #rx"bad PKCS7 padding")
+(check-raise (unpad-bytes/pkcs7 (bytes 1 2 3 4)) #rx"bad PKCS7 padding")
+(check-raise (unpad-bytes/pkcs7 (bytes 1 2 3 5)) #rx"bad PKCS7 padding")
+(check-raise (unpad-bytes/pkcs7 (bytes 1 2 1 2)) #rx"bad PKCS7 padding")

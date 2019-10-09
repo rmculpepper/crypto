@@ -1,5 +1,5 @@
 #lang racket/base
-(require crypto crypto/libcrypto rackunit)
+(require racket/class crypto crypto/libcrypto checktest)
 
 ;; Tests for KDFs implemented in Racket. Since the point is to test
 ;; the Racket code, we just use one factory that has the necessary
@@ -10,17 +10,19 @@
 ;; ----------------------------------------
 
 (define-syntax-rule (test-kdf the-kdf args ...)
-  (begin (test-kdf* the-kdf (quote-syntax args) . args) ...))
+  (test #:name (format "~a" (send the-kdf about))
+    (test-kdf* the-kdf (quote-syntax args) . args)
+    ...))
 
 ;; To make the tests more compact, the L (key-size) parameter is
 ;; usually inferred from the result.
 
 (define (test-kdf* the-kdf args-stx
                    #:z Z #:L [L #f] #:salt [salt #f] #:info [info #""] #:= result)
-  (let ([L (or L (quotient (string-length result) 2))])
-    (test-equal? (format "~s line ~s" (object-name the-kdf) (syntax-line args-stx))
-                 (run-kdf the-kdf #:z Z #:L L #:salt salt #:info info)
-                 (hex->bytes result))))
+  (test #:location args-stx
+    (let ([L (or L (quotient (string-length result) 2))])
+      (check-equal? (run-kdf the-kdf #:z Z #:L L #:salt salt #:info info)
+                    (hex->bytes result)))))
 
 (define (run-kdf the-kdf #:z Z #:L L #:salt [salt #f] #:info [info #""])
   (let ([Z (hex->bytes Z)]

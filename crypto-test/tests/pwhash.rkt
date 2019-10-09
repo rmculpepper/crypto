@@ -1,5 +1,5 @@
 #lang racket/base
-(require rackunit
+(require checktest
          crypto/private/common/kdf)
 
 ;; example credentials gathered mostly from passlib docs
@@ -14,5 +14,6 @@
     "$scram$6400$.Z/znnNOKWUsBaCU$sha-1=cRseQyJpnuPGn3e6d6u6JdJWk.0,sha-256=5GcjEbRaUIIci1r6NAMdI9OPZbxl9S5CFR6la9CHXYc,sha-512=.DHbIm82ajXbFR196Y.9TtbsgzvGjbMeuWCtKve8TPjRMNoZK9EGyHQ6y0lW9OtWdHZrDZbBUhB9ou./VI2mlw"))
 
 (for ([cred (in-list test-creds)])
-  (check-pred hash? (parse-pwhash cred))
-  (check-equal? (encode-pwhash (parse-pwhash cred)) cred))
+  (test #:name (format "cred ~e" cred)
+    (check (parse-pwhash cred) hash?)
+    (check-equal? (encode-pwhash (parse-pwhash cred)) cred)))
