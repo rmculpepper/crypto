@@ -21,7 +21,7 @@
 
 ;; Reference: https://github.com/P-H-C/phc-winner-argon2
 
-(define libargon2 (ffi-lib "libargon2" '(#f "1" "0") #:fail (lambda () #f)))
+(define libargon2 (ffi-lib "libargon2" '("1" "0" #f) #:fail (lambda () #f)))
 (define-ffi-definer define-argon2 libargon2
   #:default-make-fail make-not-available)
 

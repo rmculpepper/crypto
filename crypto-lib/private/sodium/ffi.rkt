@@ -18,7 +18,7 @@
          ffi/unsafe/define)
 (provide (protect-out (all-defined-out)))
 
-(define libsodium (ffi-lib "libsodium" '(#f "23" "18") #:fail (lambda () #f)))
+(define libsodium (ffi-lib "libsodium" '("23" "18" #f) #:fail (lambda () #f)))
 
 (define-ffi-definer define-na libsodium
   #:default-make-fail make-not-available)

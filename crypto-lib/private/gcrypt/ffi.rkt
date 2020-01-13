@@ -21,7 +21,7 @@
          "../common/error.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libgcrypt (ffi-lib "libgcrypt" '(#f "20") #:fail (lambda () #f)))
+(define libgcrypt (ffi-lib "libgcrypt" '("20" #f) #:fail (lambda () #f)))
 
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)
