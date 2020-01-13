@@ -137,8 +137,8 @@ required.
 
 Factory for
 @hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle}, a
-lightweight cryptography library. The @tt{libnettle.so.6} foreign
-library is required, and @tt{libhogweed.so.4} is required for
+lightweight cryptography library. The @tt{libnettle.so.{7,6}} foreign
+library is required, and @tt{libhogweed.so.{5,4}} is required for
 public-key crypto support.
 }
 
