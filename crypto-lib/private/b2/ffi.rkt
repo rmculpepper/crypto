@@ -18,7 +18,7 @@
          ffi/unsafe/define)
 (provide (protect-out (all-defined-out)))
 
-(define libb2 (ffi-lib "libb2" '(#f "1") #:fail (lambda () #f)))
+(define libb2 (ffi-lib "libb2" '("1" #f) #:fail (lambda () #f)))
 
 (define-ffi-definer define-b2 libb2
   #:default-make-fail make-not-available)
