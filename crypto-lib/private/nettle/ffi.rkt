@@ -21,7 +21,7 @@
          (rename-in gmp/unsafe [_mpz _mpz_t]))
 (provide (protect-out (all-defined-out)))
 
-(define libnettle (ffi-lib "libnettle" '(#f "6") #:fail (lambda () #f)))
+(define libnettle (ffi-lib "libnettle" '("7" "6" #f) #:fail (lambda () #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
@@ -54,29 +54,32 @@
    [update       _nettle_hash_update_func]
    [digest       _nettle_hash_digest_func]))
 
-;; struct nettle_hash *nettle_hashes[], array terminated by NULL
-(define nettle_hashes (and libnettle (ffi-obj #"nettle_hashes" libnettle)))
+(define-nettle nettle_get_hashes (_fun -> _pointer) #:fail (lambda () #f))
 
-(define nettle-regular-hashes
-  (let ([ptr nettle_hashes])
-    (let loop ([i 0])
-      (let ([next (and ptr (ptr-ref ptr _nettle_hash-pointer/null i))])
-        (if next
-            (cons (list (nettle_hash-name next) next)
-                  (loop (add1 i)))
-            null)))))
-
-(define nettle-more-hashes
-  (filter values
-          (map (lambda (name)
-                 (let ([obj (get-ffi-obj name libnettle _nettle_hash (lambda () #f))])
-                   (and obj (list (nettle_hash-name obj) obj))))
-               '(#"nettle_sha3_224"
-                 #"nettle_sha3_256"
-                 #"nettle_sha3_384"
-                 #"nettle_sha3_512"))))
-
-(define nettle-hashes (append nettle-regular-hashes nettle-more-hashes))
+(define nettle-hashes
+  (let ()
+    (define (get-regular-hashes ptr)
+      (let loop ([i 0])
+        (define next (and ptr (ptr-ref ptr _nettle_hash-pointer/null i)))
+        (if next (cons (list (nettle_hash-name next) next) (loop (add1 i))) null)))
+    (define (get-named-hash name)
+      (let ([obj (get-ffi-obj name libnettle _nettle_hash (lambda () #f))])
+        (and obj (list (nettle_hash-name obj) obj))))
+    (cond [(not libnettle) #f]
+          [nettle_get_hashes
+           (get-regular-hashes (nettle_get_hashes))]
+          ;; Before Nettle 3.5:
+          ;; struct nettle_hash *nettle_hashes[] // NULL-terminated array
+          [(ffi-obj #"nettle_hashes" libnettle)
+           => (lambda (ptr)
+                (append (get-regular-hashes ptr)
+                        (filter values
+                                (map get-named-hash
+                                     '(#"nettle_sha3_224"
+                                       #"nettle_sha3_256"
+                                       #"nettle_sha3_384"
+                                       #"nettle_sha3_512")))))]
+          [else null])))
 
 ;; ----
 
@@ -143,11 +146,13 @@
 (define (nettle-cipher-ref nc key)
   (cond [(assq key (nettle-cipher-extras nc)) => cadr] [else #f]))
 
-;; struct nettle_cipher *nettle_ciphers[], array terminated by NULL
-(define nettle_ciphers (and libnettle (ffi-obj #"nettle_ciphers" libnettle)))
+(define-nettle nettle_get_ciphers (_fun -> _pointer) #:fail (lambda () #f))
 
 (define nettle-regular-ciphers
-  (let ([ptr nettle_ciphers])
+  (let ([ptr (cond [nettle_get_ciphers (nettle_get_ciphers)]
+                   [(and libnettle (ffi-obj #"nettle_ciphers" libnettle))
+                    => values]
+                   [else #f])])
     (let loop ([i 0])
       (let ([next (and ptr (ptr-ref ptr _nettle_cipher-pointer/null i))])
         (if next
@@ -454,7 +459,7 @@
 
 ;; ============================================================
 
-(define libhogweed (ffi-lib "libhogweed" '("4" #f) #:fail (lambda () #f)))
+(define libhogweed (ffi-lib "libhogweed" '("5" "4" #f) #:fail (lambda () #f)))
 (define-ffi-definer define-nettleHW libhogweed
   #:default-make-fail make-not-available)
 
