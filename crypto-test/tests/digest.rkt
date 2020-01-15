@@ -167,7 +167,19 @@
      (#"abc"
       #"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
      (#"abcdef"
-      #"bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721")]))
+      #"bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721")]
+    ;; Test vectors from Go by way of Rust (ring)
+    [sha512/256
+     (#""
+      #"c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a")
+     (#"a"
+      #"455e518824bc0601f9fb858ff5c37d417d67c2f8e0df2babe4808858aea830f8")
+     (#"abcdefghij"
+      #"550762913d51eefbcd1a55068fcfc9b154fd11c1078b996df0d926ea59d2a68d")
+     (#"Discard medicine more than two years old."
+      #"690c8ad3916cefd3ad29226d9875965e3ee9ec0d4482eacc248f2ff4aa0d8e5b")
+     (#"There is no reason for any individual to have a computer in their home. -Ken Olsen, 1977"
+      #"b5baf747c307f98849ec881cf0d48605ae4edd386372aea9b26e71db517e650b")]))
 
 (define digest-inputs
   `(#""

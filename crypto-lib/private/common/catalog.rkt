@@ -59,6 +59,8 @@
             (info 'sha256      32  64)
             (info 'sha384      48  128)
             (info 'sha512      64  128)
+            (info 'sha512/224  28  128)
+            (info 'sha512/256  32  128)
             (info 'sha3-224    28  144)
             (info 'sha3-256    32  136)
             (info 'sha3-384    48  104)
