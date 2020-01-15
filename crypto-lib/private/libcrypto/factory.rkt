@@ -40,7 +40,9 @@
           [sha224    . "sha224"]
           [sha256    . "sha256"]
           [sha384    . "sha384"]
-          [sha512    . "sha512"]))
+          [sha512    . "sha512"]
+          [sha512/224 . "sha512-224"]
+          [sha512/256 . "sha512-256"]))
 
 (define libcrypto-ciphers
   '(;; [CipherName Modes KeySizes String]
