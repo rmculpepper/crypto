@@ -121,14 +121,14 @@
 
 ;; ----------------------------------------
 
-;; cipher-ctx%
+;; base-cipher-ctx%
 ;; - enforces update-aad -> update -> final state machine
 ;; - accepts data from varied input in varied sizes, passes to underlying
 ;;   crypt routines in multiples of chunk-size (except last call)
 ;; - handles PKCS7 padding
 ;; - handles attached authentication tags
 
-(define cipher-ctx%
+(define base-cipher-ctx%
   (class* state-ctx% (cipher-ctx<%>)
     (init-field encrypt? pad? auth-len attached-tag?)
     ;; auth-len : Nat -- 0 means no tag
@@ -196,24 +196,47 @@
 
     ;; ----------------------------------------
 
+    ;; -close : -> Void
+    (define/public (-close) (void))
+
     ;; -update-aad : Bytes Nat Nat -> Void
-    (define/public (-update-aad buf start end)
+    (abstract -update-aad)
+
+    ;; -finish-aad : -> Void
+    (abstract -finish-aad)
+
+    ;; -update : Bytes Nat Nat -> Void
+    (abstract -update)
+
+    ;; -final : #f/Bytes -> Void
+    (abstract -final)
+    ))
+
+;; ----------------------------------------
+
+;; cipher-ctx% -- supports incremental processing
+(define cipher-ctx%
+  (class base-cipher-ctx%
+    (inherit-field encrypt? pad? auth-len attached-tag?
+                   impl out auth-tag-out)
+    (inherit about)
+    (super-new)
+
+    ;; -update-aad : Bytes Nat Nat -> Void
+    (define/override (-update-aad buf start end)
       (send aad-ufp update buf start end))
 
     ;; -finish-aad : -> Void
-    (define/public (-finish-aad)
+    (define/override (-finish-aad)
       (send aad-ufp finish 'ignored))
 
     ;; -update : Bytes Nat Nat -> Void
-    (define/public (-update buf start end)
+    (define/override (-update buf start end)
       (send crypt-ufp update buf start end))
 
     ;; -final : #f/Bytes -> Void
-    (define/public (-final tag)
+    (define/override (-final tag)
       (send crypt-ufp finish tag))
-
-    ;; -close : -> Void
-    (define/public (-close) (void))
 
     ;; -make-crypt-sink : -> UFP[#f/AuthTag => ]
     (define/public (-make-crypt-sink)
@@ -226,7 +249,10 @@
       (define (finish _ignored) (void))
       (sink-ufp update finish))
 
-    (abstract -do-aad) ;; Bytes Nat Nat -> Void
+    (abstract -do-aad)          ;; Bytes Nat Nat -> Void
+    (abstract -do-crypt)        ;; Enc? Final? Bytes Nat Nat Bytes -> Nat
+    (abstract -do-encrypt-end)  ;; Nat -> Tag      -- fetch auth tag
+    (abstract -do-decrypt-end)  ;; Nat Tag -> Void -- check auth tag
 
     ;; -make-crypt-ufp : Boolean UFP -> UFP[Bytes,#f/AuthTag => AuthTag/#f]
     (define/public (-make-crypt-ufp enc? next)
@@ -255,10 +281,6 @@
                (-do-decrypt-end auth-tag)
                (send next finish #f)]))
       (sink-ufp update finish))
-
-    (abstract -do-crypt) ;; Enc? Final? Bytes Nat Nat Bytes -> Nat
-    (abstract -do-encrypt-end) ;; Nat -> Tag      -- fetch auth tag
-    (abstract -do-decrypt-end) ;; Nat Tag -> Void -- check auth tag
 
     ;; ----------------------------------------
     ;; Initialization
@@ -317,6 +339,55 @@
                              (pop-ufp (split-right-ufp auth-len ufp))
                              ufp)])
                ufp)]))
+    ))
+
+;; ----------------------------------------
+
+;; noninc-cipher-ctx% -- non-incremental processing
+(define noninc-cipher-ctx%
+  (class base-cipher-ctx%
+    (inherit-field encrypt? pad? auth-len attached-tag?
+                   impl out auth-tag-out)
+    (inherit about)
+    (field [aad-buffer (open-output-bytes)]
+           [msg-buffer (open-output-bytes)])
+    (super-new)
+
+    (define/override (-close)
+      (super -close)
+      (when aad-buffer (set! aad-buffer #f))
+      (when msg-buffer (set! msg-buffer #f)))
+
+    (define/override (-do-aad inbuf instart inend)
+      (write-bytes inbuf aad-buffer instart inend))
+
+    ;; -make-crypt-ufp : Boolean UFP -> UFP[Bytes,#f/AuthTag => AuthTag/#f]
+    (define/override (-make-crypt-ufp enc? next)
+      (define (update inbuf instart inend)
+        (-do-crypt inbuf instart inend))
+      (define (finish partial auth-tag)
+        (-do-crypt partial 0 (bytes-length partial))
+        (cond [enc?
+               (define authbuf (make-bytes auth-len))
+               (define authlen ((aeadcipher-encrypt cipher) outbuf authbuf msg aad iv key))
+               (unless authlen (crypto-error "encryption failed"))
+               (send next update outbuf 0 (bytes-length outbuf))
+               (send next finish (subbytes authbuf 0 authlen))]
+              [else
+               (define s ((aeadcipher-decrypt cipher) outbuf msg auth-tag aad iv key))
+               (unless (zero? s) (crypto-error "authenticated decryption failed"))
+               (send next update outbuf 0 (bytes-length outbuf))
+               (send next finish #f)]))
+      (sink-ufp update finish))
+
+    (define/override (-do-aad inbuf instart inend)
+      (err/no-impl))
+
+    (define/override (-do-crypt inbuf instart inend)
+      (write-bytes inbuf msg-buffer instart inend))
+    (define/override (-do-encrypt-end auth-len) (err/no-impl))
+    (define/override (-do-decrypt-end auth-tag) (err/no-impl))
+
     ))
 
 
