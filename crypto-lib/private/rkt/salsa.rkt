@@ -19,6 +19,8 @@
 
 ;; Reference: https://cr.yp.to/salsa20.html
 
+;; Key is 32 bytes, nonce is 8 bytes, counter is 8 bytes.
+
 ;; ============================================================
 
 (module salsa-safe racket/base
@@ -36,7 +38,7 @@
     (bitwise-xor (bitwise-bit-field x (- 32 n) 32)
                  (arithmetic-shift (bitwise-bit-field x 0 (- 32 n)) n)))
 
-  ;; salsa-init : Bytes Bytes -> State
+  ;; salsa-init : Bytes[32] Bytes[8] -> State
   (define (salsa-init key nonce)
     (vector #x61707865
             (integer-bytes->integer key #f #f  0  4)
@@ -227,3 +229,21 @@
     (define s (salsa protostate ctr 10))
     (state-xor-bytes s buf start))
   (subbytes buf 0 msglen))
+
+;; hsalsa20 : Bytes[32] Bytes[16] -> Bytes[32]
+(define (hsalsa20 key nonce)
+  (define nonce* (subbytes nonce 0 8))
+  (define ctr* (+ (arithmetic-shift (integer-bytes->integer nonce #f #f 8 12) 32)
+                  (integer-bytes->integer nonce #f #f 12 16)))
+  (define protostate (salsa-init key nonce*))
+  (define buf (make-bytes 64))
+  (define s (salsa protostate ctr* 10))
+  (state-xor-bytes s buf 0)
+  (define (select-words indexes)
+    (define out (make-bytes (* 4 (length indexes)) 0))
+    (for ([outi (in-naturals)] [index (in-list indexes)])
+      (integer->integer-bytes
+       (integer-bytes->integer buf #f #f (* index 4) (* (add1 index) 4))
+       4 #f #f out (* 4 outi)))
+    out)
+  (select-words 0 5 10 15 6 7 8 9))
