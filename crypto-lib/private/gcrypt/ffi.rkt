@@ -18,10 +18,12 @@
          ffi/unsafe/define
          ffi/unsafe/alloc
          ffi/unsafe/atomic
+         "../common/ffi.rkt"
          "../common/error.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libgcrypt (ffi-lib "libgcrypt" '("20" #f) #:fail (lambda () #f)))
+(define-values (libgcrypt gcrypt-load-error)
+  (ffi-lib-or-why-not "libgcrypt" '("20" #f)))
 
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)

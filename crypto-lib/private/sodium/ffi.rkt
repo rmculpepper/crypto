@@ -15,10 +15,12 @@
 
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/define)
+         ffi/unsafe/define
+         "../common/ffi.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libsodium (ffi-lib "libsodium" '("23" "18" #f) #:fail (lambda () #f)))
+(define-values (libsodium sodium-load-error)
+  (ffi-lib-or-why-not "libsodium" '("23" "18" #f)))
 
 (define-ffi-definer define-na libsodium
   #:default-make-fail make-not-available)

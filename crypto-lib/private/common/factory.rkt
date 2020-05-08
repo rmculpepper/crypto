@@ -28,7 +28,7 @@
 
 (define factory-base%
   (class* object% (factory<%>)
-    (init-field [ok? #t])
+    (init-field [ok? #t] [load-error #f])
     (super-new)
 
     (define/public (get-name) #f)
@@ -47,7 +47,14 @@
         [else #f]))
 
     (define/public (print-info)
-      (void))
+      (printf "Library info:\n")
+      (print-lib-info)
+      (print-avail))
+
+    (define/public (print-lib-info)
+      (printf " name: ~s\n" (get-name))
+      (printf " version: ~s\n" (get-version))
+      (when load-error (printf " load error: ~s\n" load-error)))
 
     (define/public (print-avail)
       (define (pad-to v len)

@@ -30,7 +30,7 @@
 (define sodium-factory%
   (class* factory-base% (factory<%>)
     (inherit get-cipher get-kdf print-avail)
-    (super-new [ok? (and sodium-ok? (sodium_init))])
+    (super-new [ok? (and sodium-ok? (sodium_init))] [load-error sodium-load-error])
 
     (define/override (get-name) 'sodium)
     (define/override (get-version)
@@ -83,13 +83,11 @@
         [(all-ecx-curves) '(x25519)]
         [else (super info key)]))
 
-    (define/override (print-info)
-      (printf "Library info:\n")
-      (printf " version: ~v\n" (get-version))
+    (define/override (print-lib-info)
+      (super print-lib-info)
       (printf " version string: ~v\n" (info 'version-string))
       (printf " sodium_library_version_major: ~s\n" (sodium_library_version_major))
-      (printf " sodium_library_version_minor: ~s\n" (sodium_library_version_minor))
-      (print-avail))
+      (printf " sodium_library_version_minor: ~s\n" (sodium_library_version_minor)))
     ))
 
 (define sodium-factory (new sodium-factory%))

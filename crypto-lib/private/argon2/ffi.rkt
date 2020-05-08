@@ -16,12 +16,14 @@
 #lang racket/base
 (require ffi/unsafe
          ffi/unsafe/define
+         "../common/ffi.rkt"
          "../common/error.rkt")
 (provide (protect-out (all-defined-out)))
 
 ;; Reference: https://github.com/P-H-C/phc-winner-argon2
 
-(define libargon2 (ffi-lib "libargon2" '("1" "0" #f) #:fail (lambda () #f)))
+(define-values (libargon2 argon2-load-error)
+  (ffi-lib-or-why-not "libargon2" '("1" "0" #f)))
 (define-ffi-definer define-argon2 libargon2
   #:default-make-fail make-not-available)
 

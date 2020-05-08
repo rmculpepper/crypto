@@ -130,7 +130,7 @@
 (define gcrypt-factory%
   (class* factory-base% (factory<%>)
     (inherit print-avail get-digest get-cipher)
-    (super-new [ok? gcrypt-ok?])
+    (super-new [ok? gcrypt-ok?] [load-error gcrypt-load-error])
 
     (define/override (get-name) 'gcrypt)
     (define/override (get-version)
@@ -210,11 +210,9 @@
         [(all-ecx-curves) (if x25519-ok? '(x25519) '())]
         [else (super info key)]))
 
-    (define/override (print-info)
-      (printf "Library info:\n")
-      (printf " version: ~v\n" (get-version))
-      (printf " version string: ~s\n" (gcry_check_version #f))
-      (print-avail))
+    (define/override (print-lib-info)
+      (super print-lib-info)
+      (printf " version string: ~s\n" (gcry_check_version #f)))
     ))
 
 (define gcrypt-factory (new gcrypt-factory%))

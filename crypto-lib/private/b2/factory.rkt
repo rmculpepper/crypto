@@ -26,8 +26,8 @@
 
 (define b2-factory%
   (class* factory-base% (factory<%>)
-    (inherit print-avail get-cipher)
-    (super-new [ok? b2-ok?])
+    (inherit get-cipher)
+    (super-new [ok? b2-ok?] [load-error b2-load-error])
 
     (define/override (get-name) 'b2)
     (define/override (get-version) (and b2-ok? '()))
@@ -39,13 +39,6 @@
             [(memq spec blake2s-digests)
              (new b2s-digest-impl% (info info) (factory this))]
             [else #f]))
-
-    ;; ----
-
-    (define/override (print-info)
-      (printf "Library info:\n")
-      (printf " version: ~v\n" (get-version))
-      (print-avail))
     ))
 
 (define b2-factory (new b2-factory%))

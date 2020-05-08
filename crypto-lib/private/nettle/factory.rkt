@@ -87,8 +87,8 @@
 
 (define nettle-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest get-cipher get-pk get-kdf print-avail)
-    (super-new [ok? nettle-ok?])
+    (inherit get-digest get-cipher get-pk get-kdf)
+    (super-new [ok? nettle-ok?] [load-error (or nettle-load-error hogweed-load-error)])
 
     (define/override (get-name) 'nettle)
     (define/override (get-version)
@@ -195,11 +195,6 @@
         [(all-ecx-curves)
          (if x25519-ok? '(x25519) '())]
         [else (super info key)]))
-
-    (define/override (print-info)
-      (printf "Library info:\n")
-      (printf " version: ~v\n" (get-version))
-      (print-avail))
     ))
 
 (define nettle-factory (new nettle-factory%))

@@ -61,8 +61,8 @@
 
 (define libcrypto-factory%
   (class* factory-base% (factory<%>)
-    (inherit print-avail get-digest get-cipher get-pk)
-    (super-new [ok? libcrypto-ok?])
+    (inherit get-digest get-cipher get-pk)
+    (super-new [ok? libcrypto-ok?] [load-error libcrypto-load-error])
 
     (define/override (get-name) 'libcrypto)
     (define/override (get-version)
@@ -138,17 +138,14 @@
          (and (get-pk 'ecx) '(x25519 x448))]
         [else (super info key)]))
 
-    (define/override (print-info)
-      (printf "Library info:\n")
-      (printf " version: ~v\n" (get-version))
+    (define/override (print-lib-info)
+      (super print-lib-info)
       (printf " version string: ~s\n" (OpenSSL_version SSLEAY_VERSION))
       (when (OpenSSL_version_num)
         (printf " OpenSSL_version_num: #x~x\n" (OpenSSL_version_num))
         (printf " built on: ~s\n" (OpenSSL_version SSLEAY_BUILT_ON)))
       (when (and libcrypto (not libcrypto-ok?))
-        (printf " status: library version not supported!\n"))
-      (print-avail)
-      (void))
+        (printf " status: library version not supported!\n")))
 
     (define/public (print-internal-info)
       (printf "Library info:\n")

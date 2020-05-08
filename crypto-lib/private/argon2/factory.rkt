@@ -63,8 +63,8 @@
 
 (define argon2-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-kdf print-avail)
-    (super-new [ok? argon2-ok?])
+    (inherit get-kdf)
+    (super-new [ok? argon2-ok?] [load-error argon2-load-error])
 
     (define/override (get-name) 'argon2)
     (define/override (get-version) (and argon2-ok? '()))
@@ -80,11 +80,6 @@
       (case key
         [(all-kdfs) (filter (lambda (s) (get-kdf s)) '(argon2d argon2i argon2id))]
         [else (super info key)]))
-
-    (define/override (print-info)
-      (printf "Library info:\n")
-      (printf " version: ~v\n" (get-version))
-      (print-avail))
     ))
 
 (define argon2-factory (new argon2-factory%))

@@ -15,10 +15,12 @@
 
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/define)
+         ffi/unsafe/define
+         "../common/ffi.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libb2 (ffi-lib "libb2" '("1" #f) #:fail (lambda () #f)))
+(define-values (libb2 b2-load-error)
+  (ffi-lib-or-why-not "libb2" '("1" #f)))
 
 (define-ffi-definer define-b2 libb2
   #:default-make-fail make-not-available)

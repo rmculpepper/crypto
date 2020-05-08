@@ -15,10 +15,12 @@
 
 #lang racket/base
 (require ffi/unsafe
-         ffi/unsafe/define)
+         ffi/unsafe/define
+         "../common/ffi.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libdecaf (ffi-lib "libdecaf" '(#f) #:fail (lambda () #f)))
+(define-values (libdecaf decaf-load-error)
+  (ffi-lib-or-why-not "libdecaf" '(#f)))
 
 (define-ffi-definer define-decaf libdecaf
   #:default-make-fail make-not-available)

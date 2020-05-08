@@ -25,9 +25,9 @@
 
 (define decaf-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-cipher get-kdf print-avail)
+    (inherit get-cipher get-kdf)
     (inherit-field ok?)
-    (super-new [ok? (decaf-is-ok?)])
+    (super-new [ok? (decaf-is-ok?)] [load-error decaf-load-error])
 
     (define/override (get-name) 'decaf)
     (define/override (get-version) (and ok? '()))
@@ -55,11 +55,6 @@
         [(all-eddsa-curves) (if ok? '(ed25519 ed448) '())]
         [(all-ecx-curves) (if ok? '(x25519 x448) '())]
         [else (super info key)]))
-
-    (define/override (print-info)
-      (printf "Library info:\n")
-      (printf " version: ~v\n" (get-version))
-      (print-avail))
     ))
 
 (define decaf-factory (new decaf-factory%))

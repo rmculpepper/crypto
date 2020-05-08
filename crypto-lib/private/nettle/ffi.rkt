@@ -18,10 +18,12 @@
          ffi/unsafe/alloc
          (only-in '#%foreign ffi-obj)
          ffi/unsafe/define
-         (rename-in gmp/unsafe [_mpz _mpz_t]))
+         (rename-in gmp/unsafe [_mpz _mpz_t])
+         "../common/ffi.rkt")
 (provide (protect-out (all-defined-out)))
 
-(define libnettle (ffi-lib "libnettle" '("7" "6" #f) #:fail (lambda () #f)))
+(define-values (libnettle nettle-load-error)
+  (ffi-lib-or-why-not "libnettle" '("7" "6" #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
@@ -459,7 +461,8 @@
 
 ;; ============================================================
 
-(define libhogweed (ffi-lib "libhogweed" '("5" "4" #f) #:fail (lambda () #f)))
+(define-values (libhogweed hogweed-load-error)
+  (ffi-lib-or-why-not "libhogweed" '("5" "4" #f)))
 (define-ffi-definer define-nettleHW libhogweed
   #:default-make-fail make-not-available)
 

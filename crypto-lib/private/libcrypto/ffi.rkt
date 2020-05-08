@@ -31,6 +31,7 @@
 
 (define-ffi-definer define-crypto libcrypto
   #:default-make-fail make-not-available)
+(define libcrypto-load-error libcrypto-load-fail-reason)
 
 (define-crypto SSLeay (_fun -> _long) #:fail (K (K #f)))
 (define-crypto OpenSSL_version_num (_fun -> _long) #:fail (K SSLeay))
