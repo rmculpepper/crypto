@@ -32,16 +32,17 @@ following PK systems are supported:
 @itemlist[
 
 @item{@racket['rsa] --- @as-index{RSA} keys with RSAES-* encryption
-and RSASSA-* signing.}
+and RSASSA-* signing @cite{PKCS1}.}
 
 @item{@racket['dsa] --- @as-index{DSA} keys with DSA signing.}
 
-@item{@racket['dh] --- @as-index{Diffie-Hellman} keys with DH key agreement.}
+@item{@racket['dh] --- @as-index{Diffie-Hellman} key agreement using
+modular integer arithmetic @cite{RFC2631}.}
 
 @item{@racket['ec] --- Elliptic curve keys with @as-index{ECDSA}
-signing and @as-index{ECDH} key agreement. Only named curves are
-supported, and different implementations support different curves; use
-@racket[factory-print-info] to see supported curves.}
+signing and @as-index{ECDH} key agreement @cite{SEC1}. Only named
+curves are supported, and different implementations support different
+curves; use @racket[factory-print-info] to see supported curves.}
 
 @item{@racket['eddsa] --- Edwards curve keys with @as-index{EdDSA} signing,
 specifically @as-index{Ed25519} and @as-index{Ed448}.}
@@ -428,11 +429,12 @@ authenticity, and attractive nuisance if it doesn't.}
 
 @section[#:tag "pk-keyagree"]{PK Key Agreement}
 
-In PK key agreement (sometimes called key exchange) two parties derive
-a shared secret by exchanging public keys. Each party can compute the
-secret from their own private key and the other's public key, but it
-is believed infeasible for an observer to compute the secret from the
-two public keys alone. PK secret derivation is supported by the
+In PK @as-index{key agreement} (sometimes called @as-index{key
+exchange} or @as-index{Diffie-Hellman}) two parties derive a shared
+secret by exchanging public keys. Each party can compute the secret
+from their own private key and the other's public key, but it is
+believed infeasible for an observer to compute the secret from the two
+public keys alone. PK secret derivation is supported by the
 @racket['dh], @racket['ec], and @racket['ecx] cryptosystems.
 
 @defproc[(pk-derive-secret [pk private-key?]
@@ -441,8 +443,8 @@ two public keys alone. PK secret derivation is supported by the
 
 Returns the shared secret derived from the private key @racket[pk] and
 the public key @racket[peer-pk]. If @racket[peer-pk] is a PK key, it
-must be a key belonging to the same cryptosystem and implementation as
-@racket[pk]; otherwise an exception is raised. If @racket[peer-pk] is
+must be a key compatible with @racket[pk] (same algorithm and same
+parameters); otherwise an exception is raised. If @racket[peer-pk] is
 a bytestring, an exception is raised if it cannot be interpreted as
 raw public key data.
 
@@ -451,8 +453,8 @@ private keys: if two parties perform secret derivation twice, they
 will produce the same secret both times. In addition, the secret is
 not uniformly distributed. For these reasons, the derived secret
 should not be used directly as a key; instead, it should be used to
-generate key material using a process such as described in RFC 2631
-@cite{RFC2631}.
+generate key material using a key-derivation function (see
+@racket[kdf]).
 }
 
 @section[#:tag "pk-external"]{PK External Representations}
