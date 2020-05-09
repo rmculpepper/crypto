@@ -237,15 +237,18 @@
            (check-equal? (pk-decrypt key wkey #:pad pad) skey "pk-decrypt")]
           [else (hprintf -3 "skipping encrypt w/ pad = ~v\n" pad)])))
 
-(define (test-pk-key-agree key1 pubkey1)
+(define (test-pk-key-agree keyA1 pubkeyB1)
+  ;; A,B are factories; 1,2 are parties
   (hprintf 3 "testing key agreement\n")
-  (define key2 (generate-private-key (pk-key->parameters pubkey1)))
-  (define pubkey2 (datum->pk-key (pk-key->datum key2 'SubjectPublicKeyInfo)
-                                 'SubjectPublicKeyInfo (get-factory key1)))
-  (check-equal? (pk-derive-secret key1 pubkey2)
-                (pk-derive-secret key2 pubkey1)
-                "pk-derive-secret"))
-
+  (define keyB2 (generate-private-key (pk-key->parameters pubkeyB1)))
+  (define pubkeyA2 (datum->pk-key (pk-key->datum keyB2 'SubjectPublicKeyInfo)
+                                 'SubjectPublicKeyInfo (get-factory keyA1)))
+  (check-equal? (pk-derive-secret keyA1 pubkeyA2)
+                (pk-derive-secret keyB2 pubkeyB1)
+                "pk-derive-secret")
+  ;; test that keys of different impls work (auto-convert)
+  (check-equal? (pk-derive-secret keyA1 (pk-key->public-only-key keyB2))
+                (pk-derive-secret keyB2 (pk-key->public-only-key keyA1))))
 
 ;; ----------------------------------------
 

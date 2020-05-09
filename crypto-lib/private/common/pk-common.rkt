@@ -165,11 +165,21 @@
 
     (define/public (compute-secret peer-pubkey)
       (-check-key-agree)
-      (when (pk-key? peer-pubkey)
-        (unless (eq? (send peer-pubkey get-impl) impl)
-          (crypto-error "peer key has different implementation\n  peer: ~a\n  key: ~a"
-                        (about) (send peer-pubkey about))))
-      (-compute-secret peer-pubkey))
+      (cond [(pk-key? peer-pubkey)
+             (cond [(eq? (send peer-pubkey get-impl) impl)
+                    (-compute-secret peer-pubkey)]
+                   [else ;; public key from different impl, must convert
+                    (define (bad)
+                      (crypto-error "peer key has different implementation~a\n  peer: ~a\n  key: ~a"
+                                    ";\n and conversion to this implementation failed"
+                                    (send peer-pubkey about) (about)))
+                    (define peer-pub (or (send peer-pubkey -write-key 'rkt-public) (bad)))
+                    (define peer-pubkey*
+                      (let* ([factory (send impl get-factory)]
+                             [reader (send factory get-pk-reader)])
+                        (or (send reader read-key peer-pub 'rkt-public) (bad))))
+                    (-compute-secret peer-pubkey*)])]
+            [else (-compute-secret peer-pubkey)]))
 
     (define/private (-check-encrypt pad)
       (unless (send impl can-encrypt? #f)
