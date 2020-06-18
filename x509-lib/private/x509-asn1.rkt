@@ -8,13 +8,13 @@
 (define-asn1-type Certificate-for-verify-sig
   (SEQUENCE
    (tbsCertificate ANY/DER)
-   (signatureAlgorithm AlgorithmIdentifier/PUBKEY)
+   (signatureAlgorithm (AlgorithmIdentifier SIGNING))
    (signature BIT-STRING)))
 
 (define-asn1-type CertificateList-for-verify-sig
   (SEQUENCE
    (tbsCertList ANY/DER)
-   (signatureAlgorithm AlgorithmIdentifier/PUBKEY)
+   (signatureAlgorithm (AlgorithmIdentifier SIGNING))
    (signature BIT-STRING)))
 
 ;; ============================================================
@@ -415,7 +415,7 @@
 (define-asn1-type PolicyQualifierInfo
   (SEQUENCE
    (policyQualifierId PolicyQualifierId)
-   (qualifier #:dependent (relation-ref POLICY-QUALIFIER 'oid policyQualifierId 'type))))
+   (qualifier #:dependent (relation-ref POLICY-QUALIFIERS 'oid policyQualifierId 'type))))
 (define-asn1-type PolicyQualifierId OBJECT-IDENTIFIER)
 
 (define CPSuri IA5String)
@@ -569,10 +569,34 @@
    [id-ce-certificateIssuer           CertificateIssuer]
    ))
 
-(define POLICY-QUALIFIER
+(define POLICY-QUALIFIERS
   (relation
    #:heading
    ['oid            'type]
    #:tuples
    [id-qt-cps       CPSuri]
    [id-qt-unotice   UserNotice]))
+
+(define SIGNING
+  (relation
+   #:heading
+   ['oid                    'pk  'digest 'params]
+   #:tuples
+   [md5WithRSAEncryption    'rsa 'md5    NULL]
+   [sha1WithRSAEncryption   'rsa 'sha1   NULL]
+   [sha224WithRSAEncryption 'rsa 'sha224 NULL]
+   [sha256WithRSAEncryption 'rsa 'sha256 NULL]
+   [sha384WithRSAEncryption 'rsa 'sha384 NULL]
+   [sha512WithRSAEncryption 'rsa 'sha512 NULL]
+   ;;[id-RSASSA-PSS           'rsa #f      RSASSA-PSS-params]
+   [dsa-with-sha1           'dsa 'sha1   #f]
+   [id-dsa-with-sha224      'dsa 'sha224 #f]
+   [id-dsa-with-sha256      'dsa 'sha256 #f]
+   [id-dsa-with-sha384      'dsa 'sha384 #f]
+   [id-dsa-with-sha512      'dsa 'sha512 #f]
+   [ecdsa-with-SHA1         'ec  'sha1   #f]
+   [ecdsa-with-SHA224       'ec  'sha224 #f]
+   [ecdsa-with-SHA256       'ec  'sha256 #f]
+   [ecdsa-with-SHA384       'ec  'sha384 #f]
+   [ecdsa-with-SHA512       'ec  'sha512 #f]
+   ))
