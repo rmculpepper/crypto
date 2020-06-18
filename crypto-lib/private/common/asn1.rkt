@@ -73,6 +73,14 @@
               (vector-ref tuple (relation-field-index rel wantfield #:who who)))]
         [else #f]))
 
+(define (relation-ref* rel keyfield key wantfields #:who [who 'relation-ref])
+  (cond [(relation-find rel keyfield key #:who who)
+         => (lambda (tuple)
+              (map (lambda (wantfield)
+                     (vector-ref tuple (relation-field-index rel wantfield #:who who)))
+                   wantfields))]
+        [else #f]))
+
 (define (relation-column rel keyfield #:who [who 'relation-column])
   (define keyindex (relation-field-index rel keyfield #:who who))
   (for/vector ([tuple (in-vector (rel-tuples rel))])
@@ -100,6 +108,14 @@
          (WRAP BIT-STRING
                #:encode (lambda (v) (bit-string v 0))
                #:decode (lambda (v) (bit-string-bytes v)))]))
+
+;; OCTET-STRING-containing : (U ASN1-Type #f) -> ASN1-Type
+(define (OCTET-STRING-containing type)
+  (cond [type
+         (WRAP OCTET-STRING
+               #:encode (lambda (v) (asn1->bytes/DER type v))
+               #:decode (lambda (v) (bytes->asn1/DER type v)))]
+        [else OCTET-STRING]))
 
 ;; useful for giving SEQUENCE w/ optional fields a fixed shape for match
 (define (ensure-keys h keys)
