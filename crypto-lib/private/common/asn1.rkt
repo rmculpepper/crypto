@@ -210,6 +210,43 @@
 (define id-pSpecified (build-OID pkcs-1 9))
 (define id-RSASSA-PSS (build-OID pkcs-1 10))
 
+(define-asn1-type HashAlgorithm (AlgorithmIdentifier HASH))
+
+(define MASKGEN
+  (relation
+   #:heading
+   ['oid 'params]
+   #:tuples
+   [id-mgf1 HashAlgorithm]))
+
+(define-asn1-type MaskGenAlgorithm (AlgorithmIdentifier MASKGEN))
+
+(define RSASSA-PSS-params
+  (let* ([sha1Identifier (hasheq 'algorithm id-sha1 'parameters #f)]
+         [mgf1SHA1Identifier (hasheq 'algorithm id-mgf1 'parameters sha1Identifier)])
+    (SEQUENCE
+     [hashAlgorithm    #:explicit 0 HashAlgorithm #:default sha1Identifier]
+     [maskGenAlgorithm #:explicit 1 MaskGenAlgorithm #:default mgf1SHA1Identifier]
+     [saltLength       #:explicit 2 INTEGER #:default 20]
+     [trailerField     #:explicit 3 INTEGER #:default 1])))
+
+(module+ pss-params
+  (require "util.rkt")
+  ;; The CA/B Baseline Recommendations give the following AlgorithmIdentifiers
+  ;; for RSA-PSS. This module extracts the RSASSA-PSS-params.
+  (define AlgId (SEQUENCE [a OBJECT-IDENTIFIER] [p RSASSA-PSS-params]))
+  (define (pss-params algid-hex)
+    (define algid-der (hex->bytes algid-hex))
+    #;(hash-ref (bytes->asn1/DER AlgId algid-der) 'p)
+    (bytes->asn1/DER AlgId algid-der))
+  (hasheq 'sha256 (pss-params "304106092a864886f70d01010a3034a00f300d06096086480165030402010500a11c301a06092a864886f70d010108300d06096086480165030402010500a203020120")
+          'sha384 (pss-params "304106092a864886f70d01010a3034a00f300d06096086480165030402020500a11c301a06092a864886f70d010108300d06096086480165030402020500a203020130")
+          'sha512 (pss-params "304106092a864886f70d01010a3034a00f300d06096086480165030402030500a11c301a06092a864886f70d010108300d06096086480165030402030500a203020140")))
+
+;; Per CA/B Baseline Recommendations, the following PSS configurations are supported:
+(define PSS-configs
+  '())
+
 (define sha224WithRSAEncryption (build-OID pkcs-1 14))
 (define sha256WithRSAEncryption (build-OID pkcs-1 11))
 (define sha384WithRSAEncryption (build-OID pkcs-1 12))
@@ -747,3 +784,33 @@
   (SEQUENCE
    [encryptionAlgorithm  (AlgorithmIdentifier KeyEncryptionAlgorithms)]
    [encryptedData        OCTET-STRING]))
+
+;; ============================================================
+
+(define HASH ;; HashAlgs : DIGEST-ALGORITHM
+  (relation
+   #:heading
+   ['oid          'digest     'params 'params-presence]
+   #:tuples
+   ;; RFC 5912
+   [id-md5        'md5        NULL 'preferredAbsent]
+   [id-sha1       'sha1       NULL 'preferredAbsent]
+   [id-sha224     'sha224     NULL 'preferredAbsent]
+   [id-sha256     'sha256     NULL 'preferredAbsent]
+   [id-sha384     'sha384     NULL 'preferredAbsent]
+   [id-sha512     'sha512     NULL 'preferredAbsent]
+
+   ;; RFC 8692
+   [id-shake128   'shake128   NULL 'absent] ;; output 32 bytes
+   [id-shake256   'shake256   NULL 'absent] ;; output 64 bytes
+
+   ;; NIST
+   [id-sha512-224 'sha512/224 NULL 'preferredAbsent]
+   [id-sha512-256 'sha512/256 NULL 'preferredAbsent]
+   [id-sha3-224   'sha3-224   NULL 'preferredAbsent]
+   [id-sha3-256   'sha3-256   NULL 'preferredAbsent]
+   [id-sha3-384   'sha3-384   NULL 'preferredAbsent]
+   [id-sha3-512   'sha3-512   NULL 'preferredAbsent]
+   [id-shake128-len 'shake128 INTEGER 'present]
+   [id-shake256-len 'shake256 INTEGER 'present]
+   ))
