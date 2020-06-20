@@ -3,8 +3,8 @@
          racket/class
          racket/date
          crypto
-         net/base64
          asn1
+         crypto/pem
          "x509-asn1.rkt"
          (only-in crypto/private/common/asn1 relation-ref))
 
@@ -16,22 +16,8 @@
 
 ;; read-pem-chain : InputPort -> (Listof Bytes)
 (define (read-pem-chain in)
-  (define (read/expect-start)
-    (match (read-line in 'any)
-      [(? eof-object?) null]
-      [(regexp #rx"^-----BEGIN CERTIFICATE-----$")
-       (read/contents)]
-      [_ (read/expect-start)]))
-  (define (read/contents)
-    (define out (open-output-bytes))
-    (let loop ()
-      (match (read-line in 'any)
-        [(? eof-object?) null] ;; FIXME: error, incomplete?
-        [(regexp #rx"^-----END CERTIFICATE-----$")
-         (cons (base64-decode (get-output-bytes out))
-               (read/expect-start))]
-        [(? string? s) (begin (write-string s out) (loop))])))
-  (read/expect-start))
+  (for/list ([v (in-port (lambda (in) (read-pem in #:only '(#"CERTIFICATE"))) in)])
+    (cdr v)))
 
 ;; recursive verification arguments
 ;; - chain
@@ -256,6 +242,7 @@
       (and (for/and ([use (in-list uses)]) (memq use key-uses)) #t))
 
     ))
+
 
 (define (asn1-time->seconds t)
   (define (map-num ss) (map string->number ss))
