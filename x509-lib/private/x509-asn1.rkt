@@ -389,7 +389,7 @@
 (define-asn1-type SubjectKeyIdentifier KeyIdentifier)
 
 (define KeyUsage
-  (BIT-STRING/names
+  (WRAP-NAMES BIT-STRING
    (list
     (cons 'digitalSignature 0)
     (cons 'nonRepudiation 1)
@@ -488,7 +488,7 @@
    (fullName #:implicit 0 GeneralNames)
    (nameRelativeToCRLIssuer #:implicit 1 RelativeDistinguishedName)))
 (define-asn1-type ReasonFlags
-  (BIT-STRING/names
+  (WRAP-NAMES BIT-STRING
    (list
     (cons 'unused 0)
     (cons 'keyCompromise 1)
@@ -518,7 +518,7 @@
    (onlyContainsAttributeCerts #:implicit 5 BOOLEAN #:default #f)))
 (define-asn1-type BaseCRLNumber CRLNumber)
 (define-asn1-type CRLReason
-  (ENUMERATED/names
+  (WRAP-NAMES ENUMERATED
    (list
     (cons 'unspecified 0)
     (cons 'keyCompromise 1)
