@@ -243,11 +243,18 @@
 
     ;; ============================================================
 
+    (define/public (validate-chain)
+      ;; Note: this does not verify that this certificate is valid for
+      ;; any particular *purpose*.
+      (define vi (new validation% (trust-anchor #f)))
+      (check-chain vi 1)
+      (send vi get-errors))
+
     ;; FIXME: change to include trust anchor (as certificate%) at end of chain?
 
     (define/public (check-chain vi [depth 1])
       (define (final-in-path?) (= depth 1))
-      (define (add-error what) (send vi add-error what))
+      (define (add-error what) (send vi add-error (cons depth what)))
       ;; 6.1.3
       (begin
         (cond [issuer-obj
@@ -358,7 +365,7 @@
       (unless policy-mapping (set! policy-mapping (add1 n)))
       (unless inhibit-anypolicy (set! inhibit-anypolicy (add1 n))))
 
-    (define/public (decrement-policy-counters) ;; 6.1.4 (b)
+    (define/public (decrement-counters) ;; 6.1.4 (b)
       (cond [(not max-path-length)
              (error 'check/decrement-max-path-length "not initialized")]
             [(positive? max-path-length)
@@ -406,7 +413,8 @@
 
 (define (DN-match? dn1 dn2)
   ;; Section 7.1
-  #f)
+  ;; FIXME
+  (equal? dn1 dn2))
 
 (define (DN-not-empty? dn)
   (match dn
@@ -446,4 +454,4 @@
 (define (get-cert-chain file)
   (define ders (call-with-input-file file read-pem-chain))
   (for/fold ([obj #f]) ([der (in-list (reverse ders))])
-    (new certificate% (der der))))
+    (new certificate% (der der) (issuer-obj obj))))
