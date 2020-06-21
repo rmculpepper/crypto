@@ -14,11 +14,6 @@
 ;; - RFC 8398 and 8399 (Internationalization) (https://tools.ietf.org/html/rfc8398,
 ;;   https://tools.ietf.org/html/rfc8399)
 
-;; read-pem-chain : InputPort -> (Listof Bytes)
-(define (read-pem-chain in)
-  (for/list ([v (in-port (lambda (in) (read-pem in #:only '(#"CERTIFICATE"))) in)])
-    (cdr v)))
-
 ;; recursive verification arguments
 ;; - chain
 ;; - hostname (optional)
@@ -46,7 +41,7 @@
 
 (define certificate%
   (class object%
-    (init-field der)
+    (init-field der [issuer-obj #f])
     (super-new)
 
     (define cert (bytes->asn1 Certificate der))
@@ -89,7 +84,12 @@
              => (lambda (ext) (hash-ref (extension-value ext) 'cA))]
             [else #f]))
     (define/public (is-CRL-issuer?) (and (memq 'cRLSign (get-key-uses)))) ;; FIXME: and (is-CA?)
-    (define/public (is-self-signed?) #f) ;; FIXME
+    (define/public (is-self-issued?) ;; 6.1
+      (let ([subject (get-subject)] [issuer (get-issuer)])
+        (DN-match? subject issuer)))
+    (define/public (is-self-signed?)
+      ;; FIXME
+      #f)
     (define/public (get-key-uses)
       (cond [(get-extension id-ce-keyUsage) => extension-value] [else null]))
 
@@ -241,8 +241,150 @@
       (define key-uses (get-key-uses))
       (and (for/and ([use (in-list uses)]) (memq use key-uses)) #t))
 
+    ;; ============================================================
+
+    ;; FIXME: change to include trust anchor (as certificate%) at end of chain?
+
+    (define/public (check-chain vi [depth 1])
+      (define (final-in-path?) (= depth 1))
+      (define (add-error what) (send vi add-error what))
+      ;; 6.1.3
+      (begin
+        (cond [issuer-obj
+               (send issuer-obj check-chain vi (add1 depth))
+               ;; 6.1.3 (a)(1) verify signature
+               (unless (ok-signature? (send issuer-obj get-pk))
+                 (add-error 'ok-signature))
+               ;; 6.1.3 (a)(4) issuer
+               (unless (DN-match? (get-issuer) (send issuer-obj get-subject))
+                 (add-error 'issuer-matches))]
+              [else ;; use trust anchor
+               (send vi initialize depth)
+               ;; 6.1.3 (a)(1) verify signature
+               (let ([pk (send vi get-trust-anchor-pk)])
+                 (unless (and pk (ok-signature? (send vi get-trust-anchor-pk)))
+                   (add-error 'ok-signature/trust-anchor)))
+               ;; 6.1.3 (a)(4) issuer
+               (let ([trust-anchor-subject (send vi get-trust-anchor-subject)])
+                 (unless (and trust-anchor-subject (DN-match? (get-issuer) trust-anchor-subject))
+                   (add-error 'issuer-matches/trust-anchor)))
+               (void)])
+        ;; 6.1.3 (a)(2)
+        (unless (ok-validity? (send vi get-from-time) (send vi get-to-time))
+          (add-error 'ok-validity))
+        ;; 6.1.3 (a)(3) (not revoked)
+        (void) ;; FIXME?
+        ;; 6.1.3 (b)
+        (unless (and (is-self-issued?) (final-in-path?))
+          ;; FIXME: check (get-subject) is in permitted-subtrees
+          ;; FIXME: check each subjectAltName is in permitted-subtrees
+          (void))
+        ;; 6.1.3 (c)
+        (unless (and (is-self-issued?) (final-in-path?))
+          ;; FIXME: check (get-subject) is not in excluded-subtrees
+          ;; FIXME: check each subjectAltName is not in excluded-subtrees
+          (void))
+        ;; 6.1.3 (d)
+        (begin
+          ;; FIXME: if valid-policy-tree is not #f and this cert has certificate
+          ;; policies, process the policies.
+          (void))
+        ;; 6.1.3 (e) if no certificate policies, set valid-policy-tree to #f
+        (void) ;; FIXME
+        ;; 6.1.3 (f) explicit-policy > 0 or valid-policy-tree is not #f
+        (void))
+      ;; 6.1.4
+      (unless (final-in-path?)
+        ;; 6.1.4 (a-b) policy-mappings, policies, ...
+        (void) ;; FIXME
+        ;; 6.1.4 (c-f) handled by get-pk method instead
+        (void 'OK)
+        ;; 6.1.4 (g) name constraints, {permitted,excluded}-subtrees
+        (void) ;; FIXME
+        ;; 6.1.4 (h, l) decrement counters
+        (unless (is-self-issued?)
+          (send vi decrement-counters))
+        ;; 6.1.4 (i, j) policy-mapping, inhibit-anypolicy, ...
+        (void) ;; FIXME
+        ;; 6.1.4 (k) check CA (reject if no basicConstraints extension)
+        (unless (is-CA?) (add-error 'is-CA))
+        ;; 6.1.4 (m)
+        (let* ([ext (get-extension id-ce-basicConstraints)]
+               [plen (and ext (hash-ref (extension-value ext) 'pathLenConstraint #f))])
+          (when plen (send vi set-max-path-length plen)))
+        ;; 6.1.4 (n)
+        (let ([key-uses (get-key-uses)])
+          (when (pair? key-uses)
+            (unless (memq 'keyCertSign key-uses)
+              (add-error 'CA-has-keyCertSign))))
+        ;; 6.1.4 (o) already done in certificate% construction
+        (void 'OK))
+      ;; 6.1.5
+      (when (final-in-path?)
+        ;; 6.1.5 (a) explicit-policy
+        (void) ;; FIXME
+        ;; 6.1.5 (b) policies, explicit-policy, ...
+        (void) ;; FIXME
+        ;; 6.1.5 (c-e) handled by get-pk method instead
+        (void 'OK)
+        ;; 6.1.5 (f) already done in certificate% construction
+        (void 'OK)
+        ;; 6.1.5 (g) policies ...
+        (void) ;; FIXME
+        (void))
+      (void))
+
     ))
 
+(define validation%
+  (class object%
+    (init-field trust-anchor
+                [from-time (current-seconds)]
+                [to-time from-time]
+                [init-policies null]
+                ;; state variables
+                [max-path-length #f]
+                [explicit-policy #f]
+                [policy-mapping #f]
+                [inhibit-anypolicy #f])
+    (super-new)
+
+    (define/public (get-trust-anchor-pk) #f)
+    (define/public (get-trust-anchor-subject) #f) ;; FIXME
+
+    (define/public (initialize n)
+      (unless max-path-length (set! max-path-length n))
+      (unless explicit-policy (set! explicit-policy (add1 n)))
+      (unless policy-mapping (set! policy-mapping (add1 n)))
+      (unless inhibit-anypolicy (set! inhibit-anypolicy (add1 n))))
+
+    (define/public (decrement-policy-counters) ;; 6.1.4 (b)
+      (cond [(not max-path-length)
+             (error 'check/decrement-max-path-length "not initialized")]
+            [(positive? max-path-length)
+             (set! max-path-length (sub1 max-path-length))]
+            [else (add-error 'max-path-length)])
+      (unless (zero? explicit-policy) (set! explicit-policy (sub1 explicit-policy)))
+      (unless (zero? policy-mapping) (set! policy-mapping (sub1 policy-mapping)))
+      (unless (zero? inhibit-anypolicy) (set! inhibit-anypolicy (sub1 inhibit-anypolicy))))
+
+    (define/public (get-from-time) from-time)
+    (define/public (get-to-time) to-time)
+
+    (define errors null)
+    (define/public (get-errors) errors)
+    (define/public (add-error what) (set! errors (cons what errors)))
+
+    (define valid-policy-tree #f) ;; ???
+    (define permitted-subtrees #f) ;; ???
+    (define excluded-subtrees #f) ;; ???
+
+    (define/public (set-max-path-length n)
+      (unless max-path-length (error 'set-max-path-length "not initialized"))
+      (when (< n max-path-length) (set! max-path-length n)))
+    ))
+
+;; ============================================================
 
 (define (asn1-time->seconds t)
   (define (map-num ss) (map string->number ss))
@@ -261,6 +403,10 @@
   (let ([h (make-hash)])
     (for ([x (in-list xs)]) (hash-update! h (get-key x) add1 0))
     (for/and ([v (in-hash-values h)]) (<= v 1))))
+
+(define (DN-match? dn1 dn2)
+  ;; Section 7.1
+  #f)
 
 (define (DN-not-empty? dn)
   (match dn
@@ -285,13 +431,19 @@
 
 (define (policy-id p) (hash-ref p 'policyIdentifier))
 
-(define (get-cert-chain file)
-  (map (lambda (der) (new certificate% (der der)))
-       (call-with-input-file file read-pem-chain)))
-
 ;; ----------------------------------------
 
 (require racket/pretty)
 (pretty-print-columns 160)
 (require crypto crypto/all)
 (use-all-factories!)
+
+;; read-pem-chain : InputPort -> (Listof Bytes)
+(define (read-pem-chain in)
+  (for/list ([v (in-port (lambda (in) (read-pem in #:only '(#"CERTIFICATE"))) in)])
+    (cdr v)))
+
+(define (get-cert-chain file)
+  (define ders (call-with-input-file file read-pem-chain))
+  (for/fold ([obj #f]) ([der (in-list (reverse ders))])
+    (new certificate% (der der))))
