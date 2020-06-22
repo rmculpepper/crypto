@@ -47,6 +47,7 @@
     (define cert (bytes->asn1 Certificate der))
     (define tbs (hash-ref cert 'tbsCertificate))
 
+    (define/public (get-der) der)
     (define/public (get-cert-signature-alg)
       (hash-ref cert 'signatureAlgorithm))
     (define/public (get-cert-signature-bytes)
@@ -246,7 +247,7 @@
     (define/public (validate-chain)
       ;; Note: this does not verify that this certificate is valid for
       ;; any particular *purpose*.
-      (define vi (new validation% (trust-anchor #f)))
+      (define vi (new validation% (store #f)))
       (check-chain vi 1)
       (send vi get-errors))
 
@@ -267,13 +268,15 @@
                  (add-error 'issuer-matches))]
               [else ;; use trust anchor
                (send vi initialize depth)
-               ;; 6.1.3 (a)(1) verify signature
-               (let ([pk (send vi get-trust-anchor-pk)])
-                 (unless (and pk (ok-signature? (send vi get-trust-anchor-pk)))
-                   (add-error 'ok-signature/trust-anchor)))
-               ;; 6.1.3 (a)(4) issuer
-               (let ([trust-anchor-subject (send vi get-trust-anchor-subject)])
-                 (unless (and trust-anchor-subject (DN-match? (get-issuer) trust-anchor-subject))
+               (define ta (send vi get-trust-anchor (get-issuer)))
+               (unless ta
+                 (add-error 'trust-anchor))
+               (when ta
+                 ;; 6.1.3 (a)(1) verify signature
+                 (unless (ok-signature? (send ta get-pk))
+                   (add-error 'ok-signature/trust-anchor))
+                 ;; 6.1.3 (a)(4) issuer
+                 (unless (DN-match? (get-issuer) (send ta get-subject))
                    (add-error 'issuer-matches/trust-anchor)))
                (void)])
         ;; 6.1.3 (a)(2)
@@ -343,9 +346,12 @@
 
     ))
 
+
+;; ============================================================
+
 (define validation%
   (class object%
-    (init-field trust-anchor
+    (init-field store
                 [from-time (current-seconds)]
                 [to-time from-time]
                 [init-policies null]
@@ -355,9 +361,6 @@
                 [policy-mapping #f]
                 [inhibit-anypolicy #f])
     (super-new)
-
-    (define/public (get-trust-anchor-pk) #f)
-    (define/public (get-trust-anchor-subject) #f) ;; FIXME
 
     (define/public (initialize n)
       (unless max-path-length (set! max-path-length n))
@@ -375,6 +378,10 @@
       (unless (zero? policy-mapping) (set! policy-mapping (sub1 policy-mapping)))
       (unless (zero? inhibit-anypolicy) (set! inhibit-anypolicy (sub1 inhibit-anypolicy))))
 
+    (define/public (get-trust-anchor dn)
+      ;; FIXME
+      #f)
+
     (define/public (get-from-time) from-time)
     (define/public (get-to-time) to-time)
 
@@ -389,6 +396,222 @@
     (define/public (set-max-path-length n)
       (unless max-path-length (error 'set-max-path-length "not initialized"))
       (when (< n max-path-length) (set! max-path-length n)))
+    ))
+
+(define trust-anchor<%>
+  (interface ()
+    get-pk
+    get-subject
+    ))
+
+;; ============================================================
+
+(define x509-store<%>
+  (interface ()
+    trust?     ;; certificate% -> Boolean
+    trust/der? ;; Bytes -> Boolean
+    lookup-by-subject ;; DN -> (Listof certificate%)
+    lookup-by-key-id  ;; Bytes -> (Listof certificate%)
+    ))
+
+(module openssl-x509 racket/base
+  (require ffi/unsafe
+           ffi/unsafe/define
+           ffi/unsafe/alloc
+           ffi/unsafe/atomic
+           openssl/libssl)
+  (provide (protect-out (all-defined-out)))
+
+  (define-ffi-definer define-ssl libssl
+    #:default-make-fail make-not-available)
+
+  (define-cpointer-type _X509_NAME)
+  (define-ssl X509_NAME_free (_fun _X509_NAME -> _void)
+    #:wrap (deallocator))
+  (define-ssl d2i_X509_NAME ;; FIXME: wrap allocator
+    (_fun (_pointer = #f) (_ptr i _pointer) _long -> _X509_NAME/null)
+    #:wrap (allocator X509_NAME_free))
+  (define-ssl X509_NAME_hash (_fun _X509_NAME -> _long))
+
+  #|
+  (define-cpointer-type _X509)
+  (define-cpointer-type _X509_LOOKUP_METHOD)
+  (define-cpointer-type _X509_LOOKUP)
+  (define _X509_LOOKUP_TYPE _int)
+  (define-cpointer-type _ASN1_INTEGER)
+
+  (define-ssl X509_new (_fun -> _X509))
+
+  (define X509_LU_RETRY -1)
+  (define X509_LU_FAIL 0)
+  (define X509_LU_X509 1)
+  (define X509_LU_CRL 2)
+  (define X509_LU_PKEY 3)
+
+  (define-cstruct _x509_object_st
+    ([type _int]
+     [data _pointer]))
+  (define _X509_OBJECT _x509_object_st-pointer)
+
+  (define X509_FILETYPE_PEM 1)
+  (define X509_FILETYPE_ASN1 2)
+  (define X509_FILETYPE_DEFAULT 3)
+
+  (define-ssl X509_LOOKUP_hash_dir (_fun -> _X509_LOOKUP_METHOD))
+  (define-ssl X509_LOOKUP_file (_fun -> _X509_LOOKUP_METHOD))
+
+  (define-ssl X509_LOOKUP_new (_fun _X509_LOOKUP_METHOD -> _X509_LOOKUP))
+  (define-ssl X509_LOOKUP_init (_fun _X509_LOOKUP -> _int))
+  (define-ssl X509_LOOKUP_shutdown (_fun _X509_LOOKUP -> _int))
+  (define-ssl X509_LOOKUP_free (_fun _X509_LOOKUP -> _void))
+
+  (define-ssl X509_LOOKUP_ctrl (_fun _X509_LOOKUP _int _path _long _pointer -> _int))
+  (define X509_L_FILE_LOAD 1)
+  (define X509_L_ADD_DIR 2)
+
+  (define (X509_LOOKUP_load_file x name type)
+    (X509_LOOKUP_ctrl x X509_L_FILE_LOAD name type #f))
+  (define (X509_LOOKUP_add_dir x name type)
+    (X509_LOOKUP_ctrl x X509_L_ADD_DIR name type #f))
+
+  (define-ssl X509_LOOKUP_by_subject
+    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _X509_NAME _X509_OBJECT -> _int))
+  (define-ssl X509_LOOKUP_by_issuer_serial
+    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _X509_NAME _ASN1_INTEGER _X509_OBJECT -> _int))
+  (define-ssl X509_LOOKUP_by_fingerprint
+    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _bytes _int _X509_OBJECT -> _int))
+  (define-ssl X509_LOOKUP_by_alias
+    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _bytes _int _X509_OBJECT -> _int))
+
+  (define-cpointer-type _X509_STORE)
+  (define-ssl X509_STORE_free
+    (_fun _X509_STORE -> _void)
+    #:wrap (deallocator))
+  (define-ssl X509_STORE_new
+    (_fun -> _X509_STORE/null)
+    #:wrap (allocator X509_STORE_free))
+  (define-ssl X509_STORE_load_locations
+    (_fun _X509_STORE _path _path -> _int))
+  |#
+
+  #|
+  (define lu (X509_LOOKUP_new (X509_LOOKUP_hash_dir)))
+  (X509_LOOKUP_init lu)
+  (X509_LOOKUP_add_dir lu "/etc/ssl/certs" X509_FILETYPE_PEM)
+  (define xret (X509_new))
+  (define obj (make-x509_object_st 1 xret))
+  |#)
+
+(define x509-root-store%
+  (let ()
+    (local-require (only-in racket/file file->bytes))
+    (class* object% (x509-store<%>)
+      (init-field dir)
+      (super-new)
+
+      (define/public (trust? cert) #f)
+      (define/public (trust/der? der) #f)
+
+      (define/public (lookup-by-subject dn)
+        (lookup-by-subject/cn dn))
+
+      (define/public (lookup-by-subject/cn dn)
+        (define cn (DN-get-common-name dn))
+        (define file (build-path dir (format "~a.pem" (regexp-replace* #rx" " cn "_"))))
+        (cond [(file-exists? file)
+               (define cert (read-cert-from-file file))
+               (if (DN-match? dn (send cert get-subject)) (list cert) null)]
+              [else null]))
+
+      #|
+      (define/public (lookup-by-subject/hash dn)
+        (define (padto n s) (string-append (make-string (- n (string-length s)) #\0 s)))
+        (define base (padto 8 (number->string (dn-hash (asn1->bytes Name dn)) 16)))
+        (let loop ([i 0])
+          (define file (build-path dir (format "~a.~a" base i)))
+          (cond [(file-exists? file)
+                 (define cert (read-cert-from-file file))
+                 (if (DN-match? dn (send cert get-subject))
+                     (cons cert (loop (add1 i)))
+                     (loop (add1 i)))]
+                [else null])))
+
+      (define/private (dn-hash dn-der)
+        (local-require (submod "." openssl-x509))
+        (define dn (d2i_X509_NAME dn-der (bytes-length dn-der)))
+        (begin0 (X509_NAME_hash dn) (X509_NAME_free dn)))
+      |#
+
+      (define/private (read-cert-from-file file)
+        (match (call-with-input-file* file read-pem-certs)
+          [(list der) (new certificate% (der der))]
+          [_ (error 'lookup-by-subject "bad certificate PEM file: ~e" file)]))
+
+      (define/public (lookup-by-key-id keyid) #f)
+
+      (define/public (add-certificates certs #:trusted? [trusted? #f])
+        (send (new x509-store% (parent this))
+              add-certificates certs #:trusted? trusted?))
+      )))
+
+(define root (new x509-root-store% (dir "/etc/ssl/certs")))
+
+(define x509-empty-store%
+  (class* object% (x509-store<%>)
+    (super-new)
+    (define/public (trust? cert) #f)
+    (define/public (trust/der? der) #f)
+    (define/public (lookup-by-subject dn) null)
+    (define/public (lookup-by-key-id keyid) null)
+    (define/public (add-certificates certs #:trusted? [trusted? #f])
+      (send (new x509-store% (parent this))
+            add-certificates certs #:trusted? trusted?))
+    ))
+
+(define x509-store%
+  (class* object% (x509-store<%>)
+    (init-field parent
+                [trusted-der-h '#hash()]
+                [dn=>cert      '#hash()]
+                [keyid=>cert   '#hash()])
+    (super-new)
+
+    (define/public (trust? cert)
+      (trust/der? (send cert get-der)))
+
+    (define/public (trust/der? der)
+      (or (hash-ref trusted-der-h der #f)
+          (send parent trust/der? der)))
+
+    (define/public (lookup-by-subject dn)
+      (append (hash-ref dn=>cert dn null)
+              (send parent lookup-by-subject dn)))
+    (define/public (lookup-by-key-id keyid)
+      (append (hash-ref keyid=>cert keyid null)
+              (send parent lookup-by-key-id keyid)))
+
+    (define/public (add-certificates certs #:trusted? [trusted? #f])
+      (define ((mkcons v) vs) (cons v vs))
+      (define-values (dn=>cert* keyid=>cert*)
+        (for/fold ([dn=>cert dn=>cert] [keyid=>cert keyid=>cert])
+                  ([cert (in-list certs)])
+          (values (let ([subject (send cert get-subject)])
+                    (cond [(DN-not-empty? subject)
+                           (hash-update dn=>cert subject (mkcons cert) null)]
+                          [else dn=>cert]))
+                  (cond [(send cert get-subject-key-id)
+                         => (lambda (keyid)
+                              (hash-update keyid=>cert keyid (mkcons cert) null))]
+                        [else keyid=>cert]))))
+      (define trusted-der-h*
+        (cond [trusted?
+               (for/fold ([h trusted-der-h]) ([cert (in-list certs)])
+                 (hash-set h (send cert get-der) #t))]
+              [else trusted-der-h]))
+      (new this% (parent parent)
+           (trusted-der-h trusted-der-h*)
+           (dn=>cert dn=>cert*)
+           (keyid=>cert keyid=>cert*)))
     ))
 
 ;; ============================================================
@@ -414,7 +637,24 @@
 (define (DN-match? dn1 dn2)
   ;; Section 7.1
   ;; FIXME
-  (equal? dn1 dn2))
+  (define (unwrap v) (get-attr-value v (lambda (v) v)))
+  (match* [dn1 dn2]
+    [[(list 'rdnSequence rdns1) (list 'rdnSequence rdns2)]
+     (and (= (length rdns1) (length rdns2))
+          (for/and ([rdn1 (in-list rdns1)] [rdn2 (in-list rdns2)])
+            (define (rdn->h rdn)
+              (for/fold ([h (hash)]) ([av (in-list rdn)])
+                (hash-set h (hash-ref av 'type) (hash-ref av 'value))))
+            (define h1 (rdn->h rdn1))
+            (define h2 (rdn->h rdn2))
+            ;; Note: if a (bad) DN had the same attr type multiple times in the
+            ;; SET, the hash loses information. So iterate over SETs instead.
+            (and (for/and ([av1 (in-list rdn1)])
+                   (match-define (hash-table ['type k] ['value v1]) av1)
+                   (equal? (unwrap v1) (unwrap (hash-ref h2 k #f))))
+                 (for/and ([av2 (in-list rdn2)])
+                   (match-define (hash-table ['type k] ['value v2]) av2)
+                   (equal? (unwrap v2) (unwrap (hash-ref h1 k #f)))))))]))
 
 (define (DN-not-empty? dn)
   (match dn
@@ -425,6 +665,24 @@
   ;; FIXME: see 4.1.2.4, 4.1.2.6
   ;; -- 'modern-strings (CA-MUST), not checked, FIXME
   #t)
+
+(define (DN-get-common-name dn)
+  (match dn
+    [(list 'rdnSequence rdns)
+     (for/or ([rdn (in-list rdns)])
+       (for/or ([av (in-list rdn)])
+         (match av
+           [(hash-table ['type (== id-at-commonName)] ['value cnv])
+            (get-attr-value cnv (lambda (v) #f))]
+           [_ #f])))]))
+
+(define (get-attr-value ds handle-other)
+  (match ds
+    [(list 'printableString (? string? s)) s]
+    [(list 'universalString (? string? s)) s]
+    [(list 'utf8String (? string? s)) s]
+    [(list 'bmpString (? string? s)) s]
+    [_ (handle-other ds)]))
 
 (define (wf-time? v)
   (match v
@@ -444,14 +702,14 @@
 (require racket/pretty)
 (pretty-print-columns 160)
 (require crypto crypto/all)
-(use-all-factories!)
+(crypto-factories libcrypto-factory)
 
 ;; read-pem-chain : InputPort -> (Listof Bytes)
-(define (read-pem-chain in)
+(define (read-pem-certs in)
   (for/list ([v (in-port (lambda (in) (read-pem in #:only '(#"CERTIFICATE"))) in)])
     (cdr v)))
 
 (define (get-cert-chain file)
-  (define ders (call-with-input-file file read-pem-chain))
+  (define ders (call-with-input-file file read-pem-certs))
   (for/fold ([obj #f]) ([der (in-list (reverse ders))])
     (new certificate% (der der) (issuer-obj obj))))
