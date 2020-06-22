@@ -421,89 +421,17 @@
   (require ffi/unsafe
            ffi/unsafe/define
            ffi/unsafe/alloc
-           ffi/unsafe/atomic
            openssl/libssl)
   (provide (protect-out (all-defined-out)))
-
   (define-ffi-definer define-ssl libssl
     #:default-make-fail make-not-available)
-
   (define-cpointer-type _X509_NAME)
   (define-ssl X509_NAME_free (_fun _X509_NAME -> _void)
     #:wrap (deallocator))
   (define-ssl d2i_X509_NAME ;; FIXME: wrap allocator
     (_fun (_pointer = #f) (_ptr i _pointer) _long -> _X509_NAME/null)
     #:wrap (allocator X509_NAME_free))
-  (define-ssl X509_NAME_hash (_fun _X509_NAME -> _long))
-
-  #|
-  (define-cpointer-type _X509)
-  (define-cpointer-type _X509_LOOKUP_METHOD)
-  (define-cpointer-type _X509_LOOKUP)
-  (define _X509_LOOKUP_TYPE _int)
-  (define-cpointer-type _ASN1_INTEGER)
-
-  (define-ssl X509_new (_fun -> _X509))
-
-  (define X509_LU_RETRY -1)
-  (define X509_LU_FAIL 0)
-  (define X509_LU_X509 1)
-  (define X509_LU_CRL 2)
-  (define X509_LU_PKEY 3)
-
-  (define-cstruct _x509_object_st
-    ([type _int]
-     [data _pointer]))
-  (define _X509_OBJECT _x509_object_st-pointer)
-
-  (define X509_FILETYPE_PEM 1)
-  (define X509_FILETYPE_ASN1 2)
-  (define X509_FILETYPE_DEFAULT 3)
-
-  (define-ssl X509_LOOKUP_hash_dir (_fun -> _X509_LOOKUP_METHOD))
-  (define-ssl X509_LOOKUP_file (_fun -> _X509_LOOKUP_METHOD))
-
-  (define-ssl X509_LOOKUP_new (_fun _X509_LOOKUP_METHOD -> _X509_LOOKUP))
-  (define-ssl X509_LOOKUP_init (_fun _X509_LOOKUP -> _int))
-  (define-ssl X509_LOOKUP_shutdown (_fun _X509_LOOKUP -> _int))
-  (define-ssl X509_LOOKUP_free (_fun _X509_LOOKUP -> _void))
-
-  (define-ssl X509_LOOKUP_ctrl (_fun _X509_LOOKUP _int _path _long _pointer -> _int))
-  (define X509_L_FILE_LOAD 1)
-  (define X509_L_ADD_DIR 2)
-
-  (define (X509_LOOKUP_load_file x name type)
-    (X509_LOOKUP_ctrl x X509_L_FILE_LOAD name type #f))
-  (define (X509_LOOKUP_add_dir x name type)
-    (X509_LOOKUP_ctrl x X509_L_ADD_DIR name type #f))
-
-  (define-ssl X509_LOOKUP_by_subject
-    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _X509_NAME _X509_OBJECT -> _int))
-  (define-ssl X509_LOOKUP_by_issuer_serial
-    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _X509_NAME _ASN1_INTEGER _X509_OBJECT -> _int))
-  (define-ssl X509_LOOKUP_by_fingerprint
-    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _bytes _int _X509_OBJECT -> _int))
-  (define-ssl X509_LOOKUP_by_alias
-    (_fun _X509_LOOKUP _X509_LOOKUP_TYPE _bytes _int _X509_OBJECT -> _int))
-
-  (define-cpointer-type _X509_STORE)
-  (define-ssl X509_STORE_free
-    (_fun _X509_STORE -> _void)
-    #:wrap (deallocator))
-  (define-ssl X509_STORE_new
-    (_fun -> _X509_STORE/null)
-    #:wrap (allocator X509_STORE_free))
-  (define-ssl X509_STORE_load_locations
-    (_fun _X509_STORE _path _path -> _int))
-  |#
-
-  #|
-  (define lu (X509_LOOKUP_new (X509_LOOKUP_hash_dir)))
-  (X509_LOOKUP_init lu)
-  (X509_LOOKUP_add_dir lu "/etc/ssl/certs" X509_FILETYPE_PEM)
-  (define xret (X509_new))
-  (define obj (make-x509_object_st 1 xret))
-  |#)
+  (define-ssl X509_NAME_hash (_fun _X509_NAME -> _long)))
 
 (define x509-root-store%
   (let ()
