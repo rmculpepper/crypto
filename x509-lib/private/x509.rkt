@@ -431,62 +431,62 @@
   (define-ssl d2i_X509_NAME ;; FIXME: wrap allocator
     (_fun (_pointer = #f) (_ptr i _pointer) _long -> _X509_NAME/null)
     #:wrap (allocator X509_NAME_free))
-  (define-ssl X509_NAME_hash (_fun _X509_NAME -> _long)))
+  (define-ssl X509_NAME_hash (_fun _X509_NAME -> _long))
+  (define (NAME-hash dn-der)
+    (define dn (d2i_X509_NAME dn-der (bytes-length dn-der)))
+    (begin0 (X509_NAME_hash dn) (X509_NAME_free dn))))
 
 (define x509-root-store%
-  (let ()
-    (local-require (only-in racket/file file->bytes))
-    (class* object% (x509-store<%>)
-      (init-field dir)
-      (super-new)
+  (class* object% (x509-store<%>)
+    (init-field dir)
+    (super-new)
 
-      (define/public (trust? cert)
-        (for/or ([trusted (in-list (lookup-by-subject (send cert get-subject)))])
-          (equal? (send cert get-der) (send trusted get-der))))
+    (define/public (trust? cert)
+      (for/or ([trusted (in-list (lookup-by-subject (send cert get-subject)))])
+        (equal? (send cert get-der) (send trusted get-der))))
 
-      (define/public (lookup-by-subject dn)
-        (lookup-by-subject/hash dn))
+    (define/public (lookup-by-subject dn)
+      (lookup-by-subject/hash dn))
 
-      (define/public (lookup-by-subject/cn dn)
-        ;; PROBLEM: the directory does not always base the filename on the CN,
-        ;; because some root certs have dumb CNs. (Ex: chain for google.com
-        ;; ending in GlobalSign)
-        (define cn (DN-get-common-name dn))
-        (define file (build-path dir (format "~a.pem" (regexp-replace* #rx" " cn "_"))))
-        ;; (eprintf "looking for ~s\n" file)
+    (define/public (lookup-by-subject/cn dn)
+      ;; PROBLEM: the directory does not always base the filename on the CN,
+      ;; because some root certs have dumb CNs. (Ex: chain for google.com
+      ;; ending in GlobalSign)
+      (define cn (DN-get-common-name dn))
+      (define file (build-path dir (format "~a.pem" (regexp-replace* #rx" " cn "_"))))
+      ;; (eprintf "looking for ~s\n" file)
+      (cond [(file-exists? file)
+             (define cert (read-cert-from-file file))
+             (if (DN-match? dn (send cert get-subject)) (list cert) null)]
+            [else null]))
+
+    (define/public (lookup-by-subject/hash dn)
+      (define (padto n s) (string-append (make-string (- n (string-length s)) #\0) s))
+      (define base (padto 8 (number->string (dn-hash (asn1->bytes Name dn)) 16)))
+      (let loop ([i 0])
+        (define file (build-path dir (format "~a.~a" base i)))
         (cond [(file-exists? file)
                (define cert (read-cert-from-file file))
-               (if (DN-match? dn (send cert get-subject)) (list cert) null)]
-              [else null]))
+               (if (DN-match? dn (send cert get-subject))
+                   (cons cert (loop (add1 i)))
+                   (loop (add1 i)))]
+              [else null])))
 
-      (define/public (lookup-by-subject/hash dn)
-        (define (padto n s) (string-append (make-string (- n (string-length s)) #\0) s))
-        (define base (padto 8 (number->string (dn-hash (asn1->bytes Name dn)) 16)))
-        (let loop ([i 0])
-          (define file (build-path dir (format "~a.~a" base i)))
-          (cond [(file-exists? file)
-                 (define cert (read-cert-from-file file))
-                 (if (DN-match? dn (send cert get-subject))
-                     (cons cert (loop (add1 i)))
-                     (loop (add1 i)))]
-                [else null])))
+    (define/private (dn-hash dn-der)
+      (local-require (submod "." openssl-x509))
+      (NAME-hash dn-der))
 
-      (define/private (dn-hash dn-der)
-        (local-require (submod "." openssl-x509))
-        (define dn (d2i_X509_NAME dn-der (bytes-length dn-der)))
-        (begin0 (X509_NAME_hash dn) (X509_NAME_free dn)))
+    (define/private (read-cert-from-file file)
+      (match (call-with-input-file* file read-pem-certs)
+        [(list der) (new certificate% (der der))]
+        [_ (error 'lookup-by-subject "bad certificate PEM file: ~e" file)]))
 
-      (define/private (read-cert-from-file file)
-        (match (call-with-input-file* file read-pem-certs)
-          [(list der) (new certificate% (der der))]
-          [_ (error 'lookup-by-subject "bad certificate PEM file: ~e" file)]))
+    (define/public (lookup-by-key-id keyid) null)
 
-      (define/public (lookup-by-key-id keyid) null)
-
-      (define/public (add-certificates certs #:trusted? [trusted? #f])
-        (send (new x509-store% (parent this))
-              add-certificates certs #:trusted? trusted?))
-      )))
+    (define/public (add-certificates certs #:trusted? [trusted? #f])
+      (send (new x509-store% (parent this))
+            add-certificates certs #:trusted? trusted?))
+    ))
 
 (define root (new x509-root-store% (dir "/etc/ssl/certs")))
 
