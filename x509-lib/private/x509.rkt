@@ -44,10 +44,12 @@
     (init-field der [issuer-obj #f])
     (super-new)
 
+    (define/public (get-der) der)
+    (define/public (get-next) issuer-obj)
+
     (define cert (bytes->asn1 Certificate der))
     (define tbs (hash-ref cert 'tbsCertificate))
 
-    (define/public (get-der) der)
     (define/public (get-cert-signature-alg)
       (hash-ref cert 'signatureAlgorithm))
     (define/public (get-cert-signature-bytes)
@@ -247,7 +249,7 @@
     (define/public (validate-chain)
       ;; Note: this does not verify that this certificate is valid for
       ;; any particular *purpose*.
-      (define vi (new validation% (store #f)))
+      (define vi (new validation% (store root)))
       (check-chain vi 1)
       (send vi get-errors))
 
@@ -379,8 +381,10 @@
       (unless (zero? inhibit-anypolicy) (set! inhibit-anypolicy (sub1 inhibit-anypolicy))))
 
     (define/public (get-trust-anchor dn)
-      ;; FIXME
-      #f)
+      (define certs (send store lookup-by-subject dn))
+      (match (filter (lambda (c) (send store trust? c)) certs)
+        [(cons cert _) cert]
+        [_ #f]))
 
     (define/public (get-from-time) from-time)
     (define/public (get-to-time) to-time)
@@ -408,8 +412,7 @@
 
 (define x509-store<%>
   (interface ()
-    trust?     ;; certificate% -> Boolean
-    trust/der? ;; Bytes -> Boolean
+    trust?            ;; certificate% -> Boolean
     lookup-by-subject ;; DN -> (Listof certificate%)
     lookup-by-key-id  ;; Bytes -> (Listof certificate%)
     ))
@@ -509,23 +512,27 @@
       (init-field dir)
       (super-new)
 
-      (define/public (trust? cert) #f)
-      (define/public (trust/der? der) #f)
+      (define/public (trust? cert)
+        (for/or ([trusted (in-list (lookup-by-subject (send cert get-subject)))])
+          (equal? (send cert get-der) (send trusted get-der))))
 
       (define/public (lookup-by-subject dn)
-        (lookup-by-subject/cn dn))
+        (lookup-by-subject/hash dn))
 
       (define/public (lookup-by-subject/cn dn)
+        ;; PROBLEM: the directory does not always base the filename on the CN,
+        ;; because some root certs have dumb CNs. (Ex: chain for google.com
+        ;; ending in GlobalSign)
         (define cn (DN-get-common-name dn))
         (define file (build-path dir (format "~a.pem" (regexp-replace* #rx" " cn "_"))))
+        ;; (eprintf "looking for ~s\n" file)
         (cond [(file-exists? file)
                (define cert (read-cert-from-file file))
                (if (DN-match? dn (send cert get-subject)) (list cert) null)]
               [else null]))
 
-      #|
       (define/public (lookup-by-subject/hash dn)
-        (define (padto n s) (string-append (make-string (- n (string-length s)) #\0 s)))
+        (define (padto n s) (string-append (make-string (- n (string-length s)) #\0) s))
         (define base (padto 8 (number->string (dn-hash (asn1->bytes Name dn)) 16)))
         (let loop ([i 0])
           (define file (build-path dir (format "~a.~a" base i)))
@@ -540,14 +547,13 @@
         (local-require (submod "." openssl-x509))
         (define dn (d2i_X509_NAME dn-der (bytes-length dn-der)))
         (begin0 (X509_NAME_hash dn) (X509_NAME_free dn)))
-      |#
 
       (define/private (read-cert-from-file file)
         (match (call-with-input-file* file read-pem-certs)
           [(list der) (new certificate% (der der))]
           [_ (error 'lookup-by-subject "bad certificate PEM file: ~e" file)]))
 
-      (define/public (lookup-by-key-id keyid) #f)
+      (define/public (lookup-by-key-id keyid) null)
 
       (define/public (add-certificates certs #:trusted? [trusted? #f])
         (send (new x509-store% (parent this))
@@ -560,7 +566,6 @@
   (class* object% (x509-store<%>)
     (super-new)
     (define/public (trust? cert) #f)
-    (define/public (trust/der? der) #f)
     (define/public (lookup-by-subject dn) null)
     (define/public (lookup-by-key-id keyid) null)
     (define/public (add-certificates certs #:trusted? [trusted? #f])
@@ -571,17 +576,14 @@
 (define x509-store%
   (class* object% (x509-store<%>)
     (init-field parent
-                [trusted-der-h '#hash()]
-                [dn=>cert      '#hash()]
-                [keyid=>cert   '#hash()])
+                [trusted-h   '#hash()]
+                [dn=>cert    '#hash()]
+                [keyid=>cert '#hash()])
     (super-new)
 
     (define/public (trust? cert)
-      (trust/der? (send cert get-der)))
-
-    (define/public (trust/der? der)
-      (or (hash-ref trusted-der-h der #f)
-          (send parent trust/der? der)))
+      (or (hash-ref trusted-h (send cert get-der) #f)
+          (send parent trust? cert)))
 
     (define/public (lookup-by-subject dn)
       (append (hash-ref dn=>cert dn null)
@@ -603,13 +605,13 @@
                          => (lambda (keyid)
                               (hash-update keyid=>cert keyid (mkcons cert) null))]
                         [else keyid=>cert]))))
-      (define trusted-der-h*
+      (define trusted-h*
         (cond [trusted?
-               (for/fold ([h trusted-der-h]) ([cert (in-list certs)])
+               (for/fold ([h trusted-h]) ([cert (in-list certs)])
                  (hash-set h (send cert get-der) #t))]
-              [else trusted-der-h]))
+              [else trusted-h]))
       (new this% (parent parent)
-           (trusted-der-h trusted-der-h*)
+           (trusted-h trusted-h*)
            (dn=>cert dn=>cert*)
            (keyid=>cert keyid=>cert*)))
     ))
