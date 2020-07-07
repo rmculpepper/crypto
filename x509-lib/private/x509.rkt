@@ -6,6 +6,7 @@
          asn1
          crypto/pem
          "x509-asn1.rkt"
+         "stringprep.rkt"
          (only-in crypto/private/common/asn1 relation-ref))
 
 ;; References:
@@ -565,9 +566,14 @@
     (for/and ([v (in-hash-values h)]) (<= v 1))))
 
 (define (DN-match? dn1 dn2)
-  ;; Section 7.1
-  ;; FIXME
-  (define (unwrap v) (get-attr-value v (lambda (v) v)))
+  ;; Does anyone actually implement the section 7 name matching rules?
+  ;; See https://github.com/golang/go/issues/31440 for survey.
+  (define (unwrap v)
+    (match (get-attr-value v (lambda (v) v))
+      [(? string? s) (ldap-stringprep s #:on-error (lambda (x) x))]
+      [other other]))
+  (define (same? v1 v2)
+    (if (and (string? v1) (string? v2)) (string-ci=? v1 v2) (equal? v1 v2)))
   (match* [dn1 dn2]
     [[(list 'rdnSequence rdns1) (list 'rdnSequence rdns2)]
      (and (= (length rdns1) (length rdns2))
@@ -581,10 +587,10 @@
             ;; SET, the hash loses information. So iterate over SETs instead.
             (and (for/and ([av1 (in-list rdn1)])
                    (match-define (hash-table ['type k] ['value v1]) av1)
-                   (equal? (unwrap v1) (unwrap (hash-ref h2 k #f))))
+                   (same? (unwrap v1) (unwrap (hash-ref h2 k #f))))
                  (for/and ([av2 (in-list rdn2)])
                    (match-define (hash-table ['type k] ['value v2]) av2)
-                   (equal? (unwrap v2) (unwrap (hash-ref h1 k #f)))))))]))
+                   (same? (unwrap v2) (unwrap (hash-ref h1 k #f)))))))]))
 
 (define (DN-not-empty? dn)
   (match dn
