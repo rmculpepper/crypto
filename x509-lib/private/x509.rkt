@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/match
          racket/class
+         racket/list
          racket/date
          crypto
          asn1
@@ -40,16 +41,30 @@
 
 ;; ============================================================
 
+(define certificate<%>
+  (interface*
+   ()
+   ([prop:equal+hash
+     (list (lambda (self other recur) (send self equal-to other recur))
+           (lambda (self recur) (send self hash-code recur))
+           (lambda (self recur) (send self hash-code recur)))])
+   equal-to
+   hash-code))
+
 (define certificate%
-  (class object%
-    (init-field der [issuer-obj #f])
+  (class* object% (certificate<%>)
+    (init-field der)
     (super-new)
 
     (define/public (get-der) der)
-    (define/public (get-next) issuer-obj)
 
     (define cert (bytes->asn1 Certificate der))
     (define tbs (hash-ref cert 'tbsCertificate))
+
+    (define/public (equal-to other recur)
+      (equal? (get-der) (send other get-der)))
+    (define/public (hash-code recur)
+      (recur (get-der)))
 
     (define/public (get-cert-signature-alg)
       (hash-ref cert 'signatureAlgorithm))
@@ -103,13 +118,12 @@
     (define errors null) ;; mutated
     (define/public (get-errors) errors)
 
-    (define/private (check reason ok) (unless ok (set! errors (cons reason errors))))
-    (define/private (check-should reason ok) (unless ok (set! errors (cons reason errors))))
-    (define/private (check-ca reason ok) (unless ok (set! errors (cons reason errors))))
-
     ;; Checks that the certificate is well-formed, without regard for other
     ;; certificates in the chain. (For example, the signature is not verified.)
-    (begin
+    (let ()
+      (define (check reason ok) (unless ok (set! errors (cons reason errors))))
+      (define (check-should reason ok) (unless ok (set! errors (cons reason errors))))
+      (define (check-ca reason ok) (unless ok (set! errors (cons reason errors))))
       ;; 4.1.1.2
       (check 'signature-algs-same (equal? (get-cert-signature-alg) (get-signature-alg)))
       ;; 4.1.1.3
@@ -247,53 +261,28 @@
 
     ;; ============================================================
 
-    (define/public (validate-chain)
-      ;; Note: this does not verify that this certificate is valid for
-      ;; any particular *purpose*.
-      (define vi (new validation% (store root)))
-      (check-chain vi 1)
-      (send vi get-errors))
-
-    ;; FIXME: change to include trust anchor (as certificate%) at end of chain?
-
-    (define/public (check-chain vi [depth 1])
-      (define (final-in-path?) (= depth 1))
-      (define (add-error what) (send vi add-error (cons depth what)))
+    (define/public (check-link-in-chain index issuer vi final-in-path?)
+      (define (add-error what) (send vi add-error (cons index what)))
       ;; 6.1.3
       (begin
-        (cond [issuer-obj
-               (send issuer-obj check-chain vi (add1 depth))
-               ;; 6.1.3 (a)(1) verify signature
-               (unless (ok-signature? (send issuer-obj get-pk))
-                 (add-error 'ok-signature))
-               ;; 6.1.3 (a)(4) issuer
-               (unless (DN-match? (get-issuer) (send issuer-obj get-subject))
-                 (add-error 'issuer-matches))]
-              [else ;; use trust anchor
-               (send vi initialize depth)
-               (define ta (send vi get-trust-anchor (get-issuer)))
-               (unless ta
-                 (add-error 'trust-anchor))
-               (when ta
-                 ;; 6.1.3 (a)(1) verify signature
-                 (unless (ok-signature? (send ta get-pk))
-                   (add-error 'ok-signature/trust-anchor))
-                 ;; 6.1.3 (a)(4) issuer
-                 (unless (DN-match? (get-issuer) (send ta get-subject))
-                   (add-error 'issuer-matches/trust-anchor)))
-               (void)])
-        ;; 6.1.3 (a)(2)
+        ;; 6.1.3 (a)(1) verify signature
+        (unless (ok-signature? (send issuer get-pk))
+          (add-error 'ok-signature))
+        ;; 6.1.3 (a)(2) currently valid
         (unless (ok-validity? (send vi get-from-time) (send vi get-to-time))
           (add-error 'ok-validity))
         ;; 6.1.3 (a)(3) (not revoked)
         (void) ;; FIXME?
+        ;; 6.1.3 (a)(4) issuer
+        (unless (DN-match? (get-issuer) (send issuer get-subject))
+          (add-error 'issuer-matches))
         ;; 6.1.3 (b)
-        (unless (and (is-self-issued?) (final-in-path?))
+        (unless (and (is-self-issued?) (not final-in-path?))
           ;; FIXME: check (get-subject) is in permitted-subtrees
           ;; FIXME: check each subjectAltName is in permitted-subtrees
           (void))
         ;; 6.1.3 (c)
-        (unless (and (is-self-issued?) (final-in-path?))
+        (unless (and (is-self-issued?) (not final-in-path?))
           ;; FIXME: check (get-subject) is not in excluded-subtrees
           ;; FIXME: check each subjectAltName is not in excluded-subtrees
           (void))
@@ -307,7 +296,7 @@
         ;; 6.1.3 (f) explicit-policy > 0 or valid-policy-tree is not #f
         (void))
       ;; 6.1.4
-      (unless (final-in-path?)
+      (unless final-in-path?
         ;; 6.1.4 (a-b) policy-mappings, policies, ...
         (void) ;; FIXME
         ;; 6.1.4 (c-f) handled by get-pk method instead
@@ -330,62 +319,86 @@
           (when (pair? key-uses)
             (unless (memq 'keyCertSign key-uses)
               (add-error 'CA-has-keyCertSign))))
-        ;; 6.1.4 (o) already done in certificate% construction
+        ;; 6.1.4 (o) process other critical extensions: already done in construction
         (void 'OK))
       ;; 6.1.5
-      (when (final-in-path?)
+      (when final-in-path?
         ;; 6.1.5 (a) explicit-policy
         (void) ;; FIXME
         ;; 6.1.5 (b) policies, explicit-policy, ...
         (void) ;; FIXME
         ;; 6.1.5 (c-e) handled by get-pk method instead
         (void 'OK)
-        ;; 6.1.5 (f) already done in certificate% construction
+        ;; 6.1.5 (f) process other critical extensions: already done in construction
         (void 'OK)
         ;; 6.1.5 (g) policies ...
         (void) ;; FIXME
         (void))
+      (when (pair? errors)
+        (send vi add-error (cons index errors)))
       (void))
 
     ))
 
+(define certificate-chain%
+  (class object%
+    ;; chain : (list trust-anchor<%> certificate% ...+)
+    ;; Note: In 6.1, trust anchor is not considered part of chain.
+    (init-field chain)
+    (super-new)
 
-;; ============================================================
+    (define N (length (cdr chain))) ;; don't count trust anchor
+
+    (define/public (get-chain) chain)
+    (define/public (get-end-certificate) (last chain))
+    (define/public (get-trust-anchor) (first chain))
+
+    (define/public (validate-chain [store root])
+      ;; Note: this does not verify that the end certificate is valid for
+      ;; any particular *purpose*.
+      (define vi (new validation% (N N)))
+      (when store
+        (define ta (get-trust-anchor))
+        (cond [(not (is-a? ta certificate%))
+               (send vi add-error (cons 0 'trust-anchor-not-certificate))]
+              [(not (send store trust? ta))
+               (send vi add-error (cons 0 'trust-anchor-not-trusted))]
+              [else (void)]))
+      (for ([issuer (in-list chain)]
+            [cert (in-list (cdr chain))]
+            [index (in-naturals 1)])
+        (send cert check-link-in-chain index issuer vi (= index N)))
+      (send vi get-errors))
+
+    ))
+
+;; Note: for documentation; not actually implemented
+(define trust-anchor<%>
+  (interface ()
+    get-pk
+    get-subject
+    ))
 
 (define validation%
   (class object%
-    (init-field store
+    (init N)
+    (init-field [max-path-length N]
                 [from-time (current-seconds)]
                 [to-time from-time]
                 [init-policies null]
                 ;; state variables
-                [max-path-length #f]
-                [explicit-policy #f]
-                [policy-mapping #f]
-                [inhibit-anypolicy #f])
+                [explicit-policy (add1 N)]
+                [policy-mapping (add1 N)]
+                [inhibit-anypolicy (add1 N)])
     (super-new)
 
-    (define/public (initialize n)
-      (unless max-path-length (set! max-path-length n))
-      (unless explicit-policy (set! explicit-policy (add1 n)))
-      (unless policy-mapping (set! policy-mapping (add1 n)))
-      (unless inhibit-anypolicy (set! inhibit-anypolicy (add1 n))))
-
     (define/public (decrement-counters) ;; 6.1.4 (b)
-      (cond [(not max-path-length)
-             (error 'check/decrement-max-path-length "not initialized")]
-            [(positive? max-path-length)
+      (cond [(positive? max-path-length)
              (set! max-path-length (sub1 max-path-length))]
             [else (add-error 'max-path-length)])
       (unless (zero? explicit-policy) (set! explicit-policy (sub1 explicit-policy)))
       (unless (zero? policy-mapping) (set! policy-mapping (sub1 policy-mapping)))
       (unless (zero? inhibit-anypolicy) (set! inhibit-anypolicy (sub1 inhibit-anypolicy))))
-
-    (define/public (get-trust-anchor dn)
-      (define certs (send store lookup-by-subject dn))
-      (match (filter (lambda (c) (send store trust? c)) certs)
-        [(cons cert _) cert]
-        [_ #f]))
 
     (define/public (get-from-time) from-time)
     (define/public (get-to-time) to-time)
@@ -399,15 +412,27 @@
     (define excluded-subtrees #f) ;; ???
 
     (define/public (set-max-path-length n)
-      (unless max-path-length (error 'set-max-path-length "not initialized"))
       (when (< n max-path-length) (set! max-path-length n)))
     ))
 
-(define trust-anchor<%>
-  (interface ()
-    get-pk
-    get-subject
-    ))
+;; ============================================================
+
+;; build-chains : certificate% x509-store<%> -> (Listof certificate-chain%)
+(define (build-chains end-cert [other-untrusted-certs null] #:store [store0 root])
+  (define store (send store0 add-certificates other-untrusted-certs #:trusted? #f))
+  (define (loop chains)
+    (apply append (map loop1 chains)))
+  (define (loop1 chain)
+    (define issuer-certs
+      (filter (lambda (cert) (not (member cert chain)))
+              (remove-duplicates ;; FIXME
+               (send store lookup-by-subject (send (car chain) get-issuer)))))
+    (define-values (trusted-certs untrusted-certs)
+      (partition (lambda (c) (send store trust? c)) issuer-certs))
+    (append (map (lambda (c) (new certificate-chain% (chain (cons c chain))))
+                 trusted-certs)
+            (loop (map (lambda (c) (cons c chain)) untrusted-certs))))
+  (loop1 (list end-cert)))
 
 ;; ============================================================
 
@@ -415,7 +440,6 @@
   (interface ()
     trust?            ;; certificate% -> Boolean
     lookup-by-subject ;; DN -> (Listof certificate%)
-    lookup-by-key-id  ;; Bytes -> (Listof certificate%)
     ))
 
 (module openssl-x509 racket/base
@@ -449,18 +473,6 @@
     (define/public (lookup-by-subject dn)
       (lookup-by-subject/hash dn))
 
-    (define/public (lookup-by-subject/cn dn)
-      ;; PROBLEM: the directory does not always base the filename on the CN,
-      ;; because some root certs have dumb CNs. (Ex: chain for google.com
-      ;; ending in GlobalSign)
-      (define cn (DN-get-common-name dn))
-      (define file (build-path dir (format "~a.pem" (regexp-replace* #rx" " cn "_"))))
-      ;; (eprintf "looking for ~s\n" file)
-      (cond [(file-exists? file)
-             (define cert (read-cert-from-file file))
-             (if (DN-match? dn (send cert get-subject)) (list cert) null)]
-            [else null]))
-
     (define/public (lookup-by-subject/hash dn)
       (define (padto n s) (string-append (make-string (- n (string-length s)) #\0) s))
       (define base (padto 8 (number->string (dn-hash (asn1->bytes Name dn)) 16)))
@@ -482,8 +494,6 @@
         [(list der) (new certificate% (der der))]
         [_ (error 'lookup-by-subject "bad certificate PEM file: ~e" file)]))
 
-    (define/public (lookup-by-key-id keyid) null)
-
     (define/public (add-certificates certs #:trusted? [trusted? #f])
       (send (new x509-store% (parent this))
             add-certificates certs #:trusted? trusted?))
@@ -496,7 +506,6 @@
     (super-new)
     (define/public (trust? cert) #f)
     (define/public (lookup-by-subject dn) null)
-    (define/public (lookup-by-key-id keyid) null)
     (define/public (add-certificates certs #:trusted? [trusted? #f])
       (send (new x509-store% (parent this))
             add-certificates certs #:trusted? trusted?))
@@ -506,8 +515,7 @@
   (class* object% (x509-store<%>)
     (init-field parent
                 [trusted-h   '#hash()]
-                [dn=>cert    '#hash()]
-                [keyid=>cert '#hash()])
+                [dn=>cert    '#hash()])
     (super-new)
 
     (define/public (trust? cert)
@@ -517,23 +525,16 @@
     (define/public (lookup-by-subject dn)
       (append (hash-ref dn=>cert dn null)
               (send parent lookup-by-subject dn)))
-    (define/public (lookup-by-key-id keyid)
-      (append (hash-ref keyid=>cert keyid null)
-              (send parent lookup-by-key-id keyid)))
 
     (define/public (add-certificates certs #:trusted? [trusted? #f])
       (define ((mkcons v) vs) (cons v vs))
-      (define-values (dn=>cert* keyid=>cert*)
-        (for/fold ([dn=>cert dn=>cert] [keyid=>cert keyid=>cert])
+      (define dn=>cert*
+        (for/fold ([dn=>cert dn=>cert])
                   ([cert (in-list certs)])
-          (values (let ([subject (send cert get-subject)])
-                    (cond [(DN-not-empty? subject)
-                           (hash-update dn=>cert subject (mkcons cert) null)]
-                          [else dn=>cert]))
-                  (cond [(send cert get-subject-key-id)
-                         => (lambda (keyid)
-                              (hash-update keyid=>cert keyid (mkcons cert) null))]
-                        [else keyid=>cert]))))
+          (let ([subject (send cert get-subject)])
+            (cond [(DN-not-empty? subject)
+                   (hash-update dn=>cert subject (mkcons cert) null)]
+                  [else dn=>cert]))))
       (define trusted-h*
         (cond [trusted?
                (for/fold ([h trusted-h]) ([cert (in-list certs)])
@@ -541,8 +542,7 @@
               [else trusted-h]))
       (new this% (parent parent)
            (trusted-h trusted-h*)
-           (dn=>cert dn=>cert*)
-           (keyid=>cert keyid=>cert*)))
+           (dn=>cert dn=>cert*)))
     ))
 
 ;; ============================================================
@@ -602,16 +602,6 @@
   ;; -- 'modern-strings (CA-MUST), not checked, FIXME
   #t)
 
-(define (DN-get-common-name dn)
-  (match dn
-    [(list 'rdnSequence rdns)
-     (for/or ([rdn (in-list rdns)])
-       (for/or ([av (in-list rdn)])
-         (match av
-           [(hash-table ['type (== id-at-commonName)] ['value cnv])
-            (get-attr-value cnv (lambda (v) #f))]
-           [_ #f])))]))
-
 (define (get-attr-value ds handle-other)
   (match ds
     [(list 'printableString (? string? s)) s]
@@ -645,7 +635,10 @@
   (for/list ([v (in-port (lambda (in) (read-pem in #:only '(#"CERTIFICATE"))) in)])
     (cdr v)))
 
-(define (get-cert-chain file)
+(define (read-certs file)
   (define ders (call-with-input-file file read-pem-certs))
-  (for/fold ([obj #f]) ([der (in-list (reverse ders))])
-    (new certificate% (der der) (issuer-obj obj))))
+  (map (lambda (der) (new certificate% (der der))) ders))
+
+(define (read-chain file)
+  (define certs (read-certs file))
+  (car (build-chains (car certs) (cdr certs))))
