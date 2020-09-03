@@ -675,3 +675,34 @@
 
 (define-na crypto_scalarmult_curve25519_base
   (_fun (q : _pointer) (n : _pointer) -> _int))
+
+;; ============================================================
+;; crypto_box
+
+(define crypto_box_curve25519xsalsa20poly1305_SEEDBYTES 32)
+(define crypto_box_curve25519xsalsa20poly1305_PUBLICKEYBYTES 32)
+(define crypto_box_curve25519xsalsa20poly1305_SECRETKEYBYTES 32)
+(define crypto_box_curve25519xsalsa20poly1305_BEFORENMBYTES 32)
+(define crypto_box_curve25519xsalsa20poly1305_NONCEBYTES 24)
+(define crypto_box_curve25519xsalsa20poly1305_MACBYTES 16)
+
+(define crypto_box_PUBLICKEYBYTES crypto_box_curve25519xsalsa20poly1305_PUBLICKEYBYTES)
+(define crypto_box_MACBYTES crypto_box_curve25519xsalsa20poly1305_MACBYTES)
+(define crypto_box_SEALBYTES (+ crypto_box_PUBLICKEYBYTES crypto_box_MACBYTES))
+
+(define-na crypto_box_seal
+  (_fun (m mlen pk) ::
+        (c : _bytes = (make-bytes (+ crypto_box_SEALBYTES mlen)))
+        (m : _pointer)
+        (mlen : _ullong)
+        (pk : _pointer)
+        -> (r : _int) -> (and (zero? r) c)))
+
+(define-na crypto_box_seal_open
+  (_fun (c clen pk sk) ::
+        (m : _bytes = (make-bytes (max 0 (- clen crypto_box_SEALBYTES))))
+        (c : _pointer)
+        (clen : _ullong)
+        (pk : _pointer)
+        (sk : _pointer)
+        -> (r : _int) -> (and (zero? r) m)))

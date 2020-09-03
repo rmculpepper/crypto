@@ -178,6 +178,7 @@
   (class pk-key-base%
     (init-field pub priv)
     (inherit-field impl)
+    (inherit about)
     (super-new)
 
     (define/override (is-private?) (and priv #t))
@@ -205,4 +206,18 @@
       (define secret (make-bytes crypto_scalarmult_curve25519_BYTES))
       (crypto_scalarmult_curve25519 secret priv peer-pub)
       secret)
+
+    (define/public (crypto-box-seal msg)
+      (unless (bytes? msg)
+        (raise-argument-error 'crypto-box-seal "bytes?" 1 this msg))
+      (or (crypto_box_seal msg (bytes-length msg) pub)
+          (error 'crypto-box-seal "failed")))
+
+    (define/public (crypto-box-seal-open ctext)
+      (unless (is-private?)
+        (raise-argument-error 'crypto-box-seal-open "private-key?" 0 this ctext))
+      (unless (bytes? ctext)
+        (raise-argument-error 'crypto-box-seal-open "bytes?" 1 this ctext))
+      (or (crypto_box_seal_open ctext (bytes-length ctext) pub priv)
+          (error 'crypto-box-seal-open "authenticated decryption failed")))
     ))
