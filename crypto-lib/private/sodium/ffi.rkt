@@ -706,3 +706,38 @@
         (pk : _pointer)
         (sk : _pointer)
         -> (r : _int) -> (and (zero? r) m)))
+
+;; ============================================================
+;; crypto_secretbox
+
+(define crypto_secretbox_xsalsa20poly1305_KEYBYTES 32)
+(define crypto_secretbox_xsalsa20poly1305_NONCEBYTES 24)
+(define crypto_secretbox_xsalsa20poly1305_MACBYTES 16)
+
+(define crypto_secretbox_KEYBYTES crypto_secretbox_xsalsa20poly1305_KEYBYTES)
+(define crypto_secretbox_NONCEBYTES crypto_secretbox_xsalsa20poly1305_NONCEBYTES)
+(define crypto_secretbox_MACBYTES crypto_secretbox_xsalsa20poly1305_MACBYTES)
+(define crypto_secretbox_PRIMITIVE "xsalsa20poly1305")
+
+(define-na crypto_secretbox_primitive
+  (_fun -> _string/utf-8))
+
+(define-na crypto_secretbox_detached
+  (_fun (m n k) ::
+        (c : _bytes = (make-bytes (bytes-length m)))
+        (mac : _bytes = (make-bytes crypto_secretbox_MACBYTES))
+        (m : _bytes)
+        (mlen : _ullong = (bytes-length m))
+        (n : _pointer)
+        (k : _pointer)
+        -> (r : _int) -> (and (zero? r) (list c mac))))
+
+(define-na crypto_secretbox_open_detached
+  (_fun (c mac n k) ::
+        (m : _bytes = (make-bytes (bytes-length c)))
+        (c : _bytes)
+        (mac : _bytes)
+        (clen : _ullong = (bytes-length c))
+        (n : _pointer)
+        (k : _pointer)
+        -> (r : _int) -> (and (zero? r) m)))
