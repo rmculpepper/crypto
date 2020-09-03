@@ -105,7 +105,7 @@
     (define/public (is-CRL-issuer?) (and (memq 'cRLSign (get-key-uses)))) ;; FIXME: and (is-CA?)
     (define/public (is-self-issued?) ;; 6.1
       (let ([subject (get-subject)] [issuer (get-issuer)])
-        (DN-match? subject issuer)))
+        (Name-match? subject issuer)))
     (define/public (is-self-signed?)
       ;; FIXME
       #f)
@@ -114,6 +114,13 @@
 
     (define/public (get-extension id)
       (for/or ([ext (in-list (get-extensions))] #:when (equal? id (extension-id ext))) ext))
+    (define/public (get-extension-value id default)
+      (cond [(get-extension id) => extension-value] [else default]))
+
+    (define/public (get-name-constraints)
+      (get-extension-value id-ce-nameConstraints #f))
+    (define/public (get-subject-alt-name)
+      (get-extension-value id-ce-subjectAltName null))
 
     ;; An error symbol should read as a true statement about the certificate
     ;; that points out a fault, rather than reading as a desired property that
@@ -152,7 +159,7 @@
       ;; 4.1.2.3
       ;; -- 'signature-algs-same, checked in 4.1.1.2
       ;; 4.1.2.4 Issuer
-      (unless (DN-not-empty? (get-issuer)) (bad! 'issuer:empty))
+      (when (Name-empty? (get-issuer)) (bad! 'issuer:empty))
       ;; 4.1.2.5 Validity
       ;; -- 'validity-encoding-by-year (CA-MUST), not checked because client MUST accept both
       ;; -- 'validity-time, checked later
@@ -163,9 +170,9 @@
          (unless (wf-time? ok-end) (bad! 'validity:end-not-well-formed))])
       ;; 4.1.2.6 Subject
       (when (or (is-CA?) (is-CRL-issuer?))
-        (unless (DN-not-empty? (get-subject))
+        (when (Name-empty? (get-subject))
           (bad! 'subject:empty-when-CA/CRL-issuer)))
-      (unless (DN-not-empty? (get-subject))
+      (when (Name-empty? (get-subject))
         (cond [(get-extension id-ce-subjectAltName)
                (lambda (ext)
                  (unless (extension-critical? ext)
@@ -239,9 +246,18 @@
                (bad! 'basic-constraints:pathLenConstraint-when-not-CA)))]
           ;; 4.2.1.10 Name Constraints
           [(equal? ext-id id-ce-nameConstraints)
-           ;; FIXME!
+           (define ncs (extension-value ext))
+           (unless (or (pair? (hash-ref ncs 'permittedSubtrees null))
+                       (pair? (hash-ref ncs 'excludedSubtrees null)))
+             (bad! 'name-constraints:empty))
+           (for/first ([t (in-list (append (hash-ref ncs 'permittedSubtrees null)
+                                           (hash-ref ncs 'excludedSubtrees null)))]
+                       #:when (or (not (zero? (hash-ref t 'minimum 0)))
+                                  (hash-has-key? t 'maximum)))
+             (bad! 'name-constraints:non-default-min/max))
+           ;; These are interpreted in chain validation.
            (unless (is-CA?) (bad! 'name-constraints:present-when-not-CA))
-           (unless (not critical?) (bad! 'name-constraints:critical-but-unsupported))]
+           #;(unless (not critical?) (bad! 'name-constraints:critical-but-unsupported))]
           ;; 4.2.1.11 Policy Constraints
           [(equal? ext-id id-ce-policyConstraints)
            ;; FIXME!
@@ -290,42 +306,33 @@
         (unless (ok-validity? (send vi get-from-time) (send vi get-to-time))
           (add-error 'bad-validity))
         ;; 6.1.3 (a)(3) (not revoked)
-        (void) ;; FIXME?
+        (void 'CRL-UNSUPPORTED)
         ;; 6.1.3 (a)(4) issuer
-        (unless (DN-match? (get-issuer) (send issuer get-subject))
+        (unless (Name-match? (get-issuer) (send issuer get-subject))
           (add-error 'issuer-name-mismatch))
-        ;; 6.1.3 (b)
+        ;; 6.1.3 (b,c) check name constraints
         (unless (and (is-self-issued?) (not final-in-path?))
-          ;; FIXME: check (get-subject) is in permitted-subtrees
-          ;; FIXME: check each subjectAltName is in permitted-subtrees
-          (void))
-        ;; 6.1.3 (c)
-        (unless (and (is-self-issued?) (not final-in-path?))
-          ;; FIXME: check (get-subject) is not in excluded-subtrees
-          ;; FIXME: check each subjectAltName is not in excluded-subtrees
-          (void))
-        ;; 6.1.3 (d)
-        (begin
-          ;; FIXME: if valid-policy-tree is not #f and this cert has certificate
-          ;; policies, process the policies.
-          (void))
-        ;; 6.1.3 (e) if no certificate policies, set valid-policy-tree to #f
-        (void) ;; FIXME
-        ;; 6.1.3 (f) explicit-policy > 0 or valid-policy-tree is not #f
-        (void))
+          (unless (send vi name-constraints-accept? (list 'directoryName (get-subject)))
+            (add-error 'name-constraints:subject-rejected))
+          ;; FIXME: check email address in (get-subject) ???
+          (for ([san (in-list (get-subject-alt-name))])
+            (unless (send vi name-constraints-accept? san)
+              (add-error 'name-constraints:subjectAltName-rejected))))
+        ;; 6.1.3 (d-f) process policies; set/check valid-policy-tree, explicit-policy
+        (void 'POLICIES-UNSUPPORTED))
       ;; 6.1.4
       (unless final-in-path?
         ;; 6.1.4 (a-b) policy-mappings, policies, ...
-        (void) ;; FIXME
+        (void 'POLICIES-UNSUPPORTED)
         ;; 6.1.4 (c-f) handled by get-pk method instead
         (void 'OK)
-        ;; 6.1.4 (g) name constraints, {permitted,excluded}-subtrees
-        (void) ;; FIXME
+        ;; 6.1.4 (g) name constraints
+        (send vi add-name-constraints index (get-name-constraints))
         ;; 6.1.4 (h, l) decrement counters
         (unless (is-self-issued?)
           (send vi decrement-counters))
         ;; 6.1.4 (i, j) policy-mapping, inhibit-anypolicy, ...
-        (void) ;; FIXME
+        (void 'POLICIES-UNSUPPORTED)
         ;; 6.1.4 (k) check CA (reject if no basicConstraints extension)
         (unless (is-CA?) (add-error 'intermediate:not-CA))
         ;; 6.1.4 (m)
@@ -337,23 +344,18 @@
           (when (pair? key-uses)
             (unless (memq 'keyCertSign key-uses)
               (add-error 'intermediate:missing-keyCertSign))))
-        ;; 6.1.4 (o) process other critical extensions: already done in construction
-        (void 'OK))
+        ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
+        (when (pair? errors) (add-error errors)))
       ;; 6.1.5
       (when final-in-path?
-        ;; 6.1.5 (a) explicit-policy
-        (void) ;; FIXME
-        ;; 6.1.5 (b) policies, explicit-policy, ...
-        (void) ;; FIXME
+        ;; 6.1.5 (a,b) explicit-policy, policies
+        (void 'POLICIES-UNSUPPORTED)
         ;; 6.1.5 (c-e) handled by get-pk method instead
         (void 'OK)
-        ;; 6.1.5 (f) process other critical extensions: already done in construction
-        (void 'OK)
+        ;; 6.1.5 (f) process other critical extensions: errors gathered in construction
+        (when (pair? errors) (add-error errors))
         ;; 6.1.5 (g) policies ...
-        (void) ;; FIXME
-        (void))
-      (when (pair? errors)
-        (send vi add-error (cons index errors)))
+        (void 'POLICIES-UNSUPPORTED))
       (void))
 
     ))
@@ -405,6 +407,7 @@
                 [to-time from-time]
                 [init-policies null]
                 ;; state variables
+                [name-constraints null]
                 [explicit-policy (add1 N)]
                 [policy-mapping (add1 N)]
                 [inhibit-anypolicy (add1 N)])
@@ -425,9 +428,11 @@
     (define/public (get-errors) errors)
     (define/public (add-error what) (set! errors (cons what errors)))
 
-    (define valid-policy-tree #f) ;; ???
-    (define permitted-subtrees #f) ;; ???
-    (define excluded-subtrees #f) ;; ???
+    (define/public (add-name-constraints index ncs)
+      (when ncs (set! name-constraints (extend-name-constraints name-constraints index ncs))))
+
+    (define/public (name-constraints-accept? gname)
+      (name-constraints-name-ok? name-constraints gname))
 
     (define/public (set-max-path-length n)
       (when (< n max-path-length) (set! max-path-length n)))
@@ -498,7 +503,7 @@
         (define file (build-path dir (format "~a.~a" base i)))
         (cond [(file-exists? file)
                (define cert (read-cert-from-file file))
-               (if (DN-match? dn (send cert get-subject))
+               (if (Name-match? dn (send cert get-subject))
                    (cons cert (loop (add1 i)))
                    (loop (add1 i)))]
               [else null])))
@@ -550,7 +555,7 @@
         (for/fold ([dn=>cert dn=>cert])
                   ([cert (in-list certs)])
           (let ([subject (send cert get-subject)])
-            (cond [(DN-not-empty? subject)
+            (cond [(not (Name-empty? subject))
                    (hash-update dn=>cert subject (mkcons cert) null)]
                   [else dn=>cert]))))
       (define trusted-h*
@@ -583,7 +588,12 @@
     (for ([x (in-list xs)]) (hash-update! h (get-key x) add1 0))
     (for/and ([v (in-hash-values h)]) (<= v 1))))
 
-(define (DN-match? dn1 dn2)
+(define (Name-equal? dn1 dn2)
+  (Name-match? dn1 dn2 =))
+(define (Name-prefix? dn1 dn2) ;; is dn1 a prefix of dn2?
+  (Name-match? dn1 dn2 <=))
+
+(define (Name-match? dn1 dn2 cmp)
   ;; Does anyone actually implement the section 7 name matching rules?
   ;; See https://github.com/golang/go/issues/31440 for survey.
   (define (unwrap v)
@@ -594,7 +604,7 @@
     (if (and (string? v1) (string? v2)) (string-ci=? v1 v2) (equal? v1 v2)))
   (match* [dn1 dn2]
     [[(list 'rdnSequence rdns1) (list 'rdnSequence rdns2)]
-     (and (= (length rdns1) (length rdns2))
+     (and (cmp (length rdns1) (length rdns2))
           (for/and ([rdn1 (in-list rdns1)] [rdn2 (in-list rdns2)])
             (define (rdn->h rdn)
               (for/fold ([h (hash)]) ([av (in-list rdn)])
@@ -610,10 +620,8 @@
                    (match-define (hash-table ['type k] ['value v2]) av2)
                    (same? (unwrap v2) (unwrap (hash-ref h1 k #f)))))))]))
 
-(define (DN-not-empty? dn)
-  (match dn
-    [(list 'rdnSequence (? pair?)) #t]
-    [_ #f]))
+(define (Name-empty? dn)
+  (match dn [(list 'rdnSequence rdns) (null? rdns)]))
 
 (define (get-attr-value ds handle-other)
   (match ds
@@ -635,6 +643,88 @@
 (define (extension-value ext) (hash-ref ext 'extnValue))
 
 (define (policy-id p) (hash-ref p 'policyIdentifier))
+
+;; ----------------------------------------
+
+;; ParsedNameConstraints = (Listof NameConstraintLayer)
+;; NameConstraintLayer = (nclayer (U 'permit 'exclude) Nat (Listof GeneralName))
+
+;; If a layer contains multiple entries for a given name-type, it *matches* (ie,
+;; permits or excludes, depending on mode) if any of the patterns match. (FIXME:
+;; double-check this is intended behavior)
+
+;; If a layer contains no entries for a given name-type, it *allows* all names
+;; of that name type (whether the mode is 'permit or 'exclude).
+
+(struct nclayer (mode index gnames) #:prefab)
+
+(define (extend-name-constraints cs index ncs)
+  (define (add base mode sts)
+    (cons (nclayer mode index (map (lambda (st) (hash-ref st 'base)) sts)) base))
+  (let* ([cs (cond [(hash-ref ncs 'permittedSubtrees #f)
+                    => (lambda (sts) (add cs 'permit sts))]
+                   [else cs])]
+         [cs (cond [(hash-ref ncs 'excludedSubtrees #f)
+                      => (lambda (sts) (add cs 'exclude sts))]
+                     [else cs])])
+    cs))
+
+;; Note: this checks that a specific name satisfies all constraint layers. It
+;; does not check that an intermediate certificate's constraints are narrower
+;; than the existing constraints.
+
+(define (name-constraints-name-ok? cs general-name)
+  (match-define (list (? symbol? name-type) name) general-name)
+  (define (layer-name-ok? layer)
+    (match-define (nclayer mode index pattern) layer)
+    (define relevant (filter (lambda (gn) (eq? name-type (car gn))) pattern))
+    (cond [(null? relevant) #t]
+          [(eq? mode 'permit)
+           (ormap constraint-matches? relevant)]
+          [(eq? mode 'exclude)
+           (not (ormap constraint-matches? relevant))]))
+  (define (constraint-matches? gn)
+    (match-define (list (== name-type) pattern) gn)
+    (case name-type
+      [(rfc822Name) ;; name : IA5String
+       ;; FIXME: this assumes that name is a valid rfc822 email address (??)
+       (cond [(regexp-match? #rx"@" pattern)
+              ;; pattern is address => must match exactly
+              (string-ci=? name pattern)]
+             [(regexp-match #rx"^[.]" pattern)
+              ;; pattern is domain => must match extension
+              (string-suffix-ci? name pattern)]
+             [else ;; host => host must match exactly, with mailbox prefix
+              (string-suffix-ci? name (string-append "@" pattern))])]
+      [(dNSName) ;; name : IA5String
+       (or (string-ci=? name pattern)
+           (string-suffix-ci? name (string-append "." pattern)))]
+      [(directoryName) ;; name : Name
+       (Name-prefix? pattern name)]
+      [(uniformResourceIdentifier) ;; name : IA5String
+       ;; FIXME
+       #f]
+      [(iPAddress) ;; name : OCTET-STRING
+       (define iplen (bytes-length name))
+       (cond [(= (bytes-length pattern) (* 2 iplen))
+              (for/and ([ip-b (in-bytes name)]
+                        [ipp-b (in-bytes pattern 0)]
+                        [mask-b (in-bytes pattern iplen)])
+                (= ipp-b (bitwise-and ip-b mask-b)))]
+             [else #f])]
+      ;; otherName
+      ;; x400Address
+      ;; ediPartyName
+      ;; registeredID
+      [else #f]))
+  (andmap layer-name-ok? cs))
+
+(define (string-suffix-ci? s suffix)
+  (define slen (string-length s))
+  (define suffixlen (string-length suffix))
+  (and (<= suffixlen slen)
+       (string-ci=? (substring s (- slen suffixlen))
+                    suffix)))
 
 ;; ----------------------------------------
 
