@@ -119,6 +119,19 @@
 
     (define/override (-verify msg _dspec pad sig)
       (crypto_sign_ed25519_verify_detached sig msg (bytes-length msg) pub))
+
+    (define/public (to-curve25519)
+      (define pk-read (send (send impl get-factory) get-pk-reader))
+      (define ed-pub (and pub (make-bytes crypto_scalarmult_curve25519_BYTES)))
+      (unless (zero? (crypto_sign_ed25519_pk_to_curve25519 ed-pub pub))
+        (error 'to-curve25519 "failed"))
+      (cond [priv
+             (define ed-priv (and priv (make-bytes crypto_scalarmult_curve25519_BYTES)))
+             (unless (zero? (crypto_sign_ed25519_sk_to_curve25519 ed-priv priv))
+               (error 'to-curve25519 "failed"))
+             (send pk-read read-key (list 'ecx 'private 'x25519 ed-pub ed-priv) 'rkt-private)]
+            [else
+             (send pk-read read-key (list 'ecx 'public 'x25519 ed-pub) 'rkt-public)]))
     ))
 
 ;; ============================================================
