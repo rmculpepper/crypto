@@ -527,7 +527,7 @@
   ecp)
 
 ;; ============================================================
-;; Ed25519
+;; Ed25519 and Ed448
 
 (define nettle-eddsa-impl%
   (class nettle-pk-impl%
@@ -543,42 +543,63 @@
       (curve->params (config-ref config 'curve)))
 
     (define/public (curve->params curve)
-      (case curve
-        [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
-        [else (err/no-curve curve this)]))
+      (or (make-params curve)
+          (err/no-curve curve this)))
 
     (define/public (generate-key-from-params curve)
       (case curve
-        [(ed25519)
-         (define priv (crypto-random-bytes ED25519_KEY_SIZE))
-         (define pub (make-bytes ED25519_KEY_SIZE))
-         (nettle_ed25519_sha512_public_key pub priv)
-         (new nettle-ed25519-key% (impl this) (pub pub) (priv priv))]))
+        [(ed25519) (and ed25519-ok? (generate-ed25519-key))]
+        [(ed448) (and ed448-ok? (generate-ed448-key))]))
+
+    (define/private (generate-ed25519-key)
+      (define priv (crypto-random-bytes ED25519_KEY_SIZE))
+      (define pub (make-bytes ED25519_KEY_SIZE))
+      (nettle_ed25519_sha512_public_key pub priv)
+      (new nettle-ed25519-key% (impl this) (pub pub) (priv priv)))
+    (define/private (generate-ed448-key)
+      (define priv (crypto-random-bytes ED448_KEY_SIZE))
+      (define pub (make-bytes ED448_KEY_SIZE))
+      (nettle_ed448_shake256_public_key pub priv)
+      (new nettle-ed448-key% (impl this) (pub pub) (priv priv)))
 
     ;; ----
 
     (define/override (make-params curve)
-      (case curve
-        [(ed25519) (curve->params curve)]
-        [else #f]))
+      (and (case curve [(ed25519) ed25519-ok?] [(ed448) ed448-ok?] [else #f])
+           (new pk-eddsa-params% (impl this) (curve curve))))
 
     (define/override (make-public-key curve qB)
       (case curve
-        [(ed25519)
-         (define pub (make-sized-copy ED25519_KEY_SIZE qB))
-         (new nettle-ed25519-key% (impl this) (pub pub) (priv #f))]
+        [(ed25519) (and ed25519-ok? (make-ed25519-public-key qB))]
+        [(ed448) (and ed448-ok? (make-ed448-public-key qB))]
         [else #f]))
+
+    (define/private (make-ed25519-public-key qB)
+      (define pub (make-sized-copy ED25519_KEY_SIZE qB))
+      (new nettle-ed25519-key% (impl this) (pub pub) (priv #f)))
+    (define/private (make-ed448-public-key qB)
+      (define pub (make-sized-copy ED448_KEY_SIZE qB))
+      (new nettle-ed448-key% (impl this) (pub pub) (priv #f)))
 
     (define/override (make-private-key curve _qB dB)
       ;; Note: qB (public key) might be missing, so just recompute
       (case curve
-        [(ed25519)
-         (define priv (make-sized-copy ED25519_KEY_SIZE dB))
-         (define pub (make-bytes ED25519_KEY_SIZE))
-         (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED25519_KEY_SIZE))
-         (nettle_ed25519_sha512_public_key pub priv)
-         (new nettle-ed25519-key% (impl this) (pub pub) (priv priv))]
+        [(ed25519) (and ed25519-ok? (make-ed25519-private-key dB))]
+        [(ed448) (and ed448-ok? (make-ed448-private-key dB))]
         [else #f]))
+
+    (define/private (make-ed25519-private-key dB)
+      (define priv (make-sized-copy ED25519_KEY_SIZE dB))
+      (define pub (make-bytes ED25519_KEY_SIZE))
+      (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED25519_KEY_SIZE))
+      (nettle_ed25519_sha512_public_key pub priv)
+      (new nettle-ed25519-key% (impl this) (pub pub) (priv priv)))
+    (define/private (make-ed448-private-key dB)
+      (define priv (make-sized-copy ED448_KEY_SIZE dB))
+      (define pub (make-bytes ED448_KEY_SIZE))
+      (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED448_KEY_SIZE))
+      (nettle_ed448_shake256_public_key pub priv)
+      (new nettle-ed448-key% (impl this) (pub pub) (priv priv)))
     ))
 
 (define nettle-ed25519-key%
@@ -613,8 +634,40 @@
       (nettle_ed25519_sha512_verify pub (bytes-length msg) msg sig))
     ))
 
+(define nettle-ed448-key%
+  (class pk-key-base%
+    (init-field pub priv)
+    (inherit-field impl)
+    (super-new)
+
+    (define/override (is-private?) (and priv #t))
+
+    (define/override (get-params)
+      (send impl curve->params 'ed448))
+
+    (define/override (get-public-key)
+      (if priv (new nettle-ed448-key% (impl impl) (pub pub) (priv #f)) this))
+
+    (define/override (-write-public-key fmt)
+      (encode-pub-eddsa fmt 'ed448 pub))
+    (define/override (-write-private-key fmt)
+      (encode-priv-eddsa fmt 'ed448 pub priv))
+
+    (define/override (equal-to-key? other)
+      (and (is-a? other nettle-ed448-key%)
+           (equal? pub (get-field pub other))))
+
+    (define/override (-sign msg _dspec pad)
+      (define sig (make-bytes ED448_SIGNATURE_SIZE))
+      (nettle_ed448_shake256_sign pub priv (bytes-length msg) msg sig)
+      sig)
+
+    (define/override (-verify msg _dspec pad sig)
+      (nettle_ed448_shake256_verify pub (bytes-length msg) msg sig))
+    ))
+
 ;; ============================================================
-;; X25519
+;; X25519 and X448
 
 (define nettle-ecx-impl%
   (class nettle-pk-impl%
@@ -630,41 +683,61 @@
       (curve->params (config-ref config 'curve)))
 
     (define/public (curve->params curve)
-      (case curve
-        [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
-        [else (err/no-curve curve this)]))
+      (or (make-params curve)
+          (err/no-curve curve this)))
 
     (define/public (generate-key-from-params curve)
       (case curve
-        [(x25519)
-         (define priv (crypto-random-bytes X25519_KEY_SIZE))
-         (define pub (make-bytes X25519_KEY_SIZE))
-         (nettle_curve25519_mul_g pub priv)
-         (new nettle-x25519-key% (impl this) (priv priv) (pub pub))]))
+        [(x25519) (and x25519-ok? (generate-x25519-key))]
+        [(x448) (and x448-ok? (generate-x448-key))]))
+
+    (define/private (generate-x25519-key)
+      (define priv (crypto-random-bytes X25519_KEY_SIZE))
+      (define pub (make-bytes X25519_KEY_SIZE))
+      (nettle_curve25519_mul_g pub priv)
+      (new nettle-x25519-key% (impl this) (priv priv) (pub pub)))
+    (define/private (generate-x448-key)
+      (define priv (crypto-random-bytes X448_KEY_SIZE))
+      (define pub (make-bytes X448_KEY_SIZE))
+      (nettle_curve448_mul_g pub priv)
+      (new nettle-x448-key% (impl this) (priv priv) (pub pub)))
 
     ;; ---- ECX ----
 
     (define/override (make-params curve)
-      (case curve
-        [(x25519) (curve->params curve)]
-        [else #f]))
+      (and (case curve [(x25519) x25519-ok?] [(x448) x448-ok?] [else #f])
+           (new pk-ecx-params% (impl this) (curve curve))))
 
     (define/override (make-public-key curve qB)
       (case curve
-        [(x25519)
-         (define pub (make-sized-copy X25519_KEY_SIZE qB))
-         (new nettle-x25519-key% (impl this) (pub pub) (priv #f))]
+        [(x25519) (and x25519-ok? (make-x25519-public-key qB))]
+        [(x448) (and x448-ok? (make-x448-public-key qB))]
         [else #f]))
+
+    (define/private (make-x25519-public-key qB)
+      (define pub (make-sized-copy X25519_KEY_SIZE qB))
+      (new nettle-x25519-key% (impl this) (pub pub) (priv #f)))
+    (define/private (make-x448-public-key qB)
+      (define pub (make-sized-copy X448_KEY_SIZE qB))
+      (new nettle-x448-key% (impl this) (pub pub) (priv #f)))
 
     (define/override (make-private-key curve _qB dB)
       ;; Note: qB (public key) might be missing, so just recompute
       (case curve
-        [(x25519)
-         (define priv (make-sized-copy X25519_KEY_SIZE dB))
-         (define pub (make-bytes X25519_KEY_SIZE))
-         (nettle_curve25519_mul_g pub priv)
-         (new nettle-x25519-key% (impl this) (pub pub) (priv priv))]
+        [(x25519) (and x25519-ok? (make-x25519-private-key dB))]
+        [(x448) (and x448-ok? (make-x448-private-key dB))]
         [else #f]))
+
+    (define/private (make-x25519-private-key dB)
+      (define priv (make-sized-copy X25519_KEY_SIZE dB))
+      (define pub (make-bytes X25519_KEY_SIZE))
+      (nettle_curve25519_mul_g pub priv)
+      (new nettle-x25519-key% (impl this) (pub pub) (priv priv)))
+    (define/private (make-x448-private-key dB)
+      (define priv (make-sized-copy X448_KEY_SIZE dB))
+      (define pub (make-bytes X448_KEY_SIZE))
+      (nettle_curve448_mul_g pub priv)
+      (new nettle-x448-key% (impl this) (pub pub) (priv priv)))
     ))
 
 (define nettle-x25519-key%
@@ -696,5 +769,37 @@
               [else (get-field pub peer-pubkey)]))
       (define secret (make-bytes X25519_KEY_SIZE))
       (nettle_curve25519_mul secret priv peer-pub)
+      secret)
+    ))
+
+(define nettle-x448-key%
+  (class pk-key-base%
+    (init-field pub priv)
+    (inherit-field impl)
+    (super-new)
+
+    (define/override (is-private?) (and priv #t))
+
+    (define/override (get-params)
+      (send impl curve->params 'x448))
+
+    (define/override (get-public-key)
+      (if priv (new nettle-x448-key% (impl impl) (pub pub) (priv #f)) this))
+
+    (define/override (-write-public-key fmt)
+      (encode-pub-ecx fmt 'x448 pub))
+    (define/override (-write-private-key fmt)
+      (encode-priv-ecx fmt 'x448 pub priv))
+
+    (define/override (equal-to-key? other)
+      (and (is-a? other nettle-x448-key%)
+           (equal? pub (get-field pub other))))
+
+    (define/override (-compute-secret peer-pubkey)
+      (define peer-pub
+        (cond [(bytes? peer-pubkey) (make-sized-copy X448_KEY_SIZE peer-pubkey)]
+              [else (get-field pub peer-pubkey)]))
+      (define secret (make-bytes X448_KEY_SIZE))
+      (nettle_curve448_mul secret priv peer-pub)
       secret)
     ))

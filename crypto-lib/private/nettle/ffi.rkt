@@ -23,7 +23,7 @@
 (provide (protect-out (all-defined-out)))
 
 (define-values (libnettle nettle-load-error)
-  (ffi-lib-or-why-not "libnettle" '("7" "6" #f)))
+  (ffi-lib-or-why-not "libnettle" '("8" "7" "6" #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
@@ -462,7 +462,7 @@
 ;; ============================================================
 
 (define-values (libhogweed hogweed-load-error)
-  (ffi-lib-or-why-not "libhogweed" '("5" "4" #f)))
+  (ffi-lib-or-why-not "libhogweed" '("6" "5" "4" #f)))
 (define-ffi-definer define-nettleHW libhogweed
   #:default-make-fail make-not-available)
 
@@ -805,6 +805,31 @@
 (define ed25519-ok? (get-hw-ok? #"nettle_ed25519_sha512_sign"))
 
 ;; ----------------------------------------
+;; Ed448 (since 3.6)
+
+(define ED448_KEY_SIZE 57)
+(define ED448_SIGNATURE_SIZE 114)
+
+(define-nettleHW nettle_ed448_shake256_public_key
+  (_fun (pub : _pointer)
+        (priv : _pointer)
+        -> _void))
+
+(define-nettleHW nettle_ed448_shake256_sign
+  (_fun (pub : _pointer) (priv : _pointer)
+        (len : _size) (msg : _pointer) (sig : _pointer)
+        -> _void))
+
+(define-nettleHW nettle_ed448_shake256_verify
+  (_fun (pub : _pointer)
+        (len : _size)
+        (msg : _pointer)
+        (sig : _pointer)
+        -> _bool))
+
+(define ed448-ok? (get-hw-ok? #"nettle_ed448_shake256_sign"))
+
+;; ----------------------------------------
 ;; X25519
 
 (define X25519_KEY_SIZE 32)
@@ -815,3 +840,16 @@
   (_fun (key : _pointer) (priv : _pointer) (peer : _pointer) -> _void))
 
 (define x25519-ok? (get-hw-ok? #"nettle_curve25519_mul"))
+
+;; ----------------------------------------
+;; X448 (since 3.6)
+
+(define X448_KEY_SIZE 56)
+
+(define-nettleHW nettle_curve448_mul_g
+  (_fun (pub : _pointer) (priv : _pointer) -> _void))
+
+(define-nettleHW nettle_curve448_mul
+  (_fun (key : _pointer) (priv : _pointer) (peer : _pointer) -> _void))
+
+(define x448-ok? (get-hw-ok? #"nettle_curve448_mul"))

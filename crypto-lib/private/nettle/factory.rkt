@@ -140,8 +140,8 @@
         [(rsa) (and rsa-ok? (new nettle-rsa-impl% (factory this)))]
         [(dsa) (and new-dsa-ok? (new nettle-dsa-impl% (factory this)))]
         [(ec) (and ec-ok? (new nettle-ec-impl% (factory this)))]
-        [(eddsa) (and ed25519-ok? (new nettle-eddsa-impl% (factory this)))]
-        [(ecx) (and x25519-ok? (new nettle-ecx-impl% (factory this)))]
+        [(eddsa) (and (or ed25519-ok? ed448-ok?) (new nettle-eddsa-impl% (factory this)))]
+        [(ecx) (and (or x25519-ok? x448-ok?) (new nettle-ecx-impl% (factory this)))]
         [else #f]))
 
     (define/override (-get-pk-reader)
@@ -191,9 +191,11 @@
         [(all-ec-curves)
          (map car nettle-curves)]
         [(all-eddsa-curves)
-         (if ed25519-ok? '(ed25519) '())]
+         (append (if ed25519-ok? '(ed25519) '())
+                 (if ed448-ok? '(ed448) '()))]
         [(all-ecx-curves)
-         (if x25519-ok? '(x25519) '())]
+         (append (if x25519-ok? '(x25519) '())
+                 (if x448-ok? '(x448) '()))]
         [else (super info key)]))
     ))
 
