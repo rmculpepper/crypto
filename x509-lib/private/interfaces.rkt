@@ -50,7 +50,12 @@
     ))
 
 (define certificate-chain<%>
-  (interface ()))
+  (interface*
+   ()
+   ([prop:custom-write
+     (lambda (self out mode) (send self custom-write out mode))])
+   custom-write
+   ))
 
 ;; Note: for documentation; not actually implemented
 (define trust-anchor<%>

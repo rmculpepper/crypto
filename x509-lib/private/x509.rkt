@@ -389,11 +389,15 @@
     ))
 
 (define certificate-chain%
-  (class object%
+  (class* object% (certificate-chain<%>)
     ;; chain : (list trust-anchor<%> certificate% ...+)
     ;; Note: In 6.1, trust anchor is not considered part of chain.
     (init-field chain)
     (super-new)
+
+    (define/public (custom-write out mode)
+      (fprintf out "#<certificate-chain: ~a>"
+               (Name->string (send (get-end-certificate) get-subject))))
 
     (define N (length (cdr chain))) ;; don't count trust anchor
 
