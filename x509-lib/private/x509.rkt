@@ -16,6 +16,8 @@
 ;; - RFC 8398 and 8399 (Internationalization) (https://tools.ietf.org/html/rfc8398,
 ;;   https://tools.ietf.org/html/rfc8399)
 
+;; FIXME: asn1 parser returns mutable bytes,strings?
+
 ;; recursive verification arguments
 ;; - chain
 ;; - hostname (optional)
@@ -476,7 +478,7 @@
   (define-cpointer-type _X509_NAME)
   (define-ssl X509_NAME_free (_fun _X509_NAME -> _void)
     #:wrap (deallocator))
-  (define-ssl d2i_X509_NAME ;; FIXME: wrap allocator
+  (define-ssl d2i_X509_NAME
     (_fun (_pointer = #f) (_ptr i _pointer) _long -> _X509_NAME/null)
     #:wrap (allocator X509_NAME_free))
   (define-ssl X509_NAME_hash (_fun _X509_NAME -> _long))
@@ -570,12 +572,14 @@
 
 ;; ============================================================
 
+;; FIXME: generalize, move to asn1-lib as util module?
 (define (asn1-time->seconds t)
   (define (map-num ss) (map string->number ss))
   (match t
     [(list 'utcTime
            (regexp #px"^([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})Z$"
                    (cons _ (app map-num (list YY MM DD hh mm ss)))))
+     ;; FIXME: Cite interpretation of YY.
      (define YYYY (+ YY (if (< YY 50) 2000 1900)))
      (find-seconds ss mm hh DD MM YYYY #f)]
     [(list 'generalTime
@@ -745,3 +749,18 @@
 (define (read-chain file)
   (define certs (read-certs file))
   (car (build-chains (car certs) (cdr certs))))
+
+#|
+Operations
+
+build-chain : RootStore PEM [options] -> CertChain or error
+POST: chain is well-formed, but not checked for any purpose
+NOTE: currently policies are not implemented, ...
+
+verify-for-purpose : CertChain Purpose -> Warnings or error
+ok-for-purpose? : CertChain Purpose -> Boolean
+
+{verify,ok}-for-{???} : CertChain
+- hostname : String
+- ???
+|#
