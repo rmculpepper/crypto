@@ -2,6 +2,7 @@
 (require racket/match
          racket/class
          racket/list
+         racket/string
          racket/date
          crypto
          crypto/pem
@@ -44,8 +45,8 @@
 
 ;; ============================================================
 
-(define certificate%
-  (class* object% (certificate<%>)
+(define certificate-data%
+  (class* object% (certificate-data<%>)
     (init-field der)
     (super-new)
 
@@ -58,24 +59,15 @@
       (equal? (get-der) (send other get-der)))
     (define/public (hash-code recur)
       (recur (get-der)))
+    (define/public (custom-write out mode)
+      (fprintf out "#<certificate: ~a>" (Name->string (get-subject))))
 
     (define/public (get-cert-signature-alg)
       (hash-ref cert 'signatureAlgorithm))
     (define/public (get-cert-signature-bytes)
       (match (hash-ref cert 'signature)
         [(bit-string sig-bytes 0) sig-bytes]))
-    (define/public (get-cert-tbs) tbs)
-
-    (define/public (ok-signature? issuer-pk)
-      (define vcert (bytes->asn1 Certificate-for-verify-sig der))
-      (define tbs-der (hash-ref vcert 'tbsCertificate))
-      (define alg (hash-ref vcert 'signatureAlgorithm))
-      (define alg-oid (hash-ref alg 'algorithm))
-      ;; FIXME: check issuer-pk is appropriate for alg
-      (unless (eq? #f (hash-ref alg 'parameters #f))
-        (error 'verify-signature "internal error: parameters not supported"))
-      (define di (relation-ref SIGNING 'oid (hash-ref alg 'algorithm) 'digest))
-      (digest/verify issuer-pk di tbs-der (get-cert-signature-bytes)))
+    ;;(define/public (get-cert-tbs) tbs)
 
     ;; TBSCertificate component accessors
     (define/public (get-version) (hash-ref tbs 'version))
@@ -89,8 +81,6 @@
     (define/public (get-subject-unique-id) (hash-ref tbs 'subjectUniqueID #f))
     (define/public (get-extensions) (hash-ref tbs 'extensions null))
 
-    (define/public (get-pk) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
-
     (define/public (is-CA?)
       (cond [(get-extension id-ce-basicConstraints)
              => (lambda (ext) (hash-ref (extension-value ext) 'cA))]
@@ -98,7 +88,7 @@
     (define/public (is-CRL-issuer?) (and (memq 'cRLSign (get-key-uses)))) ;; FIXME: and (is-CA?)
     (define/public (is-self-issued?) ;; 6.1
       (let ([subject (get-subject)] [issuer (get-issuer)])
-        (Name-match? subject issuer)))
+        (Name-equal? subject issuer)))
     (define/public (is-self-signed?)
       ;; FIXME
       #f)
@@ -114,6 +104,56 @@
       (get-extension-value id-ce-nameConstraints #f))
     (define/public (get-subject-alt-name)
       (get-extension-value id-ce-subjectAltName null))
+
+    (define/public (get-validity-seconds)
+      (match (get-validity)
+        [(hash-table ['notBefore ok-start] ['notAfter ok-end])
+         (list (asn1-time->seconds ok-start) (asn1-time->seconds ok-end))]))
+    ))
+
+(define certificate%
+  (class* certificate-data% (certificate<%>)
+    (inherit get-der
+             get-cert-signature-alg
+             get-cert-signature-bytes
+
+             get-version
+             get-serial-number
+             get-signature-alg
+             get-issuer
+             get-validity
+             get-subject
+             get-spki
+             get-issuer-unique-id
+             get-subject-unique-id
+             get-extensions
+
+             is-CA?
+             is-CRL-issuer?
+             is-self-issued?
+             is-self-signed?
+             get-key-uses
+
+             get-extension
+             get-extension-value
+
+             get-name-constraints
+             get-subject-alt-name
+             get-validity-seconds)
+    (super-new)
+
+    (define/public (ok-signature? issuer-pk)
+      (define vcert (bytes->asn1 Certificate-for-verify-sig (get-der)))
+      (define tbs-der (hash-ref vcert 'tbsCertificate))
+      (define alg (hash-ref vcert 'signatureAlgorithm))
+      (define alg-oid (hash-ref alg 'algorithm))
+      ;; FIXME: check issuer-pk is appropriate for alg
+      (unless (eq? #f (hash-ref alg 'parameters #f))
+        (error 'verify-signature "internal error: parameters not supported"))
+      (define di (relation-ref SIGNING 'oid (hash-ref alg 'algorithm) 'digest))
+      (digest/verify issuer-pk di tbs-der (get-cert-signature-bytes)))
+
+    (define/public (get-pk) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
 
     ;; An error symbol should read as a true statement about the certificate
     ;; that points out a fault, rather than reading as a desired property that
@@ -273,11 +313,6 @@
            (unless (not critical?) (bad! 'unknown-extension:critical-but-unsupported))]))
       (void))
 
-    (define/public (get-validity-seconds)
-      (match (get-validity)
-        [(hash-table ['notBefore ok-start] ['notAfter ok-end])
-         (list (asn1-time->seconds ok-start) (asn1-time->seconds ok-end))]))
-
     (define/public (ok-validity? [from (current-seconds)] [to from])
       (match-define (list ok-start ok-end) (get-validity-seconds))
       (<= ok-start from to ok-end))
@@ -301,7 +336,7 @@
         ;; 6.1.3 (a)(3) (not revoked)
         (void 'CRL-UNSUPPORTED)
         ;; 6.1.3 (a)(4) issuer
-        (unless (Name-match? (get-issuer) (send issuer get-subject))
+        (unless (Name-equal? (get-issuer) (send issuer get-subject))
           (add-error 'issuer-name-mismatch))
         ;; 6.1.3 (b,c) check name constraints
         (unless (and (is-self-issued?) (not final-in-path?))
@@ -489,7 +524,7 @@
         (define file (build-path dir (format "~a.~a" base i)))
         (cond [(file-exists? file)
                (define cert (read-cert-from-file file))
-               (if (Name-match? dn (send cert get-subject))
+               (if (Name-equal? dn (send cert get-subject))
                    (cons cert (loop (add1 i)))
                    (loop (add1 i)))]
               [else null])))
@@ -576,6 +611,26 @@
     (for ([x (in-list xs)]) (hash-update! h (get-key x) add1 0))
     (for/and ([v (in-hash-values h)]) (<= v 1))))
 
+;; String for display and debugging, don't rely on contents.
+;; (Among other issues, chars like #\, and #\= in value are not escaped.)
+(define (Name->string n)
+  (match n
+    [(list 'rdnSequence rdns)
+     (string-join
+      (flatten
+       (for*/list ([rdn (in-list rdns)]
+                   [av (in-list rdn)])
+         (define value (get-attr-value (hash-ref av 'value) (lambda (x) #f)))
+         (match (and value (hash-ref av 'type))
+           [(== id-at-countryName) (format "C=~a" value)]
+           [(== id-at-stateOrProvinceName) (format "ST=~a" value)]
+           [(== id-at-localityName) (format "L=~a" value)]
+           [(== id-at-commonName) (format "CN=~a" value)]
+           [(== id-at-organizationName) (format "O=~a" value)]
+           [(== id-at-organizationalUnitName) (format "OU=~a" value)]
+           [_ null])))
+      ",")]))
+
 (define (Name-equal? dn1 dn2)
   (Name-match? dn1 dn2 =))
 (define (Name-prefix? dn1 dn2) ;; is dn1 a prefix of dn2?
@@ -617,6 +672,7 @@
     [(list 'universalString (? string? s)) s]
     [(list 'utf8String (? string? s)) s]
     [(list 'bmpString (? string? s)) s]
+    [(? string? s) s]
     [_ (handle-other ds)]))
 
 (define (wf-time? v)
