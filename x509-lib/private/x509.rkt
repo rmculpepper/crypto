@@ -4,8 +4,9 @@
          racket/list
          racket/date
          crypto
-         asn1
          crypto/pem
+         asn1
+         "interfaces.rkt"
          "x509-asn1.rkt"
          "stringprep.rkt"
          (only-in crypto/private/common/asn1 relation-ref))
@@ -42,16 +43,6 @@
 
 
 ;; ============================================================
-
-(define certificate<%>
-  (interface*
-   ()
-   ([prop:equal+hash
-     (list (lambda (self other recur) (send self equal-to other recur))
-           (lambda (self recur) (send self hash-code recur))
-           (lambda (self recur) (send self hash-code recur)))])
-   equal-to
-   hash-code))
 
 (define certificate%
   (class* object% (certificate<%>)
@@ -392,13 +383,6 @@
         (send cert check-link-in-chain index issuer vi (= index N)))
       (send vi get-errors))
 
-    ))
-
-;; Note: for documentation; not actually implemented
-(define trust-anchor<%>
-  (interface ()
-    get-pk
-    get-subject
     ))
 
 (define validation%
