@@ -608,6 +608,11 @@
            (stores (append stores new-stores))))
     ))
 
+(define empty-x509-store (new x509-store%))
+
+(define (x509-store:trusted-pem-file file)
+  (send empty-x509-store add #:trusted-certs (read-certs file)))
+
 ;; ----------------------------------------
 
 (define (x509-store:openssl-trusted-directory dir)
