@@ -4,7 +4,7 @@
          racket/pretty
          crypto crypto/all
          "interfaces.rkt"
-         "x509.rkt")
+         "validation.rkt")
 
 (pretty-print-columns 160)
 (crypto-factories libcrypto-factory)

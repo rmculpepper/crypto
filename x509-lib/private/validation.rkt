@@ -9,7 +9,7 @@
          asn1
          "interfaces.rkt"
          "x509-asn1.rkt"
-         "x509-info.rkt"
+         "cert-info.rkt"
          "stringprep.rkt"
          (only-in crypto/private/common/asn1 relation-ref))
 (provide (all-defined-out))
@@ -21,6 +21,8 @@
 ;;   https://tools.ietf.org/html/rfc8399)
 
 ;; FIXME: asn1 parser returns mutable bytes,strings?
+
+;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
 
 ;; recursive verification arguments
 ;; - chain
@@ -90,7 +92,7 @@
       (unless (null? (unbox errors))
         (let ([errors (unbox errors)])
           (raise (exn:x509:certificate
-                  (format "certificate%: invalid X509 certificate\n  errors: ~s" errors)
+                  (format "certificate: invalid X509 certificate\n  errors: ~s" errors)
                   (current-continuation-marks)
                   errors)))))
 
