@@ -63,3 +63,12 @@
     get-pk
     get-subject
     ))
+
+(define x509-store<%>
+  (interface ()
+    trust?            ;; certificate% -> Boolean
+    lookup-by-subject ;; DN -> (Listof certificate%)
+    ))
+
+(define-logger x509)
+

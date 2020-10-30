@@ -9,8 +9,10 @@
          asn1
          "interfaces.rkt"
          "x509-asn1.rkt"
+         "x509-info.rkt"
          "stringprep.rkt"
          (only-in crypto/private/common/asn1 relation-ref))
+(provide (all-defined-out))
 
 ;; References:
 ;; - RFC 5280 (https://tools.ietf.org/html/rfc5280)
@@ -42,77 +44,10 @@
 ;; failure output:
 ;; - failure details?
 
-
-;; ============================================================
-
-(define certificate-data%
-  (class* object% (certificate-data<%>)
-    (init-field der)
-    (super-new)
-
-    (define/public (get-der) der)
-
-    (define cert (bytes->asn1 Certificate der))
-    (define tbs (hash-ref cert 'tbsCertificate))
-
-    (define/public (equal-to other recur)
-      (equal? (get-der) (send other get-der)))
-    (define/public (hash-code recur)
-      (recur (get-der)))
-    (define/public (custom-write out mode)
-      (fprintf out "#<certificate: ~a>" (Name->string (get-subject))))
-
-    (define/public (get-cert-signature-alg)
-      (hash-ref cert 'signatureAlgorithm))
-    (define/public (get-cert-signature-bytes)
-      (match (hash-ref cert 'signature)
-        [(bit-string sig-bytes 0) sig-bytes]))
-    ;;(define/public (get-cert-tbs) tbs)
-
-    ;; TBSCertificate component accessors
-    (define/public (get-version) (hash-ref tbs 'version))
-    (define/public (get-serial-number) (hash-ref tbs 'serialNumber))
-    (define/public (get-signature-alg) (hash-ref tbs 'signature))
-    (define/public (get-issuer) (hash-ref tbs 'issuer))
-    (define/public (get-validity) (hash-ref tbs 'validity))
-    (define/public (get-subject) (hash-ref tbs 'subject))
-    (define/public (get-spki) (hash-ref tbs 'subjectPublicKeyInfo))
-    (define/public (get-issuer-unique-id) (hash-ref tbs 'issuerUniqueID #f))
-    (define/public (get-subject-unique-id) (hash-ref tbs 'subjectUniqueID #f))
-    (define/public (get-extensions) (hash-ref tbs 'extensions null))
-
-    (define/public (is-CA?)
-      (cond [(get-extension id-ce-basicConstraints)
-             => (lambda (ext) (hash-ref (extension-value ext) 'cA))]
-            [else #f]))
-    (define/public (is-CRL-issuer?) (and (memq 'cRLSign (get-key-uses)))) ;; FIXME: and (is-CA?)
-    (define/public (is-self-issued?) ;; 6.1
-      (let ([subject (get-subject)] [issuer (get-issuer)])
-        (Name-equal? subject issuer)))
-    (define/public (is-self-signed?)
-      ;; FIXME
-      #f)
-    (define/public (get-key-uses)
-      (cond [(get-extension id-ce-keyUsage) => extension-value] [else null]))
-
-    (define/public (get-extension id)
-      (for/or ([ext (in-list (get-extensions))] #:when (equal? id (extension-id ext))) ext))
-    (define/public (get-extension-value id default)
-      (cond [(get-extension id) => extension-value] [else default]))
-
-    (define/public (get-name-constraints)
-      (get-extension-value id-ce-nameConstraints #f))
-    (define/public (get-subject-alt-name)
-      (get-extension-value id-ce-subjectAltName null))
-
-    (define/public (get-validity-seconds)
-      (match (get-validity)
-        [(hash-table ['notBefore ok-start] ['notAfter ok-end])
-         (list (asn1-time->seconds ok-start) (asn1-time->seconds ok-end))]))
-    ))
-
 (struct exn:x509 exn:fail () #:transparent)
 (struct exn:x509:certificate exn:x509 (errors) #:transparent)
+
+;; ============================================================
 
 (define certificate%
   (class* certificate-data% (certificate<%>)
@@ -343,6 +278,7 @@
 
     ;; ============================================================
 
+    ;; check-link-in-chain : Nat Certificate Validation Boolean -> Void
     (define/public (check-link-in-chain index issuer vi final-in-path?)
       (define (add-error what) (send vi add-error (cons index what)))
       ;; 6.1.3
@@ -408,41 +344,7 @@
 
     ))
 
-(define certificate-chain%
-  (class* object% (certificate-chain<%>)
-    ;; chain : (list trust-anchor<%> certificate% ...+)
-    ;; Note: In 6.1, trust anchor is not considered part of chain.
-    (init-field chain)
-    (super-new)
-
-    (define/public (custom-write out mode)
-      (fprintf out "#<certificate-chain: ~a>"
-               (Name->string (send (get-end-certificate) get-subject))))
-
-    (define N (length (cdr chain))) ;; don't count trust anchor
-
-    (define/public (get-chain) chain)
-    (define/public (get-end-certificate) (last chain))
-    (define/public (get-trust-anchor) (first chain))
-
-    (define/public (validate-chain [store root])
-      ;; Note: this does not verify that the end certificate is valid for
-      ;; any particular *purpose*.
-      (define vi (new validation% (N N)))
-      (when store
-        (define ta (get-trust-anchor))
-        (cond [(not (is-a? ta certificate%))
-               (send vi add-error (cons 0 'trust-anchor:not-certificate))]
-              [(not (send store trust? ta))
-               (send vi add-error (cons 0 'trust-anchor:not-trusted))]
-              [else (void)]))
-      (for ([issuer (in-list chain)]
-            [cert (in-list (cdr chain))]
-            [index (in-naturals 1)])
-        (send cert check-link-in-chain index issuer vi (= index N)))
-      (send vi get-errors))
-
-    ))
+;; ----------------------------------------
 
 (define validation%
   (class object%
@@ -485,9 +387,46 @@
 
 ;; ============================================================
 
+(define certificate-chain%
+  (class* object% (certificate-chain<%>)
+    ;; chain : (list trust-anchor<%> certificate% ...+)
+    ;; Note: In 6.1, trust anchor is not considered part of chain.
+    (init-field chain)
+    (super-new)
+
+    (define/public (custom-write out mode)
+      (fprintf out "#<certificate-chain: ~a>"
+               (Name->string (send (get-end-certificate) get-subject))))
+
+    (define N (length (cdr chain))) ;; don't count trust anchor
+
+    (define/public (get-chain) chain)
+    (define/public (get-end-certificate) (last chain))
+    (define/public (get-trust-anchor) (first chain))
+
+    ;; validate-chain : Store/#f -> (Listof Symbol)
+    (define/public (validate-chain store)
+      ;; Note: this does not verify that the end certificate is valid for
+      ;; any particular *purpose*.
+      (define vi (new validation% (N N)))
+      (define ta (get-trust-anchor))
+      (unless (is-a? ta certificate%)
+        (send vi add-error (cons 0 'trust-anchor:not-certificate)))
+      (unless (and store (send store trust? ta))
+        (send vi add-error (cons 0 'trust-anchor:not-trusted)))
+      (for ([issuer (in-list chain)]
+            [cert (in-list (cdr chain))]
+            [index (in-naturals 1)])
+        (send cert check-link-in-chain index issuer vi (= index N)))
+      (send vi get-errors))
+
+    ))
+
+;; ============================================================
+
 ;; build-chains : certificate% x509-store<%> -> (Listof certificate-chain%)
-(define (build-chains end-cert [other-untrusted-certs null] #:store [store0 root])
-  (define store (send store0 add-certificates other-untrusted-certs #:trusted? #f))
+(define (build-chains end-cert [other-untrusted-certs null] #:store store0)
+  (define store (send store0 add #:untrusted-certs other-untrusted-certs))
   (define (loop chains)
     (apply append (map loop1 chains)))
   (define (loop1 chain)
@@ -503,216 +442,6 @@
   (loop1 (list end-cert)))
 
 ;; ============================================================
-
-(define x509-store<%>
-  (interface ()
-    trust?            ;; certificate% -> Boolean
-    lookup-by-subject ;; DN -> (Listof certificate%)
-    ))
-
-(module openssl-x509 racket/base
-  (require ffi/unsafe
-           ffi/unsafe/define
-           ffi/unsafe/alloc
-           openssl/libssl)
-  (provide (protect-out (all-defined-out)))
-  (define-ffi-definer define-ssl libssl
-    #:default-make-fail make-not-available)
-  (define-cpointer-type _X509_NAME)
-  (define-ssl X509_NAME_free (_fun _X509_NAME -> _void)
-    #:wrap (deallocator))
-  (define-ssl d2i_X509_NAME
-    (_fun (_pointer = #f) (_ptr i _pointer) _long -> _X509_NAME/null)
-    #:wrap (allocator X509_NAME_free))
-  (define-ssl X509_NAME_hash (_fun _X509_NAME -> _long))
-  (define (NAME-hash dn-der)
-    (define dn (d2i_X509_NAME dn-der (bytes-length dn-der)))
-    (begin0 (X509_NAME_hash dn) (X509_NAME_free dn))))
-
-(define x509-root-store%
-  (class* object% (x509-store<%>)
-    (init-field dir)
-    (super-new)
-
-    (define/public (trust? cert)
-      (for/or ([trusted (in-list (lookup-by-subject (send cert get-subject)))])
-        (equal? (send cert get-der) (send trusted get-der))))
-
-    (define/public (lookup-by-subject dn)
-      (lookup-by-subject/hash dn))
-
-    (define/public (lookup-by-subject/hash dn)
-      (define (padto n s) (string-append (make-string (- n (string-length s)) #\0) s))
-      (define base (padto 8 (number->string (dn-hash (asn1->bytes Name dn)) 16)))
-      (let loop ([i 0])
-        (define file (build-path dir (format "~a.~a" base i)))
-        (cond [(file-exists? file)
-               (define cert (read-cert-from-file file))
-               (if (Name-equal? dn (send cert get-subject))
-                   (cons cert (loop (add1 i)))
-                   (loop (add1 i)))]
-              [else null])))
-
-    (define/private (dn-hash dn-der)
-      (local-require (submod "." openssl-x509))
-      (NAME-hash dn-der))
-
-    (define/private (read-cert-from-file file)
-      (match (call-with-input-file* file read-pem-certs)
-        [(list der) (new certificate% (der der))]
-        [_ (error 'lookup-by-subject "bad certificate PEM file: ~e" file)]))
-
-    (define/public (add-certificates certs #:trusted? [trusted? #f])
-      (send (new x509-store% (parent this))
-            add-certificates certs #:trusted? trusted?))
-    ))
-
-(define root (new x509-root-store% (dir "/etc/ssl/certs")))
-
-(define x509-empty-store%
-  (class* object% (x509-store<%>)
-    (super-new)
-    (define/public (trust? cert) #f)
-    (define/public (lookup-by-subject dn) null)
-    (define/public (add-certificates certs #:trusted? [trusted? #f])
-      (send (new x509-store% (parent this))
-            add-certificates certs #:trusted? trusted?))
-    ))
-
-(define x509-store%
-  (class* object% (x509-store<%>)
-    (init-field parent
-                [trusted-h   '#hash()]
-                [dn=>cert    '#hash()])
-    (super-new)
-
-    (define/public (trust? cert)
-      (or (hash-ref trusted-h (send cert get-der) #f)
-          (send parent trust? cert)))
-
-    (define/public (lookup-by-subject dn)
-      (append (hash-ref dn=>cert dn null)
-              (send parent lookup-by-subject dn)))
-
-    (define/public (add-certificates certs #:trusted? [trusted? #f])
-      (define ((mkcons v) vs) (cons v vs))
-      (define dn=>cert*
-        (for/fold ([dn=>cert dn=>cert])
-                  ([cert (in-list certs)])
-          (let ([subject (send cert get-subject)])
-            (cond [(not (Name-empty? subject))
-                   (hash-update dn=>cert subject (mkcons cert) null)]
-                  [else dn=>cert]))))
-      (define trusted-h*
-        (cond [trusted?
-               (for/fold ([h trusted-h]) ([cert (in-list certs)])
-                 (hash-set h (send cert get-der) #t))]
-              [else trusted-h]))
-      (new this% (parent parent)
-           (trusted-h trusted-h*)
-           (dn=>cert dn=>cert*)))
-    ))
-
-;; ============================================================
-
-;; FIXME: generalize, move to asn1-lib as util module?
-(define (asn1-time->seconds t)
-  (define (map-num ss) (map string->number ss))
-  (match t
-    [(list 'utcTime
-           (regexp #px"^([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})Z$"
-                   (cons _ (app map-num (list YY MM DD hh mm ss)))))
-     ;; FIXME: Cite interpretation of YY.
-     (define YYYY (+ YY (if (< YY 50) 2000 1900)))
-     (find-seconds ss mm hh DD MM YYYY #f)]
-    [(list 'generalTime
-           (regexp #px"^([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})Z$"
-                   (cons _ (app map-num (list YYYY MM DD hh mm ss)))))
-     (find-seconds ss mm hh DD MM YYYY #f)]))
-
-(define (unique-by-key? xs get-key)
-  (let ([h (make-hash)])
-    (for ([x (in-list xs)]) (hash-update! h (get-key x) add1 0))
-    (for/and ([v (in-hash-values h)]) (<= v 1))))
-
-;; String for display and debugging, don't rely on contents.
-;; (Among other issues, chars like #\, and #\= in value are not escaped.)
-(define (Name->string n)
-  (match n
-    [(list 'rdnSequence rdns)
-     (string-join
-      (flatten
-       (for*/list ([rdn (in-list rdns)]
-                   [av (in-list rdn)])
-         (define value (get-attr-value (hash-ref av 'value) (lambda (x) #f)))
-         (match (and value (hash-ref av 'type))
-           [(== id-at-countryName) (format "C=~a" value)]
-           [(== id-at-stateOrProvinceName) (format "ST=~a" value)]
-           [(== id-at-localityName) (format "L=~a" value)]
-           [(== id-at-commonName) (format "CN=~a" value)]
-           [(== id-at-organizationName) (format "O=~a" value)]
-           [(== id-at-organizationalUnitName) (format "OU=~a" value)]
-           [_ null])))
-      ",")]))
-
-(define (Name-equal? dn1 dn2)
-  (Name-match? dn1 dn2 =))
-(define (Name-prefix? dn1 dn2) ;; is dn1 a prefix of dn2?
-  (Name-match? dn1 dn2 <=))
-
-(define (Name-match? dn1 dn2 cmp)
-  ;; Does anyone actually implement the section 7 name matching rules?
-  ;; See https://github.com/golang/go/issues/31440 for survey.
-  (define (unwrap v)
-    (match (get-attr-value v (lambda (v) v))
-      [(? string? s) (ldap-stringprep s #:on-error (lambda (x) x))]
-      [other other]))
-  (define (same? v1 v2)
-    (if (and (string? v1) (string? v2)) (string-ci=? v1 v2) (equal? v1 v2)))
-  (match* [dn1 dn2]
-    [[(list 'rdnSequence rdns1) (list 'rdnSequence rdns2)]
-     (and (cmp (length rdns1) (length rdns2))
-          (for/and ([rdn1 (in-list rdns1)] [rdn2 (in-list rdns2)])
-            (define (rdn->h rdn)
-              (for/fold ([h (hash)]) ([av (in-list rdn)])
-                (hash-set h (hash-ref av 'type) (hash-ref av 'value))))
-            (define h1 (rdn->h rdn1))
-            (define h2 (rdn->h rdn2))
-            ;; Note: if a (bad) DN had the same attr type multiple times in the
-            ;; SET, the hash loses information. So iterate over SETs instead.
-            (and (for/and ([av1 (in-list rdn1)])
-                   (match-define (hash-table ['type k] ['value v1]) av1)
-                   (same? (unwrap v1) (unwrap (hash-ref h2 k #f))))
-                 (for/and ([av2 (in-list rdn2)])
-                   (match-define (hash-table ['type k] ['value v2]) av2)
-                   (same? (unwrap v2) (unwrap (hash-ref h1 k #f)))))))]))
-
-(define (Name-empty? dn)
-  (match dn [(list 'rdnSequence rdns) (null? rdns)]))
-
-(define (get-attr-value ds handle-other)
-  (match ds
-    [(list 'printableString (? string? s)) s]
-    [(list 'universalString (? string? s)) s]
-    [(list 'utf8String (? string? s)) s]
-    [(list 'bmpString (? string? s)) s]
-    [(? string? s) s]
-    [_ (handle-other ds)]))
-
-(define (wf-time? v)
-  (match v
-    ;; These regexps can be simple because of existing asn1 parser checks.
-    [(list 'utcTime (regexp #px"^[0-9]{12}Z$")) #t]
-    [(list 'generalTime (regexp #px"^[0-9]{14}Z$")) #t]
-    [_ #f]))
-
-(define (extension-id ext) (hash-ref ext 'extnID))
-(define (extension-critical? ext) (hash-ref ext 'critical))
-(define (extension-value ext) (hash-ref ext 'extnValue))
-
-(define (policy-id p) (hash-ref p 'policyIdentifier))
-
-;; ----------------------------------------
 
 ;; ParsedNameConstraints = (Listof NameConstraintLayer)
 ;; NameConstraintLayer = (nclayer (U 'permit 'exclude) Nat (Listof GeneralName))
@@ -794,39 +523,14 @@
        (string-ci=? (substring s (- slen suffixlen))
                     suffix)))
 
-;; ----------------------------------------
+;; ============================================================
 
-(require racket/pretty)
-(pretty-print-columns 160)
-(require crypto crypto/all)
-(crypto-factories libcrypto-factory)
-
-;; read-pem-chain : InputPort -> (Listof Bytes)
+;; read-pem-certs : InputPort -> (Listof Bytes)
 (define (read-pem-certs in)
   (for/list ([v (in-port (lambda (in) (read-pem in #:only '(#"CERTIFICATE"))) in)])
     (cdr v)))
 
+;; read-certs : Path -> (Listof certificate%)
 (define (read-certs file)
   (define ders (call-with-input-file file read-pem-certs))
   (map (lambda (der) (new certificate% (der der))) ders))
-
-(define (read-chain file)
-  (define certs (read-certs file))
-  (match (build-chains (car certs) (cdr certs))
-    [(cons chain _) chain]
-    ['() (error 'read-chain "could not build chain")]))
-
-#|
-Operations
-
-build-chain : RootStore PEM [options] -> CertChain or error
-POST: chain is well-formed, but not checked for any purpose
-NOTE: currently policies are not implemented, ...
-
-verify-for-purpose : CertChain Purpose -> Warnings or error
-ok-for-purpose? : CertChain Purpose -> Boolean
-
-{verify,ok}-for-{???} : CertChain
-- hostname : String
-- ???
-|#
