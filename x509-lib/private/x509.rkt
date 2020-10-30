@@ -46,6 +46,7 @@
 
 (struct exn:x509 exn:fail () #:transparent)
 (struct exn:x509:certificate exn:x509 (errors) #:transparent)
+(struct exn:x509:chain exn:x509 (errors) #:transparent)
 
 ;; ============================================================
 
@@ -88,9 +89,10 @@
       (check errors)
       (unless (null? (unbox errors))
         (let ([errors (unbox errors)])
-          (raise (exn:x509:certificate (format "invalid X509 certificate\n  errors: ~s" errors)
-                                       (current-continuation-marks)
-                                       errors)))))
+          (raise (exn:x509:certificate
+                  (format "certificate%: invalid X509 certificate\n  errors: ~s" errors)
+                  (current-continuation-marks)
+                  errors)))))
 
     ;; ----------------------------------------
 
@@ -288,7 +290,7 @@
           (add-error 'bad-signature))
         ;; 6.1.3 (a)(2) currently valid
         (unless (ok-validity? (send vi get-from-time) (send vi get-to-time))
-          (add-error 'bad-validity))
+          (add-error 'bad-validity-period))
         ;; 6.1.3 (a)(3) (not revoked)
         (void 'CRL-UNSUPPORTED)
         ;; 6.1.3 (a)(4) issuer
@@ -424,22 +426,53 @@
 
 ;; ============================================================
 
-;; build-chains : certificate% x509-store<%> -> (Listof certificate-chain%)
-(define (build-chains end-cert [other-untrusted-certs null] #:store store0)
-  (define store (send store0 add #:untrusted-certs other-untrusted-certs))
-  (define (loop chains)
-    (apply append (map loop1 chains)))
+;; build-candidate-chains : Certificate x509Store Boolean
+;;                       -> (Listof CertificateChain)
+(define (build-candidate-chains who end-cert store error-on-fail?)
+  (define (loop chains error-on-fail?)
+    (define chains* (append* (map loop1 chains)))
+    (cond [(null? chains*)
+           (when error-on-fail?
+             (raise (exn:x509:chain (format "~s: failed to build complete chain" who)
+                                    (current-continuation-marks)
+                                    '(incomplete))))
+           null]
+          [else
+           (define-values (complete incomplete)
+             (partition (lambda (chain) (send store trust? (car chain))) chains*))
+           (append (map (lambda (chain) (new certificate-chain% (chain chain))) complete)
+                   (loop incomplete (and error-on-fail? (null? complete))))]))
   (define (loop1 chain)
     (define issuer-certs
       (filter (lambda (cert) (not (member cert chain)))
               (remove-duplicates ;; FIXME
                (send store lookup-by-subject (send (car chain) get-issuer)))))
-    (define-values (trusted-certs untrusted-certs)
-      (partition (lambda (c) (send store trust? c)) issuer-certs))
-    (append (map (lambda (c) (new certificate-chain% (chain (cons c chain))))
-                 trusted-certs)
-            (loop (map (lambda (c) (cons c chain)) untrusted-certs))))
-  (loop1 (list end-cert)))
+    (map (lambda (c) (cons c chain)) issuer-certs))
+  (loop (list (list end-cert)) error-on-fail?))
+
+;; build-chains : Certificate (Listof Certificate) [#:store x509Store]
+;;             -> (Listof CertificateChain)
+(define (build-chains end-cert [other-untrusted-certs null]
+                      #:store [store0 (current-x509-store)]
+                      #:error-on-fail? [err? #t]
+                      #:who [who 'build-chains])
+  (define store (send store0 add #:untrusted-certs other-untrusted-certs))
+  (define chains (build-candidate-chains who end-cert store err?))
+  (define ok-chains
+    (filter (lambda (chain) (null? (send chain validate-chain store))) chains))
+  (when (and err? (null? ok-chains))
+    (define errors (send (car chains) validate-chain store0))
+    (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errors)
+                           (current-continuation-marks)
+                           errors)))
+  ok-chains)
+
+;; build-chain : Certificate (Listof Certificate) [#:store x509Store]
+;;            -> CertificateChain
+(define (build-chain end-cert [other-untrusted-certs null]
+                     #:store [store (current-x509-store)]
+                     #:who [who 'build-chain])
+  (car (build-chains end-cert other-untrusted-certs #:store store #:who who)))
 
 ;; ============================================================
 

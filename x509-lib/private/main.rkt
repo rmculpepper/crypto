@@ -14,10 +14,8 @@
 ;; read-chain : Path -> certificate-chain%
 (define (read-chain file)
   (define certs (read-certs file))
-  (match (build-chains (car certs) (cdr certs)
-                       #:store (send (current-x509-store) add #:stores (list root)))
-    [(cons chain _) chain]
-    ['() (error 'read-chain "could not build chain")]))
+  (build-chain (car certs) (cdr certs)
+               #:store (send (current-x509-store) add #:stores (list root))))
 
 #|
 Operations
