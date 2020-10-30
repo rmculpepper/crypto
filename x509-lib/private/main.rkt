@@ -4,16 +4,18 @@
          racket/pretty
          crypto crypto/all
          "interfaces.rkt"
-         "x509.rkt"
-         "store.rkt")
+         "x509.rkt")
 
 (pretty-print-columns 160)
 (crypto-factories libcrypto-factory)
 
+(define root (x509-store:openssl-trusted-directory "/etc/ssl/certs"))
+
 ;; read-chain : Path -> certificate-chain%
 (define (read-chain file)
   (define certs (read-certs file))
-  (match (build-chains (car certs) (cdr certs) #:store (current-x509-store))
+  (match (build-chains (car certs) (cdr certs)
+                       #:store (send (current-x509-store) add #:stores (list root)))
     [(cons chain _) chain]
     ['() (error 'read-chain "could not build chain")]))
 
