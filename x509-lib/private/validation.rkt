@@ -187,7 +187,8 @@
         ;; 4.2.1.3 Key Usage
         (when (is-CA?)
           (unless (get-extension id-ce-keyUsage)
-            (bad/ca! 'key-usage:exists)))
+            ;; FIXME: ???
+            (void) #;(bad/ca! 'key-usage:exists)))
         (void))
       ;; constraints on extensions when present
       (for ([ext (in-list (get-extensions))])
