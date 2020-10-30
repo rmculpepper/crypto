@@ -111,8 +111,12 @@
          (list (asn1-time->seconds ok-start) (asn1-time->seconds ok-end))]))
     ))
 
+(struct exn:x509 exn:fail () #:transparent)
+(struct exn:x509:certificate exn:x509 (errors) #:transparent)
+
 (define certificate%
   (class* certificate-data% (certificate<%>)
+    (init [check? #t])
     (inherit get-der
              get-cert-signature-alg
              get-cert-signature-bytes
@@ -142,6 +146,19 @@
              get-validity-seconds)
     (super-new)
 
+    ;; ----------------------------------------
+
+    (when check?
+      (define errors (box null))
+      (check errors)
+      (unless (null? (unbox errors))
+        (let ([errors (unbox errors)])
+          (raise (exn:x509:certificate (format "invalid X509 certificate\n  errors: ~s" errors)
+                                       (current-continuation-marks)
+                                       errors)))))
+
+    ;; ----------------------------------------
+
     (define/public (ok-signature? issuer-pk)
       (define vcert (bytes->asn1 Certificate-for-verify-sig (get-der)))
       (define tbs-der (hash-ref vcert 'tbsCertificate))
@@ -155,16 +172,18 @@
 
     (define/public (get-pk) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
 
+    ;; check : (Boxof (Listof Symbol)) -> Void
+    ;; Checks that the certificate is well-formed, without regard for other
+    ;; certificates in the chain or any intended purpose. In particular:
+    ;; - The signature is not verified!
+    ;; - The validity period is not checked.
+    ;; - The name, allowed uses, etc are not checked against an intended purpose.
+    ;; Errors are pushed onto the contents of errors-box.
     ;; An error symbol should read as a true statement about the certificate
     ;; that points out a fault, rather than reading as a desired property that
     ;; the certificate fails to hold.
-    (define errors null) ;; (Listof Symbol), mutated
-    (define/public (get-errors) errors)
-
-    ;; Checks that the certificate is well-formed, without regard for other
-    ;; certificates in the chain. (For example, the signature is not verified.)
-    (let ()
-      (define (bad! x)        (set! errors (cons x errors)))
+    (define/public (check errors-box)
+      (define (bad! x)        (set-box! errors-box (cons x (unbox errors-box))))
       (define (bad/ca! x)     (when #t (bad! x)))
       (define (bad/should! x) (when #f (bad! x)))
       ;; 4.1.1.2
@@ -221,7 +240,8 @@
         ;; 4.2.1.1 Authority Key Identifier
         (unless (and (is-CA?) (is-self-signed?))
           (unless (get-extension id-ce-authorityKeyIdentifier)
-            (bad! 'authority-key-id:missing)))
+            ;; FIXME: check
+            (bad/should! 'authority-key-id:missing)))
         ;; 4.2.1.2 Subject Key Identifier
         (unless (get-extension id-ce-subjectKeyIdentifier)
           (bad/should! 'subject-key-id:missing))
@@ -373,7 +393,7 @@
             (unless (memq 'keyCertSign key-uses)
               (add-error 'intermediate:missing-keyCertSign))))
         ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
-        (when (pair? errors) (add-error errors)))
+        (void 'DONE-DURING-CONSTRUCTION))
       ;; 6.1.5
       (when final-in-path?
         ;; 6.1.5 (a,b) explicit-policy, policies
@@ -381,7 +401,7 @@
         ;; 6.1.5 (c-e) handled by get-pk method instead
         (void 'OK)
         ;; 6.1.5 (f) process other critical extensions: errors gathered in construction
-        (when (pair? errors) (add-error errors))
+        (void 'DONE-DURING-CONSTRUCTION)
         ;; 6.1.5 (g) policies ...
         (void 'POLICIES-UNSUPPORTED))
       (void))
@@ -792,7 +812,9 @@
 
 (define (read-chain file)
   (define certs (read-certs file))
-  (car (build-chains (car certs) (cdr certs))))
+  (match (build-chains (car certs) (cdr certs))
+    [(cons chain _) chain]
+    ['() (error 'read-chain "could not build chain")]))
 
 #|
 Operations
