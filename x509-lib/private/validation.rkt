@@ -533,10 +533,10 @@
     (define relevant (filter (lambda (gn) (eq? name-type (car gn))) pattern))
     (cond [(null? relevant) #t]
           [(eq? mode 'permit)
-           (ormap constraint-matches? relevant)]
+           (ormap (constraint-matches? #f) relevant)]
           [(eq? mode 'exclude)
-           (not (ormap constraint-matches? relevant))]))
-  (define (constraint-matches? gn)
+           (not (ormap (constraint-matches? #t) relevant))]))
+  (define ((constraint-matches? result-for-unsupported) gn)
     (match-define (list (== name-type) pattern) gn)
     (case name-type
       [(rfc822Name) ;; name : IA5String
@@ -560,8 +560,7 @@
       [(directoryName) ;; name : Name
        (Name-prefix? pattern name)]
       [(uniformResourceIdentifier) ;; name : IA5String
-       ;; FIXME
-       #f]
+       result-for-unsupported]
       [(iPAddress) ;; name : OCTET-STRING
        (define iplen (bytes-length name))
        (cond [(= (bytes-length pattern) (* 2 iplen))
@@ -574,8 +573,19 @@
       ;; x400Address
       ;; ediPartyName
       ;; registeredID
-      [else #f]))
+      [else result-for-unsupported]))
   (andmap layer-name-ok? cs))
+
+;; (define (uri-extract-host uri)
+;;   ;; Reference: https://tools.ietf.org/html/rfc3986#section-3
+;;   ;; URIwHost ::= scheme "://" authority path-abempty [ "?" query ]["#" fragment]
+;;   ;; authority ::= [userinfo "@"] host [":" port]
+;;   (match uri
+;;     [(regexp #rx"^([a-zA-Z][a-zA-Z0-9]*)://([^?#/]*)"
+;;              (list _ _ (regexp #rx"^(?:[^@]*@)?([^:]*)(?:[:][0-9]*)?$"
+;;                                (list _ host))))
+;;      (uri-decode host)]
+;;     [_ #f]))
 
 (define (string-suffix-ci? s suffix)
   (define slen (string-length s))
