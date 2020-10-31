@@ -38,6 +38,8 @@
   (cond [(string? dn) dn]
         [else (string-append "/" (string-join dn "/") "/")]))
 
+(define int-ca:keyCertSign? #t)
+
 ;; ----
 
 (define (make-root-ca name dn)
@@ -47,13 +49,26 @@
                "-sha256" "-days" "200" "-out" (cert-file name)
                "-subj" (dn->string dn)))
 
-(define (make-int-ca ca-name name dn)
+(define (make-int-ca ca-name name dn
+                     #:permit-name [permit-name #f]
+                     #:exclude-name [exclude-name #f])
   (unless (file-exists? (key-file name))
     (openssl-genrsa "-out" (key-file name) "2048"))
   (with-output-to-file (ext-file name) #:exists 'replace
     (lambda ()
       (printf "authorityKeyIdentifier=keyid,issuer\n")
-      (printf "basicConstraints=CA:TRUE\n")))
+      (printf "basicConstraints=critical,CA:TRUE\n")
+      (when int-ca:keyCertSign?
+        (printf "keyUsage=critical,keyCertSign\n"))
+      (when (or permit-name exclude-name)
+        (printf "nameConstraints=critical,~a\n"
+                (string-join
+                 (filter string?
+                         (list (and permit-name
+                                    (format "permitted;~a" permit-name))
+                               (and exclude-name
+                                    (format "excluded;~a" exclude-name))))
+                 ",")))))
   (openssl-req "-new" "-key" (key-file name) "-out" (csr-file name)
                "-subj" (dn->string dn))
   (openssl-x509 "-req" "-in" (csr-file name) (CA-args ca-name)
@@ -63,20 +78,23 @@
 (define (CA-args ca-name)
   (list "-CA" (cert-file ca-name) "-CAkey" (key-file ca-name) "-CAcreateserial"))
 
-(define (make-end ca-name name dn [dnsnames null])
-  (unless (file-exists? (key-file name))
-    (openssl-genrsa "-out" (key-file name) "2048"))
-  (openssl-req "-new" "-key" (key-file name) "-subj" (dn->string dn)
+(define (make-end ca-name name dn [dnsnames null]
+                  #:key-file [keyfile (key-file name)])
+  (unless (file-exists? keyfile)
+    (openssl-genrsa "-out" keyfile "2048"))
+  (openssl-req "-new" "-key" keyfile "-subj" (dn->string dn)
                "-out" (csr-file name))
   (with-output-to-file (ext-file name) #:exists 'replace
     (lambda ()
       (printf "authorityKeyIdentifier=keyid,issuer\n")
-      (printf "basicConstraints=CA:FALSE\n")
-      (printf "keyUsage=digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment\n")
-      (printf "subjectAltName=@alt_names\n\n")
-      (printf "[alt_names]\n")
-      (for ([dnsname dnsnames] [i (in-naturals 1)])
-        (printf "DNS.~a=~a\n" i dnsname))))
+      (printf "basicConstraints=critical,CA:FALSE\n")
+      (printf "keyUsage=critical,~a\n"
+              "digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment")
+      (when (pair? dnsnames)
+        (printf "subjectAltName=@alt_names\n\n")
+        (printf "[alt_names]\n")
+        (for ([dnsname dnsnames] [i (in-naturals 1)])
+          (printf "DNS.~a=~a\n" i dnsname)))))
   (openssl-x509 "-req" "-in" (csr-file name) (CA-args ca-name)
                 "-out" (cert-file name) "-days" "30" "-sha256"
                 "-extfile" (ext-file name)))
@@ -95,7 +113,10 @@
   (define end-cert
     (or (for/first ([cert certs] #:when (not (send cert is-CA?))) cert)
         (car certs)))
-  (build-chain end-cert certs #:store (current-x509-store)))
+  (build-chain end-cert certs #:store (current-x509-store)
+               #:valid-time ((current-get-valid-time))))
+
+(define current-get-valid-time (make-parameter current-seconds))
 
 ;; XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
@@ -115,7 +136,9 @@
   (make-root-ca "ca" ca-name)
 
   (define intca-name '("O=testing" "CN=testing-int-ca"))
-  (make-int-ca "ca" "intca" intca-name)
+  (make-int-ca "ca" "intca" intca-name
+               #:permit-name "DNS:.test.com"
+               #:exclude-name "DNS:special.test.com")
 
   (define end-name '("C=US" "ST=MA" "L=Boston" "CN=end.test.com"))
   (define end-dnsnames '("end.test.com" "alt.test.com"))
@@ -154,4 +177,60 @@
     ;; Similar, but fakeend issuer matches intca.
     (check-exn (chain-exn? '((2 . bad-signature)))
                (lambda () (read-chain (cert-file "fakeend") (cert-file "intca")))))
+
+  ;; ----------------------------------------
+
+  ;; 6.1.3.a.1 signature valid -- tested above
+  ;; 6.1.3.a.2 validity period
+  (test-case "valid-time"
+    ;; Since we just built the certs, should not be valid last year
+    (parameterize ((current-get-valid-time
+                    (lambda () (- (current-seconds) (* 365 24 60 60)))))
+      (check-exn (chain-exn? '((1 . bad-validity-period)))
+                 (lambda () (read-chain (cert-file "intca"))))
+      (check-exn (chain-exn? '((1 . bad-validity-period)))
+                 (lambda () (read-chain (cert-file "end") (cert-file "intca")))))
+    ;; Should not be valid in 5 years (see -days arguments above)
+    (parameterize ((current-get-valid-time
+                    (lambda () (+ (current-seconds) (* 5 365 24 60 60)))))
+      (check-exn (chain-exn? '((1 . bad-validity-period)))
+                 (lambda () (read-chain (cert-file "intca"))))
+      (check-exn (chain-exn? '((1 . bad-validity-period)))
+                 (lambda () (read-chain (cert-file "end") (cert-file "intca"))))))
+  ;; 6.1.3.a.3 not revoked -- not supported
+  ;; 6.1.3.a.4 issuer matches
+  (test-case "issuer mismatch"
+    ;; build-chains uses issuer name to build, so construct bad chain manually
+    (define certs (append (read-certs (cert-file "ca")) (read-certs (cert-file "end"))))
+    (check-exn (chain-exn? '((1 . issuer-name-mismatch)))
+               (lambda ()
+                 (define chain (new certificate-chain% (chain certs)))
+                 (send chain check 'test (current-x509-store)))))
+  ;; 6.1.3.{b,c} name constraints
+  (test-case "name constraints"
+    (make-end "intca" "cz-end" '("C=CZ" "L=Praha" "CN=test.cz") '("test.cz"))
+    (check-exn (chain-exn? '((2 . name-constraints:subjectAltName-rejected)))
+               (lambda () (read-chain (cert-file "intca") (cert-file "cz-end"))))
+    (make-end "intca" "special-end" '("CN=special.test.com") '("special.test.com"))
+    (check-exn (chain-exn? '((2 . name-constraints:subjectAltName-rejected)))
+               (lambda () (read-chain (cert-file "intca") (cert-file "special-end")))))
+  ;; 6.1.3.{d-f} policies -- not unsupported
+  ;; 6.1.4.{a-j} nothing to do
+  ;; 6.1.4.k intermediate is CA
+  (test-case "intermediate is CA"
+    (make-end "ca" "intca-as-end" intca-name '("intca.org")
+              #:key-file (key-file "intca"))
+    (define certs (append (read-certs (cert-file "ca"))
+                          (read-certs (cert-file "intca-as-end"))
+                          (read-certs (cert-file "end"))))
+    (check-exn (chain-exn? '((1 . intermediate:not-CA)
+                             (1 . intermediate:missing-keyCertSign)))
+               (lambda ()
+                 (define chain (new certificate-chain% (chain certs)))
+                 (send chain check 'test (current-x509-store)))))
+  ;; 6.1.4.m intermediate: path length constraint -- TODO
+  ;; 6.1.4.n intermediate: keyCertSign -- see 6.1.4.k
+  ;; 6.1.5.{a,b,g} -- policies not supported
+  ;; 6.1.5.{c-e} signature -- tested above
+  ;; 6.1.5.f critical extensions -- TODO
   )

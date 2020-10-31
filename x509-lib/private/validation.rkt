@@ -162,7 +162,7 @@
       ;; 4.1.2.6 Subject
       (when (or (is-CA?) (is-CRL-issuer?))
         (when (Name-empty? (get-subject))
-          (bad! 'subject:empty-when-CA/CRL-issuer)))
+          (bad! 'subject:empty-but-CA/CRL-issuer)))
       (when (Name-empty? (get-subject))
         (cond [(get-extension id-ce-subjectAltName)
                (lambda (ext)
@@ -187,8 +187,11 @@
         ;; 4.2.1.3 Key Usage
         (when (is-CA?)
           (unless (get-extension id-ce-keyUsage)
-            ;; FIXME: ???
-            (void) #;(bad/ca! 'key-usage:exists)))
+            ;; ??? "Conforming CAs MUST include this extension in certificates
+            ;; that contain public keys that are used to validate digital
+            ;; signatures on other public key certificates or CRLs." Are there
+            ;; other kinds of CAs?!
+            (void) #;(bad/ca! 'key-usage:missing-but-CA)))
         (void))
       ;; constraints on extensions when present
       (for ([ext (in-list (get-extensions))])
@@ -203,11 +206,11 @@
            (unless (not critical?) (bad/ca! 'subject-key-id:critical))]
           ;; 4.2.1.3 Key Usage
           [(equal? ext-id id-ce-keyUsage)
-           (unless (extension-critical? ext)
+           (unless critical?
              (bad/should! 'key-usage:not-critical))
            (define bits (extension-value ext))
            (when (memq 'keyCertSign bits)
-             (unless (is-CA?) (bad! 'key-usage:keyCertSign-when-not-CA)))
+             (unless (is-CA?) (bad! 'key-usage:keyCertSign-but-not-CA)))
            (unless (pair? bits) (bad! 'key-usage:empty))]
           ;; 4.2.1.4 Certificate Policies
           [(equal? ext-id id-ce-certificatePolicies)
@@ -218,7 +221,7 @@
              (bad! 'policies:critical-but-unsupported))]
           ;; 4.2.1.5 Policy Mappings
           [(equal? ext-id id-ce-policyMappings)
-           (when (extension-critical? ext)
+           (when critical?
              (bad! 'policy-mappings:critical-but-unsupported))]
           ;; 4.2.1.6 Subject Alternative Name
           [(equal? ext-id id-ce-subjectAltName)
@@ -226,17 +229,20 @@
            (void)]
           ;; 4.2.1.7 Issuer Alternative Name
           [(equal? ext-id id-ce-issuerAltName)
-           (unless (not critical?)
+           (when critical?
              (bad/should! 'issuer-alt-name:critical))]
           ;; 4.2.1.8 Subjct Directory Attributes
           [(equal? ext-id id-ce-subjectDirectoryAttributes)
-           (unless (not critical?)
+           (when critical?
              (bad/ca! 'subject-directory-attributes:critical))]
           ;; 4.2.1.9 Basic Constraints
           [(equal? ext-id id-ce-basicConstraints)
+           (when (memq 'keyCertSign (get-key-uses))
+             (unless critical?
+               (bad/ca! 'basic-constraints:not-critical-but-keyCertSign)))
            (when (hash-ref (extension-value ext) 'pathLenConstraint #f)
              (unless (and (is-CA?) (memq 'keyCertSign (get-key-uses)))
-               (bad! 'basic-constraints:pathLenConstraint-when-not-CA)))]
+               (bad! 'basic-constraints:pathLenConstraint-but-not-CA)))]
           ;; 4.2.1.10 Name Constraints
           [(equal? ext-id id-ce-nameConstraints)
            (define ncs (extension-value ext))
@@ -249,7 +255,8 @@
                                   (hash-has-key? t 'maximum)))
              (bad! 'name-constraints:non-default-min/max))
            ;; These are interpreted in chain validation.
-           (unless (is-CA?) (bad! 'name-constraints:present-when-not-CA))
+           (unless (is-CA?) (bad! 'name-constraints:present-but-not-CA))
+           ;; FIXME: ???
            #;(unless (not critical?) (bad! 'name-constraints:critical-but-unsupported))]
           ;; 4.2.1.11 Policy Constraints
           [(equal? ext-id id-ce-policyConstraints)
@@ -410,10 +417,11 @@
     (define/public (get-trust-anchor) (first chain))
 
     ;; validate-chain : Store/#f -> (Listof Symbol)
-    (define/public (validate-chain store)
+    (define/public (validate-chain store
+                                   #:valid-time [valid-time (current-seconds)])
       ;; Note: this does not verify that the end certificate is valid for
       ;; any particular *purpose*.
-      (define vi (new validation% (N N)))
+      (define vi (new validation% (N N) (from-time valid-time)))
       (define ta (get-trust-anchor))
       (unless (is-a? ta certificate%)
         (send vi add-error (cons 0 'trust-anchor:not-certificate)))
@@ -425,6 +433,12 @@
         (send cert check-link-in-chain index issuer vi (= index N)))
       (send vi get-errors))
 
+    (define/public (check who store #:valid-time [valid-time (current-seconds)])
+      (define errors (validate-chain store #:valid-time valid-time))
+      (when (pair? errors)
+        (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errors)
+                               (current-continuation-marks)
+                               errors))))
     ))
 
 ;; ============================================================
@@ -458,24 +472,30 @@
 (define (build-chains end-cert [other-untrusted-certs null]
                       #:store [store0 (current-x509-store)]
                       #:error-on-fail? [err? #t]
+                      #:valid-time [valid-time #f]
                       #:who [who 'build-chains])
   (define store (send store0 add #:untrusted-certs other-untrusted-certs))
+  (define (validate chain) (send chain validate-chain store #:valid-time valid-time))
   (define chains (build-candidate-chains who end-cert store err?))
-  (define ok-chains
-    (filter (lambda (chain) (null? (send chain validate-chain store))) chains))
+  (define errss (map validate chains))
+  (define ok-chains (for/list ([chain (in-list chains)] [errs (in-list errss)]
+                               #:when (null? errs))
+                      chain))
   (when (and err? (null? ok-chains))
-    (define errors (send (car chains) validate-chain store0))
-    (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errors)
+    (define errs (car (filter pair? errss)))
+    (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errs)
                            (current-continuation-marks)
-                           errors)))
+                           errs)))
   ok-chains)
 
 ;; build-chain : Certificate (Listof Certificate) [#:store x509Store]
 ;;            -> CertificateChain
 (define (build-chain end-cert [other-untrusted-certs null]
                      #:store [store (current-x509-store)]
+                     #:valid-time [valid-time #f]
                      #:who [who 'build-chain])
-  (car (build-chains end-cert other-untrusted-certs #:store store #:who who)))
+  (car (build-chains end-cert other-untrusted-certs
+                     #:store store #:valid-time valid-time #:who who)))
 
 ;; ============================================================
 
@@ -530,8 +550,13 @@
              [else ;; host => host must match exactly, with mailbox prefix
               (string-suffix-ci? name (string-append "@" pattern))])]
       [(dNSName) ;; name : IA5String
-       (or (string-ci=? name pattern)
-           (string-suffix-ci? name (string-append "." pattern)))]
+       (cond [(regexp-match? #rx"^[.]" pattern)
+              ;; This form does not appear in RFC 5280 for DNS constraints, but
+              ;; it does appear in multiple HOWTOs around the internet.
+              (string-suffix-ci? name pattern)]
+             [else
+              (or (string-ci=? name pattern)
+                  (string-suffix-ci? name (string-append "." pattern)))])]
       [(directoryName) ;; name : Name
        (Name-prefix? pattern name)]
       [(uniformResourceIdentifier) ;; name : IA5String
