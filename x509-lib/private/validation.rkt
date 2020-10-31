@@ -416,9 +416,8 @@
     (define/public (get-end-certificate) (last chain))
     (define/public (get-trust-anchor) (first chain))
 
-    ;; validate-chain : Store/#f -> (Listof Symbol)
-    (define/public (validate-chain store
-                                   #:valid-time [valid-time (current-seconds)])
+    ;; validate-chain : Store/#f Nat[Seconds] -> (Listof Symbol)
+    (define/public (validate-chain store [valid-time (current-seconds)])
       ;; Note: this does not verify that the end certificate is valid for
       ;; any particular *purpose*.
       (define vi (new validation% (N N) (from-time valid-time)))
@@ -433,8 +432,8 @@
         (send cert check-link-in-chain index issuer vi (= index N)))
       (send vi get-errors))
 
-    (define/public (check who store #:valid-time [valid-time (current-seconds)])
-      (define errors (validate-chain store #:valid-time valid-time))
+    (define/public (check who store [valid-time (current-seconds)])
+      (define errors (validate-chain store valid-time))
       (when (pair? errors)
         (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errors)
                                (current-continuation-marks)
@@ -487,15 +486,6 @@
                            (current-continuation-marks)
                            errs)))
   ok-chains)
-
-;; build-chain : Certificate (Listof Certificate) [#:store x509Store]
-;;            -> CertificateChain
-(define (build-chain end-cert [other-untrusted-certs null]
-                     #:store [store (current-x509-store)]
-                     #:valid-time [valid-time #f]
-                     #:who [who 'build-chain])
-  (car (build-chains end-cert other-untrusted-certs
-                     #:store store #:valid-time valid-time #:who who)))
 
 ;; ============================================================
 
@@ -641,20 +631,85 @@
           (hash-set h (send cert get-der) #t)))
       (new this% (trusted-h trusted-h*) (cert-h cert-h*)
            (stores (append stores new-stores))))
+
+    (define/public (add-trusted-from-pem-file pem-file)
+      (add #:trusted-certs (read-certs pem-file)))
+    (define/public (add-trusted-from-openssl-directory dir)
+      (add #:stores (list (new x509-lookup:openssl-trusted-directory% (dir dir)))))
+
+    ;; ----------------------------------------
+
+    ;; build-chain : Cert (Listof Cert) -> CertificateChain
+    (define/public (build-chain end-cert [other-untrusted-certs null]
+                                [valid-time (current-seconds)]
+                                #:who [who 'build-chain])
+      (car (build-chains end-cert other-untrusted-certs valid-time #:who who)))
+
+    ;; build-chains : Cert (Listof Cert) -> (Listof CertificateChain)
+    (define/public (build-chains end-cert [other-untrusted-certs null]
+                                 [valid-time (current-seconds)]
+                                 #:empty-ok? [empty-ok? #f]
+                                 #:who [who 'build-chains])
+      (define store* (add #:untrusted-certs other-untrusted-certs))
+      (define candidates (send store* build-candidate-chains end-cert))
+      (unless (or (pair? candidates) empty-ok?)
+        (raise-incomplete-chain-error who end-cert))
+      (check-chains candidates valid-time #:empty-ok? empty-ok? #:who who))
+
+    ;; build-candidate-chains : Cert -> (Listof (Listof Cert))
+    (define/public (build-candidate-chains end-cert)
+      (define (loop chains)
+        (cond [(pair? chains)
+               (define chains* (append* (map loop1 chains)))
+               (define-values (complete incomplete)
+                 (partition (lambda (chain) (trust? (car chain))) chains*))
+               (append complete (loop incomplete))]
+              [else null]))
+      (define (loop1 chain)
+        (define issuer-name (send (car chain) get-issuer))
+        (for/list ([issuer-cert (in-list (remove-duplicates (lookup-by-subject issuer-name)))]
+                   #:when (not (member issuer-cert chain)))
+          (cons issuer-cert chain)))
+      (loop (list (list end-cert))))
+
+    ;; check-chain : (Listof Cert) -> CertificateChain
+    (define/public (check-chain candidate [valid-time (current-seconds)]
+                                #:who [who 'check-chain])
+      (car (check-chains (list candidate) valid-time #:who who)))
+
+    ;; check-chains : (Listof (Listof Cert)) -> (Listof CertificateChain)
+    ;; Discards invalid chains, returns certificate-chain% objects for valid.
+    (define/public (check-chains candidates [valid-time (current-seconds)]
+                                 #:empty-ok? [empty-ok? #f]
+                                 #:who [who 'check-chains])
+      (define chains (for/list ([c (in-list candidates)]) (new certificate-chain% (chain c))))
+      (define errss (for/list ([chain (in-list chains)])
+                      (send chain validate-chain this valid-time)))
+      (define ok-chains (for/list ([chain (in-list chains)] [errs (in-list errss)]
+                                   #:when (null? errs))
+                          chain))
+      (unless (or (pair? ok-chains) empty-ok?)
+        (if (pair? candidates)
+            (raise-invalid-chain-error who (send (car chains) get-end-certificate) (car errss))
+            (error who "given empty list of candidates")))
+      ok-chains)
     ))
 
 (define empty-x509-store (new x509-store%))
 
-(define (x509-store:trusted-pem-file file)
-  (send empty-x509-store add #:trusted-certs (read-certs file)))
+(define (raise-invalid-chain-error who end-cert errs)
+  (let/ec escape
+    (define msg (format "~s: chain validation failed\n  errors: ~e" who errs))
+    (raise (exn:x509:chain msg (continuation-marks escape) errs))))
+(define (raise-incomplete-chain-error who end-cert)
+  (let/ec escape
+    (define msg (format "~s: failed to build complete chain\n  end certificate: ~e" who end-cert))
+    (raise (exn:x509:chain msg (continuation-marks escape) '(incomplete)))))
 
 ;; ----------------------------------------
 
-(define (x509-store:openssl-trusted-directory dir)
-  (new x509-openssl-trusted-directory-store% (dir dir)))
-
-(define x509-openssl-trusted-directory-store%
-  (class* object% (x509-store<%>)
+(define x509-lookup:openssl-trusted-directory%
+  (class* object% (x509-lookup<%>)
     (init-field dir)
     (super-new)
 
@@ -713,4 +768,4 @@
 
 ;; ----------------------------------------
 
-(define current-x509-store (make-parameter (new x509-store%)))
+(define current-x509-store (make-parameter empty-x509-store))

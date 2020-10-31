@@ -64,10 +64,16 @@
     get-subject
     ))
 
-(define x509-store<%>
+(define x509-lookup<%>
   (interface ()
     trust?            ;; certificate% -> Boolean
-    lookup-by-subject ;; DN -> (Listof certificate%)
+    lookup-by-subject ;; Name -> (Listof certificate%)
+    ))
+
+(define x509-store<%>
+  (interface (x509-lookup<%>)
+    add                       ;; <kw args> -> x509-store<%>
+    add-trusted-from-pem-file ;; Path/String -> x509-store<%>
     ))
 
 (define-logger x509)

@@ -116,8 +116,7 @@
   (define end-cert
     (or (for/first ([cert certs] #:when (not (send cert is-CA?))) cert)
         (car certs)))
-  (build-chain end-cert certs #:store (current-x509-store)
-               #:valid-time ((current-get-valid-time))))
+  (send (current-x509-store) build-chain end-cert certs ((current-get-valid-time))))
 
 (define current-get-valid-time (make-parameter current-seconds))
 
@@ -148,8 +147,7 @@
   (make-end "intca" "end" end-name end-dnsnames)
 
   (current-x509-store
-   (send empty-x509-store add
-         #:stores (list (x509-store:trusted-pem-file (cert-file "ca")))))
+   (send (current-x509-store) add-trusted-from-pem-file (cert-file "ca")))
 
   (test-case "intca"
     (check-pred certificate-chain?
