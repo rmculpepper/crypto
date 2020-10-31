@@ -22,8 +22,13 @@
   (define (to-string x) (if (path? x) (path->string x) x))
   (let ([args (flatten args)])
     (eprintf "$ openssl ~a\n" (string-join (map to-string args) " "))
-    (void (or (apply system* (find-executable-path "openssl") args)
-              (error 'openssl "command failed")))))
+    (define out (open-output-string))
+    (define ok? (parameterize ((current-output-port out)
+                               (current-error-port out))
+                  (apply system* (find-executable-path "openssl") args)))
+    (unless ok?
+      (eprintf "~a\n" (get-output-string out))
+      (error 'openssl "command failed"))))
 (define (openssl-req . args) (apply openssl "req" args))
 (define (openssl-x509 . args) (apply openssl "x509" args))
 (define (openssl-genrsa . args) (apply openssl "genrsa" args))
@@ -50,8 +55,8 @@
                "-subj" (dn->string dn)))
 
 (define (make-int-ca ca-name name dn
-                     #:permit-name [permit-name #f]
-                     #:exclude-name [exclude-name #f])
+                     #:permit-names [permit-names null]
+                     #:exclude-names [exclude-names null])
   (unless (file-exists? (key-file name))
     (openssl-genrsa "-out" (key-file name) "2048"))
   (with-output-to-file (ext-file name) #:exists 'replace
@@ -60,15 +65,13 @@
       (printf "basicConstraints=critical,CA:TRUE\n")
       (when int-ca:keyCertSign?
         (printf "keyUsage=critical,keyCertSign\n"))
-      (when (or permit-name exclude-name)
-        (printf "nameConstraints=critical,~a\n"
-                (string-join
-                 (filter string?
-                         (list (and permit-name
-                                    (format "permitted;~a" permit-name))
-                               (and exclude-name
-                                    (format "excluded;~a" exclude-name))))
-                 ",")))))
+      (when (or (pair? permit-names) (pair? exclude-names))
+        (printf "nameConstraints=critical,@nc_section\n")
+        (printf "[nc_section]\n")
+        (for ([i (in-naturals 1)] [permit (in-list permit-names)])
+          (printf "permitted;~a.~a=~a\n" (car permit) i (cadr permit)))
+        (for ([i (in-naturals 1)] [exclude (in-list exclude-names)])
+          (printf "excluded;~a.~a=~a\n" (car exclude) i (cadr exclude))))))
   (openssl-req "-new" "-key" (key-file name) "-out" (csr-file name)
                "-subj" (dn->string dn))
   (openssl-x509 "-req" "-in" (csr-file name) (CA-args ca-name)
@@ -137,8 +140,8 @@
 
   (define intca-name '("O=testing" "CN=testing-int-ca"))
   (make-int-ca "ca" "intca" intca-name
-               #:permit-name "DNS:.test.com"
-               #:exclude-name "DNS:special.test.com")
+               #:permit-names '((DNS "test.com"))
+               #:exclude-names '((DNS "special.test.com")))
 
   (define end-name '("C=US" "ST=MA" "L=Boston" "CN=end.test.com"))
   (define end-dnsnames '("end.test.com" "alt.test.com"))
