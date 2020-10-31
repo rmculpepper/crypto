@@ -442,53 +442,6 @@
 
 ;; ============================================================
 
-;; build-candidate-chains : Certificate x509Store Boolean
-;;                       -> (Listof CertificateChain)
-(define (build-candidate-chains who end-cert store error-on-fail?)
-  (define (loop chains error-on-fail?)
-    (define chains* (append* (map loop1 chains)))
-    (cond [(null? chains*)
-           (when error-on-fail?
-             (raise (exn:x509:chain (format "~s: failed to build complete chain" who)
-                                    (current-continuation-marks)
-                                    '(incomplete))))
-           null]
-          [else
-           (define-values (complete incomplete)
-             (partition (lambda (chain) (send store trust? (car chain))) chains*))
-           (append (map (lambda (chain) (new certificate-chain% (chain chain))) complete)
-                   (loop incomplete (and error-on-fail? (null? complete))))]))
-  (define (loop1 chain)
-    (define issuer-certs
-      (filter (lambda (cert) (not (member cert chain)))
-              (remove-duplicates ;; FIXME
-               (send store lookup-by-subject (send (car chain) get-issuer)))))
-    (map (lambda (c) (cons c chain)) issuer-certs))
-  (loop (list (list end-cert)) error-on-fail?))
-
-;; build-chains : Certificate (Listof Certificate) [#:store x509Store]
-;;             -> (Listof CertificateChain)
-(define (build-chains end-cert [other-untrusted-certs null]
-                      #:store [store0 (current-x509-store)]
-                      #:error-on-fail? [err? #t]
-                      #:valid-time [valid-time #f]
-                      #:who [who 'build-chains])
-  (define store (send store0 add #:untrusted-certs other-untrusted-certs))
-  (define (validate chain) (send chain validate-chain store #:valid-time valid-time))
-  (define chains (build-candidate-chains who end-cert store err?))
-  (define errss (map validate chains))
-  (define ok-chains (for/list ([chain (in-list chains)] [errs (in-list errss)]
-                               #:when (null? errs))
-                      chain))
-  (when (and err? (null? ok-chains))
-    (define errs (car (filter pair? errss)))
-    (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errs)
-                           (current-continuation-marks)
-                           errs)))
-  ok-chains)
-
-;; ============================================================
-
 ;; ParsedNameConstraints = (Listof NameConstraintLayer)
 ;; NameConstraintLayer = (nclayer (U 'permit 'exclude) Nat (Listof GeneralName))
 
@@ -765,7 +718,3 @@
   (define (NAME-hash dn-der)
     (define dn (d2i_X509_NAME dn-der (bytes-length dn-der)))
     (begin0 (X509_NAME_hash dn) (X509_NAME_free dn))))
-
-;; ----------------------------------------
-
-(define current-x509-store (make-parameter empty-x509-store))

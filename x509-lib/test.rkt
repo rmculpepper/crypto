@@ -118,6 +118,7 @@
         (car certs)))
   (send (current-x509-store) build-chain end-cert certs ((current-get-valid-time))))
 
+(define current-x509-store (make-parameter empty-x509-store))
 (define current-get-valid-time (make-parameter current-seconds))
 
 ;; XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
