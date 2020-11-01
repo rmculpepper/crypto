@@ -100,6 +100,9 @@
     [build-chains
      (->*m [certificate?] [(listof certificate?) time/c #:empty-ok? boolean?]
            (listof certificate-chain?))]
+    [pem-file->chain
+     (->*m [path-string?] [time/c]
+           certificate-chain?)]
     ))
 
 (define -certificate<%>

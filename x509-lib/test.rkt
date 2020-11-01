@@ -108,14 +108,12 @@
 
 ;; read-chain : Path ... -> certificate-chain%
 (define (read-chain . files)
-  (define certs (append* (map pem-file->certificates files)))
-  ;; Build chain for
-  ;; - first non-CA cert in the list, if one exists
-  ;; - the first cert, otherwise
-  (define end-cert
-    (or (for/first ([cert certs] #:when (not (send cert is-CA?))) cert)
-        (car certs)))
-  (send (current-x509-store) build-chain end-cert certs ((current-get-valid-time))))
+  (cond [(= (length files) 1)
+         (send (current-x509-store) pem-file->chain (car files) ((current-get-valid-time)))]
+        [else
+         (define certs (append* (map pem-file->certificates files)))
+         (define end-cert (car certs))
+         (send (current-x509-store) build-chain end-cert certs ((current-get-valid-time)))]))
 
 (define current-x509-store (make-parameter (empty-certificate-store)))
 (define current-get-valid-time (make-parameter current-seconds))
@@ -208,10 +206,10 @@
   (test-case "name constraints"
     (make-end "intca" "cz-end" '("C=CZ" "L=Praha" "CN=test.cz") '("test.cz"))
     (check-exn (chain-exn? '((2 . name-constraints:subjectAltName-rejected)))
-               (lambda () (read-chain (cert-file "intca") (cert-file "cz-end"))))
+               (lambda () (read-chain (cert-file "cz-end") (cert-file "intca"))))
     (make-end "intca" "special-end" '("CN=special.test.com") '("special.test.com"))
     (check-exn (chain-exn? '((2 . name-constraints:subjectAltName-rejected)))
-               (lambda () (read-chain (cert-file "intca") (cert-file "special-end")))))
+               (lambda () (read-chain (cert-file "special-end") (cert-file "intca")))))
   ;; 6.1.3.{d-f} policies -- not unsupported
   ;; 6.1.4.{a-j} nothing to do
   ;; 6.1.4.k intermediate is CA
