@@ -22,7 +22,7 @@
 ;; ============================================================
 
 (define certificate%
-  (class* certificate-data% (certificate<%>)
+  (class* certificate-data% (-certificate<%>)
     (init [check-who 'certificate])
     (inherit get-der
              get-cert-signature-alg

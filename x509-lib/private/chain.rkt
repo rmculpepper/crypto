@@ -147,7 +147,7 @@
 ;;   - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
 
 (define certificate-chain%
-  (class* object% (certificate-chain<%>)
+  (class* object% (-certificate-chain<%>)
     ;; chain : (list trust-anchor<%> certificate% ...+)
     ;; Note: In 6.1, trust anchor is not considered part of chain.
     (init-field chain ok-start ok-end)

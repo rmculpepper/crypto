@@ -31,7 +31,7 @@
 (define (empty-certificate-store) (new certificate-store%))
 
 (define certificate-store%
-  (class* object% (certificate-store<%>)
+  (class* object% (-certificate-store<%>)
     (init-field [trusted-h '#hash()]
                 [cert-h    '#hash()]
                 [stores null])

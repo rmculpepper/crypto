@@ -1,6 +1,11 @@
 #lang racket/base
-(require racket/class)
+(require racket/contract
+         racket/class)
 (provide (all-defined-out))
+
+(define (certificate? v) (is-a? v -certificate<%>))
+(define (certificate-chain? v) (is-a? v -certificate-chain<%>))
+(define (certificate-store? v) (is-a? v -certificate-store<%>))
 
 (define certificate-data<%>
   (interface*
@@ -46,6 +51,7 @@
 
 (define certificate<%>
   (interface (certificate-data<%>)
+    get-pk
     ))
 
 (define certificate-chain<%>
@@ -63,23 +69,55 @@
     get-subject
     ))
 
+(define Name/c any/c) ;; FIXME: contract from asn1?
+
 (define x509-lookup<%>
   (interface ()
-    trust?            ;; Certificate -> Boolean
-    lookup-by-subject ;; Name -> (Listof Certificate)
+    [trust?            (->m certificate? boolean?)]
+    [lookup-by-subject (->m Name/c (listof certificate?))]
     ))
+
+(define time/c exact-integer?)
+(define candidate-chain/c (non-empty-listof certificate?))
 
 (define certificate-store<%>
   (interface (x509-lookup<%>)
-    add                       ;; <kw args> -> Store
-    add-trusted-from-pem-file ;; Path/String -> Store
+    [add
+     (->*m []
+           [#:trusted-certs (listof certificate?)
+            #:untrusted-certs (listof certificate?)]
+           certificate-store?)]
+    [add-trusted-from-pem-file
+     (->m path-string? certificate-store?)]
+    [add-trusted-from-openssl-directory
+     (->m path-string? certificate-store?)]
+
+    [build-chain
+     (->*m [certificate?]
+           [(listof certificate?)
+            time/c]
+           certificate-chain?)]
+    [build-chains
+     (->*m [certificate?] [(listof certificate?) time/c #:empty-ok? boolean?]
+           (listof certificate-chain?))]
     ))
 
-(define-logger x509)
-
-(define (certificate? v) (is-a? v certificate<%>))
-(define (certificate-chain? v) (is-a? v certificate-chain<%>))
-(define (certificate-store? v) (is-a? v certificate-store<%>))
+(define -certificate<%>
+  (interface (certificate<%>)))
+(define -certificate-chain<%>
+  (interface (certificate-chain<%>)))
+(define -certificate-store<%>
+  (interface (certificate-store<%>)
+    [build-candidate-chains
+     (->m certificate?
+          (listof candidate-chain/c))]
+    [check-chain
+     (->*m [candidate-chain/c] [time/c]
+           certificate-chain?)]
+    [check-chains
+     (->*m [(listof candidate-chain/c)] [time/c #:empty-ok? boolean?]
+           (listof certificate-chain?))]
+    ))
 
 (struct exn:x509 exn:fail () #:transparent)
 (struct exn:x509:certificate exn:x509 (errors) #:transparent)
@@ -87,3 +125,5 @@
 
 ;; An ErrorList is a list of "error description" values.
 ;; The empty list means no errors were detected.
+
+(define-logger x509)
