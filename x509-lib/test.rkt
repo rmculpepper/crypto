@@ -6,7 +6,8 @@
          racket/class
          racket/pretty
          "private/x509/interfaces.rkt"
-         "private/x509/validation.rkt")
+         "private/x509/validation.rkt"
+         "private/x509/chain.rkt")
 (provide (all-defined-out))
 
 ;; Testing setup:

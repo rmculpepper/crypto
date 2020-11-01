@@ -78,3 +78,9 @@
 
 (define-logger x509)
 
+(struct exn:x509 exn:fail () #:transparent)
+(struct exn:x509:certificate exn:x509 (errors) #:transparent)
+(struct exn:x509:chain exn:x509 (errors) #:transparent)
+
+;; An ErrorList is a list of "error description" values.
+;; The empty list means no errors were detected.
