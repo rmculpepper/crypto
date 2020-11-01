@@ -50,11 +50,14 @@
 (struct exn:x509:certificate exn:x509 (errors) #:transparent)
 (struct exn:x509:chain exn:x509 (errors) #:transparent)
 
+;; An ErrorList is a list of "error description" values.
+;; The empty list means no errors were detected.
+
 ;; ============================================================
 
 (define certificate%
   (class* certificate-data% (certificate<%>)
-    (init [check? #t])
+    (init [check-who 'certificate])
     (inherit get-der
              get-cert-signature-alg
              get-cert-signature-bytes
@@ -86,13 +89,11 @@
 
     ;; ----------------------------------------
 
-    (when check?
-      (define errors (box null))
-      (check errors)
-      (unless (null? (unbox errors))
-        (let ([errors (unbox errors)])
+    (when check-who
+      (let ([errors (check)])
+        (unless (null? errors)
           (raise (exn:x509:certificate
-                  (format "certificate: invalid X509 certificate\n  errors: ~s" errors)
+                  (format "~s: invalid X509 certificate\n  errors: ~s" check-who errors)
                   (current-continuation-marks)
                   errors)))))
 
@@ -111,18 +112,18 @@
 
     (define/public (get-pk) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
 
-    ;; check : (Boxof (Listof Symbol)) -> Void
+    ;; check : -> ErrorList
     ;; Checks that the certificate is well-formed, without regard for other
     ;; certificates in the chain or any intended purpose. In particular:
     ;; - The signature is not verified!
     ;; - The validity period is not checked.
     ;; - The name, allowed uses, etc are not checked against an intended purpose.
-    ;; Errors are pushed onto the contents of errors-box.
     ;; An error symbol should read as a true statement about the certificate
     ;; that points out a fault, rather than reading as a desired property that
     ;; the certificate fails to hold.
-    (define/public (check errors-box)
-      (define (bad! x)        (set-box! errors-box (cons x (unbox errors-box))))
+    (define/public (check)
+      (define errors null) ;; ErrorList, mutated
+      (define (bad! x)        (set! errors (cons x errors)))
       (define (bad/ca! x)     (when #t (bad! x)))
       (define (bad/should! x) (when #f (bad! x)))
       ;; 4.1.1.2
@@ -278,7 +279,7 @@
           ;; Other: ignore unless critical
           [else
            (unless (not critical?) (bad! 'unknown-extension:critical-but-unsupported))]))
-      (void))
+      errors)
 
     (define/public (ok-key-usage? uses)
       (define key-uses (get-key-uses))
@@ -287,6 +288,7 @@
     ;; ============================================================
 
     ;; check-link-in-chain : Nat Certificate Validation Boolean -> Void
+    ;; Pushes errors to the given validation% object.
     (define/public (check-link-in-chain index issuer vi final-in-path?)
       (define (add-error what) (send vi add-error (cons index what)))
       ;; 6.1.3
@@ -349,6 +351,8 @@
         (void 'POLICIES-UNSUPPORTED))
       (void))
 
+    ;; check-valid-period : Nat Validation Seconds Seconds -> Void
+    ;; Pushes errors to the given validation% object.
     (define/public (check-valid-period index vi from-time to-time)
       ;; 6.1.3 (a)(2) currently valid
       (match-define (list ok-start ok-end) (get-validity-seconds))
@@ -362,7 +366,7 @@
 ;; A CandidateChain is (list TrustAnchor Cert ...),
 ;; where TrustAnchor is currently always also a Cert.
 
-;; check-candidate-chain : CandidateChain -> (values CertificateChain/#f List)
+;; check-candidate-chain : CandidateChain -> (values CertificateChain/#f ErrorList)
 ;; Checks the properties listed under certificate-chain%. Also checks that the
 ;; chain's validity period includes the given valid-time argument.
 (define (check-candidate-chain certs valid-time)
@@ -396,7 +400,8 @@
                 [name-constraints null]
                 [explicit-policy (add1 N)]
                 [policy-mapping (add1 N)]
-                [inhibit-anypolicy (add1 N)])
+                [inhibit-anypolicy (add1 N)]
+                [errors null]) ;; ErrorList, mutated
     (super-new)
 
     (define/public (decrement-counters) ;; 6.1.4 (b)
@@ -414,7 +419,6 @@
     (define/public (get-from-time) from-time)
     (define/public (get-to-time) to-time)
 
-    (define errors null)
     (define/public (get-errors) errors)
     (define/public (add-error what) (set! errors (cons what errors)))
 
@@ -485,6 +489,7 @@
     (define/public (trusted? store [from-time (current-seconds)] [to-time from-time])
       (null? (check-trust store from-time to-time)))
 
+    ;; check-trust : Store Seconds Seconds -> ErrorList
     (define/public (check-trust store [from-time (current-seconds)] [to-time from-time])
       (append (cond [(send store trust? (get-trust-anchor)) '()]
                     [else '((0 . trust-anchor:not-trusted))])
@@ -494,30 +499,6 @@
                                     (from-time from-time) (to-time to-time))])
                        (for ([cert (in-list chain)] [index (in-naturals 1)])
                          (send cert check-valid-period index vi from-time to-time)))])))
-
-    #|
-    ;; validate-chain : Store/#f Nat[Seconds] -> (Listof Symbol)
-    (define/public (validate-chain store [valid-time (current-seconds)])
-      ;; Note: this does not verify that the end certificate is valid for
-      ;; any particular *purpose*.
-      (define vi (new validation% (N N) (from-time valid-time)))
-      (define ta (get-trust-anchor))
-      (unless (is-a? ta certificate%)
-        (send vi add-error (cons 0 'trust-anchor:not-certificate)))
-      (unless (and store (send store trust? ta))
-        (send vi add-error (cons 0 'trust-anchor:not-trusted)))
-      (for ([issuer (in-list chain)]
-            [cert (in-list (cdr chain))]
-            [index (in-naturals 1)])
-        (send cert check-link-in-chain index issuer vi (= index N)))
-      (send vi get-errors))
-    (define/public (check who store [valid-time (current-seconds)])
-      (define errors (validate-chain store valid-time))
-      (when (pair? errors)
-        (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errors)
-                               (current-continuation-marks)
-                               errors))))
-    |#
     ))
 
 ;; ============================================================
@@ -708,7 +689,7 @@
     ;; check-chain : (Listof Cert) -> CertificateChain
     (define/public (check-chain candidate [valid-time (current-seconds)]
                                 #:who [who 'check-chain])
-      (car (check-chains (list candidate) valid-time #:who who)))
+      (car (check-chains (list candidate) valid-time #:empty-ok? #f #:who who)))
 
     ;; check-chains : (Listof (Listof Cert)) -> (Listof CertificateChain)
     ;; Discards invalid chains, returns certificate-chain% objects for valid.
