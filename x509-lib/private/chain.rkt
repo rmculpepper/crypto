@@ -8,10 +8,10 @@
          crypto/pem
          asn1
          "interfaces.rkt"
-         "x509-asn1.rkt"
-         "cert-info.rkt"
+         "asn1.rkt"
          "stringprep.rkt"
-         "validation.rkt"
+         "cert-data.rkt"
+         "cert.rkt"
          (only-in crypto/private/common/asn1 relation-ref))
 (provide (all-defined-out))
 
