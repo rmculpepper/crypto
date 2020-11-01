@@ -7,7 +7,8 @@
          racket/pretty
          "private/x509/interfaces.rkt"
          "private/x509/cert.rkt"
-         "private/x509/chain.rkt")
+         "private/x509/chain.rkt"
+         "private/x509/store.rkt")
 (provide (all-defined-out))
 
 ;; Testing setup:

@@ -4,13 +4,10 @@
          racket/list
          racket/string
          racket/date
-         crypto
-         crypto/pem
          asn1
          "interfaces.rkt"
          "asn1.rkt"
-         "stringprep.rkt"
-         (only-in crypto/private/common/asn1 relation-ref))
+         "stringprep.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================
