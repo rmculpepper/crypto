@@ -13,20 +13,25 @@
 
 ;; ============================================================
 
-;; read-pem-certs : InputPort -> (Listof Bytes)
-(define (read-pem-certs in)
-  (for/list ([v (in-port (lambda (in) (read-pem in #:only '(#"CERTIFICATE"))) in)])
-    (cdr v)))
+;; read-pem-certificates : InputPort -> (Listof Certificate)
+;; Reads up to `count` certificates (or until end of port); does not close.
+(define (read-pem-certificates in #:count [count +inf.0] #:who [who 'read-pem-certificates])
+  (define (read-pem-cert in) (read-pem in #:only '(#"CERTIFICATE") #:who who))
+  (for/list ([v (in-port read-pem-cert in)] [i (in-range count)])
+    (define der (cdr v))
+    (bytes->certificate der #:who who)))
 
-;; read-certs : Path -> (Listof certificate%)
-(define (read-certs file)
-  (define ders (call-with-input-file file read-pem-certs))
-  (map (lambda (der) (new certificate% (der der))) ders))
+;; pem-file->certificates : PathString -> (Listof Certificate)
+(define (pem-file->certificates path #:count [count +inf.0] #:who [who 'pem-file->certificates])
+  (call-with-input-file* path
+    (lambda (in) (read-pem-certificates in #:count count #:who who))))
 
 ;; ============================================================
 
-(define x509-store%
-  (class* object% (x509-store<%>)
+(define (empty-certificate-store) (new certificate-store%))
+
+(define certificate-store%
+  (class* object% (certificate-store<%>)
     (init-field [trusted-h '#hash()]
                 [cert-h    '#hash()]
                 [stores null])
@@ -60,7 +65,7 @@
            (stores (append stores new-stores))))
 
     (define/public (add-trusted-from-pem-file pem-file)
-      (add #:trusted-certs (read-certs pem-file)))
+      (add #:trusted-certs (pem-file->certificates pem-file)))
     (define/public (add-trusted-from-openssl-directory dir)
       (add #:stores (list (new x509-lookup:openssl-trusted-directory% (dir dir)))))
 
@@ -125,8 +130,6 @@
       trusted-chains)
     ))
 
-(define empty-x509-store (new x509-store%))
-
 (define (raise-invalid-chain-error who end-cert errs)
   (let/ec escape
     (define msg (format "~s: chain validation failed\n  errors: ~e" who errs))
@@ -183,8 +186,8 @@
     ;; FIXME: cache reads?
 
     (define/private (read-cert-from-file file)
-      (match (call-with-input-file* file read-pem-certs)
-        [(list der) (new certificate% (der der))]
+      (match (pem-file->certificates file)
+        [(list cert) cert]
         [_ (begin0 #f (log-x509-error "bad certificate PEM file: ~e" file))]))
     ))
 

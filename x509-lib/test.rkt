@@ -5,10 +5,7 @@
          crypto crypto/all
          racket/class
          racket/pretty
-         "private/x509/interfaces.rkt"
-         "private/x509/cert.rkt"
-         "private/x509/chain.rkt"
-         "private/x509/store.rkt")
+         "x509.rkt")
 (provide (all-defined-out))
 
 ;; Testing setup:
@@ -111,7 +108,7 @@
 
 ;; read-chain : Path ... -> certificate-chain%
 (define (read-chain . files)
-  (define certs (append* (map read-certs files)))
+  (define certs (append* (map pem-file->certificates files)))
   ;; Build chain for
   ;; - first non-CA cert in the list, if one exists
   ;; - the first cert, otherwise
@@ -120,7 +117,7 @@
         (car certs)))
   (send (current-x509-store) build-chain end-cert certs ((current-get-valid-time))))
 
-(define current-x509-store (make-parameter empty-x509-store))
+(define current-x509-store (make-parameter (empty-certificate-store)))
 (define current-get-valid-time (make-parameter current-seconds))
 
 ;; XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -130,9 +127,6 @@
        (for/and ([err errors])
          (member err (exn:x509:chain-errors v)))
        #t))
-
-(define (certificate? x) (is-a? x certificate<%>))
-(define (certificate-chain? x) (is-a? x certificate-chain<%>))
 
 (module+ main
   (require rackunit)
@@ -205,7 +199,8 @@
   ;; 6.1.3.a.4 issuer matches
   (test-case "issuer mismatch"
     ;; build-chains uses issuer name to build, so construct bad chain manually
-    (define certs (append (read-certs (cert-file "ca")) (read-certs (cert-file "end"))))
+    (define certs (append (pem-file->certificates (cert-file "ca"))
+                          (pem-file->certificates (cert-file "end"))))
     (check-exn (chain-exn? '((1 . issuer-name-mismatch)))
                (lambda ()
                  (send (current-x509-store) check-chain certs))))
@@ -223,10 +218,9 @@
   (test-case "intermediate is CA"
     (make-end "ca" "intca-as-end" intca-name '("intca.org")
               #:key-file (key-file "intca"))
-    (define certs (append (read-certs (cert-file "ca"))
-                          (read-certs (cert-file "intca-as-end"))
-                          (read-certs (cert-file "end"))))
-    (define-values (_c errs) (check-candidate-chain certs (current-seconds)))
+    (define certs (append (pem-file->certificates (cert-file "ca"))
+                          (pem-file->certificates (cert-file "intca-as-end"))
+                          (pem-file->certificates (cert-file "end"))))
     (check-exn (chain-exn? '((1 . intermediate:not-CA)
                              (1 . intermediate:missing-keyCertSign)))
                (lambda ()

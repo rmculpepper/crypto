@@ -423,3 +423,8 @@
   (and (<= suffixlen slen)
        (string-ci=? (substring s (- slen suffixlen))
                     suffix)))
+
+;; ============================================================
+
+(define (bytes->certificate der #:who [who 'bytes->certificate])
+  (new certificate% (der (bytes->immutable-bytes der)) (check-who who)))

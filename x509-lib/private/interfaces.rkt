@@ -2,7 +2,6 @@
 (require racket/class)
 (provide (all-defined-out))
 
-
 (define certificate-data<%>
   (interface*
    ()
@@ -66,17 +65,21 @@
 
 (define x509-lookup<%>
   (interface ()
-    trust?            ;; certificate% -> Boolean
-    lookup-by-subject ;; Name -> (Listof certificate%)
+    trust?            ;; Certificate -> Boolean
+    lookup-by-subject ;; Name -> (Listof Certificate)
     ))
 
-(define x509-store<%>
+(define certificate-store<%>
   (interface (x509-lookup<%>)
-    add                       ;; <kw args> -> x509-store<%>
-    add-trusted-from-pem-file ;; Path/String -> x509-store<%>
+    add                       ;; <kw args> -> Store
+    add-trusted-from-pem-file ;; Path/String -> Store
     ))
 
 (define-logger x509)
+
+(define (certificate? v) (is-a? v certificate<%>))
+(define (certificate-chain? v) (is-a? v certificate-chain<%>))
+(define (certificate-store? v) (is-a? v certificate-store<%>))
 
 (struct exn:x509 exn:fail () #:transparent)
 (struct exn:x509:certificate exn:x509 (errors) #:transparent)
