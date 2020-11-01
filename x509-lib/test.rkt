@@ -206,8 +206,7 @@
     (define certs (append (read-certs (cert-file "ca")) (read-certs (cert-file "end"))))
     (check-exn (chain-exn? '((1 . issuer-name-mismatch)))
                (lambda ()
-                 (define chain (new certificate-chain% (chain certs)))
-                 (send chain check 'test (current-x509-store)))))
+                 (send (current-x509-store) check-chain certs))))
   ;; 6.1.3.{b,c} name constraints
   (test-case "name constraints"
     (make-end "intca" "cz-end" '("C=CZ" "L=Praha" "CN=test.cz") '("test.cz"))
@@ -225,11 +224,11 @@
     (define certs (append (read-certs (cert-file "ca"))
                           (read-certs (cert-file "intca-as-end"))
                           (read-certs (cert-file "end"))))
+    (define-values (_c errs) (check-candidate-chain certs (current-seconds)))
     (check-exn (chain-exn? '((1 . intermediate:not-CA)
                              (1 . intermediate:missing-keyCertSign)))
                (lambda ()
-                 (define chain (new certificate-chain% (chain certs)))
-                 (send chain check 'test (current-x509-store)))))
+                 (send (current-x509-store) check-chain certs))))
   ;; 6.1.4.m intermediate: path length constraint -- TODO
   ;; 6.1.4.n intermediate: keyCertSign -- see 6.1.4.k
   ;; 6.1.5.{a,b,g} -- policies not supported

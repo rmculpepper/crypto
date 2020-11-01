@@ -280,10 +280,6 @@
            (unless (not critical?) (bad! 'unknown-extension:critical-but-unsupported))]))
       (void))
 
-    (define/public (ok-validity? [from (current-seconds)] [to from])
-      (match-define (list ok-start ok-end) (get-validity-seconds))
-      (<= ok-start from to ok-end))
-
     (define/public (ok-key-usage? uses)
       (define key-uses (get-key-uses))
       (and (for/and ([use (in-list uses)]) (memq use key-uses)) #t))
@@ -298,9 +294,8 @@
         ;; 6.1.3 (a)(1) verify signature
         (unless (ok-signature? (send issuer get-pk))
           (add-error 'bad-signature))
-        ;; 6.1.3 (a)(2) currently valid
-        (unless (ok-validity? (send vi get-from-time) (send vi get-to-time))
-          (add-error 'bad-validity-period))
+        ;; 6.1.3 (a)(2) currently valid; checked in check-valid-period
+        (void)
         ;; 6.1.3 (a)(3) (not revoked)
         (void 'CRL-UNSUPPORTED)
         ;; 6.1.3 (a)(4) issuer
@@ -354,18 +349,50 @@
         (void 'POLICIES-UNSUPPORTED))
       (void))
 
+    (define/public (check-valid-period index vi from-time to-time)
+      ;; 6.1.3 (a)(2) currently valid
+      (match-define (list ok-start ok-end) (get-validity-seconds))
+      (send vi intersect-valid-period ok-start ok-end)
+      (unless (<= ok-start from-time to-time ok-end)
+        (send vi add-error (cons index 'bad-validity-period))))
     ))
 
-;; ----------------------------------------
+;; ============================================================
 
+;; A CandidateChain is (list TrustAnchor Cert ...),
+;; where TrustAnchor is currently always also a Cert.
+
+;; check-candidate-chain : CandidateChain -> (values CertificateChain/#f List)
+;; Checks the properties listed under certificate-chain%. Also checks that the
+;; chain's validity period includes the given valid-time argument.
+(define (check-candidate-chain certs valid-time)
+  (when (null? certs) (error 'get-chain-errors "empty candidate chain"))
+  (define N (sub1 (length certs))) ;; don't count trust anchor
+  (define vi (new validation% (N N)))
+  (send (car certs) check-valid-period 0 vi valid-time valid-time)
+  (for ([issuer (in-list certs)]
+        [cert (in-list (cdr certs))]
+        [index (in-naturals 1)])
+    (send cert check-valid-period index vi valid-time valid-time)
+    (send cert check-link-in-chain index issuer vi (= index N)))
+  (define ok-start (send vi get-from-time))
+  (define ok-end (send vi get-to-time))
+  (define errs (send vi get-errors))
+  (cond [(null? errs)
+         (define chain
+           (new certificate-chain% (chain certs)
+                (ok-start ok-start) (ok-end ok-end)))
+         (values chain null)]
+        [else
+         (values #f errs)]))
+
+;; validation% represents (mutable) state during chain validation
 (define validation%
   (class object%
     (init N)
     (init-field [max-path-length N]
-                [from-time (current-seconds)]
-                [to-time from-time]
-                [init-policies null]
-                ;; state variables
+                [from-time #f]
+                [to-time #f]
                 [name-constraints null]
                 [explicit-policy (add1 N)]
                 [policy-mapping (add1 N)]
@@ -379,6 +406,10 @@
       (unless (zero? explicit-policy) (set! explicit-policy (sub1 explicit-policy)))
       (unless (zero? policy-mapping) (set! policy-mapping (sub1 policy-mapping)))
       (unless (zero? inhibit-anypolicy) (set! inhibit-anypolicy (sub1 inhibit-anypolicy))))
+
+    (define/public (intersect-valid-period from to)
+      (set! from-time (if from-time (max from from-time) from))
+      (set! to-time (if to-time (min to to-time) to)))
 
     (define/public (get-from-time) from-time)
     (define/public (get-to-time) to-time)
@@ -399,11 +430,46 @@
 
 ;; ============================================================
 
+;; A CertificateChain is an instance of certificate-chain%, containing a
+;; non-empty list of certs of the form (list trust-anchor ... end-cert).
+
+;; A certificate chain is "chain-valid" if it satisfies all of the following:
+;; - each cert issued the next, and signatures are valid
+;; - the intersection of each cert's validity period is not empty
+;;   (the intersection of the validity periods is stored)
+;; - name constraints, path length constraints, etc are checked
+;; Beware the following limitations of "chain-validity":
+;; - It DOES NOT check that the trust anchor is actually trusted.
+;; - It DOES NOT check that the end-certificate is suitable for any particular purpose.
+
+;; A certificate chain is "trusted" given a x509-store and a time interval if it
+;; satisfies all of the following:
+;; - it is "chain-valid"
+;; - the chain's validity period includes the given time interval
+;; - the chain's trust anchor is trusted by the given x509-store
+
+;; A certificate chain is "valid for a purpose" if
+;; - the chain is "trusted", and
+;; - the chain's end-certificate is suitable for the given purpose
+
+;; A certificate is "suitable for a purpose of identifying a TLS server" if
+;; - the cert's subjectAlternativeName contains a dNSName pattern that matches
+;;   the TLS server's fully-qualified host name
+;; - OPTIONAL: ... sufficient security level of algorithms ...
+;; - OPTIONAL: ... validity period < some limit (825 days) ...
+;; - If KeyUsage is present, must contain at least one of
+;;     digitalSignature, keyEncipherment, keyAgreement.
+;;   (IIUC (??), cannot be more precise w/o knowing TLS ciphersuite negotiated.)
+;; - If ExtendedKeyUsage is present, then it must contain id-kp-serverAuth.
+;; - References:
+;;   - https://tools.ietf.org/html/rfc5246#section-7.4.2
+;;   - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
+
 (define certificate-chain%
   (class* object% (certificate-chain<%>)
     ;; chain : (list trust-anchor<%> certificate% ...+)
     ;; Note: In 6.1, trust anchor is not considered part of chain.
-    (init-field chain)
+    (init-field chain ok-start ok-end)
     (super-new)
 
     (define/public (custom-write out mode)
@@ -416,6 +482,20 @@
     (define/public (get-end-certificate) (last chain))
     (define/public (get-trust-anchor) (first chain))
 
+    (define/public (trusted? store [from-time (current-seconds)] [to-time from-time])
+      (null? (check-trust store from-time to-time)))
+
+    (define/public (check-trust store [from-time (current-seconds)] [to-time from-time])
+      (append (cond [(send store trust? (get-trust-anchor)) '()]
+                    [else '((0 . trust-anchor:not-trusted))])
+              (cond [(<= ok-start from-time to-time ok-end) '()]
+                    [else
+                     (let ([vi (new validation% (N (sub1 (length chain)))
+                                    (from-time from-time) (to-time to-time))])
+                       (for ([cert (in-list chain)] [index (in-naturals 1)])
+                         (send cert check-valid-period index vi from-time to-time)))])))
+
+    #|
     ;; validate-chain : Store/#f Nat[Seconds] -> (Listof Symbol)
     (define/public (validate-chain store [valid-time (current-seconds)])
       ;; Note: this does not verify that the end certificate is valid for
@@ -431,13 +511,13 @@
             [index (in-naturals 1)])
         (send cert check-link-in-chain index issuer vi (= index N)))
       (send vi get-errors))
-
     (define/public (check who store [valid-time (current-seconds)])
       (define errors (validate-chain store valid-time))
       (when (pair? errors)
         (raise (exn:x509:chain (format "~s: chain validation failed\n  errors: ~s" who errors)
                                (current-continuation-marks)
                                errors))))
+    |#
     ))
 
 ;; ============================================================
@@ -635,17 +715,20 @@
     (define/public (check-chains candidates [valid-time (current-seconds)]
                                  #:empty-ok? [empty-ok? #f]
                                  #:who [who 'check-chains])
-      (define chains (for/list ([c (in-list candidates)]) (new certificate-chain% (chain c))))
-      (define errss (for/list ([chain (in-list chains)])
-                      (send chain validate-chain this valid-time)))
-      (define ok-chains (for/list ([chain (in-list chains)] [errs (in-list errss)]
-                                   #:when (null? errs))
-                          chain))
-      (unless (or (pair? ok-chains) empty-ok?)
-        (if (pair? candidates)
-            (raise-invalid-chain-error who (send (car chains) get-end-certificate) (car errss))
-            (error who "given empty list of candidates")))
-      ok-chains)
+      (define cv-chains
+        (fault-filter candidates empty-ok?
+                      (lambda (candidate)
+                        (check-candidate-chain candidate valid-time))
+                      (lambda (candidate errs)
+                        (raise-invalid-chain-error who candidate errs))))
+      (define trusted-chains
+        (fault-filter cv-chains empty-ok?
+                      (lambda (chain)
+                        (define errs (send chain check-trust this valid-time))
+                        (if (null? errs) (values chain null) (values #f errs)))
+                      (lambda (chain errs)
+                        (raise-invalid-chain-error who chain errs))))
+      trusted-chains)
     ))
 
 (define empty-x509-store (new x509-store%))
@@ -658,6 +741,17 @@
   (let/ec escape
     (define msg (format "~s: failed to build complete chain\n  end certificate: ~e" who end-cert))
     (raise (exn:x509:chain msg (continuation-marks escape) '(incomplete)))))
+
+;; fault-filter : (Listof X) Bool (X -> (values Y/#f List)) (X List -> Z)
+;;             -> (Listof Y) or Z
+(define (fault-filter xs empty-ok? get-y/errs handle-errs)
+  (define-values (ok-ys errss)
+    (for/lists (ys errss #:result (values (filter values ys) errss))
+               ([x (in-list xs)])
+      (get-y/errs x)))
+  (cond [(or (pair? ok-ys) empty-ok?) ok-ys]
+        [(pair? errss) (handle-errs (car xs) (car errss))]
+        [else (error 'fault-filter "internal error: given empty list")]))
 
 ;; ----------------------------------------
 
