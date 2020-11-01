@@ -8,15 +8,6 @@
          "x509.rkt")
 (provide (all-defined-out))
 
-;; Testing setup:
-;; - ca-key.pem - private key for CA
-;; - ca-cert.pem - self-signed cert for CA
-;; - ca-alt-{key,cert}.pem - different key, cert for CA (same subject name!)
-;; - ca2-{key,cert}.pem - key and cert for CA w/ different subject name
-;; - mid-ca-{key,cert}.pem - key and cert for intermediate CA
-;; - end-{key,cert}.pem - correctly signed end cert
-;;   - probably want lots of variations w/ wildcards, etc
-
 (define (openssl . args)
   (define (to-string x) (if (path? x) (path->string x) x))
   (let ([args (flatten args)])
@@ -101,7 +92,7 @@
                 "-out" (cert-file name) "-days" "30" "-sha256"
                 "-extfile" (ext-file name)))
 
-;; XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+;; ============================================================
 
 (pretty-print-columns 160)
 (crypto-factories libcrypto-factory)
@@ -118,7 +109,7 @@
 (define current-x509-store (make-parameter (empty-certificate-store)))
 (define current-get-valid-time (make-parameter current-seconds))
 
-;; XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+;; ============================================================
 
 (define ((chain-exn? errors) v)
   (and (exn:x509:chain? v)
