@@ -190,7 +190,7 @@
     ;; build-chains uses issuer name to build, so construct bad chain manually
     (define certs (append (pem-file->certificates (cert-file "ca"))
                           (pem-file->certificates (cert-file "end"))))
-    (check-exn (chain-exn? '((1 . issuer-name-mismatch)))
+    (check-exn (chain-exn? '((1 . issuer:name-mismatch)))
                (lambda ()
                  (send (current-x509-store) check-chain certs))))
   ;; 6.1.3.{b,c} name constraints

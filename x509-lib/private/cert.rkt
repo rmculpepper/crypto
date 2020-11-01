@@ -44,6 +44,9 @@
              is-self-issued?
              is-self-signed?
              get-key-uses
+             ok-key-use?
+             get-extended-key-uses
+             ok-extended-key-use?
 
              get-extension
              get-extension-value
@@ -87,11 +90,17 @@
     ;; An error symbol should read as a true statement about the certificate
     ;; that points out a fault, rather than reading as a desired property that
     ;; the certificate fails to hold.
-    (define/public (check)
+    (define/public (check [include-warnings? #f])
       (define errors null) ;; ErrorList, mutated
-      (define (bad! x)        (set! errors (cons x errors)))
-      (define (bad/ca! x)     (when #t (bad! x)))
-      (define (bad/should! x) (when #f (bad! x)))
+      (define (add-error! x)  (set! errors (cons x errors)))
+      ;; bad!         -- used for "MUST" requirements that are enforced
+      ;; warn!        -- used for requirements that are enforced only when include-warnings?
+      ;; bad/should!  -- used for "SHOULD" requirements (not enforced!)
+      ;; bad/ca-must! -- used for "conforming CA MUST" requirements (not enforced!)
+      (define (bad! x)         (add-error! x))
+      (define (warn! x)        (when include-warnings? (add-error! x)))
+      (define (bad/should! x)  (warn! x))
+      (define (bad/ca-must! x) (warn! x))
       ;; 4.1.1.2
       (unless (equal? (get-cert-signature-alg) (get-signature-alg))
         (bad! 'signature-algorithm:mismatch))
@@ -112,8 +121,8 @@
              (unless (member (get-version) (list v1 v2 v3))
                (bad! 'version:v1/v2/v3-required))])
       ;; 4.1.2.2
-      (unless (positive? (get-serial-number)) (bad/ca! 'serial-number:not-positive))
-      ;; -- 'serial-number-unique, cannot check
+      (unless (positive? (get-serial-number))
+        (bad/ca-must! 'serial-number:not-positive))
       ;; 4.1.2.3
       ;; -- 'signature-algs-same, checked in 4.1.1.2
       ;; 4.1.2.4 Issuer
@@ -134,31 +143,31 @@
         (cond [(get-extension id-ce-subjectAltName)
                (lambda (ext)
                  (unless (extension-critical? ext)
-                   (bad! 'subject:empty-with-noncritical-subjectAltName)))]
+                   (bad! 'subject:empty-but-noncritical-subjectAltName)))]
               [else
-               (bad! 'subject:empty-with-missing-subjectAltName)]))
+               (bad! 'subject:empty-but-missing-subjectAltName)]))
+      ;; 4.1.2.8 Unique Identifiers
+      (when (or (get-issuer-unique-id) (get-subject-unique-id))
+        (bad/ca-must! 'unique-id:present))
       ;; ----------------------------------------
       ;; 4.2 Certificate Extensions
       (unless (unique-by-key? (get-extensions) extension-id)
         (bad! 'extensions:not-unique))
-      ;; constraints on extension that must be present
+      ;; constraints that require extensions to be present
       (begin
         ;; 4.2.1.1 Authority Key Identifier
         (unless (and (is-CA?) (is-self-signed?))
           (unless (get-extension id-ce-authorityKeyIdentifier)
-            ;; FIXME: check
-            (bad/should! 'authority-key-id:missing)))
+            (bad/ca-must! 'authority-key-id:missing)))
         ;; 4.2.1.2 Subject Key Identifier
-        (unless (get-extension id-ce-subjectKeyIdentifier)
-          (bad/should! 'subject-key-id:missing))
+        (when (is-CA?)
+          (unless (get-extension id-ce-subjectKeyIdentifier)
+            ;; FIXME: re-check
+            (bad/ca-must! 'subject-key-id:missing-but-CA)))
         ;; 4.2.1.3 Key Usage
         (when (is-CA?)
           (unless (get-extension id-ce-keyUsage)
-            ;; ??? "Conforming CAs MUST include this extension in certificates
-            ;; that contain public keys that are used to validate digital
-            ;; signatures on other public key certificates or CRLs." Are there
-            ;; other kinds of CAs?!
-            (void) #;(bad/ca! 'key-usage:missing-but-CA)))
+            (bad/ca-must! 'key-usage:missing-but-CA)))
         (void))
       ;; constraints on extensions when present
       (for ([ext (in-list (get-extensions))])
@@ -167,13 +176,13 @@
         (cond
           ;; 4.2.1.1 Authority Key Identifier
           [(equal? ext-id id-ce-authorityKeyIdentifier)
-           (unless (not critical?) (bad/ca! 'authority-key-id:critical))]
+           (when critical? (bad/ca-must! 'authority-key-id:critical))]
           ;; 4.2.1.2 Subject Key Identifier
           [(equal? ext-id id-ce-subjectKeyIdentifier)
-           (unless (not critical?) (bad/ca! 'subject-key-id:critical))]
+           (when critical? (bad/ca-must! 'subject-key-id:critical))]
           ;; 4.2.1.3 Key Usage
           [(equal? ext-id id-ce-keyUsage)
-           (unless critical?
+           (when (not critical?)
              (bad/should! 'key-usage:not-critical))
            (define bits (extension-value ext))
            (when (memq 'keyCertSign bits)
@@ -201,50 +210,48 @@
           ;; 4.2.1.8 Subjct Directory Attributes
           [(equal? ext-id id-ce-subjectDirectoryAttributes)
            (when critical?
-             (bad/ca! 'subject-directory-attributes:critical))]
+             (bad/ca-must! 'subject-directory-attributes:critical))]
           ;; 4.2.1.9 Basic Constraints
           [(equal? ext-id id-ce-basicConstraints)
            (when (memq 'keyCertSign (get-key-uses))
              (unless critical?
-               (bad/ca! 'basic-constraints:not-critical-but-keyCertSign)))
+               (bad/ca-must! 'basic-constraints:not-critical-but-keyCertSign)))
            (when (hash-ref (extension-value ext) 'pathLenConstraint #f)
              (unless (and (is-CA?) (memq 'keyCertSign (get-key-uses)))
-               (bad! 'basic-constraints:pathLenConstraint-but-not-CA)))]
+               (bad! 'basic-constraints:pathLenConstraint-but-not-keyCertSign)))]
           ;; 4.2.1.10 Name Constraints
           [(equal? ext-id id-ce-nameConstraints)
            (define ncs (extension-value ext))
            (unless (or (pair? (hash-ref ncs 'permittedSubtrees null))
                        (pair? (hash-ref ncs 'excludedSubtrees null)))
-             (bad! 'name-constraints:empty))
+             (bad/ca-must! 'name-constraints:empty))
            (for/first ([t (in-list (append (hash-ref ncs 'permittedSubtrees null)
                                            (hash-ref ncs 'excludedSubtrees null)))]
                        #:when (or (not (zero? (hash-ref t 'minimum 0)))
                                   (hash-has-key? t 'maximum)))
              (bad! 'name-constraints:non-default-min/max))
            ;; These are interpreted in chain validation.
-           (unless (is-CA?) (bad! 'name-constraints:present-but-not-CA))
-           ;; FIXME: ???
-           #;(unless (not critical?) (bad! 'name-constraints:critical-but-unsupported))]
+           (unless (is-CA?) (bad! 'name-constraints:present-but-not-CA))]
           ;; 4.2.1.11 Policy Constraints
           [(equal? ext-id id-ce-policyConstraints)
            ;; FIXME!
-           (unless (not critical?) (bad! 'policy-constraints:critical-but-unsupported))]
+           (when critical? (bad! 'policy-constraints:critical-but-unsupported))]
           ;; 4.2.1.12 Extended Key Usage
           [(equal? ext-id id-ce-extKeyUsage)
-           ;; FIXME!
-           (unless (not critical?) (bad! 'extended-key-usage:critical-but-unsupported))]
+           (when (member anyExtendedKeyUsage (get-extended-key-uses))
+             (when critical?
+               (bad/should! 'extended-key-usage:critical-but-anyExtendedKeyUse)))]
           ;; 4.2.1.13 CRL Distribution points
           [(equal? ext-id id-ce-cRLDistributionPoints)
-           (unless (not critical?) (bad! 'crl-distribution-points:critical-but-unsupported))]
+           (when critical? (bad! 'crl-distribution-points:critical-but-unsupported))]
           ;; 4.2.1.14 Inhibit anyPolicy
           [(equal? ext-id id-ce-inhibitAnyPolicy)
-           (unless (not critical?) (bad! 'inhibit-anyPolicy:critical-but-unsupported))]
+           (when critical? (bad! 'inhibit-anyPolicy:critical-but-unsupported))]
           ;; 4.2.1.15 Freshest CRL
           [(equal? ext-id id-ce-freshestCRL)
-           (unless (not critical?) (bad! 'freshest-crl:critical-but-unsupported))]
+           (when critical? (bad! 'freshest-crl:critical-but-unsupported))]
           ;; Other: ignore unless critical
-          [else
-           (unless (not critical?) (bad! 'unknown-extension:critical-but-unsupported))]))
+          [else (when critical? (bad! 'unknown-extension:critical-but-unsupported))]))
       errors)
 
     (define/public (ok-key-usage? uses)
@@ -268,7 +275,7 @@
         (void 'CRL-UNSUPPORTED)
         ;; 6.1.3 (a)(4) issuer
         (unless (Name-equal? (get-issuer) (send issuer get-subject))
-          (add-error 'issuer-name-mismatch))
+          (add-error 'issuer:name-mismatch))
         ;; 6.1.3 (b,c) check name constraints
         (unless (and (is-self-issued?) (not final-in-path?))
           (unless (send vi name-constraints-accept? (list 'directoryName (get-subject)))

@@ -59,8 +59,24 @@
     (define/public (is-self-signed?)
       ;; FIXME
       #f)
+
     (define/public (get-key-uses)
       (cond [(get-extension id-ce-keyUsage) => extension-value] [else null]))
+    (define/public (ok-key-use? use [default #f])
+      (cond [(get-extension id-ce-keyUsage) => (lambda (uses) (and (memq use uses) #t))]
+            [else (if (procedure? default) (default) default)]))
+
+    (define/public (can-cert-sign?)
+      (ok-key-use? 'keyCertSign (is-CA?)))
+
+    (define/public (get-extended-key-uses)
+      (cond [(get-extension id-ce-extKeyUsage) => extension-value] [else null]))
+    (define/public (ok-extended-key-use? use-oid [default #f] [allow-any? #t])
+      (cond [(get-extension id-ce-extKeyUsage)
+             => (lambda (uses)
+                  (or (and (member use-oid uses) #t)
+                      (and allow-any? (member anyExtendedKeyUsage uses) #t)))]
+            [else (if (procedure? default) (default) default)]))
 
     (define/public (get-extension id)
       (for/or ([ext (in-list (get-extensions))] #:when (equal? id (extension-id ext))) ext))
@@ -87,7 +103,7 @@
     [(list 'utcTime
            (regexp #px"^([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})Z$"
                    (cons _ (app map-num (list YY MM DD hh mm ss)))))
-     ;; FIXME: Cite interpretation of YY.
+     ;; See 4.1.2.5.1 for interpretation.
      (define YYYY (+ YY (if (< YY 50) 2000 1900)))
      (find-seconds ss mm hh DD MM YYYY #f)]
     [(list 'generalTime

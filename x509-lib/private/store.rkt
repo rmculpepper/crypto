@@ -132,7 +132,7 @@
     ;; ----------------------------------------
 
     (define/public (pem-file->chain pem-file [valid-time (current-seconds)]
-                                    #:who [who 'pem-file->certificate-chain])
+                                    #:who [who 'pem-file->chain])
       (define certs (pem-file->certificates pem-file #:who who))
       (unless (pair? certs) (error who "no certificates found in file\n  file: ~e" pem-file))
       (build-chain (car certs) certs valid-time #:who who))

@@ -40,6 +40,9 @@
    is-self-issued?
    is-self-signed?
    get-key-uses
+   ok-key-use?
+   get-extended-key-uses
+   ok-extended-key-use?
 
    get-extension
    get-extension-value
