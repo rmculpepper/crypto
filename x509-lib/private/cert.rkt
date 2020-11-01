@@ -38,6 +38,7 @@
              get-issuer-unique-id
              get-subject-unique-id
              get-extensions
+             get-subject-common-name
 
              is-CA?
              is-CRL-issuer?
@@ -332,7 +333,52 @@
       (send vi intersect-valid-period ok-start ok-end)
       (unless (<= ok-start from-time to-time ok-end)
         (send vi add-error (cons index 'bad-validity-period))))
+
+    ;; ----------------------------------------
+    ;; Checking suitability for a purpose
+
+    (define/public (check-suitable-for-tls-server host)
+      ;; FIXME: add security level check?
+      ;; FIXME: add validity period check?
+      ;; References:
+      ;; - https://tools.ietf.org/html/rfc5246#section-7.4.2
+      ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
+      ;; tls-key-uses is approximation; actually depends on TLS cipher negotiated
+      (define tls-key-uses '(digitalSignature keyEncipherment keyAgreement))
+      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
+                    [else '(tls:missing-key-usage)])
+              (cond [(ok-extended-key-use? id-kp-serverAuth #t) '()]
+                    [else '(tls:missing-extended-key-use)])
+              (cond [(or (for/or ([pattern (in-list (get-subject-alt-name 'dNSName))])
+                           (host-matches? host pattern))
+                         (let ([cn (get-subject-common-name)])
+                           (and cn (host-matches? host cn))))
+                     '()]
+                    [else '(tls:host-mismatch)])))
+
+    (define/public (check-suitable-for-tls-client [name #f])
+      (define tls-key-uses '(digitalSignature keyEncipherment keyAgreement))
+      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
+                    [else '(tls:missing-key-usage)])
+              (cond [(ok-extended-key-use? id-kp-clientAuth #t) '()]
+                    [else '(tls:missing-extended-key-use)])
+              (cond [(or (not name)
+                         (GeneralName-equal? name (list 'directoryName (get-subject)))
+                         (for/or ([altname (in-list (get-subject-alt-name))])
+                           (GeneralName-equal? name altname)))
+                     '()]
+                    [else '(tls:name-mismatch)])))
     ))
+
+(define (host-matches? host pattern)
+  (cond [(regexp-match #rx"^[*]([.].*)$" pattern)
+         => (match-lambda
+              [(list _ suffix) (string-suffix-ci? host suffix)])]
+        [else (string-ci=? host pattern)]))
+
+(define (GeneralName-equal? n1 n2)
+  ;; FIXME
+  (equal? n1 n2))
 
 ;; ============================================================
 

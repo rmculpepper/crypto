@@ -34,6 +34,7 @@
    get-issuer-unique-id
    get-subject-unique-id
    get-extensions
+   get-subject-common-name
 
    is-CA?
    is-CRL-issuer?

@@ -48,6 +48,13 @@
     (define/public (get-subject-unique-id) (hash-ref tbs 'subjectUniqueID #f))
     (define/public (get-extensions) (hash-ref tbs 'extensions null))
 
+    (define/public (get-subject-common-name)
+      (match (get-subject)
+        [(list 'rdnSequence rdns)
+         (for*/first ([rdn (in-list rdns)] [av (in-list rdn)]
+                      #:when (equal? (hash-ref av 'type) id-at-commonName))
+           (get-attr-value (hash-ref av 'value) values))]))
+
     (define/public (is-CA?)
       (cond [(get-extension id-ce-basicConstraints)
              => (lambda (ext) (hash-ref (extension-value ext) 'cA))]
@@ -63,7 +70,8 @@
     (define/public (get-key-uses)
       (cond [(get-extension id-ce-keyUsage) => extension-value] [else null]))
     (define/public (ok-key-use? use [default #f])
-      (cond [(get-extension id-ce-keyUsage) => (lambda (uses) (and (memq use uses) #t))]
+      (cond [(get-extension id-ce-keyUsage)
+             => (lambda (ext) (and (memq use (extension-value ext)) #t))]
             [else (if (procedure? default) (default) default)]))
 
     (define/public (can-cert-sign?)
@@ -73,7 +81,8 @@
       (cond [(get-extension id-ce-extKeyUsage) => extension-value] [else null]))
     (define/public (ok-extended-key-use? use-oid [default #f] [allow-any? #t])
       (cond [(get-extension id-ce-extKeyUsage)
-             => (lambda (uses)
+             => (lambda (ext)
+                  (define uses (extension-value ext))
                   (or (and (member use-oid uses) #t)
                       (and allow-any? (member anyExtendedKeyUsage uses) #t)))]
             [else (if (procedure? default) (default) default)]))
@@ -85,8 +94,11 @@
 
     (define/public (get-name-constraints)
       (get-extension-value id-ce-nameConstraints #f))
-    (define/public (get-subject-alt-name)
-      (get-extension-value id-ce-subjectAltName null))
+    (define/public (get-subject-alt-name [kind #f])
+      (define altnames (get-extension-value id-ce-subjectAltName null))
+      (cond [kind (for/list ([altname (in-list altnames)] #:when (eq? kind (car altname)))
+                    (cadr altname))]
+            [else altnames]))
 
     (define/public (get-validity-seconds)
       (match (get-validity)

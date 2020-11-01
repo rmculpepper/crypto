@@ -133,19 +133,6 @@
 ;; - the chain is "trusted", and
 ;; - the chain's end-certificate is suitable for the given purpose
 
-;; A certificate is "suitable for a purpose of identifying a TLS server" if
-;; - the cert's subjectAlternativeName contains a dNSName pattern that matches
-;;   the TLS server's fully-qualified host name
-;; - OPTIONAL: ... sufficient security level of algorithms ...
-;; - OPTIONAL: ... validity period < some limit (825 days) ...
-;; - If KeyUsage is present, must contain at least one of
-;;     digitalSignature, keyEncipherment, keyAgreement.
-;;   (IIUC (??), cannot be more precise w/o knowing TLS ciphersuite negotiated.)
-;; - If ExtendedKeyUsage is present, then it must contain id-kp-serverAuth.
-;; - References:
-;;   - https://tools.ietf.org/html/rfc5246#section-7.4.2
-;;   - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
-
 (define certificate-chain%
   (class* object% (-certificate-chain<%>)
     ;; chain : (list trust-anchor<%> certificate% ...+)
@@ -176,4 +163,10 @@
                                     (from-time from-time) (to-time to-time))])
                        (for ([cert (in-list chain)] [index (in-naturals 1)])
                          (send cert check-valid-period index vi from-time to-time)))])))
+
+    ;; ----------------------------------------
+    ;; Checking suitability for a purpose
+
+    (define/public (check-suitable-for-tls-server host)
+      (send (get-end-certificate) check-suitable-for-tls-server host))
     ))
