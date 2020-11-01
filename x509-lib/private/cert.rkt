@@ -67,6 +67,11 @@
                   (current-continuation-marks)
                   errors)))))
 
+    (when #f ;; debug: log certificate warnings?
+      (let ([warnings (check #t)])
+        (when (pair? warnings)
+          (log-error "warnings for ~e: ~s" this warnings))))
+
     ;; ----------------------------------------
 
     (define/public (ok-signature? issuer-pk)
@@ -371,6 +376,7 @@
     ))
 
 (define (host-matches? host pattern)
+  ;; FIXME: support patterns like "*xyz.domain" and "abc*.domain" ??
   (cond [(regexp-match #rx"^[*]([.].*)$" pattern)
          => (match-lambda
               [(list _ suffix) (string-suffix-ci? host suffix)])]

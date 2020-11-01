@@ -33,8 +33,6 @@
   (cond [(string? dn) dn]
         [else (string-append "/" (string-join dn "/") "/")]))
 
-(define int-ca:keyCertSign? #t)
-
 ;; ----
 
 (define (make-root-ca name dn)
@@ -42,7 +40,8 @@
     (openssl-genrsa "-out" (key-file name) "2048"))
   (openssl-req "-x509" "-new" "-key" (key-file name)
                "-sha256" "-days" "200" "-out" (cert-file name)
-               "-subj" (dn->string dn)))
+               "-subj" (dn->string dn)
+               "-addext" "keyUsage=critical,keyCertSign"))
 
 (define (make-int-ca ca-name name dn
                      #:permit-names [permit-names null]
@@ -53,8 +52,8 @@
     (lambda ()
       (printf "authorityKeyIdentifier=keyid,issuer\n")
       (printf "basicConstraints=critical,CA:TRUE\n")
-      (when int-ca:keyCertSign?
-        (printf "keyUsage=critical,keyCertSign\n"))
+      (printf "subjectKeyIdentifier=hash\n")
+      (printf "keyUsage=critical,keyCertSign\n")
       (when (or (pair? permit-names) (pair? exclude-names))
         (printf "nameConstraints=critical,@nc_section\n")
         (printf "[nc_section]\n")
