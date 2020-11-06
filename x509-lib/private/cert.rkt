@@ -85,7 +85,7 @@
       (define di (relation-ref SIGNING 'oid (hash-ref alg 'algorithm) 'digest))
       (digest/verify issuer-pk di tbs-der (get-cert-signature-bytes)))
 
-    (define/public (get-pk) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
+    (define/public (get-public-key) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
 
     ;; check : -> ErrorList
     ;; Checks that the certificate is well-formed, without regard for other
@@ -273,7 +273,7 @@
       ;; 6.1.3
       (begin
         ;; 6.1.3 (a)(1) verify signature
-        (unless (ok-signature? (send issuer get-pk))
+        (unless (ok-signature? (send issuer get-public-key))
           (add-error 'bad-signature))
         ;; 6.1.3 (a)(2) currently valid; checked in check-valid-period
         (void)
@@ -296,7 +296,7 @@
       (unless final-in-path?
         ;; 6.1.4 (a-b) policy-mappings, policies, ...
         (void 'POLICIES-UNSUPPORTED)
-        ;; 6.1.4 (c-f) handled by get-pk method instead
+        ;; 6.1.4 (c-f) handled by get-public-key method instead
         (void 'OK)
         ;; 6.1.4 (g) name constraints
         (send vi add-name-constraints index (get-name-constraints))
@@ -322,7 +322,7 @@
       (when final-in-path?
         ;; 6.1.5 (a,b) explicit-policy, policies
         (void 'POLICIES-UNSUPPORTED)
-        ;; 6.1.5 (c-e) handled by get-pk method instead
+        ;; 6.1.5 (c-e) handled by get-public-key method instead
         (void 'OK)
         ;; 6.1.5 (f) process other critical extensions: errors gathered in construction
         (void 'DONE-DURING-CONSTRUCTION)
@@ -341,6 +341,9 @@
 
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
+
+    (define/public (suitable-for-tls-server? host)
+      (null? (check-suitable-for-tls-server host)))
 
     (define/public (check-suitable-for-tls-server host)
       ;; FIXME: add security level check?

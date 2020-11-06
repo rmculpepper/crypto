@@ -55,7 +55,7 @@
 
 (define certificate<%>
   (interface (certificate-data<%>)
-    get-pk
+    get-public-key
     ))
 
 (define certificate-chain<%>
@@ -64,12 +64,18 @@
    ([prop:custom-write
      (lambda (self out mode) (send self custom-write out mode))])
    custom-write
+
+   get-end-certificate
+
+   [trusted?
+    (->*m [certificate-store?] [time/c time/c]
+          boolean?)]
    ))
 
 ;; Note: for documentation; not actually implemented
 (define trust-anchor<%>
   (interface ()
-    get-pk
+    get-public-key
     get-subject
     ))
 

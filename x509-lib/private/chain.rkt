@@ -167,6 +167,9 @@
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
 
+    (define/public (suitable-for-tls-server? host)
+      (null? (check-suitable-for-tls-server host)))
+
     (define/public (check-suitable-for-tls-server host)
       (send (get-end-certificate) check-suitable-for-tls-server host))
     ))
