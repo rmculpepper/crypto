@@ -204,3 +204,63 @@
 (define (extension-value ext) (hash-ref ext 'extnValue))
 
 (define (policy-id p) (hash-ref p 'policyIdentifier))
+
+;; ============================================================
+
+;; openssl-Name-hash : Name -> Nat
+;; Name hash compatible with OpenSSL X509_NAME_hash().
+(define (openssl-Name-hash name)
+  (define cname (openssl-Name-canon name))
+  (define cname-sha1 (sha1-bytes cname))
+  (integer-bytes->integer cname-sha1 #f #f 0 4))
+
+(define openssl-Name-canon-memo-table (make-weak-hasheq))
+
+;; ossl-Name-canon : Name -> Bytes
+;; Name canonicalization compatible with OpenSSL.
+(define (openssl-Name-canon name)
+  (hash-ref! openssl-Name-canon-memo-table name
+             (lambda () (openssl-Name-canon* name))))
+(define (openssl-Name-canon* name)
+  (define (rdn-canon rdn)
+    (map av-canon rdn))
+  (define (av-canon av)
+    (hash 'type (hash-ref av 'type)
+          ;; All attribute values inside of RelativeDistinguishedName
+          ;; are either string types or choices or string types.
+          'value (match (hash-ref av 'value)
+                   [(? string? s) (openssl-string-canon s)]
+                   [(list _ (? string? s)) (openssl-string-canon s)])))
+  (match name
+    [(list 'rdnSequence rdns)
+     (apply bytes-append
+            (map (lambda (cdn) (asn1->bytes/DER CanonRelativeDistinguishedName cdn))
+                 (map rdn-canon rdns)))]))
+
+(define (openssl-string-canon s)
+  ;; Ignore leading and trailing spaces; space is #x09-0D, #x20
+  ;; Collapse multiple spaces to #\space
+  ;; If ASCII, then lowercase; otherwise, just copy
+  ;; IIUC, no unicode canonicalization done
+  (define (isspace? b) (or (<= #x09 b #x0D) (= b #x20)))
+  (define (isupper? b) (<= (char->integer #\A) b (char->integer #\Z)))
+  (define (tolower b) (+ b (- (char->integer #\a) (char->integer #\A))))
+  (define bs (string->bytes/utf-8 s))
+  (define out (open-output-bytes))
+  (define start (let loop ([i 0])
+                  (cond [(= i (bytes-length bs)) i]
+                        [(isspace? (bytes-ref bs i)) (loop (add1 i))]
+                        [else i])))
+  (define end (add1 (let loop ([i (sub1 (bytes-length bs))])
+                      (cond [(<= i start) i]
+                            [(isspace? (bytes-ref bs i)) (loop (sub1 i))]
+                            [else i]))))
+  (for/fold ([skip-sp? #f]) ([b (in-bytes bs)])
+    (cond [(isspace? b) (begin (unless skip-sp? (write-char #\space out)) #t)]
+          [(isupper? b) (begin (write-byte (tolower b) out) #f)]
+          [else (begin (write-byte b out) #f)]))
+  (get-output-string out))
+
+(define CanonAttributeTypeAndValue
+  (SEQUENCE (type OBJECT-IDENTIFIER) (value UTF8String)))
+(define CanonRelativeDistinguishedName (SET-OF CanonAttributeTypeAndValue))
