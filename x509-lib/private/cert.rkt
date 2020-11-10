@@ -83,8 +83,10 @@
       ;; FIXME: check issuer-pk is appropriate for alg
       (unless (eq? #f (hash-ref alg 'parameters #f))
         (error 'verify-signature "internal error: parameters not supported"))
-      (define di (relation-ref SIGNING 'oid (hash-ref alg 'algorithm) 'digest))
-      (digest/verify issuer-pk di tbs-der (get-cert-signature-bytes)))
+      (define di (relation-ref SIGNING 'oid alg-oid 'digest))
+      (define sig (match (hash-ref vcert 'signature)
+                    [(bit-string sig-bytes 0) sig-bytes]))
+      (digest/verify issuer-pk di tbs-der sig))
 
     (define/public (get-public-key) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
 
