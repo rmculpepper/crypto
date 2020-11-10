@@ -67,30 +67,29 @@
       ;; FIXME
       #f)
 
+    (define/public (get-extension id)
+      (for/or ([ext (in-list (get-extensions))] #:when (equal? id (extension-id ext))) ext))
+    (define/public (get-extension-value id default)
+      (cond [(get-extension id) => extension-value] [else default]))
+
     (define/public (get-key-uses)
-      (cond [(get-extension id-ce-keyUsage) => extension-value] [else null]))
+      (get-extension-value id-ce-keyUsage null))
     (define/public (ok-key-use? use [default #f])
-      (cond [(get-extension id-ce-keyUsage)
-             => (lambda (ext) (and (memq use (extension-value ext)) #t))]
+      (cond [(get-extension-value id-ce-keyUsage #f)
+             => (lambda (uses) (and (memq use uses) #t))]
             [else (if (procedure? default) (default) default)]))
 
     (define/public (can-cert-sign?)
       (ok-key-use? 'keyCertSign (is-CA?)))
 
     (define/public (get-extended-key-uses)
-      (cond [(get-extension id-ce-extKeyUsage) => extension-value] [else null]))
+      (get-extension-value id-ce-extKeyUsage null))
     (define/public (ok-extended-key-use? use-oid [default #f] [allow-any? #t])
-      (cond [(get-extension id-ce-extKeyUsage)
-             => (lambda (ext)
-                  (define uses (extension-value ext))
+      (cond [(get-extension-value id-ce-extKeyUsage #f)
+             => (lambda (uses)
                   (or (and (member use-oid uses) #t)
                       (and allow-any? (member anyExtendedKeyUsage uses) #t)))]
             [else (if (procedure? default) (default) default)]))
-
-    (define/public (get-extension id)
-      (for/or ([ext (in-list (get-extensions))] #:when (equal? id (extension-id ext))) ext))
-    (define/public (get-extension-value id default)
-      (cond [(get-extension id) => extension-value] [else default]))
 
     (define/public (get-name-constraints)
       (get-extension-value id-ce-nameConstraints #f))
