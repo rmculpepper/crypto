@@ -5,8 +5,7 @@
          asn1
          "interfaces.rkt"
          "asn1.rkt"
-         "cert-data.rkt"
-         (only-in crypto/private/common/asn1 relation-ref))
+         "cert-data.rkt")
 (provide (all-defined-out))
 
 ;; References:

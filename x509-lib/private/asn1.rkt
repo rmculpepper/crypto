@@ -1,7 +1,8 @@
 #lang racket/base
 (require asn1 asn1/string-stub
          crypto/private/common/asn1)
-(provide (all-defined-out))
+(provide (all-defined-out)
+         relation-ref)
 
 ;; ============================================================
 
