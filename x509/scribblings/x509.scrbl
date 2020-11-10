@@ -26,7 +26,7 @@ public key} is tied to an @emph{identity}, to be used for a particular
 @emph{issuer}.
 
 For example, a web site would present a certificate with their public
-key, their identity in the form of the DNS name, and the purpose of
+key, their identity in the form of their DNS name, and the purpose of
 identifying a TLS server. That certificate's issuer would own a certificate for
 the purpose of acting as a @deftech{certificate authority} (CA), and its public
 key should match the private key used to sign the TLS server's certificate.
@@ -60,6 +60,36 @@ and establishing a TLS connection, and if the certificate's subject common name
 otherwise, returns @racket[#f].
 }
 
+}
+
+@defproc[(bytes->certificate [bs bytes?]) certificate?]{
+
+Parses @racket[bs] as a certificate. The byte string @racket[bs] must contain
+exactly one DER-encoded certificate; otherwise, an exception is raised.
+}
+
+@defproc[(read-pem-certificates [in input-port?]
+                                [#:count count (or/c exact-nonnegative-integer? +inf.0) +inf.0])
+         (listof certificate?)]{
+
+Reads up to @racket[count] certificates from @racket[in]. The certificates must
+be encoded in the RFC 7468 textual format @cite["PEM"]. (This format is often
+conflated with ``PEM'', although technically the two formats are not completely
+compatible.)
+
+Certificates are delimited by @tt{----BEGIN CERTIFICATE-----} and @tt{-----END
+CERTIFICATE-----} lines. Data outside of the delimiters is ignored and
+discarded, so certificates may be interleaved with other text. For example,
+the @exec{openssl s_client -showcerts} command logs certificates intermixed with
+other diagnostic messages during TLS handshaking.
+}
+
+@defproc[(pem-file->certificates [pem-file path-string?]
+                                 [#:count count (or/c exact-nonnegative-integer? +inf.0) +inf.0])
+         (listof certificate?)]{
+
+Like @racket[read-pem-certificates], but reads from the given
+@racket[pem-file].
 }
 
 @; ----------------------------------------
@@ -223,4 +253,9 @@ period including @racket[valid-time]; and it starts with a root CA trusted by
 @bib-entry[#:key "PKIX"
            #:title "RFC 5280: Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile"
            #:url "https://tools.ietf.org/html/rfc5280"]
+
+@bib-entry[#:key "PEM"
+           #:title "Textual Encodings of PKIX, PKCS, and CMS Structures"
+           #:url "https://tools.ietf.org/html/rfc7468"]
+
 ]
