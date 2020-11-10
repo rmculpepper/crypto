@@ -19,6 +19,8 @@
 
 ;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
 
+(define TLS-USE-COMMON-NAME? #f)
+
 ;; ============================================================
 
 (define certificate%
@@ -38,7 +40,7 @@
              get-issuer-unique-id
              get-subject-unique-id
              get-extensions
-             get-subject-common-name
+             get-subject-common-names
 
              is-CA?
              is-CRL-issuer?
@@ -359,8 +361,9 @@
                     [else '(tls:missing-extended-key-use)])
               (cond [(or (for/or ([pattern (in-list (get-subject-alt-name 'dNSName))])
                            (host-matches? host pattern))
-                         (let ([cn (get-subject-common-name)])
-                           (and cn (host-matches? host cn))))
+                         (and TLS-USE-COMMON-NAME?
+                              (for/or ([cn (in-list (get-subject-common-names))])
+                                (and cn (host-matches? host cn)))))
                      '()]
                     [else '(tls:host-mismatch)])))
 

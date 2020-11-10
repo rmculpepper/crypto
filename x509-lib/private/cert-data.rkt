@@ -48,11 +48,11 @@
     (define/public (get-subject-unique-id) (hash-ref tbs 'subjectUniqueID #f))
     (define/public (get-extensions) (hash-ref tbs 'extensions null))
 
-    (define/public (get-subject-common-name)
+    (define/public (get-subject-common-names)
       (match (get-subject)
         [(list 'rdnSequence rdns)
-         (for*/first ([rdn (in-list rdns)] [av (in-list rdn)]
-                      #:when (equal? (hash-ref av 'type) id-at-commonName))
+         (for*/list ([rdn (in-list rdns)] [av (in-list rdn)]
+                     #:when (equal? (hash-ref av 'type) id-at-commonName))
            (get-attr-value (hash-ref av 'value) values))]))
 
     (define/public (is-CA?)
