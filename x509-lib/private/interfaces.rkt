@@ -34,7 +34,7 @@
    get-issuer-unique-id
    get-subject-unique-id
    get-extensions
-   get-subject-common-name
+   get-subject-common-names
 
    is-CA?
    is-CRL-issuer?
@@ -57,6 +57,9 @@
   (interface (certificate-data<%>)
     get-public-key
     ))
+
+(define time/c exact-integer?)
+(define candidate-chain/c (non-empty-listof certificate?))
 
 (define certificate-chain<%>
   (interface*
@@ -86,9 +89,6 @@
     [trust?            (->m certificate? boolean?)]
     [lookup-by-subject (->m Name/c (listof certificate?))]
     ))
-
-(define time/c exact-integer?)
-(define candidate-chain/c (non-empty-listof certificate?))
 
 (define certificate-store<%>
   (interface (x509-lookup<%>)
