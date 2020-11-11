@@ -99,6 +99,9 @@
                     (cadr altname))]
             [else altnames]))
 
+    (define/public (get-crl-distribution-points)
+      (get-extension-value id-ce-cRLDistributionPoints null))
+
     (define/public (get-validity-seconds)
       (match (get-validity)
         [(hash-table ['notBefore ok-start] ['notAfter ok-end])

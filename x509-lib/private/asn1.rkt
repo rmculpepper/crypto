@@ -165,7 +165,7 @@
 (define-asn1-type TBSCertList
   (SEQUENCE
    (version Version #:optional)
-   (signature AlgorithmIdentifier)
+   (signature AlgorithmIdentifier/DER)
    (issuer Name)
    (thisUpdate Time)
    (nextUpdate Time #:optional)

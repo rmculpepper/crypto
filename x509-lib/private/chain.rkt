@@ -1,9 +1,11 @@
 #lang racket/base
 (require racket/class
+         racket/match
          racket/list
          "interfaces.rkt"
          "cert-data.rkt"
-         "cert.rkt")
+         "cert.rkt"
+         "crl.rkt")
 (provide (all-defined-out))
 
 ;; References:
@@ -163,6 +165,40 @@
                                     (from-time from-time) (to-time to-time))])
                        (for ([cert (in-list chain)] [index (in-naturals 1)])
                          (send cert check-valid-period index vi from-time to-time)))])))
+
+    ;; ----------------------------------------
+
+    (define/public (check-revocation/crl #:cache [cache the-crl-cache]
+                                         #:who [who 'check-revocation/crl])
+      ;; Check end-certificate for revocation
+      ;; FIXME: check all certs
+      ;; FIXME: require CRL issuer to be same as cert issuer
+      (define end-cert (get-end-certificate))
+      (define crl-dists (send end-cert get-crl-distribution-points))
+      (define crl-urls
+        (flatten
+         (for/list ([crl-dist (in-list crl-dists)]
+                    ;; FIXME: we only handle case where CRL issuer is same as cert issuer
+                    #:when (not (hash-has-key? crl-dist 'cRLIssuer)))
+           (match (hash-ref crl-dist 'distributionPoint #f)
+             [(list 'fullName gnames)
+              (for/list ([gname (in-list gnames)])
+                (match gname
+                  [(list 'uniformResourceIdentifier
+                         (and (regexp #rx"^https?://") url))
+                   (list url)]
+                  [_ null]))]
+             [_ null]))))
+      (unless (pair? crl-urls)
+        (error who "no supported CRL distribution points\n  certificate: ~e"
+               end-cert))
+      (define serial-number (send end-cert get-serial-number))
+      (for ([crl-url (in-list crl-urls)])
+        (define crl (send the-crl-cache get-crl crl-url))
+        ;; FIXME: check crl signature
+        ;; What to do if fetch fails or if signature fails?
+        (when (member serial-number (send crl get-revoked-serial-numbers))
+          (error who "revoked"))))
 
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
