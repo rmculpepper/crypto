@@ -1,8 +1,11 @@
 #lang racket/base
-(require asn1 asn1/string-stub
+(require asn1 asn1/util/names
          crypto/private/common/asn1)
 (provide (all-defined-out)
          relation-ref)
+
+;; Util:
+(define TeletexString  (TAG #:implicit #:universal 20 OCTET-STRING))
 
 ;; ============================================================
 

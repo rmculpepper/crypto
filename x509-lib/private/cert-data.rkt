@@ -5,6 +5,7 @@
          racket/string
          racket/date
          asn1
+         asn1/util/time
          "interfaces.rkt"
          "asn1.rkt"
          "stringprep.rkt")
@@ -110,20 +111,14 @@
 
 ;; ============================================================
 
-;; FIXME: generalize, move to asn1-lib as util module?
 (define (asn1-time->seconds t)
   (define (map-num ss) (map string->number ss))
   (match t
-    [(list 'utcTime
-           (regexp #px"^([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})Z$"
-                   (cons _ (app map-num (list YY MM DD hh mm ss)))))
-     ;; See 4.1.2.5.1 for interpretation.
-     (define YYYY (+ YY (if (< YY 50) 2000 1900)))
-     (find-seconds ss mm hh DD MM YYYY #f)]
-    [(list 'generalTime
-           (regexp #px"^([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})Z$"
-                   (cons _ (app map-num (list YYYY MM DD hh mm ss)))))
-     (find-seconds ss mm hh DD MM YYYY #f)]))
+    [(list 'utcTime s)
+     ;; See 4.1.2.5.1 for interpretation (YY in range [1950-2049]).
+     (asn1-utc-time->seconds s)]
+    [(list 'generalTime s)
+     (asn1-generalized-time->seconds s)]))
 
 (define (unique-by-key? xs get-key)
   (let ([h (make-hash)])
