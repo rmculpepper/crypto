@@ -88,14 +88,9 @@
     (define/public (ok-signature? issuer-pk)
       (define crl (bytes->asn1 CertificateList-for-verify-sig der))
       (define tbs-der (hash-ref crl 'tbsCertList))
-      (define alg (hash-ref crl 'signatureAlgorithm))
-      (define alg-oid (hash-ref alg 'algorithm))
-      ;; FIXME: check issuer-pk is appropriate for alg
-      (unless (eq? #f (hash-ref alg 'paramters #f))
-        (error 'ok-signature? "internal error: parameters not supported"))
+      (define di (sig-alg->digest (hash-ref crl 'signatureAlgorithm)))
       (define sig (match (hash-ref crl 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
-      (define di (relation-ref SIGNING 'oid alg-oid 'digest))
       (digest/verify issuer-pk di tbs-der sig))
 
     (define/public (get-next-update)
