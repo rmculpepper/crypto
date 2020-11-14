@@ -51,13 +51,9 @@
     ;; Verify signature
     (define/public (ok-signature? responder-pk)
       (define tbs-der (asn1->bytes/DER ResponseData rdata))
-      (define alg (hash-ref rbody 'signatureAlgorithm))
-      (define alg-oid (hash-ref alg 'algorithm))
-      (unless (eq? #f (hash-ref alg 'parameters #f))
-        (error 'ok-signature? "internal error: parameters not supported"))
+      (define di (sig-alg->digest (hash-ref rbody 'signatureAlgorithm)))
       (define sig (match (hash-ref rbody 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
-      (define di (relation-ref SIGNING 'oid alg-oid 'digest))
       (digest/verify responder-pk di tbs-der sig))
 
     ))
