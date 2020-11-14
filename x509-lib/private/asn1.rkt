@@ -604,3 +604,9 @@
    [ecdsa-with-SHA384       'ec  'sha384 #f]
    [ecdsa-with-SHA512       'ec  'sha512 #f]
    ))
+
+(define (sig-alg->digest alg)
+  (define alg-oid (hash-ref alg 'algorithm))
+  (unless (eq? #f (hash-ref alg 'parameters #f))
+    (error 'sig-alg->digest "internal error: unexpected parameters"))
+  (relation-ref SIGNING 'oid alg-oid 'digest))
