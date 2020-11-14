@@ -103,6 +103,17 @@
     (define/public (get-crl-distribution-points)
       (get-extension-value id-ce-cRLDistributionPoints null))
 
+    (define/public (get-ocsp-uris)
+      (filter values
+              (for/list ([loc (in-list (get-ocsp-locations))])
+                (match loc [(list 'uniformResourceIdentifier uri) uri] [_ #f]))))
+
+    (define/public (get-ocsp-locations)
+      (define aia (get-extension-value id-pe-authorityInfoAccess null))
+      (for/list ([ad (in-list aia)]
+                 #:when (equal? (hash-ref ad 'accessMethod) id-ad-ocsp))
+        (hash-ref ad 'accessLocation)))
+
     (define/public (get-validity-seconds)
       (match (get-validity)
         [(hash-table ['notBefore ok-start] ['notAfter ok-end])
