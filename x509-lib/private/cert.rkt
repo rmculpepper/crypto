@@ -78,12 +78,7 @@
     (define/public (ok-signature? issuer-pk)
       (define vcert (bytes->asn1 Certificate-for-verify-sig (get-der)))
       (define tbs-der (hash-ref vcert 'tbsCertificate))
-      (define alg (hash-ref vcert 'signatureAlgorithm))
-      (define alg-oid (hash-ref alg 'algorithm))
-      ;; FIXME: check issuer-pk is appropriate for alg
-      (unless (eq? #f (hash-ref alg 'parameters #f))
-        (error 'verify-signature "internal error: parameters not supported"))
-      (define di (relation-ref SIGNING 'oid alg-oid 'digest))
+      (define di (sig-alg->digest (hash-ref vcert 'signatureAlgorithm)))
       (define sig (match (hash-ref vcert 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
       (digest/verify issuer-pk di tbs-der sig))
