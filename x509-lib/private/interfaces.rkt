@@ -37,7 +37,6 @@
    get-subject-common-names
 
    is-CA?
-   is-CRL-issuer?
    is-self-issued?
    is-self-signed?
    get-key-uses

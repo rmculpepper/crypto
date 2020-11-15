@@ -42,7 +42,6 @@
              get-subject-common-names
 
              is-CA?
-             is-CRL-issuer?
              is-self-issued?
              is-self-signed?
              get-key-uses
@@ -140,7 +139,7 @@
          (unless (wf-time? ok-start) (bad! 'validity:start-not-well-formed))
          (unless (wf-time? ok-end) (bad! 'validity:end-not-well-formed))])
       ;; 4.1.2.6 Subject
-      (when (or (is-CA?) (is-CRL-issuer?))
+      (when (or (is-CA?) (memq 'cRLSign (get-key-uses)))
         (when (Name-empty? (get-subject))
           (bad! 'subject:empty-but-CA/CRL-issuer)))
       (when (Name-empty? (get-subject))
@@ -258,10 +257,6 @@
           [else (when critical? (bad! 'unknown-extension:critical-but-unsupported))]))
       errors)
 
-    (define/public (ok-key-usage? uses)
-      (define key-uses (get-key-uses))
-      (and (for/and ([use (in-list uses)]) (memq use key-uses)) #t))
-
     ;; ============================================================
 
     ;; check-link-in-chain : Nat Certificate Validation Boolean -> Void
@@ -339,6 +334,17 @@
 
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
+
+    #|
+    (define/public (suitable-for-certificate-signing?)
+      (ok-key-use? 'keyCertSign (is-CA?)))
+    (define/public (suitable-for-CRL-signing?)
+      (ok-key-use? 'cRLSign (is-CA?)))
+    (define/public (suitable-for-OCSP-signing? ca-cert)
+      (or (and (is-CA?) (equal? this ca-cert))
+          (and (ok-extended-key-use? id-kp-OCSPSigning #f #f)
+               ...)))
+    |#
 
     (define/public (suitable-for-tls-server? host)
       (null? (check-suitable-for-tls-server host)))

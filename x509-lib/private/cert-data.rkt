@@ -57,10 +57,8 @@
            (get-attr-value (hash-ref av 'value) values))]))
 
     (define/public (is-CA?)
-      (cond [(get-extension id-ce-basicConstraints)
-             => (lambda (ext) (hash-ref (extension-value ext) 'cA))]
-            [else #f]))
-    (define/public (is-CRL-issuer?) (and (memq 'cRLSign (get-key-uses)))) ;; FIXME: and (is-CA?)
+      (let ([bc (get-extension-value id-ce-basicConstraints #f)])
+        (and bc (hash-ref bc 'cA))))
     (define/public (is-self-issued?) ;; 6.1
       (let ([subject (get-subject)] [issuer (get-issuer)])
         (Name-equal? subject issuer)))
@@ -79,9 +77,6 @@
       (cond [(get-extension-value id-ce-keyUsage #f)
              => (lambda (uses) (and (memq use uses) #t))]
             [else (if (procedure? default) (default) default)]))
-
-    (define/public (can-cert-sign?)
-      (ok-key-use? 'keyCertSign (is-CA?)))
 
     (define/public (get-extended-key-uses)
       (get-extension-value id-ce-extKeyUsage null))
