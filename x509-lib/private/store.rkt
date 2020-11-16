@@ -117,7 +117,7 @@
       (define cv-chains
         (fault-filter candidates empty-ok?
                       (lambda (candidate)
-                        (check-candidate-chain candidate valid-time))
+                        (check-candidate-chain candidate))
                       (lambda (candidate errs)
                         (raise-invalid-chain-error who candidate errs))))
       (define trusted-chains
