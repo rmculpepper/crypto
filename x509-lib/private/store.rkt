@@ -6,7 +6,6 @@
          crypto/pem
          "interfaces.rkt"
          "asn1.rkt"
-         "cert-data.rkt"
          "cert.rkt"
          "chain.rkt")
 (provide (all-defined-out))

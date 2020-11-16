@@ -7,7 +7,7 @@
          crypto
          asn1
          "asn1.rkt"
-         (only-in "cert-data.rkt" asn1-time->seconds))
+         (only-in "cert.rkt" asn1-time->seconds))
 (provide (all-defined-out))
 
 (define CACHE-DURATION (* 6 60 60)) ;; 6 hours

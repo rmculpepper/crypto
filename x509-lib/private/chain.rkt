@@ -4,7 +4,6 @@
          racket/list
          "interfaces.rkt"
          "asn1.rkt"
-         "cert-data.rkt"
          "cert.rkt"
          "crl.rkt")
 (provide (all-defined-out))

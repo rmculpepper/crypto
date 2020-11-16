@@ -3,7 +3,7 @@
          racket/class
          crypto
          asn1
-         (only-in "asn1.rkt" Name relation-ref SIGNING)
+         (only-in "asn1.rkt" Name sig-alg->digest)
          "ocsp-asn1.rkt")
 (provide (all-defined-out))
 
