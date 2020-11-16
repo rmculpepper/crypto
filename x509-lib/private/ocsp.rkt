@@ -4,22 +4,31 @@
          crypto
          asn1
          (only-in "asn1.rkt" Name sig-alg->digest)
+         (only-in "cert.rkt" Name-equal? bytes->certificate)
+         "interfaces.rkt"
          "ocsp-asn1.rkt")
 (provide (all-defined-out))
 
 (define SubjectPublicKeyInfo-shallow
   (SEQUENCE [algorithm ANY] [subjectPublicKey BIT-STRING]))
 
-(define (make-ocsp-request cert issuer)
-  (define issuer-spki (bytes->asn1 SubjectPublicKeyInfo-shallow (send issuer get-spki)))
-  (define issuer-pk (bit-string-bytes (hash-ref issuer-spki 'subjectPublicKey)))
-  (define certid
-    (hasheq 'hashAlgorithm (hasheq 'algorithm id-sha1 'params #f)
-            'issuerNameHash (sha1-bytes (asn1->bytes/DER Name (send issuer get-subject)))
-            ;;'issuerNameHash (sha1-bytes (asn1->bytes/DER Name (send cert get-issuer)))
-            'issuerKeyHash (sha1-bytes issuer-pk)
-            ;;'issuerKeyHash (sha1-bytes (send issuer get-spki))
-            'serialNumber (send cert get-serial-number)))
+(define (certificate-keyhash cert)
+  (define spki (bytes->asn1 SubjectPublicKeyInfo-shallow (send cert get-spki)))
+  (define pk (bit-string-bytes (hash-ref spki 'subjectPublicKey)))
+  (sha1-bytes pk))
+
+(define (make-certid chain)
+  (define cert (send chain get-certificate))
+  (define issuer (send chain get-issuer-or-self))
+  (hasheq 'hashAlgorithm (hasheq 'algorithm id-sha1 'params #f)
+          'issuerNameHash (sha1-bytes (asn1->bytes/DER Name (send issuer get-subject)))
+          'issuerKeyHash (certificate-keyhash issuer)
+          'serialNumber (send cert get-serial-number)))
+
+(define (make-ocsp-request chain)
+  (define cert (send chain get-certificate))
+  (define issuer (send chain get-issuer-or-self))
+  (define certid (make-certid chain))
   (define reqlist
     (list (hasheq 'reqCert certid)))
   (define tbs
@@ -35,12 +44,14 @@
   (define rbody (and rb (hash-ref rb 'response)))
   (unless (equal? rtype id-pkix-ocsp-basic)
     (error 'ocsp-response% "bad response type: ~e" rtype))
-  (new ocsp-response% (rbody rbody) (rdata (hash-ref rbody 'tbsResponseData))))
+  (new ocsp-response% (rbody rbody)))
 
 (define ocsp-response%
   (class object%
-    (init-field rbody rdata)
+    (init-field rbody)
     (super-new)
+
+    (define rdata (hash-ref rbody 'tbsResponseData))
 
     (define/public (get-response-data) rdata)
     (define/public (get-responder-id) (hash-ref rdata 'responderID))
@@ -49,26 +60,55 @@
     ;; FIXME: process extensions
 
     ;; Verify signature
-    (define/public (ok-signature? responder-pk)
+    (define/public (ok-signature? issuer-chain)
       (define tbs-der (asn1->bytes/DER ResponseData rdata))
       (define di (sig-alg->digest (hash-ref rbody 'signatureAlgorithm)))
       (define sig (match (hash-ref rbody 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
+      (define responder-chain (get-responder-chain issuer-chain))
+      (define responder-pk (send responder-chain get-public-key))
       (digest/verify responder-pk di tbs-der sig))
 
+    (define/public (get-responder-chain issuer-chain)
+      (define (is-responder? cert)
+        (match (get-responder-id)
+          [(list 'byName responder-name)
+           (Name-equal? responder-name (send cert get-subject))]
+          [(list 'byKey keyhash)
+           (equal? keyhash (certificate-keyhash cert))]))
+      (if (is-responder? (send issuer-chain get-certificate))
+          issuer-chain
+          (for/or ([cert-der (in-list (hash-ref rbody 'certs null))])
+            (define cert (bytes->certificate cert-der))
+            (and (is-responder? cert)
+                 (let ([chain (send issuer-chain extend-chain cert)])
+                   (and (certificate-chain? chain)
+                        ;(send chain suitable-for-ocsp-signing? issuer-chain) ;; FIXME!
+                        ;; We omit the trusted check because issuer-chain has
+                        ;; (presumably) already been checked for trust, and the
+                        ;; new chain shares a trust anchor.
+                        #;(send chain trusted? the-store)
+                        (let ([now (current-seconds)])
+                          (null? (send chain check-validity-period now now)))
+                        chain))))))
     ))
 
 (require net/url racket/port)
 (require crypto/private/common/base64)
 
-(define (perform-ocsp cert issuer)
+(define (perform-ocsp chain)
+  (define cert (send chain get-certificate))
   (for/list ([ocsp-url (send cert get-ocsp-uris)])
     (define resp-in
       (post-impure-port (string->url ocsp-url)
-                        (make-ocsp-request cert issuer)
+                        (make-ocsp-request chain)
                         (list "Content-Type: application/ocsp-request")))
     (define header (purify-port resp-in))
     ;;(printf "header = ~s\n" header)
     (define resp-bytes (port->bytes resp-in))
     (close-input-port resp-in)
-    (bytes->ocsp-response resp-bytes)))
+    (define ocsp (bytes->ocsp-response resp-bytes))
+
+    (unless (send ocsp ok-signature? (send chain get-issuer-chain-or-self))
+      (error 'ocsp "bad signature"))
+    ocsp))

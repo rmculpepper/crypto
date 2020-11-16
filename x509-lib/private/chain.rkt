@@ -98,8 +98,11 @@
     (define/public (get-issuer-chain) issuer-chain)
     (define/public (get-certificate) cert)
 
-    (define/public (get-issuer-or-self)
+    (define/public (get-issuer-chain-or-self)
       (or issuer-chain this))
+    (define/public (get-issuer-or-self)
+      (send (get-issuer-chain-or-self) get-certificate))
+
     (define/public (get-anchor-chain)
       (if issuer-chain (send issuer-chain get-anchor-chain) this))
     (define/public (get-anchor)
