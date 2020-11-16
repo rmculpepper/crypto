@@ -18,15 +18,19 @@
   ;; FIXME: check all certs
   ;; FIXME: require CRL issuer to be same as cert issuer
   (define cert (send chain get-certificate))
+  (define issuer (send chain get-issuer-or-self))
   (define crl-urls (certificate-crl-urls cert))
   (cond [(pair? crl-urls)
          (define serial-number (send cert get-serial-number))
          (append*
           (for/list ([crl-url (in-list crl-urls)])
             (define crl (send the-crl-cache get-crl crl-url))
-            ;; FIXME: check crl signature
-            ;; What to do if fetch fails or if signature fails?
-            (if (member serial-number (send crl get-revoked-serial-numbers)) '(revoked) '())))]
+            (cond [(not (send crl ok-signature? (send issuer get-public-key)))
+                   '(bad-signature)]
+                  ;; What to do if fetch fails or if signature fails?
+                  [(member serial-number (send crl get-revoked-serial-numbers))
+                   '(revoked)]
+                  [else'()])))]
         [else '(no-crls)]))
 
 (define (certificate-crl-urls cert)
