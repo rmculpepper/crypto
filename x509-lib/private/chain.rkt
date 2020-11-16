@@ -199,6 +199,154 @@
         ;; What to do if fetch fails or if signature fails?
         (when (member serial-number (send crl get-revoked-serial-numbers))
           (error who "revoked"))))
+    ))
+
+;; ============================================================
+
+;; The pre-chain% class contains code used to check chain-validity. The
+;; certificate-chain% subclass represents a good chain; bad-chain% represents a
+;; bad chain and includes errors. This allows implementation sharing while
+;; preserving the invariant that a certificate-chain% object is chain-valid.
+
+(define pre-chain%
+  (class object%
+    (init-field issuer-chain  ;; Chain or #f if anchor
+                cert)         ;; Certificate
+    (super-new)
+
+    (define/public (get-issuer-chain) issuer-chain)
+    (define/public (get-certificate) cert)
+
+    (define/public (get-subject) (send cert get-subject))
+    (define/public (get-public-key) (send cert get-public-key))
+    (define/public (get-index) index)
+
+    ;; index : Nat  -- 0 is anchor
+    (define index (if issuer-chain (add1 (send issuer-chain get-index)) 0))
+
+    ;; max-path-length : Integer or #f
+    ;; The maximum number of *intermediate* certificates that can *follow* this one.
+    ;; Thus if zero, can still extend with end certificate but not new intermediate.
+    ;; If less than zero, cannot extend; but -1 is okay for end certificate.
+    (define max-path-length
+      (let* ([issuer-max-path-length (send issuer-chain get-max-path-length)]
+             [max-path-length
+              ;; 6.1.4 (h, l) decrement counters
+              (and issuer-max-path-length
+                   (- issuer-max-path-length (if (is-self-issued?) 0 1)))]
+             [max-path-length
+              ;; 6.1.4 (m)
+              (let* ([ext (get-extension-value id-ce-basicConstraints)]
+                     [plen (and ext (hash-ref ext 'pathLenConstraint #f))])
+                (cond [(and plen (< plen (or max-path-length +inf.0))) plen]
+                      [else max-path-length]))])
+        max-path-length))
+
+    ;; name-constraints : ParsedNameConstraints
+    ;; Only for the current certificate; see recursive check-name-constraints.
+    ;; 6.1.4 (g) name constraints
+    (define name-constraints
+      (cond [(send cert get-name-constraints)
+             => (lambda (ncs) (extend-name-constraints null index ncs))]
+            [else null]))
+
+    ;; {from,to}-time : Seconds
+    (define-values (from-time to-time)
+      (match (and issuer-chain (send issuer-chain get-validity-period))
+        [(list issuer-from issuer-to)
+         (match-define (list cert-from cert-to) (send cert get-validity-period))
+         (values (max cert-from issuer-from) (min cert-to issuer-to))]
+        [else (send cert get-validity-period)]))
+
+    (define/public (get-validity-period)
+      (list from-time to-time))
+
+    (define/public (check-as-intermediate)
+      ;; 6.1.4
+      (append
+       ;; 6.1.4 (a-b) policy-mappings, policies, ...
+       #| POLICIES NOT SUPPORTED |#
+       ;; 6.1.4 (c-f) handled by get-public-key method instead
+       ;; 6.1.4 (g) name constraints -- in constructor
+       ;; 6.1.4 (h, l) decrement counters -- in constructor
+       (cond [(>= max-path-length 0) '()]
+             [else '(intermediate:max-path-length)])
+       ;; 6.1.4 (i, j) policy-mapping, inhibit-anypolicy, ...
+       #| POLICIES NOT SUPPORTED |#
+       ;; 6.1.4 (k) check CA (reject if no basicConstraints extension)
+       (cond [(is-CA?) '()]
+             [else '(intermediate:not-CA)])
+       ;; 6.1.4 (m) -- in constructor
+       ;; 6.1.4 (n)
+       (cond [(ok-key-use? 'keyCertSign #t) '()]
+             [else '(intermediate:missing-keyCertSign)])
+       ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
+       #| checked in certificate% |#))
+
+    (define/public (check-as-final-chain)
+      ;; 6.1.5
+      (begin
+        ;; 6.1.5 (a,b) explicit-policy, policies
+        (void 'POLICIES-UNSUPPORTED)
+        ;; 6.1.5 (c-e) handled by get-public-key method instead
+        (void 'OK)
+        ;; 6.1.5 (f) process other critical extensions: errors gathered in construction
+        (void 'DONE-DURING-CONSTRUCTION)
+        ;; 6.1.5 (g) policies ...
+        (void 'POLICIES-UNSUPPORTED))
+      null)
+
+    ;; ----------------------------------------
+    ;; Extension
+
+    (define/public (extend-chain new-cert)
+      (define errors
+        (append (check-as-intermediate)
+                (check-chain-addition new-cert)))
+      (cond [(pair? errors)
+             (new bad-chain% (issuer-chain this) (cert new-cert) (errors errors))]
+            [else (new certificate-chain% (issuer-chain this) (cert new-cert))]))
+
+    ;; check-with-issuer-chain : Chain -> ErrList
+    (define/public (check-chain-addition new-cert)
+      (define (add-index what) (cons (add1 index) what))
+      ;; 6.1.3
+      (append
+       ;; 6.1.3 (a)(1) verify signature
+       (map add-index (check-certificate-signature new-cert))
+       ;; 6.1.3 (a)(2) currently valid
+       (match (send new-cert get-validity-period)
+         [(list cert-from cert-to)
+          (cond [(<= (max from-time cert-from) (min to-time cert-to)) '()]
+                [else (map add-index '(validity-period:empty-intersection))])])
+       ;; 6.1.3 (a)(3) (not revoked)
+       #| CRL NOT SUPPORTED |#
+       ;; 6.1.3 (a)(4) issuer
+       (cond [(Name-equal? (get-issuer) (send issuer-chain get-subject)) '()]
+             [else (map add-index '(issuer:name-mismatch))])
+       ;; 6.1.3 (b,c) check name constraints
+       (cond [(and (is-self-issued?) (not final-in-path?)) null]
+             [else
+              (define subject-name (send new-cert get-subject))
+              (define alt-names (send new-cert get-subject-alt-name))
+              (map add-index
+                   (append (check-name-constraints (list 'directoryName subject-name) 'subject)
+                           (append* (for/list ([san (in-list alt-names)])
+                                      (check-name-constraints san 'alt)))))])
+       ;; 6.1.3 (d-f) process policies; set/check valid-policy-tree, explicit-policy
+       #| POLICIES NOT SUPPORTED |#))
+
+    (define/public (check-certificate-signature new-cert)
+      (if (send new-cert ok-signature? (get-public-key)) '() '(bad-signature)))
+
+    (define/public (check-name-constraints gname kind)
+      ;; 6.1.4 (g) name constraints
+      (append
+       (cond [(name-constraints-name-ok? name-constraints name) null]
+             [else (case kind
+                     [(subject) (list (cons index 'name-constraints:subject-rejected))]
+                     [else (list (cons index 'name-constraints:subjectAltName-rejected))])])
+       (if issuer-chain (send issuer-chain check-name-constraints gname kind) null)))
 
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
@@ -208,4 +356,22 @@
 
     (define/public (check-suitable-for-tls-server host)
       (send (get-end-certificate) check-suitable-for-tls-server host))
+    ))
+
+(define bad-chain%
+  (class* pre-chain%
+    (inherit-field issuer-chain)
+    (init-field errors)
+    (super-new)
+    (define/public (get-errors)
+      (append errors
+              (cond [(is-a? issuer-chain bad-chain%)
+                     (send issuer-chain get-errors)]
+                    [else null])))
+    ))
+
+(define certificate-chain%
+  (class* pre-chain% (-certificate-chain<%>)
+    (inherit-field issuer-chain cert)
+    (super-new)
     ))

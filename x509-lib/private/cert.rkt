@@ -259,6 +259,37 @@
 
     ;; ============================================================
 
+    ;; check-with-issuer-chain : Chain -> ErrList
+    (define/public (check-with-issuer-chain issuer-chain)
+      (define index (add1 (send issuer-chain get-index)))
+      (define errors null) ;; (Listof Any), mutated
+      (define (bad! what) (set! errors (cons (cons index what) errors)))
+      ;; 6.1.3
+      (begin
+        ;; 6.1.3 (a)(1) verify signature
+        (unless (ok-signature? (send issuer-chain get-public-key))
+          (bad! 'bad-signature))
+        ;; 6.1.3 (a)(2) currently valid; checked in check-valid-period
+        (void)
+        ;; 6.1.3 (a)(3) (not revoked)
+        (void 'CRL-UNSUPPORTED)
+        ;; 6.1.3 (a)(4) issuer
+        (unless (Name-equal? (get-issuer) (send issuer-chain get-subject))
+          (bad! 'issuer:name-mismatch))
+        ;; 6.1.3 (b,c) check name constraints
+        (unless (and (is-self-issued?) (not final-in-path?))
+          (unless (send issuer-chain name-constraints-accept? (list 'directoryName (get-subject)))
+            (bad! 'name-constraints:subject-rejected))
+          ;; FIXME: check email address in (get-subject) ???
+          (for ([san (in-list (get-subject-alt-name))])
+            (unless (send issuer-chain name-constraints-accept? san)
+              (bad! 'name-constraints:subjectAltName-rejected))))
+        ;; 6.1.3 (d-f) process policies; set/check valid-policy-tree, explicit-policy
+        (void 'POLICIES-UNSUPPORTED))
+      ;; 6.1.4 -- checked in certificate-chain%
+      (begin)
+      errors)
+
     ;; check-link-in-chain : Nat Certificate Validation Boolean -> Void
     ;; Pushes errors to the given validation% object.
     (define/public (check-link-in-chain index issuer vi final-in-path?)
