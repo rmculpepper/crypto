@@ -67,7 +67,10 @@
      (lambda (self out mode) (send self custom-write out mode))])
    custom-write
 
-   get-end-certificate
+   get-certificate
+   get-issuer-chain
+   get-anchor
+   is-anchor?
 
    [trusted?
     (->*m [certificate-store?] [time/c time/c]

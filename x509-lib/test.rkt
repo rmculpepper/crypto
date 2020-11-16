@@ -172,16 +172,16 @@
     ;; Since we just built the certs, should not be valid last year
     (parameterize ((current-get-valid-time
                     (lambda () (- (current-seconds) (* 365 24 60 60)))))
-      (check-exn (chain-exn? '((1 . bad-validity-period)))
+      (check-exn (chain-exn? '((1 . validity-period:not-contained)))
                  (lambda () (read-chain (cert-file "intca"))))
-      (check-exn (chain-exn? '((1 . bad-validity-period)))
+      (check-exn (chain-exn? '((1 . validity-period:not-contained)))
                  (lambda () (read-chain (cert-file "end") (cert-file "intca")))))
     ;; Should not be valid in 5 years (see -days arguments above)
     (parameterize ((current-get-valid-time
                     (lambda () (+ (current-seconds) (* 5 365 24 60 60)))))
-      (check-exn (chain-exn? '((1 . bad-validity-period)))
+      (check-exn (chain-exn? '((1 . validity-period:not-contained)))
                  (lambda () (read-chain (cert-file "intca"))))
-      (check-exn (chain-exn? '((1 . bad-validity-period)))
+      (check-exn (chain-exn? '((1 . validity-period:not-contained)))
                  (lambda () (read-chain (cert-file "end") (cert-file "intca"))))))
   ;; 6.1.3.a.3 not revoked -- not supported
   ;; 6.1.3.a.4 issuer matches
@@ -195,10 +195,10 @@
   ;; 6.1.3.{b,c} name constraints
   (test-case "name constraints"
     (make-end "intca" "cz-end" '("C=CZ" "L=Praha" "CN=test.cz") '("test.cz"))
-    (check-exn (chain-exn? '((2 . name-constraints:subjectAltName-rejected)))
+    (check-exn (chain-exn? '((2 1 . name-constraints:subjectAltName-rejected)))
                (lambda () (read-chain (cert-file "cz-end") (cert-file "intca"))))
     (make-end "intca" "special-end" '("CN=special.test.com") '("special.test.com"))
-    (check-exn (chain-exn? '((2 . name-constraints:subjectAltName-rejected)))
+    (check-exn (chain-exn? '((2 1 . name-constraints:subjectAltName-rejected)))
                (lambda () (read-chain (cert-file "special-end") (cert-file "intca")))))
   ;; 6.1.3.{d-f} policies -- not unsupported
   ;; 6.1.4.{a-j} nothing to do

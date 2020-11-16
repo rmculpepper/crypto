@@ -3,6 +3,7 @@
          racket/match
          racket/list
          "interfaces.rkt"
+         "asn1.rkt"
          "cert-data.rkt"
          "cert.rkt"
          "crl.rkt")
@@ -51,7 +52,7 @@
   (when (null? certs) (error 'get-chain-errors "empty candidate chain"))
   (define pre-chain
     (for/fold ([chain (new certificate-chain% (issuer-chain #f) (cert (car certs)))])
-              ([cert (in-list certs)])
+              ([cert (in-list (cdr certs))])
       (send chain extend-chain cert)))
   (cond [(is-a? pre-chain bad-chain%)
          (values #f (send pre-chain get-errors))]
@@ -100,13 +101,16 @@
 
     (define/public (get-issuer-or-self)
       (or issuer-chain this))
+    (define/public (get-anchor-chain)
+      (if issuer-chain (send issuer-chain get-anchor-chain) this))
     (define/public (get-anchor)
-      (if issuer-chain (send issuer-chain get-anchor) this))
+      (send (get-anchor-chain) get-certificate))
     (define/public (is-anchor?) (not issuer-chain))
 
     (define/public (get-subject) (send cert get-subject))
     (define/public (get-public-key) (send cert get-public-key))
     (define/public (get-index) index)
+    (define/public (get-max-path-length) max-path-length)
 
     ;; index : Nat  -- 0 is anchor
     (define index (if issuer-chain (add1 (send issuer-chain get-index)) 0))
@@ -117,7 +121,7 @@
     ;; If less than zero, cannot extend; but -1 is okay for end certificate.
     (define max-path-length
       (let* ([issuer-max-path-length
-              (send issuer-chain get-max-path-length)]
+              (and issuer-chain (send issuer-chain get-max-path-length))]
              [max-path-length
               ;; 6.1.4 (h, l) decrement counters
               (and issuer-max-path-length
@@ -125,7 +129,7 @@
                       (if (send cert is-self-issued?) 0 1)))]
              [max-path-length
               ;; 6.1.4 (m)
-              (let* ([ext (get-extension-value id-ce-basicConstraints)]
+              (let* ([ext (send cert get-extension-value id-ce-basicConstraints #f)]
                      [plen (and ext (hash-ref ext 'pathLenConstraint #f))])
                 (cond [(and plen (< plen (or max-path-length +inf.0))) plen]
                       [else max-path-length]))])
@@ -141,14 +145,21 @@
 
     ;; {from,to}-time : Seconds
     (define-values (from-time to-time)
-      (match (and issuer-chain (send issuer-chain get-validity-period))
-        [(list issuer-from issuer-to)
-         (match-define (list cert-from cert-to) (send cert get-validity-period))
-         (values (max cert-from issuer-from) (min cert-to issuer-to))]
-        [else (send cert get-validity-period)]))
+      (let ()
+        (match-define (list cert-from cert-to) (send cert get-validity-seconds))
+        (match (and issuer-chain (send issuer-chain get-validity-seconds))
+          [(list issuer-from issuer-to)
+           (values (max cert-from issuer-from) (min cert-to issuer-to))]
+          [else (values cert-from cert-to)])))
 
-    (define/public (get-validity-period)
+    (define/public (get-validity-seconds)
       (list from-time to-time))
+
+    (define/public (print-chain)
+      (let loop ([chain this])
+        (when chain
+          (eprintf "~s : ~e\n" (send chain get-index) chain)
+          (loop (send chain get-issuer-chain)))))
 
     ;; ----------------------------------------
     ;; Extension
@@ -156,13 +167,17 @@
     (define/public (extend-chain new-cert)
       (define errors
         (append (check-as-intermediate)
-                (check-chain-addition new-cert)))
+                (check-chain-addition new-cert)
+                (get-errors)))
       (cond [(pair? errors)
              (new bad-chain% (issuer-chain this) (cert new-cert) (errors errors))]
             [else (new certificate-chain% (issuer-chain this) (cert new-cert))]))
 
+    (define/public (get-errors) null)
+
     ;; check-as-intermediate : -> ErrList
     (define/public (check-as-intermediate)
+      (define (add-index what) (cons (get-index) what))
       ;; 6.1.4
       (append
        ;; 6.1.4 (a-b) policy-mappings, policies, ...
@@ -170,17 +185,17 @@
        ;; 6.1.4 (c-f) handled by get-public-key method instead
        ;; 6.1.4 (g) name constraints -- in constructor
        ;; 6.1.4 (h, l) decrement counters -- in constructor
-       (cond [(>= max-path-length 0) '()]
-             [else '(intermediate:max-path-length)])
+       (cond [(>= (or max-path-length +inf.0) 0) '()]
+             [else (map add-index '(intermediate:max-path-length))])
        ;; 6.1.4 (i, j) policy-mapping, inhibit-anypolicy, ...
        #| POLICIES NOT SUPPORTED |#
        ;; 6.1.4 (k) check CA (reject if no basicConstraints extension)
-       (cond [(is-CA?) '()]
-             [else '(intermediate:not-CA)])
+       (cond [(send cert is-CA?) '()]
+             [else (map add-index '(intermediate:not-CA))])
        ;; 6.1.4 (m) -- in constructor
        ;; 6.1.4 (n)
-       (cond [(ok-key-use? 'keyCertSign #t) '()]
-             [else '(intermediate:missing-keyCertSign)])
+       (cond [(send cert ok-key-use? 'keyCertSign #t) '()]
+             [else (map add-index '(intermediate:missing-keyCertSign))])
        ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
        #| checked in certificate% |#))
 
@@ -205,7 +220,7 @@
        ;; 6.1.3 (a)(1) verify signature
        (map add-index (check-certificate-signature new-cert))
        ;; 6.1.3 (a)(2) currently valid
-       (match (send new-cert get-validity-period)
+       (match (send new-cert get-validity-seconds)
          [(list cert-from cert-to)
           (cond [(<= (max from-time cert-from) (min to-time cert-to)) '()]
                 [else (map add-index '(validity-period:empty-intersection))])])
@@ -236,30 +251,28 @@
     (define/public (check-name-constraints gname kind)
       ;; 6.1.4 (g) name constraints
       (append
-       (cond [(name-constraints-name-ok? name-constraints name) null]
+       (cond [(name-constraints-name-ok? name-constraints gname) null]
              [else (case kind
                      [(subject) (list (cons index 'name-constraints:subject-rejected))]
                      [else (list (cons index 'name-constraints:subjectAltName-rejected))])])
        (if issuer-chain (send issuer-chain check-name-constraints gname kind) null)))
 
-    (define/public (check-validity from-time to-time)
-      (match-define (list ok-start ok-end) (get-validity-period))
+    (define/public (check-validity-period from-time to-time)
+      (match-define (list ok-start ok-end) (get-validity-seconds))
       (cond [(<= ok-start from-time to-time ok-end) '()]
-            [else (cons (cons index 'validity-period:not-contained)
-                        (if issuer-chain (send issuer-chain check-validity) null))]))
+            [else
+             (cons (cons index 'validity-period:not-contained)
+                   (if issuer-chain
+                       (send issuer-chain check-validity-period from-time to-time)
+                       null))]))
     ))
 
 (define bad-chain%
-  (class* pre-chain%
+  (class pre-chain%
     (inherit-field issuer-chain)
     (init-field errors)
     (super-new)
-    (define/public (get-errors)
-      (append errors
-              (cond [(is-a? issuer-chain bad-chain%)
-                     (send issuer-chain get-errors)]
-                    [else null])))
-    ))
+    (define/override (get-errors) errors)))
 
 ;; ============================================================
 
@@ -267,7 +280,8 @@
   (class* pre-chain% (-certificate-chain<%>)
     (inherit-field issuer-chain cert)
     (inherit get-certificate
-             get-validity-period
+             get-anchor
+             get-validity-seconds
              check-as-final
              check-validity-period)
     (super-new)
