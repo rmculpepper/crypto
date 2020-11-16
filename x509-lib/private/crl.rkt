@@ -3,12 +3,49 @@
          racket/class
          racket/file
          racket/port
+         racket/list
          net/url
          crypto
          asn1
          "asn1.rkt"
          (only-in "cert.rkt" asn1-time->seconds))
 (provide (all-defined-out))
+
+;; check-not-revoked/crl : Chain -> ErrList
+(define (check-not-revoked/crl chain
+                               #:cache [cache the-crl-cache]
+                               #:who [who 'check-not-revoked/crl])
+  ;; FIXME: check all certs
+  ;; FIXME: require CRL issuer to be same as cert issuer
+  (define cert (send chain get-certificate))
+  (define crl-urls (certificate-crl-urls cert))
+  (cond [(pair? crl-urls)
+         (define serial-number (send cert get-serial-number))
+         (append*
+          (for/list ([crl-url (in-list crl-urls)])
+            (define crl (send the-crl-cache get-crl crl-url))
+            ;; FIXME: check crl signature
+            ;; What to do if fetch fails or if signature fails?
+            (if (member serial-number (send crl get-revoked-serial-numbers)) '(revoked) '())))]
+        [else '(no-crls)]))
+
+(define (certificate-crl-urls cert)
+  (define crl-dists (send cert get-crl-distribution-points))
+  (flatten
+   (for/list ([crl-dist (in-list crl-dists)]
+              ;; FIXME: we only handle case where CRL issuer is same as cert issuer
+              #:when (not (hash-has-key? crl-dist 'cRLIssuer)))
+     (match (hash-ref crl-dist 'distributionPoint #f)
+       [(list 'fullName gnames)
+        (for/list ([gname (in-list gnames)])
+          (match gname
+            [(list 'uniformResourceIdentifier
+                   (and (regexp #rx"^(?i:https?)://") url))
+             (list url)]
+            [_ null]))]
+       [_ null]))))
+
+;; ----------------------------------------
 
 (define CACHE-DURATION (* 6 60 60)) ;; 6 hours
 
