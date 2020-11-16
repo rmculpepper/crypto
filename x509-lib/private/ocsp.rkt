@@ -9,6 +9,12 @@
          "ocsp-asn1.rkt")
 (provide (all-defined-out))
 
+;; It seems that OCSP responders are very fragile and finicky.
+;; - Might respond "malformed" if request does not use sha1.
+;; - Might respond only to first certificate in request. (Probably to enable
+;;   static responses.)
+;; So: use sha1, limit request to single certificate.
+
 (define SubjectPublicKeyInfo-shallow
   (SEQUENCE [algorithm ANY] [subjectPublicKey BIT-STRING]))
 
@@ -39,12 +45,14 @@
 
 (define (bytes->ocsp-response der)
   (define resp (bytes->asn1 OCSPResponse der))
-  (define rb (hash-ref resp 'responseBytes #f))
-  (define rtype (and rb (hash-ref rb 'responseType)))
-  (define rbody (and rb (hash-ref rb 'response)))
-  (unless (equal? rtype id-pkix-ocsp-basic)
-    (error 'ocsp-response% "bad response type: ~e" rtype))
-  (new ocsp-response% (rbody rbody)))
+  (list (hash-ref resp 'responseStatus)
+        (let ()
+          (define rb (hash-ref resp 'responseBytes #f))
+          (define rtype (and rb (hash-ref rb 'responseType)))
+          (define rbody (and rb (hash-ref rb 'response)))
+          (unless (equal? rtype id-pkix-ocsp-basic)
+            (error 'ocsp-response% "bad response type: ~e" rtype ))
+          (and rbody (new ocsp-response% (rbody rbody))))))
 
 (define ocsp-response%
   (class object%
@@ -83,13 +91,11 @@
             (and (is-responder? cert)
                  (let ([chain (send issuer-chain extend-chain cert)])
                    (and (certificate-chain? chain)
-                        ;(send chain suitable-for-ocsp-signing? issuer-chain) ;; FIXME!
-                        ;; We omit the trusted check because issuer-chain has
-                        ;; (presumably) already been checked for trust, and the
-                        ;; new chain shares a trust anchor.
-                        #;(send chain trusted? the-store)
-                        (let ([now (current-seconds)])
-                          (null? (send chain check-validity-period now now)))
+                        (send chain suitable-for-ocsp-signing? issuer-chain)
+                        ;; We omit the store trust check because issuer-chain
+                        ;; has (presumably) already been checked for trust, and
+                        ;; the new chain has the same trust anchor.
+                        (send chain trusted? #f)
                         chain))))))
     ))
 
@@ -107,8 +113,9 @@
     ;;(printf "header = ~s\n" header)
     (define resp-bytes (port->bytes resp-in))
     (close-input-port resp-in)
-    (define ocsp (bytes->ocsp-response resp-bytes))
-
-    (unless (send ocsp ok-signature? (send chain get-issuer-chain-or-self))
-      (error 'ocsp "bad signature"))
-    ocsp))
+    (match (bytes->ocsp-response resp-bytes)
+      [(list status ocsp)
+       (when ocsp
+         (unless (send ocsp ok-signature? (send chain get-issuer-chain-or-self))
+           (error 'ocsp "bad signature")))
+       (list status ocsp)])))

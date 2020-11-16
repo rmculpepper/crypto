@@ -284,6 +284,7 @@
     (inherit get-certificate
              get-anchor
              get-validity-seconds
+             get-issuer-or-self
              check-as-final
              check-validity-period)
     (super-new)
@@ -292,12 +293,14 @@
       (fprintf out "#<certificate-chain: ~a>"
                (Name->string (send (get-certificate) get-subject))))
 
+    ;; trusted? : Store/#f Seconds Seconds -> Boolean
     (define/public (trusted? store [from-time (current-seconds)] [to-time from-time])
       (null? (check-trust store from-time to-time)))
 
-    ;; check-trust : Store Seconds Seconds -> ErrorList
+    ;; check-trust : Store/#f Seconds Seconds -> ErrorList
     (define/public (check-trust store [from-time (current-seconds)] [to-time from-time])
-      (append (cond [(send store trust? (get-anchor)) '()]
+      (append (cond [(not store) '()]
+                    [(send store trust? (get-anchor)) '()]
                     [else '((0 . anchor:not-trusted))])
               (check-as-final)
               (check-validity-period from-time to-time)))
@@ -338,6 +341,20 @@
 
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
+
+    (define/public (suitable-for-ocsp-signing? for-ca-chain)
+      ;; RFC 6960 4.2.2.2 says "a certificate's issuer MUST do one of the
+      ;; following: sign the OCSP responses itself, or explicitly designate this
+      ;; authority to another entity".
+      ;; - What does "itself" mean? Same certificate > same public key >> same
+      ;;   subject Name. Let's use "same public key".
+      ;; - Likewise, how to check delegation? Check signed by "same public key"
+      ;;   as original issuer.
+      (define for-ca-cert (send for-ca-chain get-certificate))
+      (or (and (send cert is-CA?)
+               (send cert has-same-public-key? for-ca-cert))
+          (and (send cert ok-extended-key-use? id-kp-OCSPSigning #f #f)
+               (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
     (define/public (suitable-for-tls-server? host)
       (null? (check-suitable-for-tls-server host)))

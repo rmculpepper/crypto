@@ -40,6 +40,10 @@
       (equal? (get-der) (send other get-der)))
     (define/public (hash-code recur)
       (recur (get-der)))
+
+    (define/public (has-same-public-key? other-cert)
+      (equal? (get-spki) (send other-cert get-spki)))
+
     (define/public (custom-write out mode)
       (fprintf out "#<certificate: ~a>" (Name->string (get-subject))))
 
@@ -311,11 +315,22 @@
       (ok-key-use? 'keyCertSign (is-CA?)))
     (define/public (suitable-for-CRL-signing?)
       (ok-key-use? 'cRLSign (is-CA?)))
-    (define/public (suitable-for-OCSP-signing? ca-cert)
-      (or (and (is-CA?) (equal? this ca-cert))
-          (and (ok-extended-key-use? id-kp-OCSPSigning #f #f)
-               ...)))
     |#
+
+    #;
+    ;; This is implemented in certificate-chain% instead, so it can avoid an
+    ;; extra signature check (which is already performed during chain validation).
+    (define/public (suitable-for-ocsp-signing? issuer-cert)
+      ;; RFC 6960 4.2.2.2 says "a certificate's issuer MUST do one of the
+      ;; following: sign the OCSP responses itself, or explicitly designate this
+      ;; authority to another entity".
+      ;; - What does "itself" mean? Same certificate > same public key >> same
+      ;;   subject Name. Let's use "same public key".
+      ;; - Likewise, how to check delegation? Check signed by "same public key"
+      ;;   as original issuer.
+      (or (and (is-CA?) (has-same-public-key? issuer-cert))
+          (and (ok-extended-key-use? id-kp-OCSPSigning #f #f)
+               (ok-signature? (send issuer-cert get-public-key)))))
 
     (define/public (suitable-for-tls-server? host)
       (null? (check-suitable-for-tls-server host)))
