@@ -33,6 +33,12 @@
                   [else'()])))]
         [else '(no-crls)]))
 
+(define (do-fetch-crl crl-url)
+  (log-error "fetching CRL: ~e" crl-url)
+  (define crl-der
+    (call/input-url (string->url crl-url) get-pure-port port->bytes))
+  (new crl% (der crl-der)))
+
 (define (certificate-crl-urls cert)
   (define crl-dists (send cert get-crl-distribution-points))
   (flatten

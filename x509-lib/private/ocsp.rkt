@@ -21,7 +21,7 @@
 
 ;; check-not-revoked/ocsp : Chain -> LookupResult
 (define (check-not-revoked/ocsp chain [at-time (current-seconds)]
-                                #:cache [cache no-cache]
+                                #:cache [cache #f]
                                 #:try-get? [try-get? #t])
   (define rs (get-ocsp-responses chain #:cache cache #:try-get? try-get?))
   (define certid (make-certid chain))
@@ -44,12 +44,14 @@
 
 ;; get-ocsp-responses : Chain -> (Listof (U ocsp-response% Symbol))
 (define (get-ocsp-responses chain
-                            #:cache [cache no-cache]
+                            #:cache [cache #f]
                             #:try-get? [try-get? #t])
   (define cert (send chain get-certificate))
   (define req-der (make-ocsp-request chain))
   (for/list ([ocsp-url (send cert get-ocsp-uris)])
-    (define resp (send cache fetch-ocsp ocsp-url req-der do-fetch-ocsp))
+    (define resp
+      (cond [cache (send cache fetch-ocsp ocsp-url req-der)]
+            [else (do-fetch-ocsp ocsp-url req-der)]))
     (when (is-a? resp ocsp-response%)
       (unless (send resp ok-signature? (send chain get-issuer-chain-or-self))
         (error 'ocsp "bad signature")))
@@ -107,7 +109,8 @@
 
 (define ocsp-response%
   (class* object% (cachable<%>)
-    (init-field rbody)
+    (init-field [der #f]
+                [rbody (bytes->asn1 BasicOCSPResponse der)])
     (super-new)
 
     (define rdata (hash-ref rbody 'tbsResponseData))
@@ -118,6 +121,7 @@
     (define/public (get-responses) (hash-ref rdata 'responses))
     ;; FIXME: process extensions
 
+    (define/public (get-der) (or der (asn1->bytes/DER BasicOCSPResponse rbody)))
     (define/public (get-expiration-time)
       (apply min
              (map asn1-generalized-time->seconds

@@ -146,29 +146,18 @@
 ;; A (CacheEntry X) is (cache-entry Seconds Seconds X)
 (struct cache-entry (fetched expires value) #:prefab)
 
-;; (CacheMethod X ... -> Y) = X ... (X ... -> Y) -> Y
-
 (define cache<%>
   (interface ()
-    make-certificate ;; CacheMethod(Bytes -> Certificate)
-    fetch-ocsp ;; CacheMethod[URL OCSPRequest -> (CacheEntry BasicOCSPResponse)]
-    fetch-crl  ;; CacheMethod[URL -> (CacheEntry CertificateList)]
+    make-certificate ;; Bytes -> Certificate
+    fetch-ocsp ;; URL OCSPRequest -> ocsp-response%
+    fetch-crl  ;; URL -> crl%
     trim ;; Seconds -> Void
     ))
 
 (define cachable<%>
   (interface ()
     get-expiration-time ;; Seconds
+    get-der ;; -> Bytes
     ))
 
 (define (cachable? v) (is-a? v cachable<%>))
-
-(define no-cache%
-  (class* object% (cache<%>)
-    (super-new)
-    (define/public (make-certificate der go) (go der))
-    (define/public (fetch-ocsp ocsp-url req-der go) (go ocsp-url req-der))
-    (define/public (fetch-crl crl-url go) (go crl-url))
-    (define/public (trim oldest-time) (void))))
-
-(define no-cache (new no-cache%))
