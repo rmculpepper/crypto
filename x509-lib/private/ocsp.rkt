@@ -1,8 +1,12 @@
 #lang racket/base
 (require racket/match
          racket/class
+         racket/port
+         net/url
          crypto
+         crypto/private/common/base64
          asn1
+         asn1/util/time
          (only-in "asn1.rkt" Name sig-alg->digest)
          (only-in "cert.rkt" Name-equal? bytes->certificate)
          "interfaces.rkt"
@@ -15,6 +19,53 @@
 ;;   static responses.)
 ;; So: use sha1, limit request to single certificate.
 
+;; check-not-revoked/ocsp : Chain -> LookupResult
+(define (check-not-revoked/ocsp chain [at-time (current-seconds)]
+                                #:try-get? [try-get? #t])
+  (define rs (get-ocsp-responses chain #:try-get? try-get?))
+  (define certid (make-certid chain))
+  (define result
+    (lookup-result-join
+     (for/list ([r (in-list rs)])
+       (match r
+         [(list 'successful ocsp)
+          (send ocsp lookup chain certid)]
+         [_ 'unknown:no-responses]))))
+  (match result
+    [(? list?)
+     (define result2
+       (filter (match-lambda
+                 [(list last-time next-time)
+                  (<= last-time at-time next-time)])
+               result))
+     (cond [(pair? result2) result2]
+           [else 'unknown:no-timely-responses])]
+    [_ result]))
+
+(define (get-ocsp-responses chain
+                            #:try-get? [try-get? #t])
+  (define cert (send chain get-certificate))
+  (define req-der (make-ocsp-request chain))
+  (define req-b64 (and try-get? (< (bytes-length req-der) 192) (b64-encode/utf-8 req-der)))
+  (define headers '("Content-Type: application/ocsp-request"))
+  (for/list ([ocsp-url (send cert get-ocsp-uris)])
+    (define resp-in
+      (cond [req-b64
+             (get-pure-port (string->url (string-append ocsp-url "/" req-b64))
+                            headers)]
+            [else
+             (post-pure-port (string->url ocsp-url)
+                             (make-ocsp-request chain)
+                             headers)]))
+    (define resp-bytes (port->bytes resp-in))
+    (close-input-port resp-in)
+    (match (bytes->ocsp-response resp-bytes)
+      [(list status ocsp)
+       (when ocsp
+         (unless (send ocsp ok-signature? (send chain get-issuer-chain-or-self))
+           (error 'ocsp "bad signature")))
+       (list status ocsp)])))
+
 (define SubjectPublicKeyInfo-shallow
   (SEQUENCE [algorithm ANY] [subjectPublicKey BIT-STRING]))
 
@@ -26,7 +77,7 @@
 (define (make-certid chain)
   (define cert (send chain get-certificate))
   (define issuer (send chain get-issuer-or-self))
-  (hasheq 'hashAlgorithm (hasheq 'algorithm id-sha1 'params #f)
+  (hasheq 'hashAlgorithm (hasheq 'algorithm id-sha1 'parameters #f)
           'issuerNameHash (sha1-bytes (asn1->bytes/DER Name (send issuer get-subject)))
           'issuerKeyHash (certificate-keyhash issuer)
           'serialNumber (send cert get-serial-number)))
@@ -50,9 +101,8 @@
           (define rb (hash-ref resp 'responseBytes #f))
           (define rtype (and rb (hash-ref rb 'responseType)))
           (define rbody (and rb (hash-ref rb 'response)))
-          (unless (equal? rtype id-pkix-ocsp-basic)
-            (error 'ocsp-response% "bad response type: ~e" rtype ))
-          (and rbody (new ocsp-response% (rbody rbody))))))
+          (and (equal? rtype id-pkix-ocsp-basic) rbody
+               (new ocsp-response% (rbody rbody))))))
 
 (define ocsp-response%
   (class object%
@@ -74,8 +124,8 @@
       (define sig (match (hash-ref rbody 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
       (define responder-chain (get-responder-chain issuer-chain))
-      (define responder-pk (send responder-chain get-public-key))
-      (digest/verify responder-pk di tbs-der sig))
+      (define responder-pk (and responder-chain (send responder-chain get-public-key)))
+      (and responder-pk (digest/verify responder-pk di tbs-der sig)))
 
     (define/public (get-responder-chain issuer-chain)
       (define (is-responder? cert)
@@ -97,25 +147,36 @@
                         ;; the new chain has the same trust anchor.
                         (send chain trusted? #f)
                         chain))))))
+
+    ;; lookup : Chain -> (Listof LookupResult)
+    (define/public (lookup chain [certid (make-certid chain)])
+      (lookup-result-join
+       (for/list ([resp (in-list (get-responses))])
+         (cond [(equal? (hash-ref resp 'certID) certid)
+                (match (hash-ref resp 'certStatus)
+                  [(list 'good _)
+                   (list (list (asn1-generalized-time->seconds (hash-ref resp 'thisUpdate))
+                               (asn1-generalized-time->seconds (hash-ref resp 'nextUpdate))))]
+                  [(list 'revoked _) 'revoked]
+                  [(list 'unknown _) 'unknown])]
+               [else 'unknown]))))
     ))
 
-(require net/url racket/port)
-(require crypto/private/common/base64)
+;; A LookupResult is one of
+;; - 'unknown
+;; - 'revoked
+;; - (listof (list Seconds Seconds))
 
-(define (perform-ocsp chain)
-  (define cert (send chain get-certificate))
-  (for/list ([ocsp-url (send cert get-ocsp-uris)])
-    (define resp-in
-      (post-impure-port (string->url ocsp-url)
-                        (make-ocsp-request chain)
-                        (list "Content-Type: application/ocsp-request")))
-    (define header (purify-port resp-in))
-    ;;(printf "header = ~s\n" header)
-    (define resp-bytes (port->bytes resp-in))
-    (close-input-port resp-in)
-    (match (bytes->ocsp-response resp-bytes)
-      [(list status ocsp)
-       (when ocsp
-         (unless (send ocsp ok-signature? (send chain get-issuer-chain-or-self))
-           (error 'ocsp "bad signature")))
-       (list status ocsp)])))
+(define (lookup-result-join xs)
+  (foldl lookup-result-join2 'unknown xs))
+
+(define (lookup-result-join2 x y)
+  (match* [x y]
+    [['unknown y] y]
+    [[x 'unknown] x]
+    [['revoked _] 'revoked]
+    [[_ 'revoked] 'revoked]
+    [[(? list? x) (? list? y)] (append x y)]))
+
+(define (max+ a b) (if (and a b) (max a b) (or a b)))
+(define (min+ a b) (if (and a b) (min a b) (or a b)))
