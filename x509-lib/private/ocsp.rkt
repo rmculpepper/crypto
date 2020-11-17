@@ -21,16 +21,16 @@
 
 ;; check-not-revoked/ocsp : Chain -> LookupResult
 (define (check-not-revoked/ocsp chain [at-time (current-seconds)]
+                                #:cache [cache no-cache]
                                 #:try-get? [try-get? #t])
-  (define rs (get-ocsp-responses chain #:try-get? try-get?))
+  (define rs (get-ocsp-responses chain #:cache cache #:try-get? try-get?))
   (define certid (make-certid chain))
   (define result
     (lookup-result-join
      (for/list ([r (in-list rs)])
-       (match r
-         [(list 'successful ocsp)
-          (send ocsp lookup chain certid)]
-         [_ 'unknown:no-responses]))))
+       (cond [(is-a? r ocsp-response%)
+              (send r lookup chain certid)]
+             [else 'unknown:no-responses]))))
   (match result
     [(? list?)
      (define result2
@@ -42,29 +42,29 @@
            [else 'unknown:no-timely-responses])]
     [_ result]))
 
+;; get-ocsp-responses : Chain -> (Listof (U ocsp-response% Symbol))
 (define (get-ocsp-responses chain
+                            #:cache [cache no-cache]
                             #:try-get? [try-get? #t])
   (define cert (send chain get-certificate))
   (define req-der (make-ocsp-request chain))
-  (define req-b64 (and try-get? (< (bytes-length req-der) 192) (b64-encode/utf-8 req-der)))
-  (define headers '("Content-Type: application/ocsp-request"))
   (for/list ([ocsp-url (send cert get-ocsp-uris)])
-    (define resp-in
-      (cond [req-b64
-             (get-pure-port (string->url (string-append ocsp-url "/" req-b64))
-                            headers)]
-            [else
-             (post-pure-port (string->url ocsp-url)
-                             (make-ocsp-request chain)
-                             headers)]))
-    (define resp-bytes (port->bytes resp-in))
-    (close-input-port resp-in)
-    (match (bytes->ocsp-response resp-bytes)
-      [(list status ocsp)
-       (when ocsp
-         (unless (send ocsp ok-signature? (send chain get-issuer-chain-or-self))
-           (error 'ocsp "bad signature")))
-       (list status ocsp)])))
+    (define resp (send cache fetch-ocsp ocsp-url req-der do-fetch-ocsp))
+    (when (is-a? resp ocsp-response%)
+      (unless (send resp ok-signature? (send chain get-issuer-chain-or-self))
+        (error 'ocsp "bad signature")))
+    resp))
+
+(define (do-fetch-ocsp ocsp-url req-der)
+  (define try-get? #t) ;; FIXME!
+  (define headers '("Content-Type: application/ocsp-request"))
+  (define req-b64 (and try-get? (< (bytes-length req-der) 192) (b64-encode/utf-8 req-der)))
+  (define resp-in
+    (cond [req-b64 (get-pure-port (string->url (string-append ocsp-url "/" req-b64)) headers)]
+          [else (post-pure-port (string->url ocsp-url) req-der headers)]))
+  (define resp-bytes (port->bytes resp-in))
+  (close-input-port resp-in)
+  (bytes->ocsp-response resp-bytes))
 
 (define SubjectPublicKeyInfo-shallow
   (SEQUENCE [algorithm ANY] [subjectPublicKey BIT-STRING]))
@@ -94,18 +94,19 @@
     (hasheq 'tbsRequest tbs))
   (asn1->bytes/DER OCSPRequest req))
 
+;; bytes->ocsp-response : Bytes -> ocsp-response% or Symbol
 (define (bytes->ocsp-response der)
   (define resp (bytes->asn1 OCSPResponse der))
-  (list (hash-ref resp 'responseStatus)
-        (let ()
-          (define rb (hash-ref resp 'responseBytes #f))
-          (define rtype (and rb (hash-ref rb 'responseType)))
-          (define rbody (and rb (hash-ref rb 'response)))
-          (and (equal? rtype id-pkix-ocsp-basic) rbody
-               (new ocsp-response% (rbody rbody))))))
+  ;; (list (hash-ref resp 'responseStatus)
+  (define rb (hash-ref resp 'responseBytes #f))
+  (define rtype (and rb (hash-ref rb 'responseType)))
+  (define rbody (and rb (hash-ref rb 'response)))
+  (or (and (equal? rtype id-pkix-ocsp-basic) rbody
+           (new ocsp-response% (rbody rbody)))
+      (hash-ref resp 'responseStatus)))
 
 (define ocsp-response%
-  (class object%
+  (class* object% (cachable<%>)
     (init-field rbody)
     (super-new)
 
@@ -116,6 +117,11 @@
     (define/public (get-produced-at) (hash-ref rdata 'producedAt))
     (define/public (get-responses) (hash-ref rdata 'responses))
     ;; FIXME: process extensions
+
+    (define/public (get-expiration-time)
+      (apply min
+             (map asn1-generalized-time->seconds
+                  (for/list ([resp (in-list (get-responses))]) (hash-ref resp 'nextUpdate)))))
 
     ;; Verify signature
     (define/public (ok-signature? issuer-chain)
