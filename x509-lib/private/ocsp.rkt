@@ -17,20 +17,24 @@
 ;; - Might respond "malformed" if request does not use sha1.
 ;; - Might respond only to first certificate in request. (Probably to enable
 ;;   static responses.)
+;; - Might not support GET request.
 ;; So: use sha1, limit request to single certificate.
 
-;; check-not-revoked/ocsp : Chain -> LookupResult
+;; check-not-revoked/ocsp : Chain [Seconds] -> LookupResult
 (define (check-not-revoked/ocsp chain [at-time (current-seconds)]
-                                #:cache [cache #f]
-                                #:try-get? [try-get? #t])
-  (define rs (get-ocsp-responses chain #:cache cache #:try-get? try-get?))
+                                #:cache [cache #f])
+  (define rs (get-ocsp-responses chain #:cache cache))
+  (check-ocsp-responses rs))
+
+;; check-ocsp-responses : Chain ?? Seconds -> LookupResult
+(define (check-ocsp-responses chain rs at-time)
   (define certid (make-certid chain))
   (define result
     (lookup-result-join
      (for/list ([r (in-list rs)])
        (cond [(is-a? r ocsp-response%)
               (send r lookup chain certid)]
-             [else 'unknown:no-responses]))))
+             [else 'unknown]))))
   (match result
     [(? list?)
      (define result2
@@ -39,13 +43,11 @@
                   (<= last-time at-time next-time)])
                result))
      (cond [(pair? result2) result2]
-           [else 'unknown:no-timely-responses])]
+           [else 'unknown])]
     [_ result]))
 
 ;; get-ocsp-responses : Chain -> (Listof (U ocsp-response% Symbol))
-(define (get-ocsp-responses chain
-                            #:cache [cache #f]
-                            #:try-get? [try-get? #t])
+(define (get-ocsp-responses chain #:cache [cache #f])
   (define cert (send chain get-certificate))
   (define req-der (make-ocsp-request chain))
   (for/list ([ocsp-url (send cert get-ocsp-uris)])
@@ -58,15 +60,21 @@
     resp))
 
 (define (do-fetch-ocsp ocsp-url req-der)
-  (define try-get? #t) ;; FIXME!
-  (define headers '("Content-Type: application/ocsp-request"))
-  (define req-b64 (and try-get? (< (bytes-length req-der) 192) (b64-encode/utf-8 req-der)))
-  (define resp-in
-    (cond [req-b64 (get-pure-port (string->url (string-append ocsp-url "/" req-b64)) headers)]
-          [else (post-pure-port (string->url ocsp-url) req-der headers)]))
-  (define resp-bytes (port->bytes resp-in))
-  (close-input-port resp-in)
-  (bytes->ocsp-response resp-bytes))
+  (let loop ([try-get? #t])
+    (define headers '("Content-Type: application/ocsp-request"))
+    (define req-b64 (and try-get? (< (bytes-length req-der) 192) (b64-encode/utf-8 req-der)))
+    (define resp-in
+      (cond [req-b64 (get-impure-port (string->url (string-append ocsp-url "/" req-b64)) headers)]
+            [else (post-impure-port (string->url ocsp-url) req-der headers)]))
+    (define header (purify-port resp-in))
+    (define resp-bytes (port->bytes resp-in))
+    (close-input-port resp-in)
+    (eprintf "do-fetch-ocsp: header = ~e\n" header)
+    (eprintf "do-fetch-ocsp: got ~e\n" resp-bytes)
+    (cond [(regexp-match? #rx"^HTTP/[0-9.]* 200" header)
+           (bytes->ocsp-response resp-bytes)]
+          [req-b64 (loop #f)]
+          [else 'failed-to-fetch])))
 
 (define SubjectPublicKeyInfo-shallow
   (SEQUENCE [algorithm ANY] [subjectPublicKey BIT-STRING]))

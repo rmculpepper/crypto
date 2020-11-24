@@ -33,7 +33,7 @@
                   ;; What to do if fetch fails or if signature fails?
                   [(member serial-number (send crl get-revoked-serial-numbers))
                    '(revoked)]
-                  [else'()])))]
+                  [else '()])))]
         [else '(no-crls)]))
 
 (define (do-fetch-crl crl-url)
@@ -72,12 +72,10 @@
 
     (define/public (get-der) der)
     (define/public (get-expiration-time)
-      (cond [(hash-ref tbs 'nextUpdate #f)
-             => asn1-time->seconds]
+      (cond [(get-next-update) => values]
             [else
              (define expire/this-update
-               (+ (asn1-time->seconds (hash-ref tbs 'thisUpdate))
-                  CRL-DEFAULT-VALIDITY))
+               (+ (get-this-update) CRL-DEFAULT-VALIDITY))
              (cond [fetched-time
                     (max expire/this-update
                          (+ fetched-time CRL-DEFAULT-VALIDITY-FROM-FETCHED))]
@@ -94,9 +92,10 @@
                     [(bit-string sig-bytes 0) sig-bytes]))
       (digest/verify issuer-pk di tbs-der sig))
 
+    (define/public (get-this-update)
+      (asn1-time->seconds (hash-ref tbs 'thisUpdate)))
     (define/public (get-next-update)
       (cond [(hash-ref tbs 'nextUpdate #f) => asn1-time->seconds] [else #f]))
-
     (define/public (get-revoked-certificates)
       (hash-ref tbs 'revokedCertificates null))
     (define/public (get-revoked-serial-numbers)
