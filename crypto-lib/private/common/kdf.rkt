@@ -17,11 +17,11 @@
 (require racket/class
          racket/match
          racket/string
+         base64
          "interfaces.rkt"
          "common.rkt"
          "error.rkt"
          "util.rkt"
-         "base64.rkt"
          (prefix-in rkt: "../rkt/kdf.rkt"))
 (provide kdf-impl-base%
          hkdf-impl%
@@ -421,8 +421,8 @@
      (and (exact-nonnegative-integer? n)
           (<= lb n ub)
           n)]
-    [($B64) (b64-decode vstr)]
-    [($AB64) (ab64-decode vstr)]))
+    [($B64) (base64-decode vstr #:mode 'strict)]
+    [($AB64) (base64-decode vstr #:endcodes #"./" #:mode 'strict)]))
 
 ;; check-param : ValueSpec Env -> Env/#f
 (define (check-param pspec env)
@@ -477,7 +477,9 @@
      (number->string v)]
     [($B64)
      (unless (or (bytes? v) (string? v)) (bad "(or/c bytes? string?)"))
-     (b64-encode/utf-8 v)]
+     (bytes->string/utf-8
+      (base64-encode v #:line #f #:pad? #f))]
     [($AB64)
      (unless (or (bytes? v) (string? v)) (bad "(or/c bytes? string?)"))
-     (ab64-encode/utf-8 v)]))
+     (bytes->string/utf-8
+      (base64-encode v #:endcodes #"./" #:line #f #:pad? #f))]))
