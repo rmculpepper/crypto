@@ -17,6 +17,7 @@
     [prop:custom-write
      (lambda (self out mode) (send self custom-write out mode))])
    equal-to
+   has-same-public-key?
    hash-code
    custom-write
 
@@ -143,15 +144,11 @@
 
 (define-logger x509)
 
-;; A (CacheEntry X) is (cache-entry Seconds Seconds X)
-(struct cache-entry (fetched expires value) #:prefab)
-
 (define cache<%>
   (interface ()
     make-certificate ;; Bytes -> Certificate
     fetch-ocsp ;; URL OCSPRequest -> ocsp-response%
     fetch-crl  ;; URL -> crl%
-    trim ;; Seconds -> Void
     ))
 
 (define cachable<%>

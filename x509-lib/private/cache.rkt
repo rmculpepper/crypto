@@ -16,14 +16,14 @@
     (define/public (fetch-ocsp ocsp-url req-der)
       (do-fetch-ocsp ocsp-url req-der))
     (define/public (fetch-crl crl-url)
-      (do-fetch-crl crl-url))
-    (define/public (trim oldest-time) (void))))
+      (do-fetch-crl crl-url))))
 
 (define no-cache (new no-cache%))
 
 (define db-cache%
   (class* object% (cache<%>)
-    (init-field parent db-file)
+    (init-field parent db-file
+                [read-only? #f])
     (super-new)
 
     (define conn (sqlite3-connect #:database db-file #:mode 'create))
@@ -47,7 +47,9 @@
             [else
              (eprintf "db-cache: fault for ~e\n" ocsp-url)
              (define r (send parent fetch-ocsp ocsp-url req-der))
-             (when (cachable? r)
+             (when (and (not read-only?) (cachable? r))
+               (query-exec conn
+                 "DELETE FROM Cache_OCSP WHERE expire < ?" now)
                (query-exec conn
                  "INSERT INTO Cache_OCSP (url, req, expire, basic_resp) VALUES (?, ?, ?, ?)"
                  ocsp-url req-der (send r get-expiration-time) (send r get-der)))
@@ -64,19 +66,13 @@
             [else
              (eprintf "db-cache: fault for ~e\n" crl-url)
              (define r (send parent fetch-crl crl-url))
-             (when (cachable? r)
+             (when (and (not read-only?) (cachable? r))
+               (query-exec conn
+                 "DELETE FROM Cache_CRL WHERE expire < ?" now)
                (query-exec conn
                  "INSERT INTO Cache_CRL (url, expire, crl) VALUES (?, ?, ?)"
                  crl-url (send r get-expiration-time) (send r get-der)))
              r]))
-
-    (define/public (trim oldest-time)
-      ;; FIXME: delete records older than oldest-time
-      (query-exec conn
-        "DELETE FROM Cache_OCSP WHERE expire < ?" oldest-time)
-      (query-exec conn
-        "DELETE FROM Cache_CRL WHERE expire < ?" oldest-time)
-      (void))
     ))
 
 (define mem-cache%
@@ -113,9 +109,6 @@
     (define/public (fetch-crl crl-url)
       (get! crl-h crl-url
             (lambda () (send parent fetch-crl crl-url))))
-
-    (define/public (trim oldest-time)
-      (void))
     ))
 
 (define (make-cache [db-file #f])
