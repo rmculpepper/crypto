@@ -17,7 +17,8 @@
 #lang racket/base
 (require racket/list
          racket/class)
-(provide crypto-entry-point
+(provide (all-from-out (submod "." logger))
+         crypto-entry-point
          with-crypto-entry
          crypto-who
          crypto-error
@@ -33,6 +34,11 @@
          err/auth-decrypt-failed
          err/no-curve
          err/off-curve)
+
+(module logger racket/base
+  (provide (all-defined-out))
+  (define-logger crypto))
+(require (submod "." logger))
 
 ;; Error conventions:
 ;; - use (about) for reporting context

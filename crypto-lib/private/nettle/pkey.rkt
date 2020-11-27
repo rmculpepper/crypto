@@ -229,14 +229,15 @@
             's (mpz->integer (dsa_signature_struct-s sig)))))
 
 (define (der->dsa_signature der)
-  (match (bytes->asn1/DER DSA-Sig-Val der)
+  (match (with-handlers ([exn:fail:asn1? void])
+           (bytes->asn1/DER DSA-Sig-Val der))
     [(hash-table ['r (? exact-nonnegative-integer? r)]
                  ['s (? exact-nonnegative-integer? s)])
      (define sig (new-dsa_signature))
      (mpz_set (dsa_signature_struct-r sig) (integer->mpz r))
      (mpz_set (dsa_signature_struct-s sig) (integer->mpz s))
      sig]
-    [_ (crypto-error "signature is not well-formed")]))
+    [_ #f]))
 
 ;; ----------------------------------------
 ;; New DSA API (Nettle >= 3.0)
@@ -355,7 +356,7 @@
 
     (define/override (-verify digest digest-spec pad sig-der)
       (define sig (der->dsa_signature sig-der))
-      (nettle_dsa_verify params pub digest sig))
+      (and sig (nettle_dsa_verify params pub digest sig)))
     ))
 
 ;; ============================================================
@@ -471,7 +472,7 @@
 
     (define/override (-verify digest digest-spec pad sig-der)
       (define sig (der->dsa_signature sig-der))
-      (nettle_ecdsa_verify pub digest sig))
+      (and sig (nettle_ecdsa_verify pub digest sig)))
 
     (define/override (-compute-secret peer-pubkey)
       (define ecc (ecc_scalar_struct-ecc priv))
@@ -637,7 +638,8 @@
       sig)
 
     (define/override (-verify msg _dspec pad sig)
-      (nettle_ed25519_sha512_verify pub (bytes-length msg) msg sig))
+      (and (= (bytes-length sig) ED25519_SIGNATURE_SIZE)
+           (nettle_ed25519_sha512_verify pub (bytes-length msg) msg sig)))
     ))
 
 (define nettle-ed448-key%
@@ -669,7 +671,8 @@
       sig)
 
     (define/override (-verify msg _dspec pad sig)
-      (nettle_ed448_shake256_verify pub (bytes-length msg) msg sig))
+      (and (= (bytes-length sig) ED448_SIGNATURE_SIZE)
+           (nettle_ed448_shake256_verify pub (bytes-length msg) msg sig)))
     ))
 
 ;; ============================================================

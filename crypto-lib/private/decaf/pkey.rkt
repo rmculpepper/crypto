@@ -117,8 +117,8 @@
     (define/override (-sign msg _dspec pad)
       (decaf_ed25519_sign priv pub msg (bytes-length msg) 0))
     (define/override (-verify msg _dspec pad sig)
-      (check-bytes-length "signature" DECAF_EDDSA_25519_SIGNATURE_BYTES sig this)
-      (decaf_ed25519_verify sig pub msg (bytes-length msg) 0))
+      (and (= (bytes-length sig) DECAF_EDDSA_25519_SIGNATURE_BYTES)
+           (decaf_ed25519_verify sig pub msg (bytes-length msg) 0)))
     ))
 
 (define decaf-ed448-key%
@@ -129,8 +129,8 @@
     (define/override (-sign msg _dspec pad)
       (decaf_ed448_sign priv pub msg (bytes-length msg) 0))
     (define/override (-verify msg _dspec pad sig)
-      (check-bytes-length "signature" DECAF_EDDSA_448_SIGNATURE_BYTES sig this)
-      (decaf_ed448_verify sig pub msg (bytes-length msg) 0))
+      (and (= (bytes-length sig) DECAF_EDDSA_448_SIGNATURE_BYTES)
+           (decaf_ed448_verify sig pub msg (bytes-length msg) 0)))
     ))
 
 ;; ============================================================

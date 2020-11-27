@@ -118,7 +118,8 @@
       sig)
 
     (define/override (-verify msg _dspec pad sig)
-      (crypto_sign_ed25519_verify_detached sig msg (bytes-length msg) pub))
+      (and (= (bytes-length sig) crypto_sign_ed25519_BYTES)
+           (crypto_sign_ed25519_verify_detached sig msg (bytes-length msg) pub)))
     ))
 
 ;; ============================================================

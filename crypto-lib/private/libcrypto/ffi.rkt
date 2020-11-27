@@ -69,42 +69,36 @@
 
 ;; Use atomic wrapper around ffi calls to avoid race retrieving error info.
 
-(define (err-wrap who [ok? positive?] #:convert [convert values] #:drain? [drain? #f])
+(define (err-wrap who [ok? positive?] #:convert [convert values] #:log-errors? [log? #t])
   (lambda (proc)
     (lambda args
       (call-as-atomic
        (lambda ()
          (let ([result (apply proc args)])
            (cond [(ok? result)
-                  (let ([errors (drain-errors)])
-                    (unless drain?
-                      (report-errors who errors)))
+                  (drain-errors who log?)
                   (convert result)]
                  [else (raise-crypto-error who)])))))))
 
-(define (drain-errors)
-  (let ([e (ERR_get_error)])
-    (cond [(zero? e) null]
-          [else (cons e (drain-errors))])))
-
-(define (report-errors who errors)
-  (when (pair? errors)
-    (call-as-nonatomic
-     (lambda ()
-       (for ([e (in-list errors)])
-         (eprintf "~a: internal error: unhandled error\n ~a [~a:~a:~a]\n"
-                  who
-                  (or (ERR_reason_error_string e) "?")
-                  (or (ERR_lib_error_string e) "?")
-                  (or (ERR_func_error_string e) "?")
-                  e))))))
+(define (drain-errors who log?)
+  (let loop ()
+    (define e (ERR_get_error))
+    (unless (zero? e)
+      (when log?
+        (log-crypto-error "~a: internal error: unhandled error\n ~a [~a:~a:~a]\n"
+                          (or who '?)
+                          (or (ERR_reason_error_string e) "?")
+                          (or (ERR_lib_error_string e) "?")
+                          (or (ERR_func_error_string e) "?")
+                          e))
+      (loop))))
 
 (define (err-wrap/pointer who)
   (err-wrap who values))
 
 (define (raise-crypto-error where)
   (let ([e (ERR_get_error)])
-    (drain-errors)
+    (drain-errors #f #f)
     (crypto-error "~a: ~a [~a:~a:~a]"
                   where
                   (or (ERR_reason_error_string e) "?")
@@ -853,10 +847,9 @@
 
 (define-crypto EVP_PKEY_verify
   (_fun _EVP_PKEY_CTX _pointer _size _pointer _size -> _int)
-  #:wrap (err-wrap 'EVP_PKEY_verify
-                   (lambda (r) (member r '(0 1)))
-                   #:convert (lambda (r) (case r ((0) #f) ((1) #t)))
-                   #:drain? #t))
+  #:wrap (err-wrap 'EVP_PKEY_verify exact-integer?
+                   #:convert (lambda (r) (> r 0))
+                   #:log-errors? #f))
 
 (define-crypto EVP_PKEY_encrypt_init
   (_fun _EVP_PKEY_CTX -> _int)

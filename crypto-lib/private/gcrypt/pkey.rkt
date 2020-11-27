@@ -100,8 +100,8 @@
       (check-sig-pad pad)
       (define data-sexp (sign-make-data-sexp digest digest-spec pad))
       (define sig-sexp (verify-make-sig-sexp sig))
-      (define result (gcry_pk_verify sig-sexp data-sexp pub))
-      (gcry_sexp_release sig-sexp)
+      (define result (and sig-sexp (gcry_pk_verify sig-sexp data-sexp pub)))
+      (when sig-sexp (gcry_sexp_release sig-sexp))
       (gcry_sexp_release data-sexp)
       result)
 
@@ -360,11 +360,12 @@
         (err/bad-signature-pad impl pad)))
 
     (define/override (verify-make-sig-sexp sig-der)
-      (match (bytes->asn1/DER DSA-Sig-Val sig-der)
+      (match (with-handlers ([exn:fail:asn1? void])
+               (bytes->asn1/DER DSA-Sig-Val sig-der))
         [(hash-table ['r (? exact-nonnegative-integer? r)]
                      ['s (? exact-nonnegative-integer? s)])
          (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
-        [_ (crypto-error "signature is not well-formed")]))
+        [_ #f]))
     ))
 
 (define (unpack-sig-sexp sig-sexp label)
@@ -532,11 +533,12 @@
         (err/bad-signature-pad impl pad)))
 
     (define/override (verify-make-sig-sexp sig-der)
-      (match (bytes->asn1/DER DSA-Sig-Val sig-der)
+      (match (with-handlers ([exn:fail:asn1? void])
+               (bytes->asn1/DER DSA-Sig-Val sig-der))
         [(hash-table ['r (? exact-nonnegative-integer? r)]
                      ['s (? exact-nonnegative-integer? s)])
          (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
-        [_ (crypto-error "signature is not well-formed")]))
+        [_ #f]))
 
     ;; ECDH support is not documented, but described in comments in
     ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
@@ -667,11 +669,10 @@
         (err/bad-signature-pad impl pad)))
 
     (define/override (verify-make-sig-sexp sig-bytes)
-      (unless (= (bytes-length sig-bytes) 64)
-        (crypto-error "signature is not well-formed"))
-      (gcry_sexp_build "(sig-val (eddsa (r %M) (s %M)))"
-                       (base256->mpi (subbytes sig-bytes 0 32))
-                       (base256->mpi (subbytes sig-bytes 32 64))))
+      (and (= (bytes-length sig-bytes) 64)
+           (gcry_sexp_build "(sig-val (eddsa (r %M) (s %M)))"
+                            (base256->mpi (subbytes sig-bytes 0 32))
+                            (base256->mpi (subbytes sig-bytes 32 64)))))
     ))
 
 ;; ============================================================

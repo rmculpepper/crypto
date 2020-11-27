@@ -532,7 +532,6 @@
                   ;; Convert status to avoid raising exn, return #f for "not verified"
                   (values GPG_ERR_NO_ERROR #f)]
                  [else
-                  (eprintf "got status ~s\n" status)
                   (values status #f)]))
   #:wrap check2)
 

@@ -206,6 +206,7 @@
 
     sign            ;; bytes DigestSpec Padding -> bytes
     verify          ;; bytes DigestSpec Padding bytes -> boolean
+    ;; In verify, if sig is not well-formed then just return #f, no error.
 
     encrypt         ;; bytes Padding -> bytes
     decrypt         ;; bytes Padding -> bytes
