@@ -9,6 +9,7 @@
          asn1
          "interfaces.rkt"
          "asn1.rkt"
+         (submod "asn1.rkt" verify)
          (only-in "cert.rkt" asn1-time->seconds))
 (provide (all-defined-out))
 
@@ -87,10 +88,10 @@
     (define/public (ok-signature? issuer-pk)
       (define crl (bytes->asn1 CertificateList-for-verify-sig der))
       (define tbs-der (hash-ref crl 'tbsCertList))
-      (define di (sig-alg->digest (hash-ref crl 'signatureAlgorithm)))
+      (define algid (hash-ref crl 'signatureAlgorithm))
       (define sig (match (hash-ref crl 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
-      (digest/verify issuer-pk di tbs-der sig))
+      (verify/algid issuer-pk algid tbs-der sig))
 
     (define/public (get-this-update)
       (asn1-time->seconds (hash-ref tbs 'thisUpdate)))

@@ -9,6 +9,7 @@
          asn1/util/time
          "interfaces.rkt"
          "asn1.rkt"
+         (submod "asn1.rkt" verify)
          "stringprep.rkt")
 (provide (all-defined-out))
 
@@ -662,10 +663,10 @@
     (define/public (ok-signature? issuer-pk)
       (define vcert (bytes->asn1 Certificate-for-verify-sig (get-der)))
       (define tbs-der (hash-ref vcert 'tbsCertificate))
-      (define di (sig-alg->digest (hash-ref vcert 'signatureAlgorithm)))
+      (define algid (hash-ref vcert 'signatureAlgorithm))
       (define sig (match (hash-ref vcert 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
-      (digest/verify issuer-pk di tbs-der sig))
+      (verify/algid issuer-pk algid tbs-der sig))
 
     (define/public (get-public-key) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
     ))

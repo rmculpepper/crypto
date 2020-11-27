@@ -7,7 +7,8 @@
          crypto/private/common/base64
          asn1
          asn1/util/time
-         (only-in "asn1.rkt" Name sig-alg->digest)
+         (only-in "asn1.rkt" Name)
+         (submod "asn1.rkt" verify)
          (only-in "cert.rkt" Name-equal? bytes->certificate)
          "interfaces.rkt"
          "ocsp-asn1.rkt")
@@ -138,12 +139,12 @@
     ;; Verify signature
     (define/public (ok-signature? issuer-chain)
       (define tbs-der (asn1->bytes/DER ResponseData rdata))
-      (define di (sig-alg->digest (hash-ref rbody 'signatureAlgorithm)))
+      (define algid (hash-ref rbody 'signatureAlgorithm))
       (define sig (match (hash-ref rbody 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
       (define responder-chain (get-responder-chain issuer-chain))
       (define responder-pk (and responder-chain (send responder-chain get-public-key)))
-      (and responder-pk (digest/verify responder-pk di tbs-der sig)))
+      (and responder-pk (verify/algid responder-pk algid tbs-der sig)))
 
     (define/public (get-responder-chain issuer-chain)
       (define (is-responder? cert)

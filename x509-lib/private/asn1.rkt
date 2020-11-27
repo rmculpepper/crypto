@@ -603,10 +603,24 @@
    [ecdsa-with-SHA256       'ec  'sha256 #f]
    [ecdsa-with-SHA384       'ec  'sha384 #f]
    [ecdsa-with-SHA512       'ec  'sha512 #f]
+   [id-Ed25519              'eddsa #f    #f]
+   [id-Ed448                'eddsa #f    #f]
    ))
 
-(define (sig-alg->digest alg)
-  (define alg-oid (hash-ref alg 'algorithm))
-  (unless (eq? #f (hash-ref alg 'parameters #f))
-    (error 'sig-alg->digest "internal error: unexpected parameters"))
-  (relation-ref SIGNING 'oid alg-oid 'digest))
+(module+ verify
+  (require racket/match racket/class crypto)
+  (provide verify/algid)
+
+  ;; If key is wrong type just return #f, no error.
+  (define (verify/algid pk alg tbs sig #:who [who 'verify/algid])
+    (define alg-oid (hash-ref alg 'algorithm))
+    (unless (eq? #f (hash-ref alg 'parameters #f))
+      (error who "unexpected signature algorithm parameters"))
+    (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
+      [(list 'eddsa #f)
+       (and (eq? 'eddsa (send pk get-spec))
+            (pk-verify pk tbs sig))]
+      [(list pk-type di)
+       (and (eq? pk-type (send pk get-spec))
+            (digest/verify pk di tbs sig))]
+      [_ (error who "unimplemented signature algorithm")])))
