@@ -245,9 +245,16 @@
     (define/public (check-certificate-name-constraints new-cert)
       (define subject-name (send new-cert get-subject))
       (define alt-names (send new-cert get-subject-alt-name))
-      (append (check-name-constraints (list 'directoryName subject-name) 'subject)
-              (append* (for/list ([san (in-list alt-names)])
-                         (check-name-constraints san 'alt)))))
+      (append
+       (check-name-constraints (list 'directoryName subject-name) 'subject)
+       (append*
+        (match subject-name
+          [(list 'rdnSequence rdns)
+           (for*/list ([rdn (in-list rdns)] [av (in-list rdn)]
+                       #:when (equal? (hash-ref av 'type) id-emailAddress))
+             (check-name-constraints (list 'rfc822Name (hash-ref av 'value)) 'subject-email))]))
+       (append* (for/list ([san (in-list alt-names)])
+                  (check-name-constraints san 'alt)))))
 
     (define/public (check-name-constraints gname kind)
       ;; 6.1.4 (g) name constraints
@@ -255,6 +262,7 @@
        (cond [(name-constraints-name-ok? name-constraints gname) null]
              [else (case kind
                      [(subject) (list (cons index 'name-constraints:subject-rejected))]
+                     [(subject-email) (list (cons index 'name-constraint:subject-email-rejected))]
                      [else (list (cons index 'name-constraints:subjectAltName-rejected))])])
        (if issuer-chain (send issuer-chain check-name-constraints gname kind) null)))
 
