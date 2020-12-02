@@ -615,34 +615,6 @@
    [id-Ed448                'eddsa #f    #f       'absent]
    ))
 
-(define HASH ;; HashAlgs : DIGEST-ALGORITHM
-  (relation
-   #:heading
-   ['oid        'digest 'params 'params-presence]
-   #:tuples
-   ;; RFC 5912
-   [id-md5      'md5    NULL    'preferredAbsent]
-   [id-sha1     'sha1   NULL    'preferredAbsent]
-   [id-sha224   'sha224 NULL    'preferredAbsent]
-   [id-sha256   'sha256 NULL    'preferredAbsent]
-   [id-sha384   'sha384 NULL    'preferredAbsent]
-   [id-sha512   'sha512 NULL    'preferredAbsent]
-
-   ;; RFC 8692
-   [id-shake128 'shake128 #f 'absent] ;; output 32 bytes
-   [id-shake256 'shake256 #f 'absent] ;; output 64 bytes
-
-   ;; NIST
-   [id-sha512-224 'sha512/224 NULL 'preferredAbsent]
-   [id-sha512-256 'sha512/256 NULL 'preferredAbsent]
-   [id-sha3-224 'sha3-224 NULL 'preferredAbsent]
-   [id-sha3-256 'sha3-256 NULL 'preferredAbsent]
-   [id-sha3-384 'sha3-384 NULL 'preferredAbsent]
-   [id-sha3-512 'sha3-512 NULL 'preferredAbsent]
-   [id-shake128-len 'shake128 INTEGER 'present]
-   [id-shake256-len 'shake256 INTEGER 'present]
-   ))
-
 (module+ verify
   (require racket/match racket/class crypto)
   (provide verify/algid)
