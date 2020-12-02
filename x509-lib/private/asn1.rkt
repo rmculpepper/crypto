@@ -589,39 +589,59 @@
 (define SIGNING
   (relation
    #:heading
-   ['oid                    'pk  'digest 'params]
+   ['oid                    'pk  'digest 'params  'params-presence]
    #:tuples
-   [md5WithRSAEncryption    'rsa 'md5    NULL]
-   [sha1WithRSAEncryption   'rsa 'sha1   NULL]
-   [sha224WithRSAEncryption 'rsa 'sha224 NULL]
-   [sha256WithRSAEncryption 'rsa 'sha256 NULL]
-   [sha384WithRSAEncryption 'rsa 'sha384 NULL]
-   [sha512WithRSAEncryption 'rsa 'sha512 NULL]
-   [id-RSASSA-PSS           'rsa #f      RSASSA-PSS-params]
-   [dsa-with-sha1           'dsa 'sha1   #f]
-   [id-dsa-with-sha224      'dsa 'sha224 #f]
-   [id-dsa-with-sha256      'dsa 'sha256 #f]
-   [id-dsa-with-sha384      'dsa 'sha384 #f]
-   [id-dsa-with-sha512      'dsa 'sha512 #f]
-   [ecdsa-with-SHA1         'ec  'sha1   #f]
-   [ecdsa-with-SHA224       'ec  'sha224 #f]
-   [ecdsa-with-SHA256       'ec  'sha256 #f]
-   [ecdsa-with-SHA384       'ec  'sha384 #f]
-   [ecdsa-with-SHA512       'ec  'sha512 #f]
-   [id-Ed25519              'eddsa #f    #f]
-   [id-Ed448                'eddsa #f    #f]
+   ;; From RFC 5912:
+   [md5WithRSAEncryption    'rsa 'md5    NULL     'required]
+   [sha1WithRSAEncryption   'rsa 'sha1   NULL     'required]
+   [sha224WithRSAEncryption 'rsa 'sha224 NULL     'required]
+   [sha256WithRSAEncryption 'rsa 'sha256 NULL     'required]
+   [sha384WithRSAEncryption 'rsa 'sha384 NULL     'required]
+   [sha512WithRSAEncryption 'rsa 'sha512 NULL     'required]
+   [id-RSASSA-PSS           'rsa #f      RSASSA-PSS-params 'required]
+   [dsa-with-sha1           'dsa 'sha1   NULL     'absent]
+   [id-dsa-with-sha224      'dsa 'sha224 NULL     'absent]
+   [id-dsa-with-sha256      'dsa 'sha256 NULL     'absent]
+   [id-dsa-with-sha384      'dsa 'sha384 NULL     'absent]
+   [id-dsa-with-sha512      'dsa 'sha512 NULL     'absent]
+   [ecdsa-with-SHA1         'ec  'sha1   NULL     'absent]
+   [ecdsa-with-SHA224       'ec  'sha224 NULL     'absent]
+   [ecdsa-with-SHA256       'ec  'sha256 NULL     'absent]
+   [ecdsa-with-SHA384       'ec  'sha384 NULL     'absent]
+   [ecdsa-with-SHA512       'ec  'sha512 NULL     'absent]
+
+   ;; From RFC 8410:
+   [id-Ed25519              'eddsa #f    #f       'absent]
+   [id-Ed448                'eddsa #f    #f       'absent]
    ))
 
-(define HASH
+(define HASH ;; HashAlgs : DIGEST-ALGORITHM
   (relation
    #:heading
-   ['oid        'digest]
+   ['oid        'digest 'params 'params-presence]
    #:tuples
-   [id-sha1     'sha1]
-   [id-sha224   'sha224]
-   [id-sha256   'sha256]
-   [id-sha384   'sha384]
-   [id-sha512   'sha512]))
+   ;; RFC 5912
+   [id-md5      'md5    NULL    'preferredAbsent]
+   [id-sha1     'sha1   NULL    'preferredAbsent]
+   [id-sha224   'sha224 NULL    'preferredAbsent]
+   [id-sha256   'sha256 NULL    'preferredAbsent]
+   [id-sha384   'sha384 NULL    'preferredAbsent]
+   [id-sha512   'sha512 NULL    'preferredAbsent]
+
+   ;; RFC 8692
+   [id-shake128 'shake128 #f 'absent] ;; output 32 bytes
+   [id-shake256 'shake256 #f 'absent] ;; output 64 bytes
+
+   ;; NIST
+   [id-sha512-224 'sha512/224 NULL 'preferredAbsent]
+   [id-sha512-256 'sha512/256 NULL 'preferredAbsent]
+   [id-sha3-224 'sha3-224 NULL 'preferredAbsent]
+   [id-sha3-256 'sha3-256 NULL 'preferredAbsent]
+   [id-sha3-384 'sha3-384 NULL 'preferredAbsent]
+   [id-sha3-512 'sha3-512 NULL 'preferredAbsent]
+   [id-shake128-len 'shake128 INTEGER 'present]
+   [id-shake256-len 'shake256 INTEGER 'present]
+   ))
 
 (module+ verify
   (require racket/match racket/class crypto)
@@ -632,12 +652,13 @@
     (define alg-oid (hash-ref alg 'algorithm))
     (unless (eq? #f (hash-ref alg 'parameters #f))
       (error who "unexpected signature algorithm parameters"))
-    (match (relation-ref* SIGNING 'oid alg-oid '(pk digest params))
-      [(list 'eddsa #f _)
+    (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
+      [(list 'eddsa #f)
        (and (eq? 'eddsa (send pk get-spec))
             (pk-verify pk tbs sig))]
-      [(list 'rsa #f pss-params)
-       (define hash-algid (hash-ref pss-params 'hashAlgorithm))
+      [(list 'rsa #f) ;; means RSA w/ PSS
+       (define alg-params (hash-ref alg 'parameters))
+       (define hash-algid (hash-ref alg-params 'hashAlgorithm))
        (and (eq? 'rsa (send pk get-spec))
             ;; FIXME: maskGenAlgorithm!
             (match (relation-ref HASH 'oid (hash-ref hash-algid 'algorithm) 'digest)
@@ -645,7 +666,7 @@
                ;; FIXME: 'pss vs 'pss*, and salt length is actually in pss-params
                (digest/verify pk di tbs sig #:pad 'pss*)]
               [_ (error who "unimplemented signature algorithm (PSS)")]))]
-      [(list pk-type di _)
+      [(list pk-type di)
        (and (eq? pk-type (send pk get-spec))
             (digest/verify pk di tbs sig))]
       [_ (error who "unimplemented signature algorithm")])))
