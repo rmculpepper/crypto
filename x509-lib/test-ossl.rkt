@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/class
          racket/list
+         racket/cmdline
          rackunit
          crypto crypto/all
          x509)
@@ -13,6 +14,14 @@
 
 (crypto-factories libcrypto-factory)
 ;(crypto-factories gcrypt-factory) ;; can't handle ca-cert-ec-explicit
+
+(command-line
+ #:args ([ossl-test-cert-dir #f])
+ (cond [ossl-test-cert-dir
+        (current-directory ossl-test-cert-dir)]
+       [else
+        (eprintf "OpenSSL test/certs directory not provided. Skipping tests.\n")
+        (exit 0)]))
 
 (when #f
 (define store
