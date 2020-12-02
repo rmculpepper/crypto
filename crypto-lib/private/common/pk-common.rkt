@@ -525,7 +525,7 @@
       (case fmt
         [(AlgorithmIdentifier)
          (-check-bytes fmt buf)
-         (match (bytes->asn1/DER AlgorithmIdentifier/DER buf)
+         (match (ensure-keys (bytes->asn1/DER AlgorithmIdentifier/DER buf) '(parameters))
            [(hash-table ['algorithm alg-oid] ['parameters parameters])
             (cond [(equal? alg-oid id-dsa)
                    (read-params parameters 'Dss-Parms)] ;; Dss-Parms
@@ -685,6 +685,12 @@
 ;; Only use OneAsymmetricKey format if public key supplied and
 ;; PrivateKeyInfo can't represent it.
 
+;; On presence/absence of AlgorithmIdentifier parameters:
+;; - CAB BR (v1.7.3) section 7.1.3 says for SPKI
+;;   - NULL parameters must be present for RSA
+;; - RFC 8410 says in general
+;;   - for Ed25519 etc, parameters must be absent
+
 (define (private-key->der fmt priv pub)
   (cond [(and (eq? fmt 'OneAsymmetricKey) pub)
          (asn1->bytes/DER OneAsymmetricKey
@@ -700,6 +706,7 @@
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER
       SubjectPublicKeyInfo
+      ;; CAB BR (v1.7.3) section 7.1.3.1.1 says MUST include NULL parameter
       (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
               'subjectPublicKey (hasheq 'modulus n 'publicExponent e)))]
     [(rkt-public) (list 'rsa 'public n e)]
@@ -851,6 +858,7 @@
     [(AlgorithmIdentifier)
      (asn1->bytes/DER
       AlgorithmIdentifier/PUBKEY
+      ;; RFC 8410 says parameters MUST be absent.
       (hasheq 'algorithm (ed-curve->oid curve)))]
     [(rkt-params) (list 'eddsa 'params curve)]
     [else #f]))
@@ -888,6 +896,7 @@
     [(AlgorithmIdentifier)
      (asn1->bytes/DER
       AlgorithmIdentifier/PUBKEY
+      ;; RFC 8410 says parameters MUST be absent.
       (hasheq 'algorithm (x-curve->oid curve)))]
     [(rkt-params) (list 'ecx 'params curve)]
     [else #f]))

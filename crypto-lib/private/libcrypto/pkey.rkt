@@ -120,7 +120,7 @@
         (and impl (send impl make-params evp)))
       (case fmt
         [(AlgorithmIdentifier)
-         (match (bytes->asn1/DER AlgorithmIdentifier/DER buf)
+         (match (ensure-keys (bytes->asn1/DER AlgorithmIdentifier/DER buf) '(parameters))
            [(hash-table ['algorithm alg-oid] ['parameters parameters])
             (cond [(equal? alg-oid id-dsa)
                    (read-params parameters 'DSAParameters)] ;; Dss-Parms

@@ -502,13 +502,11 @@
                          (internal-error "unknown algorithm OID: ~e" algorithm))
               #:decode (lambda (v) 'unknown))))
   (WRAP (SEQUENCE [algorithm              OBJECT-IDENTIFIER]
-                  [parameters #:dependent (get-type algorithm) #:optional])
-        #:decode (lambda (h) (ensure-keys h '(parameters)))))
+                  [parameters #:dependent (get-type algorithm) #:optional])))
 
 (define AlgorithmIdentifier/DER
   (WRAP (SEQUENCE [algorithm  OBJECT-IDENTIFIER]
-                  [parameters ANY/DER #:optional])
-        #:decode (lambda (h) (ensure-keys h '(parameters)))))
+                  [parameters ANY/DER #:optional])))
 
 (define PUBKEY
   ;; for SubjectPublicKeyInfo, PrivateKeyInfo, OneAsymmetricKey
@@ -519,7 +517,8 @@
    ;;   #f means pubkey is bytestring (ECPoint), wrap in bitstring w/o BER
    ;;   see BIT-STRING-containing
    #:tuples
-   [rsaEncryption   NULL              RSAPublicKey  RSAPrivateKey]
+   ;; From RFC 5912:
+   [rsaEncryption   NULL #|absent|#   RSAPublicKey  RSAPrivateKey]
    [id-dsa          Dss-Parms         DSAPublicKey  INTEGER]
    ;; DH: PKIX says use dhpublicnumber; OpenSSL uses PKCS#3 OID
    [dhpublicnumber  DomainParameters  DHPublicKey   INTEGER]
@@ -527,10 +526,13 @@
    ;; Special case!: the bitstring's octets are ECPoint, not a
    ;; BER-encoding of ECPoint
    [id-ecPublicKey  EcpkParameters    #f            ECPrivateKey]
-   [id-Ed25519      NULL              #f            OCTET-STRING]
-   [id-Ed448        NULL              #f            OCTET-STRING]
-   [id-X25519       NULL              #f            OCTET-STRING]
-   [id-X448         NULL              #f            OCTET-STRING]
+
+   ;; From RFC 8410:
+   ;; No wrapping for public key.
+   [id-Ed25519      NULL #|absent|#   #f            OCTET-STRING]
+   [id-Ed448        NULL #|absent|#   #f            OCTET-STRING]
+   [id-X25519       NULL #|absent|#   #f            OCTET-STRING]
+   [id-X448         NULL #|absent|#   #f            OCTET-STRING]
    ))
 
 (define CURVES
@@ -663,7 +665,7 @@
             [aes-ICVlen         INTEGER #:default 12]))
 
 (define algid-hmacWithSHA1
-  (hasheq 'algorithm id-hmacWithSHA1 'parameters #f))
+  (hasheq 'algorithm id-hmacWithSHA1))
 
 (define PBKDF2-PRFs
   (relation
@@ -675,8 +677,8 @@
    [id-hmacWithSHA256    NULL     'sha256]
    [id-hmacWithSHA384    NULL     'sha384]
    [id-hmacWithSHA512    NULL     'sha512]
-   ;; [id-hmacWithSHA512-224 NULL _]
-   ;; [id-hmacWithSHA512-256 NULL _]
+   [id-hmacWithSHA512-224 NULL    'sha512/224]
+   [id-hmacWithSHA512-256 NULL    'sha512/256]
    ;; Not "standard"!
    [id-hmacWithSHA3-224  NULL     'sha3-224]
    [id-hmacWithSHA3-256  NULL     'sha3-256]
