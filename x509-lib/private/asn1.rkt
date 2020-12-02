@@ -538,6 +538,11 @@
 (define-asn1-type HoldInstructionCode OBJECT-IDENTIFIER)
 (define-asn1-type InvalidityDate GeneralizedTime)
 
+;; ------------------------------------------------------------
+;; RFC 6960 (PKIX OCSP)
+
+(define id-pkix-ocsp id-ad-ocsp)
+(define id-pkix-ocsp-nocheck (build-OID id-pkix-ocsp 5))
 
 ;; ============================================================
 
@@ -592,7 +597,7 @@
    [sha256WithRSAEncryption 'rsa 'sha256 NULL]
    [sha384WithRSAEncryption 'rsa 'sha384 NULL]
    [sha512WithRSAEncryption 'rsa 'sha512 NULL]
-   ;;[id-RSASSA-PSS           'rsa #f      RSASSA-PSS-params]
+   [id-RSASSA-PSS           'rsa #f      RSASSA-PSS-params]
    [dsa-with-sha1           'dsa 'sha1   #f]
    [id-dsa-with-sha224      'dsa 'sha224 #f]
    [id-dsa-with-sha256      'dsa 'sha256 #f]
@@ -607,6 +612,17 @@
    [id-Ed448                'eddsa #f    #f]
    ))
 
+(define HASH
+  (relation
+   #:heading
+   ['oid        'digest]
+   #:tuples
+   [id-sha1     'sha1]
+   [id-sha224   'sha224]
+   [id-sha256   'sha256]
+   [id-sha384   'sha384]
+   [id-sha512   'sha512]))
+
 (module+ verify
   (require racket/match racket/class crypto)
   (provide verify/algid)
@@ -616,11 +632,20 @@
     (define alg-oid (hash-ref alg 'algorithm))
     (unless (eq? #f (hash-ref alg 'parameters #f))
       (error who "unexpected signature algorithm parameters"))
-    (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
-      [(list 'eddsa #f)
+    (match (relation-ref* SIGNING 'oid alg-oid '(pk digest params))
+      [(list 'eddsa #f _)
        (and (eq? 'eddsa (send pk get-spec))
             (pk-verify pk tbs sig))]
-      [(list pk-type di)
+      [(list 'rsa #f pss-params)
+       (define hash-algid (hash-ref pss-params 'hashAlgorithm))
+       (and (eq? 'rsa (send pk get-spec))
+            ;; FIXME: maskGenAlgorithm!
+            (match (relation-ref HASH 'oid (hash-ref hash-algid 'algorithm) 'digest)
+              [(? symbol? di)
+               ;; FIXME: 'pss vs 'pss*, and salt length is actually in pss-params
+               (digest/verify pk di tbs sig #:pad 'pss*)]
+              [_ (error who "unimplemented signature algorithm (PSS)")]))]
+      [(list pk-type di _)
        (and (eq? pk-type (send pk get-spec))
             (digest/verify pk di tbs sig))]
       [_ (error who "unimplemented signature algorithm")])))

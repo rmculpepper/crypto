@@ -304,6 +304,9 @@
           ;; 4.2.1.15 Freshest CRL
           [(equal? ext-id id-ce-freshestCRL)
            (when critical? (bad! 'freshest-crl:critical-but-unsupported))]
+          ;; RFC 6960 (PKIX OCSP)
+          [(equal? ext-id id-pkix-ocsp-nocheck)
+           (void)]
           ;; Other: ignore unless critical
           [else (when critical? (bad! 'unknown-extension:critical-but-unsupported))]))
       errors)

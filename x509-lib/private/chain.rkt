@@ -12,6 +12,9 @@
 ;; - RFC 6818 (general updates) (https://tools.ietf.org/html/rfc6818)
 ;; - RFC 8398 and 8399 (Internationalization) (https://tools.ietf.org/html/rfc8398,
 ;;   https://tools.ietf.org/html/rfc8399)
+;; - CA/Browser Forum Baseline Recommendations (v1.7.3)
+;;   - extKeyUsage extension used to constrain scope of issued certs (see footnote 2, p69)
+;;     - 7.1.5: ...
 
 ;; FIXME: asn1 parser returns mutable bytes,strings?
 
