@@ -155,10 +155,25 @@
             [else null]))
 
     (define/public (ok-extended-key-usage? eku [on-unset #f] [or-anyeku? #f])
-      (define (join cert-result issuer-result) ;; (U 'yes 'yes>unset 'no 'unset)
-        ;; This code allows {eku} -> unset -> {eku}, but not {eku} -> {} -> {eku}.
+      ;; This code attempts to follow the CA/B Basic Requirements interpretation
+      ;; of EKU extensions in CA certificates, mainly following OpenSSL's tests
+      ;; to resolve ambiguities. In particular:
+      ;; - If a CA contains the EKU extension, then the effective EKUs of any
+      ;;   descendent are limited to the EKUs in the CA cert. (If the descendent
+      ;;   contains others, they are ignored, but the cert is not considered
+      ;;   invalid.)
+      ;; - Clarifications, with the issuer is written on the left of the arrow:
+      ;;   - In a chain with {eku} -> {} -> {eku}, eku is NOT in the set of
+      ;;     effective EKUs.
+      ;;   - In a chain with {eku} -> unset -> {eku}, eku is in the set of
+      ;;     effective EKUs.
+      ;;   - In a chain ending with {eku} -> unset, eku is NOT in the set of
+      ;;     effective EKUs.
+      ;; - In summary, in an intermediate cert, unset is equivalent to allowing
+      ;;   all EKUs; in a leaf cert, it is equivalent to {}.
+      (define (join cert-result issuer-result) ;; (U 'yes 'no 'unset)
         (case issuer-result
-          [(yes yes>unset) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'yes>unset])]
+          [(yes) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'unset])]
           [(no) 'no]
           [(unset) cert-result]))
       (define result (foldr join 'unset (get-eku-chain eku or-anyeku?)))
