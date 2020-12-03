@@ -254,7 +254,7 @@
     (define/public (check-as-final)
       (append
        ;; 6.1.3 (b,c) -- deferred
-       (send issuer-chain check-certificate-name-constraints cert)
+       (if issuer-chain (send issuer-chain check-certificate-name-constraints cert) '())
        ;; 6.1.5
        ;; 6.1.5 (a,b) explicit-policy, policies
        #| POLICIES NOT SUPPORTED |#

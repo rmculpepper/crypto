@@ -146,6 +146,7 @@
     (check-pred certificate-chain? chain)
     (case purpose
       [("sslserver") (check-equal? (send chain suitable-for-tls-server? #f) #t)]
+      [("Xsslserver") (void)] ;; For certs that don't contain serverAuth EKU
       [("sslclient") (check-equal? (send chain suitable-for-tls-client? #f) #t)])))
 
 (define (test-no cert purpose trusted untrusted comment #:o [opt #f])
@@ -360,13 +361,12 @@
          "fail wrong intermediate CA DN")
 (test-no "ee-expired" "sslserver" '[root-cert] '[ca-cert]
          "fail expired leaf")
-(XFAIL ;; FIXME: trust cert directly?
- (test-v "ee-cert" "sslserver" '[ee-cert] '[] #:o "-partial_chain"
-         "accept last-resort direct leaf match")
- (test-v "ee-client" "sslclient" '[ee-client] '[] #:o "-partial_chain"
-         "accept last-resort direct leaf match")
- (test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
-          "fail last-resort direct leaf non-match"))
+(test-v "ee-cert" "sslserver" '[ee-cert] '[] #:o "-partial_chain"
+        "accept last-resort direct leaf match")
+(test-v "ee-client" "sslclient" '[ee-client] '[] #:o "-partial_chain"
+        "accept last-resort direct leaf match")
+(test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
+         "fail last-resort direct leaf non-match")
 (SKIP ;; trusted certs
  (test-v "ee-cert" "sslserver" '[ee+serverAuth] '[] #:o "-partial_chain"
          "accept direct match with server trust")
@@ -430,8 +430,6 @@
 (begin
  (test-v "ee-cert" "sslserver" '["root-cert-md5"] '["ca-cert"] #:o '("-auth_level" "2")
          "accept md5 self-signed TA at auth level 2")
- (test-v "ee-cert" "sslserver" '["ca-cert-md5-any"] '[] #:o '("-auth_level" "2")
-         "accept md5 intermediate TA at auth level 2")
  (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert-md5"] #:o '("-auth_level" "0")
          "accept md5 intermediate at auth level 0")
  (test-v "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
@@ -441,6 +439,9 @@
           "reject md5 intermediate at auth level 1")
  (test-no "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"]
           "reject md5 leaf at auth level 1"))
+(SKIP ;; trusted certs
+ (test-v "ee-cert" "sslserver" '["ca-cert-md5-any"] '[] #:o '("-auth_level" "2")
+         "accept md5 intermediate TA at auth level 2"))
 
 ;; Explicit vs named curve tests
 
@@ -551,7 +552,7 @@
  (test-v "root-cert-rsa2" "sslserver" '["root-cert-rsa2"] '[] #:o "-check_ss_sig"
          "Public Key Algorithm rsa instead of rsaEncryption"))
 
-(test-v "ee-self-signed" "sslserver" '["ee-self-signed"] '[]
+(test-v "ee-self-signed" "Xsslserver" '["ee-self-signed"] '[]
         "accept trusted self-signed EE cert excluding key usage keyCertSign")
 
 ;; ED25519 certificate from draft-ietf-curdle-pkix-04

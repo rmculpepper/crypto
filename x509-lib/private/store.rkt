@@ -89,18 +89,23 @@
 
     ;; build-candidate-chains : Cert -> (Listof (Listof Cert))
     (define/public (build-candidate-chains end-cert)
-      (define (loop chains)
-        (cond [(pair? chains)
-               (define chains* (append* (map loop1 chains)))
-               (define-values (complete incomplete)
-                 (partition (lambda (chain) (trust? (car chain))) chains*))
-               (append complete (loop incomplete))]
-              [else null]))
-      (define (loop1 chain)
+      ;; (define (loop chains)
+      ;;   (cond [(pair? chains)
+      ;;          (define chains* (append* (map loop1 chains)))
+      ;;          (define-values (complete incomplete)
+      ;;            (partition (lambda (chain) (trust? (car chain))) chains*))
+      ;;          (append complete (loop incomplete))]
+      ;;         [else null]))
+      (define (extend chain)
         (define issuer-name (send (car chain) get-issuer))
         (for/list ([issuer-cert (in-list (remove-duplicates (lookup-by-subject issuer-name)))]
                    #:when (not (member issuer-cert chain)))
           (cons issuer-cert chain)))
+      (define (loop chains)
+        (define-values (complete incomplete)
+          (partition (lambda (chain) (trust? (car chain))) chains))
+        ;;(eprintf "complete = ~v\n" complete)
+        (apply append complete (map (lambda (c) (loop (extend c))) incomplete)))
       (loop (list (list end-cert))))
 
     ;; check-chain : (Listof Cert) -> CertificateChain
