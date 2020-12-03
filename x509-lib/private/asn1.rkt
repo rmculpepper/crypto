@@ -1,6 +1,7 @@
 #lang racket/base
 (require asn1 asn1/util/names
-         crypto/private/common/asn1)
+         crypto/private/common/asn1
+         "interfaces.rkt")
 (provide (all-defined-out)
          relation-ref)
 
@@ -619,26 +620,38 @@
   (require racket/match racket/class crypto)
   (provide verify/algid)
 
+  (define (pss-with-digest? alg hash-oid hash-length)
+    (match alg
+      [(hash-table ['hashAlgorithm (hash-table ['algorithm (== hash-oid)])]
+                   ['maskGenAlgorithm
+                    (hash-table ['algorithm (== id-mgf1)]
+                                ['parameters (hash-table ['algorithm (== hash-oid)])])]
+                   ['saltLength hash-length]
+                   ['trailerField 1])
+       #t]
+      [else #f]))
+
   ;; If key is wrong type just return #f, no error.
-  (define (verify/algid pk alg tbs sig #:who [who 'verify/algid])
+  (define (verify/algid pk alg tbs sig)
     (define alg-oid (hash-ref alg 'algorithm))
-    (unless (eq? #f (hash-ref alg 'parameters #f))
-      (error who "unexpected signature algorithm parameters"))
     (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
       [(list 'eddsa #f)
        (and (eq? 'eddsa (send pk get-spec))
             (pk-verify pk tbs sig))]
       [(list 'rsa #f) ;; means RSA w/ PSS
        (define alg-params (hash-ref alg 'parameters))
-       (define hash-algid (hash-ref alg-params 'hashAlgorithm))
+       (define di
+         (cond [(pss-with-digest? alg-params id-sha1 20) 'sha1]
+               [(pss-with-digest? alg-params id-sha256 32) 'sha256]
+               [(pss-with-digest? alg-params id-sha384 48) 'sha384]
+               [(pss-with-digest? alg-params id-sha512 64) 'sha512]
+               [else #f]))
        (and (eq? 'rsa (send pk get-spec))
-            ;; FIXME: maskGenAlgorithm!
-            (match (relation-ref HASH 'oid (hash-ref hash-algid 'algorithm) 'digest)
-              [(? symbol? di)
-               ;; FIXME: 'pss vs 'pss*, and salt length is actually in pss-params
-               (digest/verify pk di tbs sig #:pad 'pss*)]
-              [_ (error who "unimplemented signature algorithm (PSS)")]))]
+            (symbol? di)
+            (digest/verify pk di tbs sig #:pad 'pss))]
       [(list pk-type di)
        (and (eq? pk-type (send pk get-spec))
             (digest/verify pk di tbs sig))]
-      [_ (error who "unimplemented signature algorithm")])))
+      [_
+       (log-x509-error "unknown signature algorithm: ~v" alg-oid)
+       #f])))
