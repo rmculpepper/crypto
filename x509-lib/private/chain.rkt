@@ -154,61 +154,18 @@
              => (lambda (ncs) (extend-name-constraints null index ncs))]
             [else null]))
 
-    #;
-    ;; effective-ekus : (Listof OID) or #f -- #f means unconstrained
-    (define effective-ekus
-      (let ()
-        (define (list-intersect xs ys)
-          (define result (filter (lambda (x) (member x ys)) xs))
-          (if (equal? result xs) xs result))
-        (define issuer-ekus (and issuer-chain (send issuer-chain get-effective-ekus)))
-        (define cert-ekus (send cert get-extended-key-usages #f))
-        (case EKU-MODE
-          [(intersect-tail)
-           (cond [issuer-ekus
-                  (list-intersect (or cert-ekus null) issuer-ekus)]
-                 [else cert-ekus])]
-          [(intersect-present)
-           (cond [(and issuer-ekus cert-ekus)
-                  (list-intersect issuer-ekus cert-ekus)]
-                 [else (or issuer-ekus cert-ekus)])]
-          [else (error 'certificate-chain% "internal error: bad EKU mode: ~e" EKU-MODE)])))
-
-    #;
-    (define/public (get-effective-ekus) effective-ekus)
-    #;
-    (define/public (ok-extended-key-usage? use-oid [default #f] [allow-any? #t])
-      (cond [(get-effective-ekus)
-             => (lambda (ekus)
-                  (or (and (member use-oid ekus) #t)
-                      (and allow-any? (member anyExtendedKeyUsage ekus) #t)))]
-            [else (if (procedure? default) (default) default)]))
-
-    #;
-    (define/public (ok-eku eku [or-anyeku? #f]) ;; (U 'yes 'yes>unset 'no 'unset)
-      ;; - If or-anyeku? is true, then {anyEKU} -> {specificEKU} is allowed.
-      ;; - This code allows {eku} -> unset -> {eku}, but not {eku} -> {} -> {eku}.
-      (define (recur eku or-anyeku?)
-        (if issuer-chain (send issuer-chain ok-eku eku or-anyeku?) 'unset))
-      (define-values (cert-result issuer-result)
-        (cond [(send cert get-extended-key-usages #f)
-               => (lambda (cert-ekus)
-                    (cond [(member eku cert-ekus)
-                           (values 'yes (recur eku or-anyeku?))]
-                          [(and or-anyeku? (member anyExtendedKeyUsage cert-ekus))
-                           (values 'yes (recur anyExtendedKeyUsage #f))]
-                          [else
-                           (values 'no (recur eku or-anyeku?))]))]
-              [else (values 'unset (recur eku or-anyeku?))]))
-      (case issuer-result
-        [(yes yes>unset) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'yes>unset])]
-        [(no) 'no]
-        [(unset) cert-result]))
-    #;
     (define/public (ok-extended-key-usage? eku [on-unset #f] [or-anyeku? #f])
-      (case (ok-eku eku or-anyeku?) [(yes) #t] [(no) #f] [else on-unset]))
+      (define (join cert-result issuer-result) ;; (U 'yes 'yes>unset 'no 'unset)
+        ;; This code allows {eku} -> unset -> {eku}, but not {eku} -> {} -> {eku}.
+        (case issuer-result
+          [(yes yes>unset) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'yes>unset])]
+          [(no) 'no]
+          [(unset) cert-result]))
+      (define result (foldr join 'unset (get-eku-chain eku or-anyeku?)))
+      (case result [(yes) #t] [(no) #f] [else on-unset]))
 
-    (define/public (get-eku-chain eku [or-anyeku? #f]) ;; (Listof (U 'yes 'no 'unset))
+    ;; get-eku-chain : OID Boolean -> (Listof (U 'yes 'no 'unset)), leaf first, root CA last
+    (define/public (get-eku-chain eku or-anyeku?)
       (define (recur eku or-anyeku?)
         (if issuer-chain (send issuer-chain get-eku-chain eku or-anyeku?) '()))
       (cond [(send cert get-extended-key-usages #f)
@@ -216,19 +173,11 @@
                   (cond [(member eku cert-ekus)
                          (cons 'yes (recur eku or-anyeku?))]
                         [(and or-anyeku? (member anyExtendedKeyUsage cert-ekus))
+                         ;; If or-anyeku? is true, then {anyEKU} -> {specificEKU} is allowed.
                          (cons 'yes (recur anyExtendedKeyUsage #f))]
                         [else
                          (cons 'no (recur eku or-anyeku?))]))]
             [else (cons 'unset (recur eku or-anyeku?))]))
-
-    (define/public (ok-extended-key-usage? eku [on-unset #f] [or-anyeku? #f])
-      (define (join cert-result issuer-result) ;; (U 'yes 'yes>unset 'no 'unset)
-        (case issuer-result
-          [(yes yes>unset) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'yes>unset])]
-          [(no) 'no]
-          [(unset) cert-result]))
-      (define result (foldr join 'unset (get-eku-chain eku or-anyeku?)))
-      (case result [(yes) #t] [(no) #f] [else on-unset]))
 
     ;; {from,to}-time : Seconds
     (define-values (from-time to-time)
