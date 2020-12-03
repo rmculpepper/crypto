@@ -13,10 +13,14 @@
 ;; - RFC 8398 and 8399 (Internationalization) (https://tools.ietf.org/html/rfc8398,
 ;;   https://tools.ietf.org/html/rfc8399)
 ;; - CA/Browser Forum Baseline Recommendations (v1.7.3)
-;;   - extKeyUsage extension used to constrain scope of issued certs (see footnote 2, p69)
-;;     - 7.1.5: ...
+;;   - extKeyUsage extension used to constrain scope of issued certs
+;;     (see footnote 2, p69; see section 7.1.5)
+;;     - Interpretation 1: If a (root or intermediate) CA cert has
+;;       extKeyUsage extension, then every subsequent cert must have the
+;;       extKeyUsage extension, and an end certificate is valid only for
+;;       uses that also appear in EVERY subsequent list.
 
-;; FIXME: asn1 parser returns mutable bytes,strings?
+(define EXT-KEY-USAGE-MODE 'intersect)
 
 ;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
 
@@ -66,6 +70,8 @@
 
 ;; A certificate chain is "chain-valid" if it satisfies all of the following:
 ;; - each cert issued the next, and signatures are valid
+;;   (Note that the trust anchor's signature is not verified; the trust
+;;   anchor may or may not be self-signed.)
 ;; - the intersection of each cert's validity period is not empty
 ;;   (the intersection of the validity periods is stored)
 ;; - name constraints, path length constraints, etc are checked
@@ -112,6 +118,7 @@
     (define/public (is-anchor?) (not issuer-chain))
 
     (define/public (get-subject) (send cert get-subject))
+    (define/public (get-subject-alt-names) (send cert get-subject-alt-names))
     (define/public (get-public-key) (send cert get-public-key))
     (define/public (get-index) index)
     (define/public (get-max-path-length) max-path-length)
@@ -146,6 +153,59 @@
       (cond [(send cert get-name-constraints)
              => (lambda (ncs) (extend-name-constraints null index ncs))]
             [else null]))
+
+    #;
+    ;; effective-ekus : (Listof OID) or #f -- #f means unconstrained
+    (define effective-ekus
+      (let ()
+        (define (list-intersect xs ys)
+          (define result (filter (lambda (x) (member x ys)) xs))
+          (if (equal? result xs) xs result))
+        (define issuer-ekus (and issuer-chain (send issuer-chain get-effective-ekus)))
+        (define cert-ekus (send cert get-extended-key-usages #f))
+        (case EKU-MODE
+          [(intersect-tail)
+           (cond [issuer-ekus
+                  (list-intersect (or cert-ekus null) issuer-ekus)]
+                 [else cert-ekus])]
+          [(intersect-present)
+           (cond [(and issuer-ekus cert-ekus)
+                  (list-intersect issuer-ekus cert-ekus)]
+                 [else (or issuer-ekus cert-ekus)])]
+          [else (error 'certificate-chain% "internal error: bad EKU mode: ~e" EKU-MODE)])))
+
+    #;
+    (define/public (get-effective-ekus) effective-ekus)
+    #;
+    (define/public (ok-extended-key-usage? use-oid [default #f] [allow-any? #t])
+      (cond [(get-effective-ekus)
+             => (lambda (ekus)
+                  (or (and (member use-oid ekus) #t)
+                      (and allow-any? (member anyExtendedKeyUsage ekus) #t)))]
+            [else (if (procedure? default) (default) default)]))
+
+    (define/public (ok-eku eku [or-anyeku? #f]) ;; (U 'yes 'yes>unset 'no 'unset)
+      ;; - If or-anyeku? is true, then {anyEKU} -> {specificEKU} is allowed.
+      ;; - This code allows {eku} -> unset -> {eku}, but not {eku} -> {} -> {eku}.
+      (define (super-ok-eku eku or-anyeku?)
+        (if issuer-chain (send issuer-chain ok-eku eku or-anyeku?) 'unset))
+      (define-values (cert-result issuer-result)
+        (cond [(send cert get-extended-key-usages #f)
+               => (lambda (cert-ekus)
+                    (cond [(member eku cert-ekus)
+                           (values 'yes (super-ok-eku eku or-anyeku?))]
+                          [(and or-anyeku? (member anyExtendedKeyUsage cert-ekus))
+                           (values 'yes (super-ok-eku anyExtendedKeyUsage #f))]
+                          [else
+                           (values 'no (super-ok-eku eku or-anyeku?))]))]
+              [else (values 'unset (super-ok-eku eku or-anyeku?))]))
+      (case issuer-result
+        [(yes yes>unset) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'yes>unset])]
+        [(no) 'no]
+        [(unset) cert-result]))
+
+    (define/public (ok-extended-key-usage? eku [on-unset #f] [or-anyeku? #f])
+      (case (ok-eku eku or-anyeku?) [(yes) #t] [(no) #f] [else on-unset]))
 
     ;; {from,to}-time : Seconds
     (define-values (from-time to-time)
@@ -247,7 +307,7 @@
 
     (define/public (check-certificate-name-constraints new-cert)
       (define subject-name (send new-cert get-subject))
-      (define alt-names (send new-cert get-subject-alt-name))
+      (define alt-names (send new-cert get-subject-alt-names))
       (append
        (check-name-constraints (list 'directoryName subject-name) 'subject)
        (append*
@@ -295,6 +355,9 @@
              get-anchor
              get-validity-seconds
              get-issuer-or-self
+             get-subject
+             get-subject-alt-names
+             ok-extended-key-usage?
              check-as-final
              check-validity-period)
     (super-new)
@@ -316,8 +379,6 @@
               (check-validity-period from-time to-time)))
 
     ;; ----------------------------------------
-
-    ;; ----------------------------------------
     ;; Checking suitability for a purpose
 
     (define/public (suitable-for-ocsp-signing? for-ca-chain)
@@ -331,12 +392,52 @@
       (define for-ca-cert (send for-ca-chain get-certificate))
       (or (and (send cert is-CA?)
                (send cert has-same-public-key? for-ca-cert))
-          (and (send cert ok-extended-key-use? id-kp-OCSPSigning #f #f)
+          (and (ok-extended-key-usage? id-kp-OCSPSigning #f #f)
                (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
     (define/public (suitable-for-tls-server? host)
       (null? (check-suitable-for-tls-server host)))
 
-    (define/public (check-suitable-for-tls-server host)
-      (send (get-certificate) check-suitable-for-tls-server host))
+    (define/public (check-suitable-for-tls-server [host #f])
+      ;; FIXME: add option to accept anyExtendedKeyUsage?
+      ;; FIXME: add option to use subject common name?
+      ;; FIXME: add security level check?
+      ;; FIXME: add validity period check?
+      ;; References:
+      ;; - https://tools.ietf.org/html/rfc5246#section-7.4.2
+      ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
+      ;; - CA/B Baseline Requirements (Section 7.1 Certificate Profile)
+      (define TLS-USE-COMMON-NAME? #f)
+      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
+                    [else '(tls:missing-key-usage)])
+              (cond [(ok-extended-key-usage? id-kp-serverAuth #f #f) '()]
+                    [else '(tls:missing-serverAuth-eku)])
+              (cond [(or (not host)
+                         (for/or ([pattern (in-list (get-subject-alt-names 'dNSName))])
+                           (host-matches? host pattern))
+                         (and TLS-USE-COMMON-NAME?
+                              (for/or ([cn (in-list (send cert get-subject-common-names))])
+                                (and cn (host-matches? host cn)))))
+                     '()]
+                    [else '(tls:host-mismatch)])))
+
+    (define/public (suitable-for-tls-client? [name #f])
+      (null? (check-suitable-for-tls-client name)))
+
+    (define/public (check-suitable-for-tls-client [name #f])
+      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
+                    [else '(tls:missing-key-usage)])
+              (cond [(ok-extended-key-usage? id-kp-clientAuth #f #f) '()]
+                    [else '(tls:missing-clientAuth-eku)])
+              (cond [(or (not name)
+                         (GeneralName-equal? name (list 'directoryName (get-subject)))
+                         (for/or ([altname (in-list (get-subject-alt-names))])
+                           (GeneralName-equal? name altname)))
+                     '()]
+                    [else '(tls:name-mismatch)])))
+
+    (define/public (ok-key-use? use [default #f]) (send cert ok-key-use? use default))
     ))
+
+;; tls-key-uses is approximation; actually depends on TLS cipher negotiated
+(define tls-key-uses '(digitalSignature keyEncipherment keyAgreement))

@@ -142,12 +142,24 @@
 
 (define (test-v cert purpose trusted untrusted comment #:o [opt #f])
   (test-case (format "~a / ~a" cert comment)
-    (check-pred certificate-chain? (verify cert purpose trusted untrusted))))
+    (define chain (verify cert purpose trusted untrusted))
+    (check-pred certificate-chain? chain)
+    (case purpose
+      [("sslserver") (check-equal? (send chain suitable-for-tls-server? #f) #t)]
+      [("sslclient") (check-equal? (send chain suitable-for-tls-client? #f) #t)])))
 
 (define (test-no cert purpose trusted untrusted comment #:o [opt #f])
   (test-case (format "~a / ~a" cert comment)
     (check-exn exn:x509?
                (lambda () (verify cert purpose trusted untrusted)))))
+
+(define (test-uns cert purpose trusted untrusted comment #:o [opt #f])
+  (test-case (format "~a / ~a" cert comment)
+    (define chain (verify cert purpose trusted untrusted))
+    (check-pred certificate-chain? chain)
+    (case purpose
+      [("sslserver") (check-equal? (send chain suitable-for-tls-server? #f) #f)]
+      [("sslclient") (check-equal? (send chain suitable-for-tls-client? #f) #f)])))
 
 (define-syntax-rule (XFAIL form ...) (when #f form ... (void)))
 
@@ -158,7 +170,7 @@
 ;; Root CA variants
 (test-no "ee-cert" "sslserver" '[root-nonca] '[ca-cert]
          "fail trusted non-ca root")
-(XFAIL
+(XFAIL ;; no trusted certificate
  (test-no "ee-cert" "sslserver" '[nroot+serverAuth] '[ca-cert]
           "fail server trust non-ca root")
  (test-no "ee-cert" "sslserver" '[nroot+anyEKU] '[ca-cert]
@@ -179,11 +191,11 @@
 
 ;; Explicit trust/purpose combinations
 
+(test-v "ee-cert" "sslserver" '[sroot-cert] '[ca-cert]
+        "accept server purpose")
+(test-no "ee-cert" "sslserver" '[croot-cert] '[ca-cert]
+         "fail client purpose")
 (XFAIL
- (test-v "ee-cert" "sslserver" '[sroot-cert] '[ca-cert]
-         "accept server purpose")
- (test-no "ee-cert" "sslserver" '[croot-cert] '[ca-cert]
-          "fail client purpose")
  (test-v "ee-cert" "sslserver" '[root+serverAuth] '[ca-cert]
          "accept server trust")
  (test-v "ee-cert" "sslserver" '[sroot+serverAuth] '[ca-cert]
@@ -260,15 +272,16 @@
          "fail wrong intermediate CA DN")
 (test-no "ee-cert" "sslserver" '[root-cert] '[ca-root2]
          "fail wrong intermediate CA issuer")
+
+(test-no "ee-cert" "sslserver" '[] '[ca-cert] #:o "-partial_chain"
+         "fail untrusted partial chain")
+(test-v "ee-cert" "sslserver" '[ca-cert] '[] #:o "-partial_chain"
+        "accept trusted partial chain")
+(test-v "ee-cert" "sslserver" '[sca-cert] '[] #:o "-partial_chain"
+        "accept partial chain with server purpose");
+(test-no "ee-cert" "sslserver" '[cca-cert] '[] #:o "-partial_chain"
+         "fail partial chain with client purpose")
 (XFAIL
- (test-no "ee-cert" "sslserver" '[] '[ca-cert] #:o "-partial_chain"
-          "fail untrusted partial chain")
- (test-v "ee-cert" "sslserver" '[ca-cert] '[] #:o "-partial_chain"
-         "accept trusted partial chain")
- (test-v "ee-cert" "sslserver" '[sca-cert] '[] #:o "-partial_chain"
-         "accept partial chain with server purpose");
- (test-no "ee-cert" "sslserver" '[cca-cert] '[] #:o "-partial_chain"
-          "fail partial chain with client purpose")
  (test-v "ee-cert" "sslserver" '[ca+serverAuth] '[] #:o "-partial_chain"
          "accept server trust partial chain")
  (test-v "ee-cert" "sslserver" '[cca+serverAuth] '[] #:o "-partial_chain"
@@ -346,13 +359,13 @@
          "fail wrong intermediate CA DN")
 (test-no "ee-expired" "sslserver" '[root-cert] '[ca-cert]
          "fail expired leaf")
+(test-v "ee-cert" "sslserver" '[ee-cert] '[] #:o "-partial_chain"
+        "accept last-resort direct leaf match")
+(test-v "ee-client" "sslclient" '[ee-client] '[] #:o "-partial_chain"
+        "accept last-resort direct leaf match")
+(test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
+         "fail last-resort direct leaf non-match")
 (XFAIL
- (test-v "ee-cert" "sslserver" '[ee-cert] '[] #:o "-partial_chain"
-         "accept last-resort direct leaf match")
- (test-v "ee-client" "sslclient" '[ee-client] '[] #:o "-partial_chain"
-         "accept last-resort direct leaf match")
- (test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
-          "fail last-resort direct leaf non-match")
  (test-v "ee-cert" "sslserver" '[ee+serverAuth] '[] #:o "-partial_chain"
          "accept direct match with server trust")
  (test-no "ee-cert" "sslserver" '[ee-serverAuth] '[] #:o "-partial_chain"

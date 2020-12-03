@@ -42,14 +42,13 @@
    is-self-signed?
    get-key-uses
    ok-key-use?
-   get-extended-key-uses
-   ok-extended-key-use?
+   get-extended-key-usages
 
    get-extension
    get-extension-value
 
    get-name-constraints
-   get-subject-alt-name
+   get-subject-alt-names
    get-validity-seconds
    ))
 
@@ -72,6 +71,11 @@
    get-issuer-chain
    get-anchor
    is-anchor?
+
+   get-subject
+   get-subject-alt-names
+   ok-key-use?
+   ok-extended-key-usage?
 
    [trusted?
     (->*m [certificate-store?] [time/c time/c]

@@ -23,8 +23,6 @@
 
 ;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
 
-(define TLS-USE-COMMON-NAME? #f)
-
 ;; ============================================================
 
 (define certificate-data%
@@ -96,18 +94,12 @@
              => (lambda (uses) (and (memq use uses) #t))]
             [else (if (procedure? default) (default) default)]))
 
-    (define/public (get-extended-key-uses)
-      (get-extension-value id-ce-extKeyUsage null))
-    (define/public (ok-extended-key-use? use-oid [default #f] [allow-any? #t])
-      (cond [(get-extension-value id-ce-extKeyUsage #f)
-             => (lambda (uses)
-                  (or (and (member use-oid uses) #t)
-                      (and allow-any? (member anyExtendedKeyUsage uses) #t)))]
-            [else (if (procedure? default) (default) default)]))
+    (define/public (get-extended-key-usages [default null])
+      (get-extension-value id-ce-extKeyUsage default))
 
     (define/public (get-name-constraints)
       (get-extension-value id-ce-nameConstraints #f))
-    (define/public (get-subject-alt-name [kind #f])
+    (define/public (get-subject-alt-names [kind #f])
       (define altnames (get-extension-value id-ce-subjectAltName null))
       (cond [kind (for/list ([altname (in-list altnames)] #:when (eq? kind (car altname)))
                     (cadr altname))]
@@ -292,7 +284,7 @@
            (when critical? (bad! 'policy-constraints:critical-but-unsupported))]
           ;; 4.2.1.12 Extended Key Usage
           [(equal? ext-id id-ce-extKeyUsage)
-           (when (member anyExtendedKeyUsage (get-extended-key-uses))
+           (when (member anyExtendedKeyUsage (get-extended-key-usages))
              (when critical?
                (bad/should! 'extended-key-usage:critical-but-anyExtendedKeyUse)))]
           ;; 4.2.1.13 CRL Distribution points
@@ -310,67 +302,6 @@
           ;; Other: ignore unless critical
           [else (when critical? (bad! 'unknown-extension:critical-but-unsupported))]))
       errors)
-
-    ;; ============================================================
-    ;; Checking suitability for a purpose
-
-    #|
-    (define/public (suitable-for-certificate-signing?)
-      (ok-key-use? 'keyCertSign (is-CA?)))
-    (define/public (suitable-for-CRL-signing?)
-      (ok-key-use? 'cRLSign (is-CA?)))
-    |#
-
-    #;
-    ;; This is implemented in certificate-chain% instead, so it can avoid an
-    ;; extra signature check (which is already performed during chain validation).
-    (define/public (suitable-for-ocsp-signing? issuer-cert)
-      ;; RFC 6960 4.2.2.2 says "a certificate's issuer MUST do one of the
-      ;; following: sign the OCSP responses itself, or explicitly designate this
-      ;; authority to another entity".
-      ;; - What does "itself" mean? Same certificate > same public key >> same
-      ;;   subject Name. Let's use "same public key".
-      ;; - Likewise, how to check delegation? Check signed by "same public key"
-      ;;   as original issuer.
-      (or (and (is-CA?) (has-same-public-key? issuer-cert))
-          (and (ok-extended-key-use? id-kp-OCSPSigning #f #f)
-               (ok-signature? (send issuer-cert get-public-key)))))
-
-    (define/public (suitable-for-tls-server? host)
-      (null? (check-suitable-for-tls-server host)))
-
-    (define/public (check-suitable-for-tls-server host)
-      ;; FIXME: add security level check?
-      ;; FIXME: add validity period check?
-      ;; References:
-      ;; - https://tools.ietf.org/html/rfc5246#section-7.4.2
-      ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
-      ;; tls-key-uses is approximation; actually depends on TLS cipher negotiated
-      (define tls-key-uses '(digitalSignature keyEncipherment keyAgreement))
-      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
-                    [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-use? id-kp-serverAuth #t) '()]
-                    [else '(tls:missing-extended-key-use)])
-              (cond [(or (for/or ([pattern (in-list (get-subject-alt-name 'dNSName))])
-                           (host-matches? host pattern))
-                         (and TLS-USE-COMMON-NAME?
-                              (for/or ([cn (in-list (get-subject-common-names))])
-                                (and cn (host-matches? host cn)))))
-                     '()]
-                    [else '(tls:host-mismatch)])))
-
-    (define/public (check-suitable-for-tls-client [name #f])
-      (define tls-key-uses '(digitalSignature keyEncipherment keyAgreement))
-      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
-                    [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-use? id-kp-clientAuth #t) '()]
-                    [else '(tls:missing-extended-key-use)])
-              (cond [(or (not name)
-                         (GeneralName-equal? name (list 'directoryName (get-subject)))
-                         (for/or ([altname (in-list (get-subject-alt-name))])
-                           (GeneralName-equal? name altname)))
-                     '()]
-                    [else '(tls:name-mismatch)])))
     ))
 
 ;; ============================================================
