@@ -13,14 +13,6 @@
 ;; - RFC 8398 and 8399 (Internationalization) (https://tools.ietf.org/html/rfc8398,
 ;;   https://tools.ietf.org/html/rfc8399)
 ;; - CA/Browser Forum Baseline Recommendations (v1.7.3)
-;;   - extKeyUsage extension used to constrain scope of issued certs
-;;     (see footnote 2, p69; see section 7.1.5)
-;;     - Interpretation 1: If a (root or intermediate) CA cert has
-;;       extKeyUsage extension, then every subsequent cert must have the
-;;       extKeyUsage extension, and an end certificate is valid only for
-;;       uses that also appear in EVERY subsequent list.
-
-(define EXT-KEY-USAGE-MODE 'intersect)
 
 ;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
 
