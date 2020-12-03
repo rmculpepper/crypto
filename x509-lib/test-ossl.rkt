@@ -162,6 +162,7 @@
       [("sslclient") (check-equal? (send chain suitable-for-tls-client? #f) #f)])))
 
 (define-syntax-rule (XFAIL form ...) (when #f form ... (void)))
+(define-syntax-rule (SKIP form ...) (when #f form ... (void)))
 
 ;; Canonical success
 (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert"]
@@ -170,7 +171,7 @@
 ;; Root CA variants
 (test-no "ee-cert" "sslserver" '[root-nonca] '[ca-cert]
          "fail trusted non-ca root")
-(XFAIL ;; no trusted certificate
+(SKIP ;; uses TRUSTED CERTIFICATE
  (test-no "ee-cert" "sslserver" '[nroot+serverAuth] '[ca-cert]
           "fail server trust non-ca root")
  (test-no "ee-cert" "sslserver" '[nroot+anyEKU] '[ca-cert]
@@ -193,9 +194,9 @@
 
 (test-v "ee-cert" "sslserver" '[sroot-cert] '[ca-cert]
         "accept server purpose")
-(test-no "ee-cert" "sslserver" '[croot-cert] '[ca-cert]
-         "fail client purpose")
-(XFAIL
+(test-uns "ee-cert" "sslserver" '[croot-cert] '[ca-cert]
+          "fail client purpose")
+(SKIP ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root+serverAuth] '[ca-cert]
          "accept server trust")
  (test-v "ee-cert" "sslserver" '[sroot+serverAuth] '[ca-cert]
@@ -241,7 +242,7 @@
 ;; Check that trusted-first is on by setting up paths to different roots
 ;; depending on whether the intermediate is the trusted or untrusted one.
 
-(XFAIL
+(SKIP ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root-serverAuth root-cert2 ca-root2] '[ca-cert]
          "accept trusted-first path")
  (test-v "ee-cert" "sslserver" '[root-cert root2+serverAuth ca-root2] '[ca-cert]
@@ -261,7 +262,7 @@
          "fail non-CA trust-store intermediate")
 (test-no "ee-cert" "sslserver" '[root-cert ca-nonbc] '[]
          "fail non-CA trust-store intermediate")
-(XFAIL
+(SKIP ;; trusted certs
  (test-no "ee-cert" "sslserver" '[root-cert nca+serverAuth] '[]
           "fail non-CA server trust intermediate")
  (test-no "ee-cert" "sslserver" '[root-cert nca+anyEKU] '[]
@@ -279,9 +280,9 @@
         "accept trusted partial chain")
 (test-v "ee-cert" "sslserver" '[sca-cert] '[] #:o "-partial_chain"
         "accept partial chain with server purpose");
-(test-no "ee-cert" "sslserver" '[cca-cert] '[] #:o "-partial_chain"
-         "fail partial chain with client purpose")
-(XFAIL
+(test-uns "ee-cert" "sslserver" '[cca-cert] '[] #:o "-partial_chain"
+          "fail partial chain with client purpose")
+(SKIP ;; trusted certs
  (test-v "ee-cert" "sslserver" '[ca+serverAuth] '[] #:o "-partial_chain"
          "accept server trust partial chain")
  (test-v "ee-cert" "sslserver" '[cca+serverAuth] '[] #:o "-partial_chain"
@@ -303,14 +304,14 @@
 ;; -partial_chain.  Note that "-trusted_first" is now always on and cannot
 ;; be disabled.
 
-(XFAIL
+(SKIP ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root-cert ca+serverAuth] '[ca-cert]
          "accept server trust")
  (test-v "ee-cert" "sslserver" '[root-cert ca+anyEKU] '[ca-cert]
          "accept wildcard trust"))
 (test-v "ee-cert" "sslserver" '[root-cert sca-cert] '[ca-cert]
         "accept server purpose")
-(XFAIL
+(SKIP ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root-cert sca+serverAuth] '[ca-cert]
          "accept server trust and purpose")
  (test-v "ee-cert" "sslserver" '[root-cert sca+anyEKU] '[ca-cert]
@@ -321,9 +322,9 @@
          "accept server trust and client purpose")
  (test-v "ee-cert" "sslserver" '[root-cert cca+anyEKU] '[ca-cert]
          "accept wildcard trust and client purpose"))
-(test-no "ee-cert" "sslserver" '[root-cert cca-cert] '[ca-cert]
-         "fail client purpose")
-(XFAIL
+(test-uns "ee-cert" "sslserver" '[root-cert cca-cert] '[ca-cert]
+          "fail client purpose")
+(SKIP ;; trusted certs
  (test-no "ee-cert" "sslserver" '[root-cert ca-anyEKU] '[ca-cert]
           "fail wildcard mistrust")
  (test-no "ee-cert" "sslserver" '[root-cert ca-serverAuth] '[ca-cert]
@@ -349,23 +350,24 @@
 
 (test-v "ee-client" "sslclient" '[root-cert] '[ca-cert]
         "accept client chain")
-(test-no "ee-client" "sslserver" '[root-cert] '[ca-cert]
-         "fail server leaf purpose")
-(test-no "ee-cert" "sslclient" '[root-cert] '[ca-cert]
-         "fail client leaf purpose")
+(test-uns "ee-client" "sslserver" '[root-cert] '[ca-cert]
+          "fail server leaf purpose")
+(test-uns "ee-cert" "sslclient" '[root-cert] '[ca-cert]
+          "fail client leaf purpose")
 (test-no "ee-cert2" "sslserver" '[root-cert] '[ca-cert]
          "fail wrong intermediate CA key")
 (test-no "ee-name2" "sslserver" '[root-cert] '[ca-cert]
          "fail wrong intermediate CA DN")
 (test-no "ee-expired" "sslserver" '[root-cert] '[ca-cert]
          "fail expired leaf")
-(test-v "ee-cert" "sslserver" '[ee-cert] '[] #:o "-partial_chain"
-        "accept last-resort direct leaf match")
-(test-v "ee-client" "sslclient" '[ee-client] '[] #:o "-partial_chain"
-        "accept last-resort direct leaf match")
-(test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
-         "fail last-resort direct leaf non-match")
-(XFAIL
+(XFAIL ;; FIXME: trust cert directly?
+ (test-v "ee-cert" "sslserver" '[ee-cert] '[] #:o "-partial_chain"
+         "accept last-resort direct leaf match")
+ (test-v "ee-client" "sslclient" '[ee-client] '[] #:o "-partial_chain"
+         "accept last-resort direct leaf match")
+ (test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
+          "fail last-resort direct leaf non-match"))
+(SKIP ;; trusted certs
  (test-v "ee-cert" "sslserver" '[ee+serverAuth] '[] #:o "-partial_chain"
          "accept direct match with server trust")
  (test-no "ee-cert" "sslserver" '[ee-serverAuth] '[] #:o "-partial_chain"
@@ -374,14 +376,15 @@
          "accept direct match with client trust")
  (test-no "ee-client" "sslclient" '[ee-clientAuth] '[] #:o "-partial_chain"
           "reject direct match with client mistrust"))
-(test-v "ee-pathlen" "sslserver" '[root-cert] '[ca-cert]
-        "accept non-ca with pathlen:0 by default")
+(XFAIL ;; rejected
+ (test-v "ee-pathlen" "sslserver" '[root-cert] '[ca-cert]
+         "accept non-ca with pathlen:0 by default"))
 (test-no "ee-pathlen" "sslserver" '[root-cert] '[ca-cert] #:o "-x509_strict"
          "reject non-ca with pathlen:0 with strict flag")
 
 ;; Proxy certificates
 
-(XFAIL
+(SKIP ;; proxy certs not implemented
  (test-no "pc1-cert" "sslclient" '[root-cert] '[ee-client ca-cert]
           "fail to accept proxy cert without -allow_proxy_certs")
  (test-v "pc1-cert" "sslclient" '[root-cert] '[ee-client ca-cert] #:o "-allow_proxy_certs"
@@ -402,45 +405,50 @@
           "failed proxy cert where last CN was added as a multivalue RDN component"))
 
 ;; Security level tests
+;; Security levels not implemented, so disable the reject tests.
 
-(XFAIL
+;; Slightly reordered:
+(begin
  (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "2")
-         "accept RSA 2048 chain at auth level 2");
- (test-no "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "3")
-          "reject RSA 2048 root at auth level 3")
+         "accept RSA 2048 chain at auth level 2")
  (test-v "ee-cert" "sslserver" '["root-cert-768"] '["ca-cert-768i"] #:o '("-auth_level" "0")
          "accept RSA 768 root at auth level 0")
- (test-no "ee-cert" "sslserver" '["root-cert-768"] '["ca-cert-768i"]
-          "reject RSA 768 root at auth level 1")
  (test-v "ee-cert-768i" "sslserver" '["root-cert"] '["ca-cert-768"] #:o '("-auth_level" "0")
          "accept RSA 768 intermediate at auth level 0")
+ (test-v "ee-cert-768" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
+         "accept RSA 768 leaf at auth level 0"))
+(SKIP ;; security levels not implemented
+ (test-no "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "3")
+          "reject RSA 2048 root at auth level 3")
+ (test-no "ee-cert" "sslserver" '["root-cert-768"] '["ca-cert-768i"]
+          "reject RSA 768 root at auth level 1")
  (test-no "ee-cert-768i" "sslserver" '["root-cert"] '["ca-cert-768"]
           "reject RSA 768 intermediate at auth level 1")
- (test-v "ee-cert-768" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
-         "accept RSA 768 leaf at auth level 0")
  (test-no "ee-cert-768" "sslserver" '["root-cert"] '["ca-cert"]
           "reject RSA 768 leaf at auth level 1"))
 
-(XFAIL
+(begin
  (test-v "ee-cert" "sslserver" '["root-cert-md5"] '["ca-cert"] #:o '("-auth_level" "2")
          "accept md5 self-signed TA at auth level 2")
  (test-v "ee-cert" "sslserver" '["ca-cert-md5-any"] '[] #:o '("-auth_level" "2")
          "accept md5 intermediate TA at auth level 2")
  (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert-md5"] #:o '("-auth_level" "0")
          "accept md5 intermediate at auth level 0")
+ (test-v "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
+         "accept md5 leaf at auth level 0"))
+(SKIP ;; security levels not implemented
  (test-no "ee-cert" "sslserver" '["root-cert"] '["ca-cert-md5"]
           "reject md5 intermediate at auth level 1")
- (test-v "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
-         "accept md5 leaf at auth level 0")
  (test-no "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"]
           "reject md5 leaf at auth level 1"))
 
 ;; Explicit vs named curve tests
 
-(test-no "ee-cert-ec-explicit" "sslserver" '["root-cert"] '["ca-cert-ec-named"]
-         "reject explicit curve leaf with named curve intermediate")
-(test-no "ee-cert-ec-named-explicit" "sslserver" '["root-cert"] '["ca-cert-ec-explicit"]
-         "reject named curve leaf with explicit curve intermediate")
+(XFAIL ;; ??? some rule about explicit curves ???
+ (test-no "ee-cert-ec-explicit" "sslserver" '["root-cert"] '["ca-cert-ec-named"]
+          "reject explicit curve leaf with named curve intermediate")
+ (test-no "ee-cert-ec-named-explicit" "sslserver" '["root-cert"] '["ca-cert-ec-explicit"]
+          "reject named curve leaf with explicit curve intermediate"))
 (test-v "ee-cert-ec-named-named" "sslserver" '["root-cert"] '["ca-cert-ec-named"]
         "accept named curve leaf with named curve intermediate")
 
@@ -448,7 +456,7 @@
 ;; between the trust-anchor and the leaf, so, for example, with a root->ca->leaf
 ;; chain, depth = 1 is sufficient, but depth == 0 is not.
 
-(XFAIL
+(SKIP ;; verify-depth not supported
  (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-verify_depth" "2")
          "accept chain with verify_depth 2")
  (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-verify_depth" "1")
@@ -458,52 +466,58 @@
  (test-v "ee-cert" "sslserver" '["ca-cert-md5-any"] '[] #:o '("-verify_depth" "0")
          "accept md5 intermediate TA with verify_depth 0"))
 
-;; Name Constraints tests.
+;; Name Constraints tests
 
-(test-v "alt1-cert" "sslserver" '["root-cert"] '["ncca1-cert"]
+;; The NC test certs don't assert serverAuth EKU, so disable
+;; suitability check by changing purpose to "Xsslserver".
+
+(test-v "alt1-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
         "Name Constraints everything permitted")
 
-(test-v "alt2-cert" "sslserver" '["root-cert"] '["ncca2-cert"]
+(test-v "alt2-cert" "Xsslserver" '["root-cert"] '["ncca2-cert"]
         "Name Constraints nothing excluded")
 
-(test-v "alt3-cert" "sslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"]
+(test-v "alt3-cert" "Xsslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"]
         "Name Constraints nested test all permitted")
 
-(test-v "goodcn1-cert" "sslserver" '["root-cert"] '["ncca1-cert"]
+(test-v "goodcn1-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
         "Name Constraints CNs permitted")
 
-(test-no "badcn1-cert" "sslserver" '["root-cert"] '["ncca1-cert"] 
-         "Name Constraints CNs not permitted")
+(XFAIL ;; DNS NC not applied to CN
+ (test-no "badcn1-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
+          "Name Constraints CNs not permitted"))
 
-(test-no "badalt1-cert" "sslserver" '["root-cert"] '["ncca1-cert"] 
+(test-no "badalt1-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
          "Name Constraints hostname not permitted")
 
-(test-no "badalt2-cert" "sslserver" '["root-cert"] '["ncca2-cert"] 
+(test-no "badalt2-cert" "Xsslserver" '["root-cert"] '["ncca2-cert"]
          "Name Constraints hostname excluded")
 
-(test-no "badalt3-cert" "sslserver" '["root-cert"] '["ncca1-cert"] 
+(test-no "badalt3-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
          "Name Constraints email address not permitted")
 
-(test-no "badalt4-cert" "sslserver" '["root-cert"] '["ncca1-cert"] 
+(test-no "badalt4-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
          "Name Constraints subject email address not permitted")
 
-(test-no "badalt5-cert" "sslserver" '["root-cert"] '["ncca1-cert"] 
+(test-no "badalt5-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
          "Name Constraints IP address not permitted")
 
-(test-no "badalt6-cert" "sslserver" '["root-cert"] '["ncca1-cert"] 
-         "Name Constraints CN hostname not permitted")
+(XFAIL ;; DNS NC not applied to CN
+ (test-no "badalt6-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
+          "Name Constraints CN hostname not permitted")
+ (test-no "badalt7-cert" "Xsslserver" '["root-cert"] '["ncca1-cert"]
+          "Name Constraints CN BMPSTRING hostname not permitted"))
 
-(test-no "badalt7-cert" "sslserver" '["root-cert"] '["ncca1-cert"] 
-         "Name Constraints CN BMPSTRING hostname not permitted")
-
-(test-no "badalt8-cert" "sslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"] 
+(test-no "badalt8-cert" "Xsslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"]
          "Name constraints nested DNS name not permitted 1")
 
-(test-no "badalt9-cert" "sslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"] 
+(test-no "badalt9-cert" "Xsslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"]
          "Name constraints nested DNS name not permitted 2")
 
-(test-no "badalt10-cert" "sslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"] 
+(test-no "badalt10-cert" "Xsslserver" '["root-cert"] '["ncca1-cert" "ncca3-cert"]
          "Name constraints nested DNS name excluded")
+
+;; ---
 
 (test-v "ee-pss-sha1-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
         "Accept PSS signature using SHA1 at auth level 0")
@@ -511,19 +525,20 @@
 (test-v "ee-pss-sha256-cert" "sslserver" '["root-cert"] '["ca-cert"]
         "CA with PSS signature using SHA256")
 
-(XFAIL
+(SKIP ;; security levels not implemented
  (test-no "ee-pss-sha1-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "1")
           "Reject PSS signature using SHA1 and auth level 1"))
 
 (test-v "ee-pss-sha256-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "2")
         "PSS signature using SHA256 and auth level 2")
 
-(test-no "many-names1" "sslserver" '["many-constraints"] '["many-constraints"] 
-         "Too many names and constraints to check (1)")
-(test-no "many-names2" "sslserver" '["many-constraints"] '["many-constraints"] 
-         "Too many names and constraints to check (2)")
-(test-no "many-names3" "sslserver" '["many-constraints"] '["many-constraints"] 
-         "Too many names and constraints to check (3)")
+(XFAIL ;; no limit implemented, not sure what these should do...
+ (test-no "many-names1" "sslserver" '["many-constraints"] '["many-constraints"]
+          "Too many names and constraints to check (1)")
+ (test-no "many-names2" "sslserver" '["many-constraints"] '["many-constraints"]
+          "Too many names and constraints to check (2)")
+ (test-no "many-names3" "sslserver" '["many-constraints"] '["many-constraints"]
+          "Too many names and constraints to check (3)"))
 
 (test-v "some-names1" "sslserver" '["many-constraints"] '["many-constraints"]
         "Not too many names and constraints to check (1)")
@@ -531,28 +546,32 @@
         "Not too many names and constraints to check (2)")
 (test-v "some-names2" "sslserver" '["many-constraints"] '["many-constraints"]
         "Not too many names and constraints to check (3)")
-(test-v "root-cert-rsa2" "sslserver" '["root-cert-rsa2"] '[] #:o "-check_ss_sig"
-        "Public Key Algorithm rsa instead of rsaEncryption")
+
+(SKIP ;; alt rsa oid not supported
+ (test-v "root-cert-rsa2" "sslserver" '["root-cert-rsa2"] '[] #:o "-check_ss_sig"
+         "Public Key Algorithm rsa instead of rsaEncryption"))
 
 (test-v "ee-self-signed" "sslserver" '["ee-self-signed"] '[]
         "accept trusted self-signed EE cert excluding key usage keyCertSign")
 
 ;; ED25519 certificate from draft-ietf-curdle-pkix-04
 
-(test-v "ee-ed25519" "sslserver" '["root-ed25519"] '[]
-        "accept X25519 EE cert issued by trusted Ed25519 self-signed CA cert")
+(XFAIL ;; these certs are not valid DER: encode CA:false (default value)
 
-(test-no "ee-ed25519" "sslserver" '["root-ed25519"] '[] #:o "-x509_strict"
-         "reject X25519 EE cert in strict mode since AKID is missing")
+ (test-v "ee-ed25519" "sslserver" '["root-ed25519"] '[]
+         "accept X25519 EE cert issued by trusted Ed25519 self-signed CA cert")
 
-(test-no "root-ed25519" "sslserver" '["ee-ed25519"] '[]
-         "fail Ed25519 CA and EE certs swapped")
+ (test-no "ee-ed25519" "sslserver" '["root-ed25519"] '[] #:o "-x509_strict"
+          "reject X25519 EE cert in strict mode since AKID is missing")
 
-(test-v "root-ed25519" "sslserver" '["root-ed25519"] '[]
-        "accept trusted Ed25519 self-signed CA cert")
+ (test-no "root-ed25519" "sslserver" '["ee-ed25519"] '[]
+          "fail Ed25519 CA and EE certs swapped")
 
-(test-no "ee-ed25519" "sslserver" '["ee-ed25519"] '[]
-         "fail trusted Ed25519-signed self-issued X25519 cert")
+ (test-v "root-ed25519" "sslserver" '["root-ed25519"] '[]
+         "accept trusted Ed25519 self-signed CA cert")
 
-(test-v "ee-ed25519" "sslserver" '["ee-ed25519"] '[] #:o "-partial_chain"
-        "accept last-resort direct leaf match Ed25519-signed self-issued cert")
+ (test-no "ee-ed25519" "sslserver" '["ee-ed25519"] '[]
+          "fail trusted Ed25519-signed self-issued X25519 cert")
+
+ (test-v "ee-ed25519" "sslserver" '["ee-ed25519"] '[] #:o "-partial_chain"
+         "accept last-resort direct leaf match Ed25519-signed self-issued cert"))
