@@ -335,6 +335,10 @@
               (check-as-final)
               (check-validity-period from-time to-time)))
 
+    ;; ok-validity-period? : Seconds [Seconds] -> Boolean
+    (define/public (ok-validity-period? [from-time (current-seconds)] [to-time from-time])
+      (null? (check-validity-period from-time to-time)))
+
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
 
