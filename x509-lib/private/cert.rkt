@@ -19,10 +19,6 @@
 ;; - RFC 8398 and 8399 (Internationalization) (https://tools.ietf.org/html/rfc8398,
 ;;   https://tools.ietf.org/html/rfc8399)
 
-;; FIXME: asn1 parser returns mutable bytes,strings?
-
-;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
-
 ;; ============================================================
 
 (define certificate-data%

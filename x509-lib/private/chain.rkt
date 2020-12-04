@@ -16,28 +16,6 @@
 
 ;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
 
-;; recursive verification arguments
-;; - chain
-;; - hostname (optional)
-;; - purposes (recur with purposes={CA}?)
-;; - depth (decrement --- or just do depth check once?)
-
-;; constant verification arguments
-;; - when (allow range?)
-;; - download CRLs? use OSCP?
-;;   - if so, use cache? (storage location, cache params, etc)
-;; - trusted certificate roots (CA or not?)
-;; - ? untrusted intermediate certificates (if chain is not explicit?)
-;;   - option to automatically fetch intermediate certificates? (feasible?)
-
-;; success output:
-;; - verified chain (ending in explicit self-signed (CA?) cert? maybe not necessarily)
-;; - public key (of top cert)
-;; - warnings?
-
-;; failure output:
-;; - failure details?
-
 ;; ============================================================
 
 ;; A CandidateChain is (list TrustAnchor Cert ...),
