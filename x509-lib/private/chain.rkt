@@ -364,15 +364,16 @@
       ;; - https://tools.ietf.org/html/rfc5246#section-7.4.2
       ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
       ;; - CA/B Baseline Requirements (Section 7.1 Certificate Profile)
-      (define TLS-USE-COMMON-NAME? #f)
+      (define OR-ANYEKU? #f)
+      (define USE-CN? #f)
       (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
                     [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-usage? id-kp-serverAuth #f #f) '()]
+              (cond [(ok-extended-key-usage? id-kp-serverAuth #f OR-ANYEKU?) '()]
                     [else '(tls:missing-serverAuth-eku)])
               (cond [(or (not host)
                          (for/or ([pattern (in-list (get-subject-alt-names 'dNSName))])
                            (host-matches? host pattern))
-                         (and TLS-USE-COMMON-NAME?
+                         (and USE-CN?
                               (for/or ([cn (in-list (send cert get-subject-common-names))])
                                 (and cn (host-matches? host cn)))))
                      '()]
@@ -382,9 +383,10 @@
       (null? (check-suitable-for-tls-client name)))
 
     (define/public (check-suitable-for-tls-client [name #f])
+      (define OR-ANYEKU? #f)
       (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
                     [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-usage? id-kp-clientAuth #f #f) '()]
+              (cond [(ok-extended-key-usage? id-kp-clientAuth #f OR-ANYEKU?) '()]
                     [else '(tls:missing-clientAuth-eku)])
               (cond [(or (not name)
                          (GeneralName-equal? name (list 'directoryName (get-subject)))
