@@ -2,22 +2,33 @@
 (require racket/list
          racket/system
          racket/string
+         racket/cmdline
          crypto crypto/all
          racket/class
          racket/pretty
          "x509.rkt")
 (provide (all-defined-out))
 
+(command-line
+ #:args ([working-dir #f])
+ (cond [working-dir
+        (current-directory working-dir)]
+       [else
+        (printf "Working directory not provided. Skipping tests.\n")
+        (exit 0)]))
+
+;; ------------------------------------------------------------
+
 (define (openssl . args)
   (define (to-string x) (if (path? x) (path->string x) x))
   (let ([args (flatten args)])
-    (eprintf "$ openssl ~a\n" (string-join (map to-string args) " "))
+    (printf "$ openssl ~a\n" (string-join (map to-string args) " "))
     (define out (open-output-string))
     (define ok? (parameterize ((current-output-port out)
                                (current-error-port out))
                   (apply system* (find-executable-path "openssl") args)))
     (unless ok?
-      (eprintf "~a\n" (get-output-string out))
+      (printf "~a\n" (get-output-string out))
       (error 'openssl "command failed"))))
 (define (openssl-req . args) (apply openssl "req" args))
 (define (openssl-x509 . args) (apply openssl "x509" args))
@@ -219,3 +230,6 @@
   ;; 6.1.5.{c-e} signature -- tested above
   ;; 6.1.5.f critical extensions -- TODO
   )
+
+(module+ test
+  (require (submod ".." main)))
