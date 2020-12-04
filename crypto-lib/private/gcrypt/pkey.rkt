@@ -120,7 +120,7 @@
     (super-new (spec 'rsa))
 
     (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
-    (define/override (can-sign? pad) (memq pad '(#f pkcs1-v1.5)))
+    (define/override (can-sign? pad) (memq pad '(#f pkcs1-v1.5 pss)))
     (define/override (can-sign2? pad dspec) (-known-digest? dspec))
 
     (define/override (generate-key config)
@@ -207,11 +207,19 @@
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (define padding (check-sig-pad pad))
-      (gcry_sexp_build "(data (flags %s) (hash %s %b))"
-                       padding
-                       (string->bytes/utf-8 (symbol->string digest-spec))
-                       (cast (bytes-length digest) _uintptr _pointer)
-                       digest))
+      (case pad
+        [(pss)
+         (gcry_sexp_build "(data (flags pss) (salt-length %d) (hash %s %b))"
+                          (cast (digest-spec-size digest-spec) _uintptr _pointer)
+                          (string->bytes/utf-8 (symbol->string digest-spec))
+                          (cast (bytes-length digest) _uintptr _pointer)
+                          digest)]
+        [else
+         (gcry_sexp_build "(data (flags %s) (hash %s %b))"
+                          padding
+                          (string->bytes/utf-8 (symbol->string digest-spec))
+                          (cast (bytes-length digest) _uintptr _pointer)
+                          digest)]))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
       (define sig-part (gcry_sexp_find_token sig-sexp "rsa"))
@@ -223,9 +231,7 @@
 
     (define/override (check-sig-pad pad)
       (case pad
-        ;; FIXME: gcrypt PSS is for fixed salt length (20), incompatible with libcrypto
-        ;;   gcrypt 1.7 adds option to set salt length, but still no max/auto support
-        ;; [(pss) #"pss"]
+        [(pss) #"pss"]
         [(pkcs1-v1.5 #f) #"pkcs1"]
         [else (err/bad-signature-pad impl pad)]))
 
