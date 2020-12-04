@@ -12,8 +12,9 @@
 
 ;; See $SRC/test/recipes/25-test_verify.t for expected behavior.
 
-(crypto-factories libcrypto-factory)
-;(crypto-factories gcrypt-factory) ;; can't handle ca-cert-ec-explicit
+(crypto-factories libcrypto-factory) ;; all tests enabled pass
+;(crypto-factories gcrypt-factory)    ;; all tests enabled pass
+;(crypto-factories nettle-factory)    ;; can't handle PSS w/ sha1; others pass
 
 (command-line
  #:args ([ossl-test-cert-dir #f])
