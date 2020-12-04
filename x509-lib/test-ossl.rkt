@@ -10,124 +10,17 @@
 ;; This test should be run in the OpenSSL source distribution, in the
 ;; $SRC/test/certs directory.
 
-;; See $SRC/test/recipes/25-test_verify.t for expected behavior.
-
-(crypto-factories libcrypto-factory) ;; all tests enabled pass
-;(crypto-factories gcrypt-factory)    ;; all tests enabled pass
-;(crypto-factories nettle-factory)    ;; can't handle PSS w/ sha1; others pass
-
 (command-line
  #:args ([ossl-test-cert-dir #f])
  (cond [ossl-test-cert-dir
         (current-directory ossl-test-cert-dir)]
        [else
-        (eprintf "OpenSSL test/certs directory not provided. Skipping tests.\n")
+        (printf "OpenSSL test/certs directory not provided. Skipping tests.\n")
         (exit 0)]))
 
-(when #f
-(define store
-  (send (empty-certificate-store) add
-        #:trusted-certs (append*
-                         (map pem-file->certificates
-                              '("root-cert.pem" "root-ed448-cert.pem")))
-        #:untrusted-certs (append*
-                           (map pem-file->certificates
-                                '("root-nonca.pem" "root-name2.pem" "root-cert2.pem"
-                                  "ca-cert.pem" "ca-nonca.pem" "ca-cert2.pem"
-                                  "ca-name2.pem" "ca-root2.pem" "ca-expired.pem"
-                                  "ca-cert-ec-explicit.pem" "ca-cert-ec-named.pem"
-                                  "cca-cert.pem" "sca-cert.pem"
-                                  "ncca1-cert.pem" "ncca2-cert.pem" "ncca3-cert.pem")))))
-
-(define (test-ok pem-file)
-  (test-case pem-file
-    (define ch (send store pem-file->chain pem-file))
-    (check-pred certificate-chain? ch)))
-
-(define (test-reject pem-file)
-  (test-case pem-file
-    (check-exn exn:x509?
-               (lambda () (send store pem-file->chain pem-file)))))
-
-;; ++ root-cert
-;; + root-nonca
-;; + root-cert2
-;; + root-name2
-
-;; ? root-cert-md5
-;; ? root-cert-768
-
-;; ? croot-cert - w/ clientAuth
-;; ? sroot-cert - w/ serverAuth
-
-;; + ca-cert - OK
-;; + ca-nonca - not CA
-(test-reject "ca-nonbc.pem") ;; invalid cert
-;; + ca-cert2 - OK, same name, other key
-;; + ca-name2 - OK, same key, other name
-;; + ca-root2 - not OK, signed by untrusted root2
-;; + ca-expired
-
-;; ? ca-cert-md5
-;; ? ca-cert-768i
-;; ? ca-cert-768
-;; + ca-cert-ec-explicit
-;; + ca-cert-ec-named
-
-;; + cca-cert
-;; + sca-cert
-
-(test-ok "ee-cert.pem")
-(test-reject "ee-expired.pem")
-(test-ok "ee-cert2.pem")
-(test-ok "ee-name2.pem")
-(test-ok "ee-client.pem")
-(test-reject "ee-pathlen.pem")
-
-(test-ok "ee-cert-md5.pem") ;; FIXME, security level
-;; ? ee-cert-768i
-(test-ok "ee-cert-768.pem") ;; FIXME, security level
-(test-ok "ee-cert-ec-explicit.pem") ;; ??
-(test-ok "ee-cert-ec-named-explicit.pem") ;; ??
-(test-ok "ee-cert-ec-named-named.pem") ;; ??
-
-(test-reject "ee-self-signed.pem")
-
-;; Skipping proxy certs
-
-;; + ncca1-cert
-;; + ncca2-cert
-;; + ncca3-cert
-
-(test-ok "alt1-cert.pem")
-(test-ok "goodcn1-cert.pem")
-(test-ok "badcn1-cert.pem") ;; ???
-(test-ok "alt2-cert.pem")
-(test-reject "badalt1-cert.pem") ;; bad DNS SAN; FIXME!
-(test-reject "badalt2-cert.pem")
-(test-reject "badalt3-cert.pem") ;; FIXME
-(test-reject "badalt4-cert.pem") ;; subject email address
-(test-reject "badalt5-cert.pem")
-(test-reject "badalt6-cert.pem") ;; FIXME: CN-as-DNS
-(test-reject "badalt7-cert.pem") ;; FIXME: CN-as-DNS
-(test-ok "alt3-cert.pem")
-(test-reject "badalt8-cert.pem")
-(test-reject "badalt9-cert.pem")
-(test-reject "badalt10-cert.pem")
-
-;; ee-pss-sha1-cert
-;; ee-pss-sha256-cert
-;; ? server-ecdsa-brainpoolP256r1-cert -- BAD, issued by "rootcert" (typo?)
-;; ? server-pss-restrict-cert -- BAD, issued by "rootcert" (typo?)
-
-;; ++ root-ed448-cert
-
-(test-ok "server-ed448-cert.pem")
-
-(test-ok "ee-cert-noncrit-unknown-ext.pem")
-(test-reject "ee-cert-crit-unknown-ext.pem")
-(test-ok "ee-cert-ocsp-nocheck.pem") ;; FIXME
-(void))
+(crypto-factories libcrypto-factory) ;; all tests enabled pass
+;(crypto-factories gcrypt-factory)    ;; all tests enabled pass
+;(crypto-factories nettle-factory)    ;; can't handle PSS w/ sha1; others pass
 
 ;; ============================================================
 ;; Adapted from $SRC/test/recipes/25-test_verify.t
