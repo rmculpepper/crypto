@@ -29,6 +29,26 @@
 ;; check-ocsp-responses : Chain ?? Seconds -> LookupResult
 (define (check-ocsp-responses chain rs at-time)
   (define certid (make-certid chain))
+  (define results
+    (for/list ([r (in-list rs)] #:when (is-a? r ocsp-response%))
+      (send r lookup chain certid)))
+  (define result (lookup-result-join results))
+  (cond [(null? rs) 'unknown:no-sources]
+        [(null? results) 'unknown:no-responses]
+        [(list? result)
+         (define result2
+           (filter (match-lambda
+                     [(list last-time next-time)
+                      (<= last-time at-time next-time)])
+                   result))
+         (cond [(pair? result2) result2]
+               [else 'unknown:response-expired])]
+        [else result]))
+
+#;
+;; check-ocsp-responses : Chain ?? Seconds -> LookupResult
+(define (check-ocsp-responses chain rs at-time)
+  (define certid (make-certid chain))
   (define result
     (lookup-result-join
      (for/list ([r (in-list rs)])
@@ -51,13 +71,16 @@
   (define cert (send chain get-certificate))
   (define req-der (make-ocsp-request chain))
   (for/list ([ocsp-url (send cert get-ocsp-uris)])
-    (define resp
-      (cond [cache (send cache fetch-ocsp ocsp-url req-der)]
-            [else (do-fetch-ocsp ocsp-url req-der)]))
-    (when (is-a? resp ocsp-response%)
-      (unless (send resp ok-signature? (send chain get-issuer-chain-or-self))
-        (error 'ocsp "bad signature")))
-    resp))
+    (get-ocsp-response chain cache req-der ocsp-url)))
+
+(define (get-ocsp-response chain cache req-der ocsp-url)
+  (define resp
+    (cond [cache (send cache fetch-ocsp ocsp-url req-der)]
+          [else (do-fetch-ocsp ocsp-url req-der)]))
+  (cond [(is-a? resp ocsp-response%)
+         (cond [(send resp ok-signature? (send chain get-issuer-chain-or-self)) resp]
+               [else 'bad-signature])]
+        [else resp]))
 
 (define (do-fetch-ocsp ocsp-url req-der)
   (let loop ([try-get? #t])
