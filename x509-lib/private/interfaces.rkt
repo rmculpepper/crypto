@@ -13,12 +13,10 @@
    custom-write
 
    get-der
-   get-cert-signature-alg
-   get-cert-signature-bytes
+   get-cert-signature-info
 
    get-version
    get-serial-number
-   get-signature-alg
    get-issuer
    get-validity
    get-subject
@@ -55,7 +53,6 @@
      (lambda (self out mode) (send self custom-write out mode))])
    equal-to
    hash-code
-   get-public-key
    ))
 
 (define time/c exact-integer?)
@@ -78,8 +75,11 @@
    ok-key-use?
    ok-extended-key-usage?
 
+   get-public-key
+   check-signature
+
    [trusted?
-    (->*m [certificate-store?] [time/c time/c]
+    (->*m [(or/c #f certificate-store?)] [time/c time/c]
           boolean?)]
    ))
 

@@ -3,7 +3,6 @@
          racket/class
          racket/port
          net/url
-         crypto
          crypto/private/common/base64
          asn1
          asn1/util/time
@@ -25,7 +24,7 @@
 (define (check-not-revoked/ocsp chain [at-time (current-seconds)]
                                 #:cache [cache #f])
   (define rs (get-ocsp-responses chain #:cache cache))
-  (check-ocsp-responses rs))
+  (check-ocsp-responses chain rs at-time))
 
 ;; check-ocsp-responses : Chain ?? Seconds -> LookupResult
 (define (check-ocsp-responses chain rs at-time)
@@ -70,8 +69,8 @@
     (define header (purify-port resp-in))
     (define resp-bytes (port->bytes resp-in))
     (close-input-port resp-in)
-    (eprintf "do-fetch-ocsp: header = ~e\n" header)
-    (eprintf "do-fetch-ocsp: got ~e\n" resp-bytes)
+    ;;(eprintf "do-fetch-ocsp: header = ~e\n" header)
+    ;;(eprintf "do-fetch-ocsp: got ~e\n" resp-bytes)
     (cond [(regexp-match? #rx"^HTTP/[0-9.]* 200" header)
            (bytes->ocsp-response resp-bytes)]
           [req-b64 (loop #f)]
@@ -92,6 +91,11 @@
           'issuerNameHash (sha1-bytes (asn1->bytes/DER Name (send issuer get-subject)))
           'issuerKeyHash (certificate-keyhash issuer)
           'serialNumber (send cert get-serial-number)))
+
+(define (certid=? a b)
+  ;; Avoid comparing hashAlgorithm, parameter presence varies.
+  (for/and ([key (in-list '(issuerNameHash issuerKeyHash serialNumber))])
+    (equal? (hash-ref a key) (hash-ref b key))))
 
 (define (make-ocsp-request chain)
   (define cert (send chain get-certificate))
@@ -143,8 +147,8 @@
       (define sig (match (hash-ref rbody 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
       (define responder-chain (get-responder-chain issuer-chain))
-      (define responder-pk (and responder-chain (send responder-chain get-public-key)))
-      (and responder-pk (verify/algid responder-pk algid tbs-der sig)))
+      (and responder-chain
+           (null? (send responder-chain check-signature algid tbs-der sig))))
 
     (define/public (get-responder-chain issuer-chain)
       (define (is-responder? cert)
@@ -153,25 +157,25 @@
            (Name-equal? responder-name (send cert get-subject))]
           [(list 'byKey keyhash)
            (equal? keyhash (certificate-keyhash cert))]))
-      (if (is-responder? (send issuer-chain get-certificate))
-          issuer-chain
-          (for/or ([cert-der (in-list (hash-ref rbody 'certs null))])
-            (define cert (bytes->certificate cert-der))
-            (and (is-responder? cert)
-                 (let ([chain (send issuer-chain extend-chain cert)])
-                   (and (certificate-chain? chain)
-                        (send chain suitable-for-ocsp-signing? issuer-chain)
-                        ;; We omit the store trust check because issuer-chain
-                        ;; has (presumably) already been checked for trust, and
-                        ;; the new chain has the same trust anchor.
-                        (send chain trusted? #f)
-                        chain))))))
+      (cond [(is-responder? (send issuer-chain get-certificate)) issuer-chain]
+            [else
+             (define certs (map bytes->certificate (hash-ref rbody 'certs null)))
+             (for/or ([cert (in-list certs)])
+               (and (is-responder? cert)
+                    (let ([chain (send issuer-chain extend-chain cert)])
+                      (and (certificate-chain? chain)
+                           (send chain suitable-for-ocsp-signing? issuer-chain)
+                           ;; We omit the store trust check because issuer-chain
+                           ;; has (presumably) already been checked for trust, and
+                           ;; the new chain has the same trust anchor.
+                           (send chain trusted? #f)
+                           chain))))]))
 
     ;; lookup : Chain -> (Listof LookupResult)
     (define/public (lookup chain [certid (make-certid chain)])
       (lookup-result-join
        (for/list ([resp (in-list (get-responses))])
-         (cond [(equal? (hash-ref resp 'certID) certid)
+         (cond [(certid=? (hash-ref resp 'certID) certid)
                 (match (hash-ref resp 'certStatus)
                   [(list 'good _)
                    (list (list (asn1-generalized-time->seconds (hash-ref resp 'thisUpdate))

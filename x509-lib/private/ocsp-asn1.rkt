@@ -17,6 +17,7 @@
                   Certificate
                   SIGNING)
          (only-in crypto/private/common/asn1
+                  ANY/DER
                   AlgorithmIdentifier))
 
 ;; Value, etc definitions
@@ -81,7 +82,7 @@
    (tbsResponseData ResponseData)
    (signatureAlgorithm (AlgorithmIdentifier SIGNING))
    (signature BIT-STRING)
-   (certs #:explicit 0 (SEQUENCE-OF Certificate) #:optional)))
+   (certs #:explicit 0 (SEQUENCE-OF ANY/DER #|Certificate|#) #:optional)))
 (define-asn1-type ResponseData
   (SEQUENCE
    (version #:explicit 0 Version #:default v1)

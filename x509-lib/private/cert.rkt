@@ -4,12 +4,10 @@
          racket/list
          racket/string
          racket/date
-         crypto
          asn1
          asn1/util/time
          "interfaces.rkt"
          "asn1.rkt"
-         (submod "asn1.rkt" verify)
          "stringprep.rkt")
 (provide (all-defined-out))
 
@@ -37,16 +35,16 @@
     (define/public (custom-write out mode)
       (fprintf out "#<certificate: ~a>" (Name->string (get-subject))))
 
-    (define/public (get-cert-signature-alg)
-      (hash-ref cert 'signatureAlgorithm))
-    (define/public (get-cert-signature-bytes)
-      (match (hash-ref cert 'signature)
-        [(bit-string sig-bytes 0) sig-bytes]))
+    (define/public (get-cert-signature-info)
+      (define vcert (bytes->asn1 Certificate-for-verify-sig der))
+      (values (hash-ref vcert 'signatureAlgorithm)
+              (hash-ref vcert 'tbsCertificate)
+              (match (hash-ref vcert 'signature)
+                [(bit-string sig-bytes 0) sig-bytes])))
 
     ;; TBSCertificate component accessors
     (define/public (get-version) (hash-ref tbs 'version))
     (define/public (get-serial-number) (hash-ref tbs 'serialNumber))
-    (define/public (get-signature-alg) (hash-ref tbs 'signature))
     (define/public (get-issuer) (hash-ref tbs 'issuer))
     (define/public (get-validity) (hash-ref tbs 'validity))
     (define/public (get-subject) (hash-ref tbs 'subject))
@@ -143,7 +141,8 @@
       (define (bad/should! x)  (warn! x))
       (define (bad/ca-must! x) (warn! x))
       ;; 4.1.1.2
-      (unless (equal? (get-cert-signature-alg) (get-signature-alg))
+      (unless (equal? (hash-ref cert 'signatureAlgorithm)
+                      (hash-ref tbs 'signature))
         (bad! 'signature-algorithm:mismatch))
       ;; 4.1.1.3
       ;; -- 'signature-valid, checked later
@@ -604,18 +603,6 @@
       (cond [(member* eku reject-ekus) 'no]
             [replace-ekus (if (member* eku replace-ekus) 'yes 'no)]
             [else (super get-eku eku)]))
-
-    ;; ----------------------------------------
-
-    (define/public (ok-signature? issuer-pk)
-      (define vcert (bytes->asn1 Certificate-for-verify-sig (get-der)))
-      (define tbs-der (hash-ref vcert 'tbsCertificate))
-      (define algid (hash-ref vcert 'signatureAlgorithm))
-      (define sig (match (hash-ref vcert 'signature)
-                    [(bit-string sig-bytes 0) sig-bytes]))
-      (verify/algid issuer-pk algid tbs-der sig))
-
-    (define/public (get-public-key) (datum->pk-key (get-spki) 'SubjectPublicKeyInfo))
     ))
 
 (define (bytes->certificate der #:who [who 'bytes->certificate])

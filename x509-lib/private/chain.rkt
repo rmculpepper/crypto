@@ -2,8 +2,10 @@
 (require racket/class
          racket/match
          racket/list
+         crypto
          "interfaces.rkt"
          "asn1.rkt"
+         (submod "asn1.rkt" verify)
          "cert.rkt")
 (provide (all-defined-out))
 
@@ -89,9 +91,23 @@
 
     (define/public (get-subject) (send cert get-subject))
     (define/public (get-subject-alt-names) (send cert get-subject-alt-names))
-    (define/public (get-public-key) (send cert get-public-key))
     (define/public (get-index) index)
     (define/public (get-max-path-length) max-path-length)
+
+    ;; ----------------------------------------
+
+    ;; public-key-cache : WeakHasheq[(Listof crypto-factory?) => pk-key?]
+    ;; The crypto-factories parameter can change; cache for current factories.
+    (define public-key-cache (make-weak-hasheq))
+
+    (define/public (get-public-key)
+      (hash-ref! public-key-cache (crypto-factories)
+                 (lambda () (datum->pk-key (send cert get-spki) 'SubjectPublicKeyInfo))))
+
+    (define/public (check-signature algid tbs sig)
+      (check-signature/algid (get-public-key) algid tbs sig))
+
+    ;; ----------------------------------------
 
     ;; index : Nat  -- 0 is anchor
     (define index (if issuer-chain (add1 (send issuer-chain get-index)) 0))
@@ -250,7 +266,8 @@
        #| POLICIES NOT SUPPORTED |#))
 
     (define/public (check-certificate-signature new-cert)
-      (if (send new-cert ok-signature? (get-public-key)) '() '(bad-signature)))
+      (define-values (algid tbs-der sig) (send new-cert get-cert-signature-info))
+      (check-signature algid tbs-der sig))
 
     (define/public (check-certificate-name-constraints new-cert)
       (define subject-name (send new-cert get-subject))
@@ -305,6 +322,7 @@
              get-subject
              get-subject-alt-names
              ok-extended-key-usage?
+             get-eku-chain
              check-as-final
              check-validity-period)
     (super-new)
@@ -343,7 +361,10 @@
       (define for-ca-cert (send for-ca-chain get-certificate))
       (or (and (send cert is-CA?)
                (send cert has-same-public-key? for-ca-cert))
-          (and (ok-extended-key-usage? id-kp-OCSPSigning #f)
+          ;; The id-kp-OCSPSigning EKU check is shallow; it should only appear in the
+          ;; responder certificate. Including it in ancestor CA certificates would
+          ;; allow a subordinate CA to sign OCSP responses for its issuer CAs.
+          (and (eq? (send cert get-eku id-kp-OCSPSigning) 'yes)
                (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
     (define/public (suitable-for-tls-server? host)

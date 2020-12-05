@@ -618,7 +618,8 @@
 
 (module+ verify
   (require racket/match racket/class crypto)
-  (provide verify/algid)
+  (provide check-signature/algid
+           verify/algid)
 
   (define (pss-with-digest? alg hash-oid hash-length)
     (match alg
@@ -631,13 +632,13 @@
        #t]
       [else #f]))
 
-  ;; If key is wrong type just return #f, no error.
-  (define (verify/algid pk alg tbs sig)
+  (define (check-signature/algid pk alg tbs sig)
     (define alg-oid (hash-ref alg 'algorithm))
     (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
       [(list 'eddsa #f)
-       (and (eq? 'eddsa (send pk get-spec))
-            (pk-verify pk tbs sig))]
+       (cond [(not (eq? 'eddsa (send pk get-spec))) '(signature:key:wrong-type)]
+             [(pk-verify pk tbs sig) '()]
+             [else '(signature:bad)])]
       [(list 'rsa #f) ;; means RSA w/ PSS
        (define alg-params (hash-ref alg 'parameters))
        (define di
@@ -646,12 +647,18 @@
                [(pss-with-digest? alg-params id-sha384 48) 'sha384]
                [(pss-with-digest? alg-params id-sha512 64) 'sha512]
                [else #f]))
-       (and (eq? 'rsa (send pk get-spec))
-            (symbol? di)
-            (digest/verify pk di tbs sig #:pad 'pss))]
+       (cond [(not (eq? 'rsa (send pk get-spec))) '(signature:key:wrong-type)]
+             [(not di) '(signature:unknown-pss-digest)]
+             [(not (pk-can-sign? pk 'pss di)) '(signature:key:unsupported-padding/digest)]
+             [(digest/verify pk di tbs sig #:pad 'pss) '()]
+             [else '(signature:bad)])]
       [(list pk-type di)
-       (and (eq? pk-type (send pk get-spec))
-            (digest/verify pk di tbs sig))]
-      [_
-       (log-x509-error "unknown signature algorithm: ~v" alg-oid)
-       #f])))
+       (cond [(not (eq? pk-type (send pk get-spec))) '(signature:key:wrong-type)]
+             [(not (pk-can-sign? pk #f di)) '(signature:key:unsupported-padding/digest)]
+             [(digest/verify pk di tbs sig) '()]
+             [else '(signature:bad)])]
+      [_ '(signature:unknown-algorithm)]))
+
+  ;; If key is wrong type just return #f, no error.
+  (define (verify/algid pk alg tbs sig)
+    (null? (check-signature/algid pk alg tbs sig))))

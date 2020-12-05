@@ -166,13 +166,13 @@
   (test-case "fakeintca"
     ;; Since "fakeca" has same Subject as "ca", will build chain with "ca",
     ;; but signature verification will fail.
-    (check-exn (chain-exn? '((1 . bad-signature)))
+    (check-exn (chain-exn? '((1 . signature:bad)))
                (lambda () (read-chain (cert-file "fakeintca"))))
-    (check-exn (chain-exn? '((1 . bad-signature)))
+    (check-exn (chain-exn? '((1 . signature:bad)))
                (lambda () (read-chain (cert-file "fakeend") (cert-file "fakeintca")))))
   (test-case "fakeend w/ intca"
     ;; Similar, but fakeend issuer matches intca.
-    (check-exn (chain-exn? '((2 . bad-signature)))
+    (check-exn (chain-exn? '((2 . signature:bad)))
                (lambda () (read-chain (cert-file "fakeend") (cert-file "intca")))))
 
   ;; ----------------------------------------

@@ -5,11 +5,9 @@
          racket/port
          racket/list
          net/url
-         crypto
          asn1
          "interfaces.rkt"
          "asn1.rkt"
-         (submod "asn1.rkt" verify)
          (only-in "cert.rkt" asn1-time->seconds))
 (provide (all-defined-out))
 
@@ -20,7 +18,7 @@
   ;; FIXME: check all certs
   ;; FIXME: require CRL issuer to be same as cert issuer
   (define cert (send chain get-certificate))
-  (define issuer (send chain get-issuer-or-self))
+  (define issuer-chain (send chain get-issuer-chain-or-self))
   (define crl-urls (certificate-crl-urls cert))
   (cond [(pair? crl-urls)
          (define serial-number (send cert get-serial-number))
@@ -29,7 +27,7 @@
             (define crl
               (cond [cache (send cache fetch-crl crl-url)]
                     [else (do-fetch-crl crl-url)]))
-            (cond [(not (send crl ok-signature? (send issuer get-public-key)))
+            (cond [(not (send crl ok-signature? issuer-chain))
                    '(bad-signature)]
                   ;; What to do if fetch fails or if signature fails?
                   [(member serial-number (send crl get-revoked-serial-numbers))
@@ -84,14 +82,13 @@
 
     ;; FIXME: well-formedness checking?
 
-    ;; FIXME: abstract; see certificate% ok-signature?
-    (define/public (ok-signature? issuer-pk)
+    (define/public (ok-signature? issuer-chain)
       (define crl (bytes->asn1 CertificateList-for-verify-sig der))
       (define tbs-der (hash-ref crl 'tbsCertList))
       (define algid (hash-ref crl 'signatureAlgorithm))
       (define sig (match (hash-ref crl 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
-      (verify/algid issuer-pk algid tbs-der sig))
+      (null? (send issuer-chain check-signature algid tbs-der sig)))
 
     (define/public (get-this-update)
       (asn1-time->seconds (hash-ref tbs 'thisUpdate)))
