@@ -124,7 +124,7 @@
              => (lambda (ncs) (extend-name-constraints null index ncs))]
             [else null]))
 
-    (define/public (ok-extended-key-usage? eku [on-unset #f] [or-anyeku? #f])
+    (define/public (ok-extended-key-usage? eku [on-unset #f])
       ;; This code attempts to follow the CA/B Basic Requirements interpretation
       ;; of EKU extensions in CA certificates, mainly following OpenSSL's tests
       ;; to resolve ambiguities. In particular:
@@ -146,23 +146,13 @@
           [(yes) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'unset])]
           [(no) 'no]
           [(unset) cert-result]))
-      (define result (foldr join 'unset (get-eku-chain eku or-anyeku?)))
+      (define result (foldr join 'unset (get-eku-chain eku)))
       (case result [(yes) #t] [(no) #f] [else on-unset]))
 
-    ;; get-eku-chain : OID Boolean -> (Listof (U 'yes 'no 'unset)), leaf first, root CA last
-    (define/public (get-eku-chain eku or-anyeku?)
-      (define (recur eku or-anyeku?)
-        (if issuer-chain (send issuer-chain get-eku-chain eku or-anyeku?) '()))
-      (cond [(send cert get-extended-key-usages #f)
-             => (lambda (cert-ekus)
-                  (cond [(member eku cert-ekus)
-                         (cons 'yes (recur eku or-anyeku?))]
-                        [(and or-anyeku? (member anyExtendedKeyUsage cert-ekus))
-                         ;; If or-anyeku? is true, then {anyEKU} -> {specificEKU} is allowed.
-                         (cons 'yes (recur anyExtendedKeyUsage #f))]
-                        [else
-                         (cons 'no (recur eku or-anyeku?))]))]
-            [else (cons 'unset (recur eku or-anyeku?))]))
+    ;; get-eku-chain : OID -> (Listof (U 'yes 'no 'unset)), leaf first, root CA last
+    (define/public (get-eku-chain eku)
+      (cons (send cert get-eku eku)
+            (if issuer-chain (send issuer-chain get-eku-chain eku) '())))
 
     ;; {from,to}-time : Seconds
     (define-values (from-time to-time)
@@ -353,7 +343,7 @@
       (define for-ca-cert (send for-ca-chain get-certificate))
       (or (and (send cert is-CA?)
                (send cert has-same-public-key? for-ca-cert))
-          (and (ok-extended-key-usage? id-kp-OCSPSigning #f #f)
+          (and (ok-extended-key-usage? id-kp-OCSPSigning #f)
                (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
     (define/public (suitable-for-tls-server? host)
@@ -368,11 +358,10 @@
       ;; - https://tools.ietf.org/html/rfc5246#section-7.4.2
       ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
       ;; - CA/B Baseline Requirements (Section 7.1 Certificate Profile)
-      (define OR-ANYEKU? #f)
       (define USE-CN? #f)
       (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
                     [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-usage? id-kp-serverAuth #f OR-ANYEKU?) '()]
+              (cond [(ok-extended-key-usage? id-kp-serverAuth #f) '()]
                     [else '(tls:missing-serverAuth-eku)])
               (cond [(or (not host)
                          (for/or ([pattern (in-list (get-subject-alt-names 'dNSName))])
@@ -387,10 +376,9 @@
       (null? (check-suitable-for-tls-client name)))
 
     (define/public (check-suitable-for-tls-client [name #f])
-      (define OR-ANYEKU? #f)
       (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
                     [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-usage? id-kp-clientAuth #f OR-ANYEKU?) '()]
+              (cond [(ok-extended-key-usage? id-kp-clientAuth #f) '()]
                     [else '(tls:missing-clientAuth-eku)])
               (cond [(or (not name)
                          (GeneralName-equal? name (list 'directoryName (get-subject)))

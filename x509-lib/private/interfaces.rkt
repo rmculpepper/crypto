@@ -8,17 +8,8 @@
 (define (certificate-store? v) (is-a? v -certificate-store<%>))
 
 (define certificate-data<%>
-  (interface*
-   ()
-   ([prop:equal+hash
-     (list (lambda (self other recur) (send self equal-to other recur))
-           (lambda (self recur) (send self hash-code recur))
-           (lambda (self recur) (send self hash-code recur)))]
-    [prop:custom-write
-     (lambda (self out mode) (send self custom-write out mode))])
-   equal-to
+  (interface ()
    has-same-public-key?
-   hash-code
    custom-write
 
    get-der
@@ -42,7 +33,8 @@
    is-self-signed?
    get-key-uses
    ok-key-use?
-   get-extended-key-usages
+   get-eku
+   get-ekus
 
    get-extension
    get-extension-value
@@ -53,9 +45,18 @@
    ))
 
 (define certificate<%>
-  (interface (certificate-data<%>)
-    get-public-key
-    ))
+  (interface*
+   (certificate-data<%>)
+   ([prop:equal+hash
+     (list (lambda (self other recur) (send self equal-to other recur))
+           (lambda (self recur) (send self hash-code recur))
+           (lambda (self recur) (send self hash-code recur)))]
+    [prop:custom-write
+     (lambda (self out mode) (send self custom-write out mode))])
+   equal-to
+   hash-code
+   get-public-key
+   ))
 
 (define time/c exact-integer?)
 (define candidate-chain/c (non-empty-listof certificate?))

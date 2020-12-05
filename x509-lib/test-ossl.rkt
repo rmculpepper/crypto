@@ -4,6 +4,8 @@
          racket/cmdline
          rackunit
          crypto crypto/all
+         crypto/pem
+         (submod x509/private/cert openssl-trusted-cert)
          x509)
 (provide (all-defined-out))
 
@@ -22,11 +24,23 @@
 ;(crypto-factories gcrypt-factory)    ;; all tests enabled pass
 ;(crypto-factories nettle-factory)    ;; can't handle PSS w/ sha1; others pass
 
+(define (pem-file->certs* pem-file)
+  (call-with-input-file* pem-file
+    (lambda (in)
+      (define (do-read in)
+        (read-pem in #:only '(#"CERTIFICATE" #"TRUSTED CERTIFICATE")))
+      (for/list ([v (in-port do-read in)])
+        (case (car v)
+          [(#"CERTIFICATE")
+           (bytes->certificate (cdr v))]
+          [(#"TRUSTED CERTIFICATE")
+           (bytes->certificate/override-uses (cdr v))])))))
+
 ;; ============================================================
 ;; Adapted from $SRC/test/recipes/25-test_verify.t
 
 (define (verify cert purpose trusted untrusted)
-  (define (pemcerts name) (pem-file->certificates (format "~a.pem" name)))
+  (define (pemcerts name) (pem-file->certs* (format "~a.pem" name)))
   (define store (send (empty-certificate-store) add
                       #:trusted-certs (append* (map pemcerts trusted))
                       #:untrusted-certs (append* (map pemcerts untrusted))))

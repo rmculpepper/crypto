@@ -31,11 +31,6 @@
     (define cert (bytes->asn1 Certificate der))
     (define tbs (hash-ref cert 'tbsCertificate))
 
-    (define/public (equal-to other [recur equal?])
-      (equal? (get-der) (send other get-der)))
-    (define/public (hash-code recur)
-      (recur (get-der)))
-
     (define/public (has-same-public-key? other-cert)
       (equal? (get-spki) (send other-cert get-spki)))
 
@@ -47,7 +42,6 @@
     (define/public (get-cert-signature-bytes)
       (match (hash-ref cert 'signature)
         [(bit-string sig-bytes 0) sig-bytes]))
-    ;;(define/public (get-cert-tbs) tbs)
 
     ;; TBSCertificate component accessors
     (define/public (get-version) (hash-ref tbs 'version))
@@ -90,8 +84,13 @@
              => (lambda (uses) (and (memq use uses) #t))]
             [else (if (procedure? default) (default) default)]))
 
-    (define/public (get-extended-key-usages [default null])
+    (define/public (get-ekus [default null])
       (get-extension-value id-ce-extKeyUsage default))
+
+    (define/public (get-eku eku) ;; (U 'yes 'no 'unset)
+      (cond [(get-ekus #f)
+             => (lambda (ekus) (if (member eku ekus) 'yes 'no))]
+            [else 'unset]))
 
     (define/public (get-name-constraints)
       (get-extension-value id-ce-nameConstraints #f))
@@ -280,7 +279,7 @@
            (when critical? (bad! 'policy-constraints:critical-but-unsupported))]
           ;; 4.2.1.12 Extended Key Usage
           [(equal? ext-id id-ce-extKeyUsage)
-           (when (member anyExtendedKeyUsage (get-extended-key-usages))
+           (when (member anyExtendedKeyUsage (get-ekus))
              (when critical?
                (bad/should! 'extended-key-usage:critical-but-anyExtendedKeyUse)))]
           ;; 4.2.1.13 CRL Distribution points
@@ -568,6 +567,7 @@
 (define certificate%
   (class* certificate-data% (-certificate<%>)
     (init [check-who 'certificate])
+    (init-field [reject-ekus null] [allow-ekus null])
     (inherit get-der
              get-spki
              check)
@@ -590,6 +590,21 @@
 
     ;; ----------------------------------------
 
+    (define/public (equal-to other [recur equal?])
+      (and (equal? (get-der) (send other get-der))
+           (equal? reject-ekus (get-field reject-ekus other))
+           (equal? allow-ekus (get-field allow-ekus other))))
+
+    (define/public (hash-code recur)
+      (recur (get-der)))
+
+    (define/override (get-eku eku)
+      (cond [(member eku reject-ekus) 'no]
+            [(member eku allow-ekus) 'yes]
+            [else (super get-eku eku)]))
+
+    ;; ----------------------------------------
+
     (define/public (ok-signature? issuer-pk)
       (define vcert (bytes->asn1 Certificate-for-verify-sig (get-der)))
       (define tbs-der (hash-ref vcert 'tbsCertificate))
@@ -603,3 +618,25 @@
 
 (define (bytes->certificate der #:who [who 'bytes->certificate])
   (new certificate% (der (bytes->immutable-bytes der)) (check-who who)))
+
+;; ============================================================
+
+;; Support for OpenSSL's TRUSTED CERTIFICATE: a certificate with additional
+;; trusted and rejected EKUs.
+(module+ openssl-trusted-cert
+  (provide (all-defined-out))
+
+  (define CertAux
+    (SEQUENCE
+     [trust (SEQUENCE-OF OBJECT-IDENTIFIER) #:optional]
+     [reject #:implicit 0 (SEQUENCE-OF OBJECT-IDENTIFIER) #:optional]
+     [alias UTF8String #:optional]
+     [keyid OCTET-STRING #:optional]))
+
+  (define (bytes->certificate/override-uses der #:who [who 'openssl-bytes->certificate])
+    (define in (open-input-bytes der))
+    (define cert-der (begin (read-asn1 ANY in) (subbytes der 0 (file-position in))))
+    (define aux (read-asn1 CertAux in))
+    (new certificate% (der (bytes->immutable-bytes cert-der))
+         (reject-ekus (hash-ref aux 'reject #f))
+         (allow-ekus (hash-ref aux 'trust #f)))))
