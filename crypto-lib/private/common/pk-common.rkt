@@ -80,6 +80,9 @@
           (crypto-error "parameters format not supported\n  format: ~e\n  parameters: ~a"
                         fmt (about))))
     (define/public (-write-params fmt) #f)
+
+    (define/public (get-security-bits)
+      (rkt-params-security-bits (-write-params 'rkt-params)))
     ))
 
 (define pk-key-base%
@@ -90,6 +93,11 @@
     (define/override (about)
       (format "~a ~a key" (send impl about) (if (is-private?) 'private 'public)))
     (define/public (get-spec) (send impl get-spec))
+
+    (define/public (get-security-bits)
+      (if (send impl has-params?)
+          (send (get-params) get-security-bits)
+          (err/no-impl this)))
 
     (abstract is-private?)
     (abstract get-public-key)
@@ -983,3 +991,66 @@
 
 (define config:ecx-keygen
   `((curve ,(lambda (x) (memq x '(x25519 x448))) "(or/c 'x25519 'x448)" #:req)))
+
+;; ============================================================
+;; Security levels
+
+;; Reference:
+;; - NIST SP-800-57 Part 1 Section 5.6: Guidance for Cryptographic Algorithm and Key-Size...
+;;   (https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r5.pdf)
+
+;; Levels: 0, 80, 112, 128, 192, 256
+
+(define (rsa-security-bits nbits)
+  (cond [(>= nbits 15360) 256]
+        [(>= nbits 7680) 192]
+        [(>= nbits 3072) 128]
+        [(>= nbits 2048) 112]
+        [(>= nbits 1024) 80]
+        [else 0]))
+
+(define (dsa/dh-security-bits nbits [qbits +inf.0])
+  (cond [(and (>= nbits 3072) (>= qbits 256)) 128]
+        [(and (>= nbits 2048) (>= qbits 224)) 112]
+        [(and (>= nbits 1024) (>= qbits 160)) 80]
+        [else 0]))
+
+(define (ec-security-bits nbits)
+  (cond [(>= nbits 512) 256]
+        [(>= nbits 384) 192]
+        [(>= nbits 256) 128]
+        [(>= nbits 224) 112]
+        [(>= nbits 160) 80]
+        [else 0]))
+
+(define (curve-security-bits curve)
+  (define (ec n) (ec-security-bits n))
+  (case (alias->curve-name curve)
+    [(ed25519 x25519) (ec 255)]
+    [(ed448 x448) (ec 448)]
+    ;; -- Prime-order fields --
+    [(secp192k1 secp192r1) (ec 192)]
+    [(secp224k1 secp224r1) (ec 224)]
+    [(secp256k1 secp256r1) (ec 256)]
+    [(secp384r1) (ec 384)]
+    [(secp521r1) (ec 521)]
+    ;; -- Characteristic 2 fields --
+    [(sect163k1 sect163r1) (ec 163)]
+    [(sect163r2 sect233k1) (ec 163)]
+    [(sect233r1) (ec 233)]
+    [(sect239k1) (ec 239)]
+    [(sect283k1 sect283r1) (ec 283)]
+    [(sect409k1 sect409r1) (ec 409)]
+    [(sect571k1 sect571r1) (ec 571)]
+    ;; --
+    [else 0]))
+
+(define (rkt-params-security-bits params)
+  (match params
+    [(list 'dsa p q g) (dsa/dh-security-bits (add1 (log p 2)) (add1 (log q 2)))]
+    [(list 'dh 'params p g) (dsa/dh-security-bits (add1 (log p 2)))]
+    [(list 'ec 'params curve-oid)
+     (curve-security-bits (curve-oid->name curve-oid))]
+    [(list 'eddsa 'params curve) (curve-security-bits curve)]
+    [(list 'ecx 'params curve) (curve-security-bits curve)]
+    [else 0]))

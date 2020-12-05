@@ -179,6 +179,9 @@
     (inherit is-private?)
     (super-new)
 
+    (define/override (get-security-bits)
+      (rsa-security-bits (gcry_pk_get_nbits pub)))
+
     (define/override (-write-private-key fmt)
       (define (get-mpi tag) (sexp-get-mpi priv "rsa" tag))
       (define n-mpi (get-mpi "n"))
@@ -345,6 +348,9 @@
     (inherit-field pub priv impl)
     (inherit is-private?)
     (super-new)
+
+    (define/override (get-security-bits)
+      (dsa/dh-security-bits (gcry_pk_get_nbits pub)))
 
     (define/override (-write-private-key fmt)
       (define (get-int tag) (sexp-get-int priv "dsa" tag))

@@ -796,6 +796,10 @@
   (_fun _EVP_PKEY -> _int)
   #:wrap (err-wrap 'EVP_PKEY_bits))
 
+(define-crypto EVP_PKEY_security_bits ;; since OpenSSL 1.1.0
+  (_fun _EVP_PKEY -> _int)
+  #:fail (lambda () (lambda (evp) #f)))
+
 (define-crypto EVP_PKEY_set1_RSA
   (_fun _EVP_PKEY _RSA -> _int)
   #:wrap (err-wrap 'EVP_PKEY_set1_RSA))

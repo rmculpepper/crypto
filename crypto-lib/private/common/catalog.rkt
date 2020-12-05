@@ -96,6 +96,35 @@
 (define (list-known-digests)
   (sort (hash-keys known-digests) symbol<?))
 
+;; Digest security levels; see NIST SP 800-57 Part 1 Section 5.6
+
+(define (digest-security-bits digest-spec [collision? #t])
+  (if collision?
+      (case digest-spec
+        [(sha1) 0]
+        [(sha224 sha512/224 sha3-224) 112]
+        [(sha256 sha512/256 sha3-256) 128]
+        [(sha384 sha3-384) 192]
+        [(sha512 sha3-512) 256]
+        [(blake2b-512) 256]
+        [(blake2b-384) 192]
+        [(blake2b-256 blake2s-256) 128]
+        [(blake2s-224) 112]
+        [(blake2b-160 blake2s-160) 80]
+        [else 0])
+      (case digest-spec
+        [(sha1) 128]
+        [(sha224 sha512/224 sha3-224) 192]
+        [(sha256 sha512/256 sha3-256) 256]
+        [(sha384 sha3-384) 256]
+        [(sha512 sha3-512) 256]
+        [(blake2b-512) 256]
+        [(blake2b-384) 256]
+        [(blake2b-256 blake2s-256) 256]
+        [(blake2s-224) 192]
+        [(blake2b-160 blake2s-160) 128]
+        [else 0])))
+
 ;; ============================================================
 
 ;; SizeSet is one of

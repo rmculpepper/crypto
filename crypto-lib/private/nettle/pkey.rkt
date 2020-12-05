@@ -117,6 +117,9 @@
     (inherit about)
     (super-new)
 
+    (define/override (get-security-bits)
+      (rsa-security-bits (* 8 (rsa_public_key_struct-size pub))))
+
     (define/override (is-private?) (and priv #t))
 
     (define/override (get-public-key)
@@ -321,6 +324,10 @@
     (init-field params pub priv)
     (inherit-field impl)
     (super-new)
+
+    (define/override (get-security-bits)
+      (dsa/dh-security-bits (mpz_sizeinbase (dsa_params_struct-p params) 2)
+                            (mpz_sizeinbase (dsa_params_struct-q params) 2)))
 
     (define/override (is-private?) (and priv #t))
 

@@ -213,6 +213,10 @@
     (inherit-field impl)
     (super-new)
 
+    (define/override (get-security-bits)
+      (or (EVP_PKEY_security_bits evp)
+          (super get-security-bits)))
+
     (define/override (is-private?) private?)
 
     (define/override (get-public-key)
@@ -346,6 +350,10 @@
     (inherit-field impl evp private?)
     (super-new)
 
+    (define/override (get-security-bits)
+      (or (EVP_PKEY_security_bits evp)
+          (rsa-security-bits (EVP_PKEY_bits evp))))
+
     (define/override (-write-key fmt)
       (cond [(and (eq? fmt 'RSAPrivateKey) private?)
              (i2d i2d_PrivateKey evp)]
@@ -409,6 +417,10 @@
   (class libcrypto-pk-params%
     (inherit-field impl pevp)
     (super-new)
+
+    (define/override (get-security-bits)
+      (or (EVP_PKEY_security_bits pevp)
+          (dsa/dh-security-bits (EVP_PKEY_bits pevp))))
 
     (define/override (generate-key config)
       (check-config config '() "DSA key generation from parameters")
@@ -484,6 +496,10 @@
   (class libcrypto-pk-params%
     (inherit-field impl pevp)
     (super-new)
+
+    (define/override (get-security-bits)
+      (or (EVP_PKEY_security_bits pevp)
+          (dsa/dh-security-bits (EVP_PKEY_bits pevp))))
 
     (define/override (-write-params fmt)
       (case fmt
@@ -573,6 +589,10 @@
 
     (define/public (get-curve-oid)
       (curve-alias->oid (get-curve)))
+
+    (define/override (get-security-bits)
+      (or (EVP_PKEY_security_bits pevp)
+          (ec-security-bits (EVP_PKEY_bits pevp))))
 
     (define/override (-write-params fmt)
       (case fmt
