@@ -31,13 +31,13 @@
 
 (define certificate-store%
   (class* object% (-certificate-store<%>)
-    (init-field [trusted-h '#hash()]
-                [cert-h    '#hash()]
+    (init-field [trusted-h '#hash()] ;; Certificate => #t
+                [cert-h    '#hash()] ;; Certificate => #t
                 [stores null])
     (super-new)
 
     (define/public (trust? cert)
-      (or (hash-ref trusted-h (send cert get-der) #f)
+      (or (hash-ref trusted-h cert #f)
           (for/or ([store (in-list stores)]) (send store trust? cert))))
 
     (define/public (lookup-by-subject dn)
@@ -59,7 +59,7 @@
       (define trusted-h*
         (for/fold ([h trusted-h])
                   ([cert (in-list trusted-certs)])
-          (hash-set h (send cert get-der) #t)))
+          (hash-set h cert #t)))
       (new this% (trusted-h trusted-h*) (cert-h cert-h*)
            (stores (append stores new-stores))))
 
@@ -89,13 +89,6 @@
 
     ;; build-candidate-chains : Cert -> (Listof (Listof Cert))
     (define/public (build-candidate-chains end-cert)
-      ;; (define (loop chains)
-      ;;   (cond [(pair? chains)
-      ;;          (define chains* (append* (map loop1 chains)))
-      ;;          (define-values (complete incomplete)
-      ;;            (partition (lambda (chain) (trust? (car chain))) chains*))
-      ;;          (append complete (loop incomplete))]
-      ;;         [else null]))
       (define (extend chain)
         (define issuer-name (send (car chain) get-issuer))
         (for/list ([issuer-cert (in-list (remove-duplicates (lookup-by-subject issuer-name)))]

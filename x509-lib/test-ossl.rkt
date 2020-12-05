@@ -80,7 +80,7 @@
 ;; Root CA variants
 (test-no "ee-cert" "sslserver" '[root-nonca] '[ca-cert]
          "fail trusted non-ca root")
-(SKIP ;; uses TRUSTED CERTIFICATE
+(begin ;; uses TRUSTED CERTIFICATE
  (test-no "ee-cert" "sslserver" '[nroot+serverAuth] '[ca-cert]
           "fail server trust non-ca root")
  (test-no "ee-cert" "sslserver" '[nroot+anyEKU] '[ca-cert]
@@ -105,7 +105,7 @@
         "accept server purpose")
 (test-uns "ee-cert" "sslserver" '[croot-cert] '[ca-cert]
           "fail client purpose")
-(SKIP ;; trusted certs
+(begin ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root+serverAuth] '[ca-cert]
          "accept server trust")
  (test-v "ee-cert" "sslserver" '[sroot+serverAuth] '[ca-cert]
@@ -124,42 +124,43 @@
          "accept client mistrust")
  (test-v "ee-cert" "sslserver" '[sroot-clientAuth] '[ca-cert]
          "accept client mistrust with server purpose")
- (test-no "ee-cert" "sslserver" '[croot-clientAuth] '[ca-cert]
-          "fail client mistrust with client purpose")
+ (test-uns "ee-cert" "sslserver" '[croot-clientAuth] '[ca-cert]
+           "fail client mistrust with client purpose")
  ;; Inapplicable trust
- (test-no "ee-cert" "sslserver" '[root+clientAuth] '[ca-cert]
-          "fail client trust")
- (test-no "ee-cert" "sslserver" '[sroot+clientAuth] '[ca-cert]
-          "fail client trust with server purpose")
- (test-no "ee-cert" "sslserver" '[croot+clientAuth] '[ca-cert]
-          "fail client trust with client purpose")
+ (test-uns "ee-cert" "sslserver" '[root+clientAuth] '[ca-cert]
+           "fail client trust")
+ (test-uns "ee-cert" "sslserver" '[sroot+clientAuth] '[ca-cert]
+           "fail client trust with server purpose")
+ (test-uns "ee-cert" "sslserver" '[croot+clientAuth] '[ca-cert]
+           "fail client trust with client purpose")
  ;; Server mistrust
- (test-no "ee-cert" "sslserver" '[root-serverAuth] '[ca-cert]
-          "fail rejected EKU")
- (test-no "ee-cert" "sslserver" '[sroot-serverAuth] '[ca-cert]
-          "fail server mistrust with server purpose")
- (test-no "ee-cert" "sslserver" '[croot-serverAuth] '[ca-cert]
-          "fail server mistrust with client purpose")
+ (test-uns "ee-cert" "sslserver" '[root-serverAuth] '[ca-cert]
+           "fail rejected EKU")
+ (test-uns "ee-cert" "sslserver" '[sroot-serverAuth] '[ca-cert]
+           "fail server mistrust with server purpose")
+ (test-uns "ee-cert" "sslserver" '[croot-serverAuth] '[ca-cert]
+           "fail server mistrust with client purpose")
  ;; Wildcard mistrust
- (test-no "ee-cert" "sslserver" '[root-anyEKU] '[ca-cert]
-          "fail wildcard mistrust")
- (test-no "ee-cert" "sslserver" '[sroot-anyEKU] '[ca-cert]
-          "fail wildcard mistrust with server purpose")
- (test-no "ee-cert" "sslserver" '[croot-anyEKU] '[ca-cert]
-          "fail wildcard mistrust with client purpose"))
+ (test-uns "ee-cert" "sslserver" '[root-anyEKU] '[ca-cert]
+           "fail wildcard mistrust")
+ (test-uns "ee-cert" "sslserver" '[sroot-anyEKU] '[ca-cert]
+           "fail wildcard mistrust with server purpose")
+ (test-uns "ee-cert" "sslserver" '[croot-anyEKU] '[ca-cert]
+           "fail wildcard mistrust with client purpose"))
 
 ;; Check that trusted-first is on by setting up paths to different roots
 ;; depending on whether the intermediate is the trusted or untrusted one.
 
-(SKIP ;; trusted certs
+(begin ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root-serverAuth root-cert2 ca-root2] '[ca-cert]
          "accept trusted-first path")
  (test-v "ee-cert" "sslserver" '[root-cert root2+serverAuth ca-root2] '[ca-cert]
-         "accept trusted-first path with server trust")
- (test-no "ee-cert" "sslserver" '[root-cert root2-serverAuth ca-root2] '[ca-cert]
-          "fail trusted-first path with server mistrust")
- (test-no "ee-cert" "sslserver" '[root-cert root2+clientAuth ca-root2] '[ca-cert]
-          "fail trusted-first path with client trust"))
+         "accept trusted-first path with server trust"))
+(SKIP ;; ???
+ (test-uns "ee-cert" "sslserver" '[root-cert root2-serverAuth ca-root2] '[ca-cert]
+           "fail trusted-first path with server mistrust")
+ (test-uns "ee-cert" "sslserver" '[root-cert root2+clientAuth ca-root2] '[ca-cert]
+           "fail trusted-first path with client trust"))
 
 ;; CA variants
 
@@ -171,7 +172,7 @@
          "fail non-CA trust-store intermediate")
 (test-no "ee-cert" "sslserver" '[root-cert ca-nonbc] '[]
          "fail non-CA trust-store intermediate")
-(SKIP ;; trusted certs
+(begin ;; trusted certs
  (test-no "ee-cert" "sslserver" '[root-cert nca+serverAuth] '[]
           "fail non-CA server trust intermediate")
  (test-no "ee-cert" "sslserver" '[root-cert nca+anyEKU] '[]
@@ -191,7 +192,7 @@
         "accept partial chain with server purpose");
 (test-uns "ee-cert" "sslserver" '[cca-cert] '[] #:o "-partial_chain"
           "fail partial chain with client purpose")
-(SKIP ;; trusted certs
+(begin ;; trusted certs
  (test-v "ee-cert" "sslserver" '[ca+serverAuth] '[] #:o "-partial_chain"
          "accept server trust partial chain")
  (test-v "ee-cert" "sslserver" '[cca+serverAuth] '[] #:o "-partial_chain"
@@ -202,25 +203,25 @@
          "accept wildcard trust partial chain")
  (test-no "ee-cert" "sslserver" '[] '[ca+serverAuth] #:o "-partial_chain"
           "fail untrusted partial issuer with ignored server trust")
- (test-no "ee-cert" "sslserver" '[ca-serverAuth] '[] #:o "-partial_chain"
-          "fail server mistrust partial chain")
- (test-no "ee-cert" "sslserver" '[ca+clientAuth] '[] #:o "-partial_chain"
-          "fail client trust partial chain")
- (test-no "ee-cert" "sslserver" '[ca-anyEKU] '[] #:o "-partial_chain"
-          "fail wildcard mistrust partial chain"))
+ (test-uns "ee-cert" "sslserver" '[ca-serverAuth] '[] #:o "-partial_chain"
+           "fail server mistrust partial chain")
+ (test-uns "ee-cert" "sslserver" '[ca+clientAuth] '[] #:o "-partial_chain"
+           "fail client trust partial chain")
+ (test-uns "ee-cert" "sslserver" '[ca-anyEKU] '[] #:o "-partial_chain"
+           "fail wildcard mistrust partial chain"))
 
 ;; We now test auxiliary trust even for intermediate trusted certs without
 ;; -partial_chain.  Note that "-trusted_first" is now always on and cannot
 ;; be disabled.
 
-(SKIP ;; trusted certs
+(begin ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root-cert ca+serverAuth] '[ca-cert]
          "accept server trust")
  (test-v "ee-cert" "sslserver" '[root-cert ca+anyEKU] '[ca-cert]
          "accept wildcard trust"))
 (test-v "ee-cert" "sslserver" '[root-cert sca-cert] '[ca-cert]
         "accept server purpose")
-(SKIP ;; trusted certs
+(begin ;; trusted certs
  (test-v "ee-cert" "sslserver" '[root-cert sca+serverAuth] '[ca-cert]
          "accept server trust and purpose")
  (test-v "ee-cert" "sslserver" '[root-cert sca+anyEKU] '[ca-cert]
@@ -233,27 +234,27 @@
          "accept wildcard trust and client purpose"))
 (test-uns "ee-cert" "sslserver" '[root-cert cca-cert] '[ca-cert]
           "fail client purpose")
-(SKIP ;; trusted certs
- (test-no "ee-cert" "sslserver" '[root-cert ca-anyEKU] '[ca-cert]
-          "fail wildcard mistrust")
- (test-no "ee-cert" "sslserver" '[root-cert ca-serverAuth] '[ca-cert]
-          "fail server mistrust")
- (test-no "ee-cert" "sslserver" '[root-cert ca+clientAuth] '[ca-cert]
-          "fail client trust")
- (test-no "ee-cert" "sslserver" '[root-cert sca+clientAuth] '[ca-cert]
-          "fail client trust and server purpose")
- (test-no "ee-cert" "sslserver" '[root-cert cca+clientAuth] '[ca-cert]
-          "fail client trust and client purpose")
- (test-no "ee-cert" "sslserver" '[root-cert cca-serverAuth] '[ca-cert]
-          "fail server mistrust and client purpose")
- (test-no "ee-cert" "sslserver" '[root-cert cca-clientAuth] '[ca-cert]
-          "fail client mistrust and client purpose")
- (test-no "ee-cert" "sslserver" '[root-cert sca-serverAuth] '[ca-cert]
-          "fail server mistrust and server purpose")
- (test-no "ee-cert" "sslserver" '[root-cert sca-anyEKU] '[ca-cert]
-          "fail wildcard mistrust and server purpose")
- (test-no "ee-cert" "sslserver" '[root-cert cca-anyEKU] '[ca-cert]
-          "fail wildcard mistrust and client purpose"))
+(begin ;; trusted certs
+ (test-uns "ee-cert" "sslserver" '[root-cert ca-anyEKU] '[ca-cert]
+           "fail wildcard mistrust")
+ (test-uns "ee-cert" "sslserver" '[root-cert ca-serverAuth] '[ca-cert]
+           "fail server mistrust")
+ (test-uns "ee-cert" "sslserver" '[root-cert ca+clientAuth] '[ca-cert]
+           "fail client trust")
+ (test-uns "ee-cert" "sslserver" '[root-cert sca+clientAuth] '[ca-cert]
+           "fail client trust and server purpose")
+ (test-uns "ee-cert" "sslserver" '[root-cert cca+clientAuth] '[ca-cert]
+           "fail client trust and client purpose")
+ (test-uns "ee-cert" "sslserver" '[root-cert cca-serverAuth] '[ca-cert]
+           "fail server mistrust and client purpose")
+ (test-uns "ee-cert" "sslserver" '[root-cert cca-clientAuth] '[ca-cert]
+           "fail client mistrust and client purpose")
+ (test-uns "ee-cert" "sslserver" '[root-cert sca-serverAuth] '[ca-cert]
+           "fail server mistrust and server purpose")
+ (test-uns "ee-cert" "sslserver" '[root-cert sca-anyEKU] '[ca-cert]
+           "fail wildcard mistrust and server purpose")
+ (test-uns "ee-cert" "sslserver" '[root-cert cca-anyEKU] '[ca-cert]
+           "fail wildcard mistrust and client purpose"))
 
 ;; EE variants
 
@@ -276,14 +277,16 @@
 (test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
          "fail last-resort direct leaf non-match")
 (SKIP ;; trusted certs
+ ;; These tests require *replacing* the starting point with a
+ ;; certificate from the trusted store*. Not implemented.
  (test-v "ee-cert" "sslserver" '[ee+serverAuth] '[] #:o "-partial_chain"
          "accept direct match with server trust")
- (test-no "ee-cert" "sslserver" '[ee-serverAuth] '[] #:o "-partial_chain"
-          "fail direct match with server mistrust")
+ (test-uns "ee-cert" "sslserver" '[ee-serverAuth] '[] #:o "-partial_chain"
+           "fail direct match with server mistrust")
  (test-v "ee-client" "sslclient" '[ee+clientAuth] '[] #:o "-partial_chain"
          "accept direct match with client trust")
- (test-no "ee-client" "sslclient" '[ee-clientAuth] '[] #:o "-partial_chain"
-          "reject direct match with client mistrust"))
+ (test-uns "ee-client" "sslclient" '[ee-clientAuth] '[] #:o "-partial_chain"
+           "reject direct match with client mistrust"))
 (XFAIL ;; rejected
  (test-v "ee-pathlen" "sslserver" '[root-cert] '[ca-cert]
          "accept non-ca with pathlen:0 by default"))
@@ -347,7 +350,7 @@
           "reject md5 intermediate at auth level 1")
  (test-no "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"]
           "reject md5 leaf at auth level 1"))
-(SKIP ;; trusted certs
+(begin ;; trusted certs
  (test-v "ee-cert" "sslserver" '["ca-cert-md5-any"] '[] #:o '("-auth_level" "2")
          "accept md5 intermediate TA at auth level 2"))
 

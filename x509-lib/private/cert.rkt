@@ -567,7 +567,8 @@
 (define certificate%
   (class* certificate-data% (-certificate<%>)
     (init [check-who 'certificate])
-    (init-field [reject-ekus null] [allow-ekus null])
+    (init-field [reject-ekus null] ;; (Listof OID)
+                [replace-ekus #f]) ;; #f or (Listof OID) -- #f means use cert EKUs
     (inherit get-der
              get-spki
              check)
@@ -593,14 +594,15 @@
     (define/public (equal-to other [recur equal?])
       (and (equal? (get-der) (send other get-der))
            (equal? reject-ekus (get-field reject-ekus other))
-           (equal? allow-ekus (get-field allow-ekus other))))
+           (equal? replace-ekus (get-field replace-ekus other))))
 
     (define/public (hash-code recur)
       (recur (get-der)))
 
     (define/override (get-eku eku)
-      (cond [(member eku reject-ekus) 'no]
-            [(member eku allow-ekus) 'yes]
+      (define (member* x xs) (or (member x xs) (member anyExtendedKeyUsage xs)))
+      (cond [(member* eku reject-ekus) 'no]
+            [replace-ekus (if (member* eku replace-ekus) 'yes 'no)]
             [else (super get-eku eku)]))
 
     ;; ----------------------------------------
@@ -638,5 +640,5 @@
     (define cert-der (begin (read-asn1 ANY in) (subbytes der 0 (file-position in))))
     (define aux (read-asn1 CertAux in))
     (new certificate% (der (bytes->immutable-bytes cert-der))
-         (reject-ekus (hash-ref aux 'reject #f))
-         (allow-ekus (hash-ref aux 'trust #f)))))
+         (reject-ekus (hash-ref aux 'reject null))
+         (replace-ekus (hash-ref aux 'trust #f)))))
