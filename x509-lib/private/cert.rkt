@@ -416,6 +416,9 @@
           ;; are either string types or choices or string types.
           'value (match (hash-ref av 'value)
                    [(? string? s) (openssl-string-canon s)]
+                   [(list 'teletexString bs)
+                    ;; FIXME: ???
+                    (openssl-string-canon (bytes->string/latin-1 bs))]
                    [(list _ (? string? s)) (openssl-string-canon s)])))
   (match name
     [(list 'rdnSequence rdns)
@@ -454,10 +457,17 @@
 ;; ============================================================
 
 (define (host-matches? host pattern)
-  ;; FIXME: support patterns like "*xyz.domain" and "abc*.domain" ??
+  ;; Patterns like "*xyz.domain" and "abc*.domain" are not supported.
   (cond [(regexp-match #rx"^[*]([.].*)$" pattern)
          => (match-lambda
-              [(list _ suffix) (string-suffix-ci? host suffix)])]
+              [(list _ suffix)
+               (define prefix-len (- (string-length host) (string-length suffix)))
+               (and (string-suffix-ci? host suffix)
+                    ;; RFC 6125 Section 7.2 recommends agains wildcards; Appendix
+                    ;; B mentions RFC 2818 interpretation: RFC 2818 Section 3.1
+                    ;; says wildcard matches *one* domain name component. So
+                    ;; forbid "." in prefix. Also check prefix is not empty.
+                    (regexp-match? #rx"^[^.]+$" host 0 prefix-len))])]
         [else (string-ci=? host pattern)]))
 
 (define (GeneralName-equal? n1 n2)

@@ -1,48 +1,46 @@
 #lang racket/base
-(require racket/list
-         racket/system
+(require crypto crypto/all
          racket/string
-         racket/cmdline
-         crypto crypto/all
+         racket/list
          racket/class
          racket/pretty
          "x509.rkt")
 (provide (all-defined-out))
 
-(command-line
- #:args ([working-dir #f])
- (cond [working-dir
-        (current-directory working-dir)]
-       [else
-        (printf "Working directory not provided. Skipping tests.\n")
-        (exit 0)]))
+(module util racket/base
+  (require racket/runtime-path
+           racket/string
+           racket/system
+           racket/list
+           racket/file)
+  (provide (all-defined-out))
 
-;; ------------------------------------------------------------
+  (define-runtime-path working-dir "test-scratch")
+  (make-directory* working-dir)
+  (current-directory working-dir)
 
-(define (openssl . args)
-  (define (to-string x) (if (path? x) (path->string x) x))
-  (let ([args (flatten args)])
-    (printf "$ openssl ~a\n" (string-join (map to-string args) " "))
-    (define out (open-output-string))
-    (define ok? (parameterize ((current-output-port out)
-                               (current-error-port out))
-                  (apply system* (find-executable-path "openssl") args)))
-    (unless ok?
-      (printf "~a\n" (get-output-string out))
-      (error 'openssl "command failed"))))
-(define (openssl-req . args) (apply openssl "req" args))
-(define (openssl-x509 . args) (apply openssl "x509" args))
-(define (openssl-genrsa . args) (apply openssl "genrsa" args))
+  (define (openssl . args)
+    (define (to-string x) (if (path? x) (path->string x) x))
+    (let ([args (flatten args)])
+      (printf "$ openssl ~a\n" (string-join (map to-string args) " "))
+      (define out (open-output-string))
+      (define ok? (parameterize ((current-output-port out)
+                                 (current-error-port out))
+                    (apply system* (find-executable-path "openssl") args)))
+      (cond [ok? (get-output-string out)]
+            [else
+             (printf "~a\n" (get-output-string out))
+             (error 'openssl "command failed")])))
+  (define (openssl-req . args) (void (apply openssl "req" args)))
+  (define (openssl-x509 . args) (void (apply openssl "x509" args)))
+  (define (openssl-genrsa . args) (void (apply openssl "genrsa" args)))
 
-(define (key-file name) (format "~a.key" name))
-(define (cert-file name) (format "~a-cert.pem" name))
-(define (csr-file name) (format "~a.csr" name))
-(define (srl-file name) (format "~a.srl" name))
-(define (ext-file name) (format "~a.ext" name))
-
-(define (dn->string dn)
-  (cond [(string? dn) dn]
-        [else (string-append "/" (string-join dn "/") "/")]))
+  (define (key-file name) (format "~a.key" name))
+  (define (cert-file name) (format "~a-cert.pem" name))
+  (define (csr-file name) (format "~a.csr" name))
+  (define (srl-file name) (format "~a.srl" name))
+  (define (ext-file name) (format "~a.ext" name)))
+(require 'util)
 
 ;; ----
 
@@ -101,6 +99,10 @@
   (openssl-x509 "-req" "-in" (csr-file name) (CA-args ca-name)
                 "-out" (cert-file name) "-days" "30" "-sha256"
                 "-extfile" (ext-file name)))
+
+(define (dn->string dn)
+  (cond [(string? dn) dn]
+        [else (string-append "/" (string-join dn "/") "/")]))
 
 ;; ============================================================
 

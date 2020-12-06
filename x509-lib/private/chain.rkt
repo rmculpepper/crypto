@@ -90,7 +90,8 @@
     (define/public (is-anchor?) (not issuer-chain))
 
     (define/public (get-subject) (send cert get-subject))
-    (define/public (get-subject-alt-names) (send cert get-subject-alt-names))
+    (define/public (get-subject-alt-names [kind #f])
+      (send cert get-subject-alt-names kind))
     (define/public (get-index) index)
     (define/public (get-max-path-length) max-path-length)
 
@@ -436,7 +437,7 @@
                     [else '(tls:missing-clientAuth-eku)])
               (cond [(or (not name)
                          (GeneralName-equal? name (list 'directoryName (get-subject)))
-                         (for/or ([altname (in-list (get-subject-alt-names))])
+                         (for/or ([altname (in-list (get-subject-alt-names #f))])
                            (GeneralName-equal? name altname)))
                      '()]
                     [else '(tls:name-mismatch)])))
