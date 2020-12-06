@@ -3,7 +3,7 @@
          racket/class
          racket/port
          net/url
-         crypto/private/common/base64
+         base64
          asn1
          asn1/util/time
          (only-in "asn1.rkt" Name)
@@ -85,7 +85,9 @@
 (define (do-fetch-ocsp ocsp-url req-der)
   (let loop ([try-get? #t])
     (define headers '("Content-Type: application/ocsp-request"))
-    (define req-b64 (and try-get? (< (bytes-length req-der) 192) (b64-encode/utf-8 req-der)))
+    (define req-b64
+      (and try-get? (< (bytes-length req-der) 192)
+           (bytes->string/utf-8 (base64-encode req-der))))
     (define resp-in
       (cond [req-b64 (get-impure-port (string->url (string-append ocsp-url "/" req-b64)) headers)]
             [else (post-impure-port (string->url ocsp-url) req-der headers)]))
