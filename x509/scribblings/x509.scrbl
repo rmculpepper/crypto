@@ -73,7 +73,7 @@ exactly one DER-encoded certificate; otherwise, an exception is raised.
          (listof certificate?)]{
 
 Reads up to @racket[count] certificates from @racket[in]. The certificates must
-be encoded in the RFC 7468 textual format @cite["PEM"]. (This format is often
+be encoded in the RFC 7468 textual format @cite["RFC7468"]. (This format is often
 conflated with ``PEM'', although technically the two formats are not completely
 compatible.)
 
@@ -246,16 +246,3 @@ period including @racket[valid-time]; and it starts with a root CA trusted by
 }
 
 }
-
-@bibliography[
-#:tag "x509-bibliography"
-
-@bib-entry[#:key "PKIX"
-           #:title "RFC 5280: Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile"
-           #:url "https://tools.ietf.org/html/rfc5280"]
-
-@bib-entry[#:key "PEM"
-           #:title "Textual Encodings of PKIX, PKCS, and CMS Structures"
-           #:url "https://tools.ietf.org/html/rfc7468"]
-
-]
