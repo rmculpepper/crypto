@@ -103,7 +103,8 @@
     [add
      (->*m []
            [#:trusted-certs (listof certificate?)
-            #:untrusted-certs (listof certificate?)]
+            #:untrusted-certs (listof certificate?)
+            #:set-security-level (or/c 0 1 2 3 4 5)]
            certificate-store?)]
     [add-trusted-from-pem-file
      (->m path-string? certificate-store?)]

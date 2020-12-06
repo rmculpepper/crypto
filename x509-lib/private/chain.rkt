@@ -301,6 +301,36 @@
                    (if issuer-chain
                        (send issuer-chain check-validity-period from-time to-time)
                        null))]))
+
+    ;; ----------------------------------------
+    ;; Checking security level
+
+    (define/public (get-security-bits-chain)
+      (cons (send (get-public-key) get-security-bits)
+            (cond [issuer-chain
+                   (cons (let-values ([(algid _tbs _sig) (send cert get-cert-signature-info)])
+                           (sig-alg-security-bits algid))
+                         (send issuer-chain get-security-bits-chain))]
+                  [else null])))
+
+    (define/public (check-security-bits sec-bits)
+      (append
+       (let ([pk (get-public-key)])
+         (cond [(<= sec-bits (send pk get-security-bits)) '()]
+               ;; Note: here index means owner of public key.
+               [else (list (cons index 'security-level:weak-public-key))]))
+       (cond [issuer-chain
+              (define-values (algid _tbs _sig) (send cert get-cert-signature-info))
+              (define sig-level (sig-alg-security-bits algid))
+              (append (cond [(<= sec-bits sig-level) '()]
+                            ;; Note: here index means site of signature (created by issuer!).
+                            [else (list (cons index 'security-level:weak-signature-algorithm))])
+                      (send issuer-chain check-security-bits sec-bits))]
+             [else null])))
+
+    (define/public (check-security-level level)
+      (check-security-bits
+       (case level [(0) 0] [(1) 80] [(2) 112] [(3) 128] [(4) 192] [(5) 256] [else 256])))
     ))
 
 (define bad-chain%
@@ -324,6 +354,7 @@
              ok-extended-key-usage?
              get-eku-chain
              check-as-final
+             check-security-level
              check-validity-period)
     (super-new)
 
@@ -336,10 +367,12 @@
       (null? (check-trust store from-time to-time)))
 
     ;; check-trust : Store/#f Seconds Seconds -> ErrorList
-    (define/public (check-trust store [from-time (current-seconds)] [to-time from-time])
+    (define/public (check-trust store [from-time (current-seconds)] [to-time from-time]
+                                #:security-level [security-level 0])
       (append (cond [(not store) '()]
                     [(send store trust? (get-anchor)) '()]
                     [else '((0 . anchor:not-trusted))])
+              (check-security-level security-level)
               (check-as-final)
               (check-validity-period from-time to-time)))
 

@@ -39,32 +39,35 @@
 ;; ============================================================
 ;; Adapted from $SRC/test/recipes/25-test_verify.t
 
-(define (verify cert purpose trusted untrusted)
+(define LEVEL 1)
+
+(define (verify cert purpose trusted untrusted [level LEVEL])
   (define (pemcerts name) (pem-file->certs* (format "~a.pem" name)))
   (define store (send (empty-certificate-store) add
                       #:trusted-certs (append* (map pemcerts trusted))
-                      #:untrusted-certs (append* (map pemcerts untrusted))))
+                      #:untrusted-certs (append* (map pemcerts untrusted))
+                      #:set-security-level level))
   (define chain (send store pem-file->chain (format "~a.pem" cert)))
   ;; FIXME: check purpose
   chain)
 
-(define (test-v cert purpose trusted untrusted comment #:o [opt #f])
+(define (test-v cert purpose trusted untrusted comment #:o [opt #f] #:level [level LEVEL])
   (test-case (format "~a / ~a" cert comment)
-    (define chain (verify cert purpose trusted untrusted))
+    (define chain (verify cert purpose trusted untrusted level))
     (check-pred certificate-chain? chain)
     (case purpose
       [("sslserver") (check-equal? (send chain suitable-for-tls-server? #f) #t)]
       [("Xsslserver") (void)] ;; For certs that don't contain serverAuth EKU
       [("sslclient") (check-equal? (send chain suitable-for-tls-client? #f) #t)])))
 
-(define (test-no cert purpose trusted untrusted comment #:o [opt #f])
+(define (test-no cert purpose trusted untrusted comment #:o [opt #f] #:level [level LEVEL])
   (test-case (format "~a / ~a" cert comment)
     (check-exn exn:x509?
-               (lambda () (verify cert purpose trusted untrusted)))))
+               (lambda () (verify cert purpose trusted untrusted level)))))
 
-(define (test-uns cert purpose trusted untrusted comment #:o [opt #f])
+(define (test-uns cert purpose trusted untrusted comment #:o [opt #f] #:level [level LEVEL])
   (test-case (format "~a / ~a" cert comment)
-    (define chain (verify cert purpose trusted untrusted))
+    (define chain (verify cert purpose trusted untrusted level))
     (check-pred certificate-chain? chain)
     (case purpose
       [("sslserver") (check-equal? (send chain suitable-for-tls-server? #f) #f)]
@@ -320,38 +323,38 @@
 
 ;; Slightly reordered:
 (begin
- (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "2")
+ (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:level 2
          "accept RSA 2048 chain at auth level 2")
- (test-v "ee-cert" "sslserver" '["root-cert-768"] '["ca-cert-768i"] #:o '("-auth_level" "0")
+ (test-v "ee-cert" "sslserver" '["root-cert-768"] '["ca-cert-768i"] #:level 0
          "accept RSA 768 root at auth level 0")
- (test-v "ee-cert-768i" "sslserver" '["root-cert"] '["ca-cert-768"] #:o '("-auth_level" "0")
+ (test-v "ee-cert-768i" "sslserver" '["root-cert"] '["ca-cert-768"] #:level 0
          "accept RSA 768 intermediate at auth level 0")
- (test-v "ee-cert-768" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
+ (test-v "ee-cert-768" "sslserver" '["root-cert"] '["ca-cert"] #:level 0
          "accept RSA 768 leaf at auth level 0"))
-(SKIP ;; security levels not implemented
- (test-no "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "3")
+(begin ;; security levels
+ (test-no "ee-cert" "sslserver" '["root-cert"] '["ca-cert"] #:level 3
           "reject RSA 2048 root at auth level 3")
- (test-no "ee-cert" "sslserver" '["root-cert-768"] '["ca-cert-768i"]
+ (test-no "ee-cert" "sslserver" '["root-cert-768"] '["ca-cert-768i"] #:level 1
           "reject RSA 768 root at auth level 1")
- (test-no "ee-cert-768i" "sslserver" '["root-cert"] '["ca-cert-768"]
+ (test-no "ee-cert-768i" "sslserver" '["root-cert"] '["ca-cert-768"] #:level 1
           "reject RSA 768 intermediate at auth level 1")
- (test-no "ee-cert-768" "sslserver" '["root-cert"] '["ca-cert"]
+ (test-no "ee-cert-768" "sslserver" '["root-cert"] '["ca-cert"] #:level 1
           "reject RSA 768 leaf at auth level 1"))
 
 (begin
- (test-v "ee-cert" "sslserver" '["root-cert-md5"] '["ca-cert"] #:o '("-auth_level" "2")
+ (test-v "ee-cert" "sslserver" '["root-cert-md5"] '["ca-cert"] #:level 2
          "accept md5 self-signed TA at auth level 2")
- (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert-md5"] #:o '("-auth_level" "0")
+ (test-v "ee-cert" "sslserver" '["root-cert"] '["ca-cert-md5"] #:level 0
          "accept md5 intermediate at auth level 0")
- (test-v "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
+ (test-v "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"] #:level 0
          "accept md5 leaf at auth level 0"))
-(SKIP ;; security levels not implemented
- (test-no "ee-cert" "sslserver" '["root-cert"] '["ca-cert-md5"]
+(begin ;; security levels
+ (test-no "ee-cert" "sslserver" '["root-cert"] '["ca-cert-md5"] #:level 1
           "reject md5 intermediate at auth level 1")
- (test-no "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"]
+ (test-no "ee-cert-md5" "sslserver" '["root-cert"] '["ca-cert"] #:level 1
           "reject md5 leaf at auth level 1"))
 (begin ;; trusted certs
- (test-v "ee-cert" "sslserver" '["ca-cert-md5-any"] '[] #:o '("-auth_level" "2")
+ (test-v "ee-cert" "sslserver" '["ca-cert-md5-any"] '[] #:level 2
          "accept md5 intermediate TA at auth level 2"))
 
 ;; Explicit vs named curve tests
@@ -431,17 +434,17 @@
 
 ;; ---
 
-(test-v "ee-pss-sha1-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "0")
+(test-v "ee-pss-sha1-cert" "sslserver" '["root-cert"] '["ca-cert"] #:level 0
         "Accept PSS signature using SHA1 at auth level 0")
 
 (test-v "ee-pss-sha256-cert" "sslserver" '["root-cert"] '["ca-cert"]
         "CA with PSS signature using SHA256")
 
-(SKIP ;; security levels not implemented
- (test-no "ee-pss-sha1-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "1")
+(begin ;; security levels
+ (test-no "ee-pss-sha1-cert" "sslserver" '["root-cert"] '["ca-cert"] #:level 1
           "Reject PSS signature using SHA1 and auth level 1"))
 
-(test-v "ee-pss-sha256-cert" "sslserver" '["root-cert"] '["ca-cert"] #:o '("-auth_level" "2")
+(test-v "ee-pss-sha256-cert" "sslserver" '["root-cert"] '["ca-cert"] #:level 2
         "PSS signature using SHA256 and auth level 2")
 
 (XFAIL ;; no limit implemented, not sure what these should do...

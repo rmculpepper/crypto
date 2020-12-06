@@ -29,11 +29,14 @@
 
 (define (empty-certificate-store) (new certificate-store%))
 
+(define INIT-SECURITY-LEVEL 1)
+
 (define certificate-store%
   (class* object% (-certificate-store<%>)
     (init-field [trusted-h '#hash()] ;; Certificate => #t
                 [cert-h    '#hash()] ;; Certificate => #t
-                [stores null])
+                [stores null]
+                [security-level INIT-SECURITY-LEVEL])
     (super-new)
 
     (define/public (trust? cert)
@@ -49,7 +52,8 @@
 
     (define/public (add #:untrusted-certs [untrusted-certs null]
                         #:trusted-certs [trusted-certs null]
-                        #:stores [new-stores null])
+                        #:stores [new-stores null]
+                        #:set-security-level [security-level security-level])
       (define ((mkcons v) vs) (cons v vs))
       (define cert-h*
         (for*/fold ([h cert-h])
@@ -61,7 +65,7 @@
                   ([cert (in-list trusted-certs)])
           (hash-set h cert #t)))
       (new this% (trusted-h trusted-h*) (cert-h cert-h*)
-           (stores (append stores new-stores))))
+           (stores (append stores new-stores)) (security-level security-level)))
 
     (define/public (add-trusted-from-pem-file pem-file)
       (add #:trusted-certs (pem-file->certificates pem-file)))
@@ -120,7 +124,9 @@
       (define trusted-chains
         (fault-filter cv-chains empty-ok?
                       (lambda (chain)
-                        (define errs (send chain check-trust this valid-time))
+                        (define errs
+                          (send chain check-trust this valid-time
+                                #:security-level security-level))
                         (if (null? errs) (values chain null) (values #f errs)))
                       (lambda (chain errs)
                         (raise-invalid-chain-error who chain errs))))

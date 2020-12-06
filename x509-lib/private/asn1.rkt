@@ -1,6 +1,8 @@
 #lang racket/base
-(require asn1 asn1/util/names
+(require racket/match
+         asn1 asn1/util/names
          crypto/private/common/asn1
+         (only-in crypto/private/common/catalog digest-security-bits)
          "interfaces.rkt")
 (provide (all-defined-out)
          relation-ref)
@@ -616,21 +618,41 @@
    [id-Ed448                'eddsa #f    #f       'absent]
    ))
 
+(define (pss-with-digest? alg hash-oid hash-length)
+  (match alg
+    [(hash-table ['hashAlgorithm (hash-table ['algorithm (== hash-oid)])]
+                 ['maskGenAlgorithm
+                  (hash-table ['algorithm (== id-mgf1)]
+                              ['parameters (hash-table ['algorithm (== hash-oid)])])]
+                 ['saltLength hash-length]
+                 ['trailerField 1])
+     #t]
+    [else #f]))
+
+;; Returns the security bits for the *digest* used by the signature algorithm.
+;; The public key strength is not considered. Returns #f when there is no separate
+;; digest, 0 for unknown digest.
+(define (sig-alg-security-bits alg)
+  (define alg-oid (hash-ref alg 'algorithm))
+  (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
+    [(list 'eddsa #f) #f]
+    [(list 'rsa #f) ;; means RSA w/ PSS
+     (define alg-params (hash-ref alg 'parameters))
+     (define di
+       (cond [(pss-with-digest? alg-params id-sha1 20) 'sha1]
+             [(pss-with-digest? alg-params id-sha256 32) 'sha256]
+             [(pss-with-digest? alg-params id-sha384 48) 'sha384]
+             [(pss-with-digest? alg-params id-sha512 64) 'sha512]
+             [else #f]))
+     (if di (digest-security-bits di #t) 0)]
+    [(list pk di)
+     (digest-security-bits di #t)]
+    [_ 0]))
+
 (module+ verify
-  (require racket/match racket/class crypto)
+  (require racket/class crypto)
   (provide check-signature/algid
            verify/algid)
-
-  (define (pss-with-digest? alg hash-oid hash-length)
-    (match alg
-      [(hash-table ['hashAlgorithm (hash-table ['algorithm (== hash-oid)])]
-                   ['maskGenAlgorithm
-                    (hash-table ['algorithm (== id-mgf1)]
-                                ['parameters (hash-table ['algorithm (== hash-oid)])])]
-                   ['saltLength hash-length]
-                   ['trailerField 1])
-       #t]
-      [else #f]))
 
   (define (check-signature/algid pk alg tbs sig)
     (define alg-oid (hash-ref alg 'algorithm))
