@@ -15,6 +15,7 @@
 
 @title[#:tag "misc"]{Miscellaneous Notes and Utilities}
 
+@; ------------------------------------------------------------
 @section[#:tag "input"]{Input to Cryptographic Operations}
 
 @defthing[input/c contract?]{
@@ -45,6 +46,7 @@ Equivalent to @racket[(subbytes bs start end)] if @racket[bs] is not
 subsequently mutated, but avoids making a copy.
 }
 
+@; ------------------------------------------------------------
 @section[#:tag "crypto-random-bytes"]{Random Bytes}
 
 @(declare-exporting crypto)
@@ -55,6 +57,38 @@ For convenience, this library re-exports @racket:crypto-random-bytes-id
 from @racketmodname[racket/random].
 }
 
+@; ------------------------------------------------------------
+@section[#:tag "pem"]{PEM Reading}
+
+@defmodule[crypto/pem]
+
+@history[#:added "1.7"]
+
+@defproc[(read-pem [in input-port?]
+                   [decode (-> bytes? any/c) base64-decode]
+                   [#:only only-kinds (or/c #f (listof bytes?)) #f])
+         (or/c (cons/c bytes? any/c) eof)]{
+
+Reads a single PEM-encapsulated datum from @racket[in], decodes it
+using @racket[decode], and returns a pair containing the encapulation
+boundary label and the decoded result. Data before the starting
+encapsulation boundary is discarded. If no starting encapsulation
+boundary is found before the end of input, @racket[eof] is
+returned. If the ending encapsulation boundary is missing or has the
+wrong label, an error is raised.
+
+For example, the encapsulation boundaries for an X.509 certificate are
+lines consisting of @racket[#"-----BEGIN CERTIFICATE-----"] and
+@racket[#"-----END CERTIFICATE-----"], and the label returned is
+@racket[#"CERTIFICATE"].
+
+Note: This format is the PEM-based ``textual encoding''
+@cite["RFC7468"] used for encoding cryptographic keys, certificates,
+etc. It is commonly called ``PEM'' although it is not completely
+compatible with the original PEM format.
+}
+
+@; ------------------------------------------------------------
 @section[#:tag "provider-notes"]{Notes on Cryptography Providers}
 
 @subsection[#:tag "random"]{CSPRNG Initialization}

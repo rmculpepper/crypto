@@ -728,4 +728,9 @@ Equivalent to the following:
 @bib-entry[#:key "SEC1"
            #:title "SEC 1: Elliptic Curve Cryptography"
            #:url "http://www.secg.org/sec1-v2.pdf"]
+
+@bib-entry[#:key "RFC7468"
+           #:title "Textual Encodings of PKIX, PKCS, and CMS Structures"
+           #:url "https://tools.ietf.org/html/rfc7468"]
 ]
+
