@@ -584,8 +584,11 @@
 (define deserialize-info:certificate%
   (make-deserialize-info
    (lambda (der reject-ekus replace-ekus)
-     (new certificate% (der (bytes->immutable-bytes der))
-          (reject-ekus reject-ekus) (replace-ekus replace-ekus)))
+     (cond [(or (pair? reject-ekus) replace-ekus)
+            (new certificate% (der (bytes->immutable-bytes der))
+                 (reject-ekus reject-ekus) (replace-ekus replace-ekus)
+                 (check-who 'deserialize-certificate))]
+           [else (bytes->certificate der #:who 'deserialize-certificate)]))
    (lambda () (error 'deserialize-cert "cycles not allowed"))))
 
 ;; ============================================================
@@ -646,8 +649,17 @@
             [else (super get-eku eku)]))
     ))
 
-(define (bytes->certificate der #:who [who 'bytes->certificate])
-  (new certificate% (der (bytes->immutable-bytes der)) (check-who who)))
+;; ============================================================
+
+;; cert-cache : WeakHash[Bytes => Certificate]
+(define cert-cache (make-weak-hash))
+
+(define (bytes->certificate der #:who [who 'bytes->-certificate])
+  (let ([der (bytes->immutable-bytes der)])
+    (hash-ref! cert-cache der (lambda () (make-certificate der who)))))
+
+(define (make-certificate der who)
+  (new certificate% (der der) (check-who who)))
 
 ;; ============================================================
 
@@ -663,7 +675,7 @@
      [alias UTF8String #:optional]
      [keyid OCTET-STRING #:optional]))
 
-  (define (bytes->certificate/override-uses der #:who [who 'openssl-bytes->certificate])
+  (define (bytes->certificate/override-uses der #:who [who 'bytes->certificate/override-uses])
     (define in (open-input-bytes der))
     (define cert-der (begin (read-asn1 ANY in) (subbytes der 0 (file-position in))))
     (define aux (read-asn1 CertAux in))

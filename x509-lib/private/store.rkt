@@ -175,7 +175,7 @@
     (define/public (trust? cert)
       (or (hash-ref trusted-cache cert #f)
           (for/or ([trusted (in-list (lookup-by-subject (send cert get-subject)))])
-            (send trusted equal-to cert))))
+            (equal? trusted cert))))
 
     (define/public (lookup-by-subject name)
       (define (padto n s) (string-append (make-string (- n (string-length s)) #\0) s))

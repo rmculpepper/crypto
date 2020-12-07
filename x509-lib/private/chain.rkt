@@ -20,15 +20,22 @@
 
 ;; ============================================================
 
+;; anchor-cache : WeakHasheq[Certificate => CertChain]
+(define anchor-cache (make-weak-hasheq))
+
+(define (make-anchor-chain cert)
+  (define (do-make-anchor-chain)
+    (new certificate-chain% (issuer-chain #f) (cert cert)))
+  (hash-ref! anchor-cache cert do-make-anchor-chain))
+
 ;; A CandidateChain is (list TrustAnchor Cert ...),
 ;; where TrustAnchor is currently always also a Cert.
 
 ;; check-candidate-chain : CandidateChain -> (values CertificateChain/#f ErrorList)
 ;; Checks the properties listed under certificate-chain%.
 (define (check-candidate-chain certs)
-  (when (null? certs) (error 'get-chain-errors "empty candidate chain"))
   (define pre-chain
-    (for/fold ([chain (new certificate-chain% (issuer-chain #f) (cert (car certs)))])
+    (for/fold ([chain (make-anchor-chain (car certs))])
               ([cert (in-list (cdr certs))])
       (send chain extend-chain cert)))
   (cond [(is-a? pre-chain bad-chain%)
@@ -192,14 +199,18 @@
     ;; ----------------------------------------
     ;; Extension
 
+    (define extension-cache (make-weak-hasheq))
+
     (define/public (extend-chain new-cert)
-      (define errors
-        (append (check-as-intermediate)
-                (check-chain-addition new-cert)
-                (get-errors)))
-      (cond [(pair? errors)
-             (new bad-chain% (issuer-chain this) (cert new-cert) (errors errors))]
-            [else (new certificate-chain% (issuer-chain this) (cert new-cert))]))
+      (hash-ref! extension-cache new-cert
+                 (lambda ()
+                   (define errors
+                     (append (check-as-intermediate)
+                             (check-chain-addition new-cert)
+                             (get-errors)))
+                   (cond [(pair? errors)
+                          (new bad-chain% (issuer-chain this) (cert new-cert) (errors errors))]
+                         [else (new certificate-chain% (issuer-chain this) (cert new-cert))]))))
 
     (define/public (get-errors) null)
 
