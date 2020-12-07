@@ -10,7 +10,6 @@
 (define certificate-data<%>
   (interface ()
    has-same-public-key?
-   custom-write
 
    get-der
    get-cert-signature-info
@@ -43,45 +42,31 @@
    ))
 
 (define certificate<%>
-  (interface*
-   (certificate-data<%>)
-   ([prop:equal+hash
-     (list (lambda (self other recur) (send self equal-to other recur))
-           (lambda (self recur) (send self hash-code recur))
-           (lambda (self recur) (send self hash-code recur)))]
-    [prop:custom-write
-     (lambda (self out mode) (send self custom-write out mode))])
-   equal-to
-   hash-code
-   ))
+  (interface (certificate-data<%> equal<%> writable<%>)
+    ))
 
 (define time/c exact-integer?)
 (define candidate-chain/c (non-empty-listof certificate?))
 
 (define certificate-chain<%>
-  (interface*
-   ()
-   ([prop:custom-write
-     (lambda (self out mode) (send self custom-write out mode))])
-   custom-write
+  (interface ()
+    get-certificate
+    get-issuer-chain
+    get-anchor
+    is-anchor?
 
-   get-certificate
-   get-issuer-chain
-   get-anchor
-   is-anchor?
+    get-subject
+    get-subject-alt-names
+    ok-key-use?
+    ok-extended-key-usage?
 
-   get-subject
-   get-subject-alt-names
-   ok-key-use?
-   ok-extended-key-usage?
+    get-public-key
+    check-signature
 
-   get-public-key
-   check-signature
-
-   [trusted?
-    (->*m [(or/c #f certificate-store?)] [time/c time/c]
-          boolean?)]
-   ))
+    [trusted?
+     (->*m [(or/c #f certificate-store?)] [time/c time/c]
+           boolean?)]
+    ))
 
 ;; Note: for documentation; not actually implemented
 (define trust-anchor<%>

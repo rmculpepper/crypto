@@ -344,7 +344,7 @@
 ;; ============================================================
 
 (define certificate-chain%
-  (class* pre-chain% (-certificate-chain<%>)
+  (class* pre-chain% (-certificate-chain<%> writable<%>)
     (inherit-field issuer-chain cert)
     (inherit get-certificate
              get-anchor
@@ -359,9 +359,11 @@
              check-validity-period)
     (super-new)
 
-    (define/public (custom-write out mode)
+    (define/public (custom-write out)
       (fprintf out "#<certificate-chain: ~a>"
                (Name->string (send (get-certificate) get-subject))))
+    (define/public (custom-display out)
+      (custom-write out))
 
     ;; trusted? : Store/#f Seconds Seconds -> Boolean
     (define/public (trusted? store [from-time (current-seconds)] [to-time from-time])

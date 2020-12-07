@@ -4,6 +4,7 @@
          racket/list
          racket/string
          racket/date
+         racket/serialize
          asn1
          asn1/util/time
          "interfaces.rkt"
@@ -31,9 +32,6 @@
 
     (define/public (has-same-public-key? other-cert)
       (equal? (get-spki) (send other-cert get-spki)))
-
-    (define/public (custom-write out mode)
-      (fprintf out "#<certificate: ~a>" (Name->string (get-subject))))
 
     (define/public (get-cert-signature-info)
       (define vcert (bytes->asn1 Certificate-for-verify-sig der))
@@ -573,13 +571,34 @@
 
 ;; ============================================================
 
+(define serializable-certificate<%>
+  (interface*
+   ()
+   ([prop:serializable
+     (make-serialize-info (lambda (c) (send c -serialize))
+                          #'deserialize-info:certificate%
+                          #f
+                          (or (current-load-relative-directory)
+                              (current-directory)))])))
+
+(define deserialize-info:certificate%
+  (make-deserialize-info
+   (lambda (der reject-ekus replace-ekus)
+     (new certificate% (der (bytes->immutable-bytes der))
+          (reject-ekus reject-ekus) (replace-ekus replace-ekus)))
+   (lambda () (error 'deserialize-cert "cycles not allowed"))))
+
+;; ============================================================
+
 (define certificate%
-  (class* certificate-data% (-certificate<%>)
+  (class* certificate-data% (-certificate<%> serializable-certificate<%>)
     (init [check-who 'certificate])
+    (inherit-field der)
     (init-field [reject-ekus null] ;; (Listof OID)
                 [replace-ekus #f]) ;; #f or (Listof OID) -- #f means use cert EKUs
     (inherit get-der
              get-spki
+             get-subject
              check)
     (super-new)
 
@@ -600,13 +619,25 @@
 
     ;; ----------------------------------------
 
-    (define/public (equal-to other [recur equal?])
-      (and (equal? (get-der) (send other get-der))
-           (equal? reject-ekus (get-field reject-ekus other))
-           (equal? replace-ekus (get-field replace-ekus other))))
+    (define/public (equal-to? other [recur equal?])
+      (and (recur (get-der) (send other get-der))
+           (recur reject-ekus (get-field reject-ekus other))
+           (recur replace-ekus (get-field replace-ekus other))))
 
-    (define/public (hash-code recur)
+    (define/public (equal-hash-code-of recur)
       (recur (get-der)))
+    (define/public (equal-secondary-hash-code-of recur)
+      (recur (get-der)))
+
+    (define/public (custom-write out)
+      (fprintf out "#<certificate: ~a>" (Name->string (get-subject))))
+    (define/public (custom-display out)
+      (custom-write out))
+
+    (define/public (-serialize)
+      (vector der reject-ekus replace-ekus))
+
+    ;; ----------------------------------------
 
     (define/override (get-eku eku)
       (define (member* x xs) (or (member x xs) (member anyExtendedKeyUsage xs)))
