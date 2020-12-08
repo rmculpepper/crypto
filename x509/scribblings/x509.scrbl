@@ -377,4 +377,86 @@ period including @racket[valid-time]; and it starts with a root CA trusted by
 
 }
 
+@; ----------------------------------------
+
+@defproc[(make-revocation-checker [db-file path-string?]
+                                  [#:trust-db? trust-db? boolean? #t]
+                                  [#:fetch-ocsp? fetch-ocsp? boolean? #t]
+                                  [#:fetch-crl? fetch-crl? boolean? #t])
+         (is-a?/c revocation-checker<%>)]{
+
+Returns an object for performing certificate revocation checks using OCSP and
+CRLs.
+
+The @racket[db-file] is a SQLite3 database file used to cache OCSP and CRL
+responses. These responses carry signatures, so they can cached even if the
+cache is untrusted. (When the cache contains a response, the response is
+re-verified, and if verification fails then the cached response is discarded and
+a new response is retrieved.)
+
+If @racket[trust-db?] is @racket[#t], then status information about individual
+certificates is also cached. This saves parsing and signature verification time,
+but these individual status records do not carry signatures, so they cannot be
+re-verified later. If @racket[trust-db?] is @racket[#f], then only the
+re-verifiable parts of the cache are used.
+
+If @racket[fetch-ocsp?] is @racket[#t], then if the cache does not contain a
+trusted, unexpired OCSP response, a response is fetched from the OCSP responder
+URL (or URLs) in the certificate being checked. If @racket[fetch-ocsp?] is
+@racket[#f], no new response is fetched; if a suitable response is not in the
+cache, the certificate's status is unknown. Likewise, the @racket[fetch-crl?]
+option controls requests for CRLs.
+}
+
+@definterface[revocation-checker<%> ()]{
+
+Public interface for checking revocation of certificates.
+
+Both the @method[revocation-checker<%> check-ocsp] and
+@method[revocation-checker<%> check-crl] methods take certificate chains rather
+than certificates, because verifying revocation responses requires the public
+key of the certificate's issuer. Both methods check only the final certificate
+in the chain for revocation.
+
+@defmethod[(check-ocsp [chain certificate-chain?]) list?]{
+
+Returns @racket['()] to indicate success (at least one OCSP response indicated
+that the certificate is good) or a non-empty list to indicate failure or another
+condition. If the list is non-empty, it will contain at least one of the
+following symbols:
+@itemlist[
+
+@item{@racket['revoked] --- The certificate is revoked.}
+
+@item{@racket['unknown] --- The certificate's status is unknown, either because
+the certificate listed no OCSP responder URLs, or because no responder produced
+a valid response, or because the response indicated that the responder does not
+know the certificate's status.}
+
+]
+}
+
+@defmethod[(check-crl [chain certificate-chain?]) list?]{
+
+Returns @racket['()] to indicate success (at least one CRL was found and the
+certificate of @racket[chain] was absent from its revocation list) or a
+non-empty list to indicate failure or another condition. If the list is
+non-empty, it will contain at least one of the following symbols:
+@itemlist[
+
+@item{@racket['revoked] --- The certificate is revoked.}
+
+@item{@racket['no-crls] --- The certificate does not list any usable CRL
+URLs. (This library only uses URLs with the scheme @racket["http"] or
+@racket["https"].)}
+
+@item{@racket['unavailable] --- The certificate listed a CRL URL whose content
+was unavailable, either because retrieving it failed (perhaps due to a network
+failure or server problem), or the retrieved CRL had a bad signature, or
+@(this-obj) was configured not to fetch CRLs (and it was not in the cache).}
+
+]
+}
+}
+
 @(close-eval the-eval)
