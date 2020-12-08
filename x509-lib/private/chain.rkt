@@ -408,9 +408,10 @@
       (define for-ca-cert (send for-ca-chain get-certificate))
       (or (and (send cert is-CA?)
                (send cert has-same-public-key? for-ca-cert))
-          ;; The id-kp-OCSPSigning EKU check is shallow; it should only appear in the
-          ;; responder certificate. Including it in ancestor CA certificates would
-          ;; allow a subordinate CA to sign OCSP responses for its issuer CAs.
+          ;; The id-kp-OCSPSigning EKU check is shallow; it should only appear
+          ;; in the responder certificate. One reason: Including the EKU in
+          ;; ancestor CA certificates would allow every subordinate CA to sign
+          ;; OCSP responses for its issuer CAs.
           (and (eq? (send cert get-eku id-kp-OCSPSigning) 'yes)
                (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
