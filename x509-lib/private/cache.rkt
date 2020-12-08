@@ -30,12 +30,15 @@
 
 ;; Trusted_OCSP (ocsp-url, certid, expire, thisUpdate, nextUpdate, certStatus)
 
-(define (make-revocation-checker db-file)
-  (new revocation-checker% (db-file db-file)))
+(define (make-revocation-checker db-file #:trust-db? [trust-db? #t])
+  (new revocation-checker% (db-file db-file) (trust-db? trust-db?)))
 
 (define revocation-checker%
   (class* object% ()
-    (init-field db-file)
+    (init-field db-file
+                [trust-db? #t]
+                [fetch-ocsp? #t]
+                [fetch-crl? #t])
     (super-new)
 
     (define conn (sqlite3-connect #:database db-file #:mode 'create))
@@ -77,14 +80,16 @@
                      (lambda (sr) (db-update-trusted-ocsp now ocsp-url certid-der sr)))))
 
     (define/private (db-get-trusted-ocsp ocsp-url certid-der)
-      (query-maybe-value conn
-        "SELECT singleResponse FROM Trusted_OCSP WHERE url = ? AND certid = ?"
-        ocsp-url certid-der))
+      (and trust-db?
+           (query-maybe-value conn
+             "SELECT singleResponse FROM Trusted_OCSP WHERE url = ? AND certid = ?"
+             ocsp-url certid-der)))
 
     (define/private (db-update-trusted-ocsp now ocsp-url certid-der sr)
-      (query-exec conn
-        "INSERT OR REPLACE INTO Trusted_OCSP (url, certid, singleResponse) VALUES (?, ?, ?)"
-        ocsp-url certid-der (asn1->bytes/DER SingleResponse sr)))
+      (when trust-db?
+        (query-exec conn
+          "INSERT OR REPLACE INTO Trusted_OCSP (url, certid, singleResponse) VALUES (?, ?, ?)"
+          ocsp-url certid-der (asn1->bytes/DER SingleResponse sr))))
 
     ;; ----------------------------------------
 
@@ -105,7 +110,7 @@
                           [else (begin (log-revocation-debug " no stored ocsp") #f)])
                     (lambda (r) (log-revocation-debug " using stored ocsp")))
           (handle-r 'fetched
-                    (cond [(do-fetch-ocsp ocsp-url req-der)
+                    (cond [(and fetch-ocsp? (do-fetch-ocsp ocsp-url req-der))
                            => (lambda (v) (and (is-a? v ocsp-response%) v))]
                           [else #f])
                     (lambda (r) (db-update-untrusted-ocsp now ocsp-url req-der r)))))
@@ -115,10 +120,9 @@
         "SELECT basic_resp FROM Cache_OCSP WHERE url = ? AND req = ?"
         ocsp-url req-der))
     (define/private (db-update-untrusted-ocsp now ocsp-url req-der r)
-      (when (and (not read-only?) (cachable? r))
-        (query-exec conn
-          "INSERT OR REPLACE INTO Cache_OCSP (url, req, basic_resp) VALUES (?, ?, ?)"
-          ocsp-url req-der (send r get-der))))
+      (query-exec conn
+        "INSERT OR REPLACE INTO Cache_OCSP (url, req, basic_resp) VALUES (?, ?, ?)"
+        ocsp-url req-der (send r get-der)))
 
     ;; ============================================================
 
@@ -151,21 +155,22 @@
                 [else (begin (log-revocation-debug " no stored CRL status") #f)])
           (cond [(get-crl now crl-url issuer-chain)
                  => (lambda (crl)
-                      (define revoked-serials (send crl get-revoked-serial-numbers))
-                      (define status (if (member serial revoked-serials) 'revoked 'absent))
+                      (define status (if (send crl revoked? serial) 'revoked 'absent))
                       (define expire (send crl get-expiration-time))
                       (db-update-trusted-crl-status crl-url serial status expire)
                       status)]
                 [else #f])))
 
     (define/private (db-get-trusted-crl-status crl-url serial)
-      (query-maybe-row conn
-        "SELECT status, expire FROM Trusted_CRL WHERE url = ? AND serial = ?"
-        crl-url (number->string serial)))
+      (and trust-db?
+           (query-maybe-row conn
+             "SELECT status, expire FROM Trusted_CRL WHERE url = ? AND serial = ?"
+             crl-url (number->string serial))))
     (define/private (db-update-trusted-crl-status crl-url serial status expire)
-      (query-exec conn
-        "INSERT OR REPLACE INTO Trusted_CRL (url, serial, status, expire) VALUES (?, ?, ?, ?)"
-        crl-url (number->string serial) (symbol->string status) expire))
+      (when trust-db?
+        (query-exec conn
+          "INSERT OR REPLACE INTO Trusted_CRL (url, serial, status, expire) VALUES (?, ?, ?, ?)"
+          crl-url (number->string serial) (symbol->string status) expire)))
 
     ;; get-crl : ... -> crl% or #f
     ;; The result crl% is trusted and unexpired.
@@ -183,7 +188,7 @@
                              => (lambda (crl-der) (new crl% (der crl-der)))]
                             [else #f]))
           (handle-crl 'fetched
-                      (do-fetch-crl crl-url)
+                      (and fetch-crl? (do-fetch-crl crl-url))
                       (lambda (crl) (db-update-untrusted-crl crl-url crl)))))
 
     (define/private (db-get-untrusted-crl crl-url)
@@ -194,13 +199,3 @@
         "INSERT OR REPLACE INTO Cache_CRL (url, crl) VALUES (?, ?)"
         crl-url (send crl get-der)))
     ))
-
-;; ============================================================
-
-(define no-cache%
-  (class* object% (cache<%>)
-    (super-new)
-    (define/public (fetch-ocsp ocsp-url req-der)
-      (do-fetch-ocsp ocsp-url req-der))
-    (define/public (fetch-crl crl-url)
-      (do-fetch-crl crl-url))))
