@@ -216,7 +216,7 @@
         [(list) #f]))
 
     (define/public (lookup-single-responses certid)
-      (for/first ([sr (in-list (get-responses))]
+      (for/list ([sr (in-list (get-responses))]
                   #:when (certid=? (hash-ref sr 'certID) certid))
         sr))
     ))

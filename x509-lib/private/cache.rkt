@@ -46,7 +46,8 @@
       (define cert (send chain get-certificate))
       (define certid-der (asn1->bytes/DER CertID (make-certid chain)))
       (define req-der (make-ocsp-request chain))
-      (or (for/or ([ocsp-url (send cert get-ocsp-urls)])
+      (or (for/or ([ocsp-url (send cert get-ocsp-uris)])
+            (log-revocation-debug "trying OCSP url: ~e" ocsp-url)
             (cond [(get-ocsp-single-response now chain ocsp-url certid-der req-der)
                    => (lambda (sr)
                         (match (hash-ref sr 'certStatus)
@@ -65,7 +66,8 @@
               [else #f]))
       (or (handle-sr (cond [(db-get-trusted-ocsp ocsp-url certid-der)
                             => (lambda (sr-der) (bytes->asn1 SingleResponse sr-der))]
-                           [else #f]))
+                           [else #f])
+                     (lambda (sr) (log-revocation-debug " using stored SingleResponse")))
           (handle-sr (cond [(get-ocsp-response now chain ocsp-url req-der)
                             => (lambda (resp) (send resp lookup-single-response
                                                     (bytes->asn1 CertID certid-der)))]
@@ -90,15 +92,16 @@
       (define (handle-r whence r [accept void])
         (cond [(not r) #f]
               [(not (<= now (send r get-expiration-time)))
-               (begin (log-revocation-debug "~a ocsp expired for ~e" whence ocsp-url) #f)]
+               (begin (log-revocation-debug " ~a ocsp expired" whence) #f)]
               [(not (send r ok-signature? (send chain get-issuer-chain-or-self)))
-               (begin (log-revocation-debug "~a ocsp bad sig for ~e" whence ocsp-url) #f)]
+               (begin (log-revocation-debug " ~a ocsp bad sig" whence) #f)]
               [else (begin (accept r) r)]))
 
       (or (handle-r 'stored
                     (cond [(db-get-untrusted-ocsp ocsp-url req-der)
                            => (lambda (r-der) (new ocsp-response% (der r-der)))]
-                          [else (log-revocation-debug "no stored ocsp for ~e" ocsp-url) #f]))
+                          [else (begin (log-revocation-debug " no stored ocsp") #f)])
+                    (lambda (r) (log-revocation-debug " using stored ocsp")))
           (handle-r 'fetched
                     (cond [(do-fetch-ocsp ocsp-url req-der)
                            => (lambda (v) (and (is-a? v ocsp-response%) v))]
@@ -118,6 +121,8 @@
     ;; ============================================================
     ))
 
+;; ============================================================
+
 (define no-cache%
   (class* object% (cache<%>)
     (super-new)
@@ -129,7 +134,7 @@
 (define no-cache (new no-cache%))
 
 (define db-cache%
-  (class* object% (cache<%>)
+  (class* object% ()
     (init-field parent conn
                 [read-only? #f])
     (super-new)
