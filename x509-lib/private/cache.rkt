@@ -1,15 +1,15 @@
 #lang racket/base
 (require racket/match
          racket/class
+         racket/list
          asn1
          (only-in "cert.rkt" bytes->certificate)
          "ocsp.rkt"
          "ocsp-asn1.rkt"
-         (only-in "crl.rkt" crl% do-fetch-crl)
+         "crl.rkt"
          db/base db/sqlite3
          "interfaces.rkt")
-(provide (all-defined-out)
-         no-cache)
+(provide (all-defined-out))
 
 (define-logger revocation)
 
@@ -21,10 +21,12 @@
    (s+ "CREATE TABLE IF NOT EXISTS Cache_OCSP"
        " (url TEXT, req BLOB, basic_resp BLOB, PRIMARY KEY (url, req))")
    (s+ "CREATE TABLE IF NOT EXISTS Cache_CRL"
-       " (url TEXT, expire INTEGER, crl BLOB, PRIMARY KEY (url))")
+       " (url TEXT, crl BLOB, PRIMARY KEY (url))")
    ;; For trusted tables
    (s+ "CREATE TABLE IF NOT EXISTS Trusted_OCSP"
-       " (url TEXT, certid BLOB, singleResponse BLOB, PRIMARY KEY (url, certid))")))
+       " (url TEXT, certid BLOB, singleResponse BLOB, PRIMARY KEY (url, certid))")
+   (s+ "CREATE TABLE IF NOT EXISTS Trusted_CRL"
+       " (url TEXT, serial TEXT, status TEXT, expire INTEGER, PRIMARY KEY (url, serial))")))
 
 ;; Trusted_OCSP (ocsp-url, certid, expire, thisUpdate, nextUpdate, certStatus)
 
@@ -119,6 +121,78 @@
           ocsp-url req-der (send r get-der))))
 
     ;; ============================================================
+
+    (define/public (check-crl chain [now (current-seconds)])
+      ;; FIXME: require CRL issuer to be same as cert issuer
+      (define crl-urls (certificate-crl-urls (send chain get-certificate)))
+      (cond [(pair? crl-urls)
+             (append*
+              (for/list ([crl-url (in-list crl-urls)])
+                (log-revocation-debug "trying CRL url: ~e" crl-url)
+                (match (get-crl-status now chain crl-url)
+                  ['absent '()]
+                  ['revoked '(revoked)]
+                  [#f '(unavailable)])))]
+            [else '(no-crls)]))
+
+    ;; get-crl-status : ... -> (U 'absent 'revoked #f)
+    ;; If result is 'absent or 'revoked, from trusted and unexpired CRL.
+    (define/private (get-crl-status now chain crl-url)
+      (define cert (send chain get-certificate))
+      (define serial (send cert get-serial-number))
+      (define issuer-chain (send chain get-issuer-chain-or-self))
+      (or (cond [(db-get-trusted-crl-status crl-url serial)
+                 => (match-lambda
+                      [(vector status expire)
+                       (cond [(<= now expire)
+                              (log-revocation-debug " using stored CRL status")
+                              (string->symbol status)]
+                             [else (begin (log-revocation-debug " CRL status expired") #f)])])]
+                [else (begin (log-revocation-debug " no stored CRL status") #f)])
+          (cond [(get-crl now crl-url issuer-chain)
+                 => (lambda (crl)
+                      (define revoked-serials (send crl get-revoked-serial-numbers))
+                      (define status (if (member serial revoked-serials) 'revoked 'absent))
+                      (define expire (send crl get-expiration-time))
+                      (db-update-trusted-crl-status crl-url serial status expire)
+                      status)]
+                [else #f])))
+
+    (define/private (db-get-trusted-crl-status crl-url serial)
+      (query-maybe-row conn
+        "SELECT status, expire FROM Trusted_CRL WHERE url = ? AND serial = ?"
+        crl-url (number->string serial)))
+    (define/private (db-update-trusted-crl-status crl-url serial status expire)
+      (query-exec conn
+        "INSERT OR REPLACE INTO Trusted_CRL (url, serial, status, expire) VALUES (?, ?, ?, ?)"
+        crl-url (number->string serial) (symbol->string status) expire))
+
+    ;; get-crl : ... -> crl% or #f
+    ;; The result crl% is trusted and unexpired.
+    (define/public (get-crl now crl-url issuer-chain)
+      (define (handle-crl whence crl [accept void])
+        (cond [(not crl) #f]
+              [(not (<= now (send crl get-expiration-time)))
+               (begin (log-revocation-debug " ~a CRL expired" whence) #f)]
+              [(not (send crl ok-signature? issuer-chain))
+               (begin (log-revocation-debug " ~a CRL bad signature" whence) #f)]
+              [else (begin (log-revocation-debug " using ~a CRL" whence) (accept crl) crl)]))
+
+      (or (handle-crl 'stored
+                      (cond [(db-get-untrusted-crl crl-url)
+                             => (lambda (crl-der) (new crl% (der crl-der)))]
+                            [else #f]))
+          (handle-crl 'fetched
+                      (do-fetch-crl crl-url)
+                      (lambda (crl) (db-update-untrusted-crl crl-url crl)))))
+
+    (define/private (db-get-untrusted-crl crl-url)
+      (query-maybe-value conn "SELECT crl FROM Cache_CRL WHERE url = ?" crl-url))
+
+    (define/private (db-update-untrusted-crl crl-url crl)
+      (query-exec conn
+        "INSERT OR REPLACE INTO Cache_CRL (url, crl) VALUES (?, ?)"
+        crl-url (send crl get-der)))
     ))
 
 ;; ============================================================
@@ -130,66 +204,3 @@
       (do-fetch-ocsp ocsp-url req-der))
     (define/public (fetch-crl crl-url)
       (do-fetch-crl crl-url))))
-
-(define no-cache (new no-cache%))
-
-(define db-cache%
-  (class* object% ()
-    (init-field parent conn
-                [read-only? #f])
-    (super-new)
-
-    (define/public (fetch-crl crl-url)
-      (define now (current-seconds))
-      (define r-der
-        (query-maybe-value conn
-          "SELECT crl FROM Cache_CRL WHERE url = ? ORDER BY expire DESC LIMIT 1"
-          crl-url))
-      (define r (and r-der (new crl% (der r-der))))
-      (cond [(and r (< now (send r get-expiration-time))) r]
-            [else
-             (eprintf "db-cache: fault for ~e\n" crl-url)
-             (define r (send parent fetch-crl crl-url))
-             (when (and (not read-only?) (cachable? r))
-               (query-exec conn
-                 "DELETE FROM Cache_CRL WHERE expire < ?" now)
-               (query-exec conn
-                 "INSERT INTO Cache_CRL (url, expire, crl) VALUES (?, ?, ?)"
-                 crl-url (send r get-expiration-time) (send r get-der)))
-             r]))
-    ))
-
-(define mem-cache%
-  (class* object% (cache<%>)
-    (init-field parent)
-    (super-new)
-
-    (define/private (get! cache-h key fault)
-      (define r (hash-ref cache-h key #f))
-      (define now (current-seconds))
-      (if (and r (< now (send r get-expiration-time)))
-          r
-          (let ([r (fault)])
-            (eprintf "mem-cache: fault for ~e\n" key)
-            (when (cachable? r) (hash-set! cache-h key r))
-            r)))
-
-    ;; ocsp-h : Hash[(cons String[URL] Bytes[Req-DER]) => ocsp-response%]
-    (define ocsp-h (make-hash))
-
-    (define/public (fetch-ocsp ocsp-url req)
-      (get! ocsp-h (cons ocsp-url req)
-            (lambda () (send parent fetch-ocsp ocsp-url req))))
-
-    ;; crl-h : Hash[String[URL] => crl%]
-    (define crl-h (make-hash))
-
-    (define/public (fetch-crl crl-url)
-      (get! crl-h crl-url
-            (lambda () (send parent fetch-crl crl-url))))
-    ))
-
-(define (make-cache [db-file #f])
-  (define conn (and db-file (sqlite3-connect #:database db-file #:mode 'create)))
-  (define cache1 (if conn (new db-cache% (conn conn) (parent no-cache)) no-cache))
-  (new mem-cache% (parent cache1)))
