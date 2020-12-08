@@ -160,10 +160,9 @@
     ;; FIXME: process extensions
 
     (define/public (get-der) (or der (asn1->bytes/DER BasicOCSPResponse rbody)))
+
     (define/public (get-expiration-time)
-      (apply min
-             (map asn1-generalized-time->seconds
-                  (for/list ([resp (in-list (get-responses))]) (hash-ref resp 'nextUpdate)))))
+      (apply min (map single-response-expiration-time (get-responses))))
 
     ;; Verify signature
     (define/public (ok-signature? issuer-chain)
@@ -196,19 +195,39 @@
                            (send chain trusted? #f)
                            chain))))]))
 
-    ;; lookup : Chain -> (Listof LookupResult)
+    ;; lookup : Chain -> LookupResult
     (define/public (lookup chain [certid (make-certid chain)])
       (lookup-result-join
-       (for/list ([resp (in-list (get-responses))])
-         (cond [(certid=? (hash-ref resp 'certID) certid)
-                (match (hash-ref resp 'certStatus)
-                  [(list 'good _)
-                   (list (list (asn1-generalized-time->seconds (hash-ref resp 'thisUpdate))
-                               (asn1-generalized-time->seconds (hash-ref resp 'nextUpdate))))]
-                  [(list 'revoked _) 'revoked]
-                  [(list 'unknown _) 'unknown])]
-               [else 'unknown]))))
+       (for/list ([sr (in-list (lookup-single-responses chain certid))])
+         (match (hash-ref sr 'certStatus)
+           [(list 'good _)
+            (list (list (asn1-generalized-time->seconds (hash-ref sr 'thisUpdate))
+                        (asn1-generalized-time->seconds (hash-ref sr 'nextUpdate))))]
+           [(list 'revoked _) 'revoked]
+           [(list 'unknown _) 'unknown]))))
+
+    (define/public (lookup-single-response certid)
+      ;; We assume that there is at most one SingleResponse matching certid.
+      (match (lookup-single-responses certid)
+        [(cons sr more)
+         (when (pair? more)
+           (log-x509-error "OCSP response contains multiple matching SingleResponses"))
+         sr]
+        [(list) #f]))
+
+    (define/public (lookup-single-responses certid)
+      (for/first ([sr (in-list (get-responses))]
+                  #:when (certid=? (hash-ref sr 'certID) certid))
+        sr))
     ))
+
+;; How to calculate expire? CAB BR says validity period can be 16 hours to 10 days.
+;; So min of nextUpdate and thisUpdate+10days?
+(define DEFAULT-VALID-TIME (* 10 24 60 60))
+(define (single-response-expiration-time resp)
+  (cond [(hash-ref resp 'nextUpdate #f) => asn1-generalized-time->seconds]
+        [else (+ (asn1-generalized-time->seconds (hash-ref resp 'thisUpdate))
+                 DEFAULT-VALID-TIME)]))
 
 ;; A LookupResult is one of
 ;; - 'unknown

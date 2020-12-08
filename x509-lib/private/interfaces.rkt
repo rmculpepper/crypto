@@ -137,7 +137,6 @@
 
 (define cache<%>
   (interface ()
-    make-certificate ;; Bytes -> Certificate
     fetch-ocsp ;; URL OCSPRequest -> ocsp-response%
     fetch-crl  ;; URL -> crl%
     ))
