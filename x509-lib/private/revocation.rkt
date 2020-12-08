@@ -23,8 +23,12 @@
 
 ;; ============================================================
 
-(define (make-revocation-checker db-file #:trust-db? [trust-db? #t])
-  (new revocation-checker% (db-file db-file) (trust-db? trust-db?)))
+(define (make-revocation-checker db-file
+                                 #:trust-db? [trust-db? #t]
+                                 #:fetch-ocsp? [fetch-ocsp? #t]
+                                 #:fetch-crl? [fetch-crl? #t])
+  (new revocation-checker% (db-file db-file) (trust-db? trust-db?)
+       (fetch-ocsp? fetch-ocsp?) (fetch-crl? fetch-crl?)))
 
 (define s+ string-append)
 

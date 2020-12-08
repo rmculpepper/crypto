@@ -135,10 +135,10 @@
 
 (define-logger x509)
 
-(define cache<%>
+(define revocation-checker<%>
   (interface ()
-    fetch-ocsp ;; URL OCSPRequest -> ocsp-response%
-    fetch-crl  ;; URL -> crl%
+    check-ocsp ;; CertificateChain -> ErrorList
+    check-crl  ;; CertificateChain -> ErrorList
     ))
 
 (define cachable<%>
@@ -146,5 +146,3 @@
     get-expiration-time ;; Seconds
     get-der ;; -> Bytes
     ))
-
-(define (cachable? v) (is-a? v cachable<%>))

@@ -1,14 +1,18 @@
 #lang racket/base
 (require racket/contract/base
+         racket/lazy-require
          "private/interfaces.rkt"
          "private/cert.rkt"
          "private/store.rkt")
+(lazy-require ["private/revocation.rkt"
+               (make-revocation-checker)])
 (provide certificate<%>
          certificate-chain<%>
          certificate-store<%>
          certificate?
          certificate-chain?
          certificate-store?
+         revocation-checker<%>
          (struct-out exn:x509)
          (struct-out exn:x509:certificate)
          (struct-out exn:x509:chain)
@@ -21,6 +25,12 @@
                 (listof certificate?))]
           [pem-file->certificates
            (->* [path-string?] [#:count (or/c exact-nonnegative-integer? +inf.0)]
-                (listof certificate?))])
+                (listof certificate?))]
+          [make-revocation-checker
+           (->* [path-string?]
+                [#:trust-db? boolean?
+                 #:fetch-ocsp? boolean?
+                 #:fetch-crl? boolean?]
+                any)])
 
          empty-certificate-store)
