@@ -85,6 +85,9 @@
     (define/public (get-issuer-chain) issuer-chain)
     (define/public (get-certificate) cert)
 
+    (define/public (get-certificates)
+      (cons cert (if issuer-chain (send issuer-chain get-certificates) null)))
+
     (define/public (get-issuer-chain-or-self)
       (or issuer-chain this))
     (define/public (get-issuer-or-self)
@@ -418,7 +421,7 @@
     (define/public (suitable-for-tls-server? host)
       (null? (check-suitable-for-tls-server host)))
 
-    (define/public (check-suitable-for-tls-server [host #f])
+    (define/public (check-suitable-for-tls-server host)
       ;; FIXME: add option to accept anyExtendedKeyUsage?
       ;; FIXME: add option to use subject common name?
       ;; FIXME: add security level check?
@@ -441,10 +444,10 @@
                      '()]
                     [else '(tls:host-mismatch)])))
 
-    (define/public (suitable-for-tls-client? [name #f])
+    (define/public (suitable-for-tls-client? name)
       (null? (check-suitable-for-tls-client name)))
 
-    (define/public (check-suitable-for-tls-client [name #f])
+    (define/public (check-suitable-for-tls-client name)
       (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
                     [else '(tls:missing-key-usage)])
               (cond [(ok-extended-key-usage? id-kp-clientAuth #f) '()]

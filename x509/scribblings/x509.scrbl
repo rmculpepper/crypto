@@ -8,7 +8,7 @@
           (for-label racket/base
                      racket/class
                      racket/contract
-                     crypto x509))
+                     crypto crypto/libcrypto x509))
 
 @(define-runtime-path log-file "eval-logs/x509.rktd")
 @(define-runtime-path racket-pem-file "eval-logs/racket.pem")
@@ -20,30 +20,98 @@
 
 @defmodule[x509]
 
+This library provides support for X.509 certificates, specifically the profiles
+and interpretations defined by @cite["PKIX"] and the
+@hyperlink["https://cabforum.org/"]{CA/Browser Forum's}
+@hyperlink["https://cabforum.org/baseline-requirements/"]{Baseline
+Requirements}.
+
+Note that @racketmodname[x509] is provided by the @tt{x509-lib}
+package, not @tt{crypto-lib}.
+
+@section[#:tag "cert-intro"]{Introduction to Using Certificates}
+
+The following example shows how to configure a @tech{certificate store} with
+trusted root certificates, load a PEM file to create a @tech{certificate chain},
+and check whether the chain is suitable for identifying a TLS server.
+
+First, let's use @exec{openssl s_client} to connect to
+@url{https://www.racket-lang.org} and save the @tech{certificates} that the
+server sends in the TLS handshake:
+
+@verbatim{
+openssl s_client -connect www.racket-lang.org:443 -showcerts \
+  < /dev/null > racket.pem
+}
+
+@(the-eval `(define racket-pem-file ,(path->string racket-pem-file)))
+
+In general, the saved file will contain one or more PEM-encapsulated
+@tt{CERTIFICATE} blocks: one for the server, and zero or more intermediate CA
+certificates necessary for building a @tech{certificate chain} anchored by a
+trusted root CA.
+
+If we try to load the PEM file using an empty @tech{certificate store}, we get
+an error, because the store has no trusted roots:
+@examples[#:eval the-eval #:label #f
+(eval:alts (send (empty-certificate-store) pem-file->chain "racket.pem")
+           (eval:error (send (empty-certificate-store) pem-file->chain racket-pem-file)))
+]
+We must configure a @tech{certificate store} with a reasonable set of trusted
+roots. We must also enable some crypto factories so that the store can verify
+certificate signatures.
+@examples[#:eval the-eval #:label #f
+(define store
+  (send (empty-certificate-store) add-trusted-from-openssl-directory
+        "/etc/ssl/certs"))
+(crypto-factories libcrypto-factory)
+]
+
+Now we can create a certificate chain from the saved PEM file:
+@examples[#:eval the-eval #:label #f
+(eval:alts (define racket-chain (send store pem-file->chain "racket.pem"))
+           (define racket-chain (send store pem-file->chain racket-pem-file)))
+]
+We can extract the chain's end certificate; we can also extract all of the
+certificates in the chain:
+@examples[#:eval the-eval #:label #f
+(send racket-chain get-certificate)
+(send racket-chain get-certificates)
+]
+
+Finally, we check whether the certificate (more precisely, the certificate
+chain) is suitable for identifying a TLS server---and specifically,
+@racket["www.racket-lang.org"]:
+@examples[#:eval the-eval #:label #f
+(send racket-chain suitable-for-tls-server? "www.racket-lang.org")
+(send racket-chain suitable-for-tls-server? "www.scheme.com")
+]
+
 @; ----------------------------------------
-
-@defproc[(certificate? [v any/c]) boolean?]{
-
-Returns @racket[#t] if @racket[v] is a certificate, @racket[#f]
-otherwise. Certificates implement the @racket[certificate<%>]
-interface.
+@section[#:tag "certificate"]{Certificates}
 
 A @deftech{certificate} represents an assertion that a @emph{cryptographic
 public key} is tied to an @emph{identity}, to be used for a particular
 @emph{purpose}. The assertion is cryptographically signed by another party, the
 @emph{issuer}.
 
-For example, a web site would present a certificate with their public
-key, their identity in the form of their DNS name, and the purpose of
-identifying a TLS server. That certificate's issuer would own a certificate for
-the purpose of acting as a @deftech{certificate authority} (CA), and its public
-key should match the private key used to sign the TLS server's certificate.
+For example, a secure web site (serving HTTP over TLS) would present a
+certificate with their public key, their identity in the form of their DNS name,
+and the purpose of identifying a TLS server. That certificate's issuer would own
+a certificate for the purpose of acting as a @emph{certificate authority} (CA),
+and its public key should verify the signature on the TLS server's certificate.
 
 One does not decide whether to trust a certificate in isolation; it depends on
 whether the issuer is trusted, and that often involves obtaining a certificate
 for the issuer and deciding whether to trust it, and so on. In general, trust is
 evaluated for a @tech{certificate chain}; chains are built and evaluated using a
 @tech{certificate store}.
+
+@defproc[(certificate? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a certificate, @racket[#f]
+otherwise. Certificates implement the @racket[certificate<%>]
+interface.
 }
 
 @definterface[certificate<%> ()]{
@@ -54,8 +122,8 @@ Note that @racket[(certificate? _v)] implies @racket[(is-a? _v
 certificate<%>)], but not vice versa. That is, a certificate object
 implements additional internal interfaces not exposed to users.
 
-@(the-eval `(define racket-cert (car (pem-file->certificates ,(path->string racket-pem-file)))))
 @examples[#:eval the-eval #:label #f
+(define racket-cert (send racket-chain get-certificate))
 racket-cert
 ]
 
@@ -154,12 +222,7 @@ Like @racket[read-pem-certificates], but reads from the given
 }
 
 @; ----------------------------------------
-
-@defproc[(certificate-chain? [v any/c]) boolean?]{
-
-Returns @racket[#t] if @racket[v] is a certificate chain, @racket[#f]
-otherwise. Certificate chains implement the @racket[certificate-chain<%>]
-interface.
+@section[#:tag "chains"]{Certificate Chains}
 
 A @deftech{certificate chain} contains a non-empty list of certificates,
 starting with a @deftech{trust anchor} (typically a root CA certificate) and
@@ -204,6 +267,12 @@ property (in the case of a TLS server).
 
 Note: @cite["PKIX"] uses the term ``certification path'' instead of
 ``certificate chain''.
+
+@defproc[(certificate-chain? [v any/c]) boolean?]{
+
+Returns @racket[#t] if @racket[v] is a certificate chain, @racket[#f]
+otherwise. Certificate chains implement the @racket[certificate-chain<%>]
+interface.
 }
 
 @definterface[certificate-chain<%> ()]{
@@ -220,6 +289,13 @@ users.
 Returns the certificate that the chain certifies.
 }
 
+@defmethod[(get-certificates) (listof certificate?)]{
+
+Returns all of the certificates in @(this-obj), starting with the end
+certificate and ending with the @tech{trust anchor} (that is, most-specific
+first).
+}
+
 @defmethod[(get-public-key) public-only-key?]{
 
 Creates a public key from the SubjectPublicKeyInfo in the certificate
@@ -228,7 +304,7 @@ using a factory from @racket[(crypto-factories)].
 
 @defmethod[(trusted? [store certificate-store?]
                      [from-time exact-integer? (current-seconds)]
-                     [to-time exact-integer? (current-seconds)])
+                     [to-time exact-integer? from-time])
            boolean?]{
 
 Returns @racket[#t] if the chain's @tech{trust anchor} certificate is trusted
@@ -240,11 +316,6 @@ from @racket[from-time] to @racket[to-time]; otherwise, returns @racket[#f].
 
 Returns the tail of the certificate chain corresponding to this certificate's
 issuer, or @racket[#f] if the current certificate is the @emph{trust anchor}.
-}
-
-@defmethod[(get-anchor) certificate-chain?]{
-
-Returns the tail of the certificate chain corresponding to the @tech{trust anchor}.
 }
 
 @defmethod[(get-subject) any/c]{
@@ -271,7 +342,7 @@ identifying a TLS server, and if the certificate has a subject alternative name
 @racket[#f]. If @racket[host] is @racket[#f], the DNS name check is omitted.
 }
 
-@defmethod[(suitable-for-tls-client? [name any/c #f]) boolean?]{
+@defmethod[(suitable-for-tls-client? [name any/c]) boolean?]{
 
 Returns @racket[#t] if the chain's certificate is suitable for identifying a
 client to a TLS server, and if the certificate has a subject name or subject
@@ -281,12 +352,7 @@ alternative name (SAN) that matches the given @racket[name]; otherwise, returns
 }
 
 @; ----------------------------------------
-
-@defproc[(certificate-store? [v any/c]) boolean?]{
-
-Returns @racket[#f] if @racket[v] is a certificate store, @racket[#f]
-otherwise. Certificate stores implement the @racket[certificate-store<%>]
-interface.
+@section[#:tag "certificate-stores"]{Certificate Stores}
 
 A @deftech{certificate store} determines which certificates are trusted a
 priori---usually, these trusted certificates correspond to root CAs, which are
@@ -297,6 +363,17 @@ certificate is automatically accepted as suitable for every purpose.
 
 The store may also contain certificates that are not directly trusted, but may
 be used in the construction of chains.
+
+@defproc[(certificate-store? [v any/c]) boolean?]{
+
+Returns @racket[#f] if @racket[v] is a certificate store, @racket[#f]
+otherwise. Certificate stores implement the @racket[certificate-store<%>]
+interface.
+}
+
+@defproc[(empty-certificate-store) certificate-store?]{
+
+Returns a certificate store containing no certificates (trusted or untrusted).
 }
 
 @definterface[certificate-store<%> ()]{
@@ -345,7 +422,7 @@ Builds a certificate chain starting with some trusted certificate and ending
 with @racket[end-cert]. The chain may be built from intermediate certificates
 from @racket[other-untrusted-certs] in addition to the certificates already in
 the store. The result chain is chain-valid; it is valid for a period including
-@racket[valid-time]; and it starts with an anchor trusted by @(this-obj).
+@racket[valid-time]; and its anchor is trusted by @(this-obj).
 
 If no such chain can be constructed, an exception is raised. If multiple chains
 can be constructed, one is selected, but there are no guarantees about how it is
@@ -371,13 +448,23 @@ returned.
 Returns a certificate chain for the @emph{first} certificate in PEM format in
 @racket[pem-file], using any remaining certificates in the file as other
 untrusted certificates. The result chain is chain-valid; it is valid for a
-period including @racket[valid-time]; and it starts with a root CA trusted by
-@(this-obj).
+period including @racket[valid-time]; and its anchor is trusted by @(this-obj).
 }
 
 }
 
 @; ----------------------------------------
+@section[#:tag "cert-revocation"]{Certificate Revocation Checking}
+@section-index["CRL" "OCSP"]
+
+There are two main @deftech{certificate revocation} mechanisms: CRLs
+(Certificate Revocation Lists) and OCSP (Online Certificate Status Protocol).
+
+@examples[#:eval the-eval
+(define rev (make-revocation-checker "/tmp/rev.db" #:fetch-crl? #f))
+(send rev check-ocsp racket-chain)
+(send rev check-crl racket-chain)
+]
 
 @defproc[(make-revocation-checker [db-file path-string?]
                                   [#:trust-db? trust-db? boolean? #t]
