@@ -63,16 +63,19 @@
       (define cert (send chain get-certificate))
       (define certid-der (asn1->bytes/DER CertID (make-certid chain)))
       (define req-der (make-ocsp-request chain))
-      (or (for/or ([ocsp-url (send cert get-ocsp-uris)])
-            (log-revocation-debug "trying OCSP url: ~e" ocsp-url)
-            (cond [(get-ocsp-single-response now chain ocsp-url certid-der req-der)
-                   => (lambda (sr)
-                        (match (hash-ref sr 'certStatus)
-                          [(list 'good _) '()]
-                          [(list 'revoked info) '(revoked)]
-                          [(list 'unknown _) #f]))]
-                  [else #f]))
-          '(unknown)))
+      (define ocsp-urls (send cert get-ocsp-uris))
+      (cond [(pair? ocsp-urls)
+             (or (for/or ([ocsp-url (in-list ocsp-urls)])
+                   (log-revocation-debug "trying OCSP url: ~e" ocsp-url)
+                   (cond [(get-ocsp-single-response now chain ocsp-url certid-der req-der)
+                          => (lambda (sr)
+                               (match (hash-ref sr 'certStatus)
+                                 [(list 'good _) '()]
+                                 [(list 'revoked info) '(revoked)]
+                                 [(list 'unknown _) #f]))]
+                         [else #f]))
+                 '(unknown))]
+            [else '(no-sources)]))
 
     ;; get-ocsp-single-response : ... -> decoded-SingleResponse or #f
     ;; The resulting SingleResponse is trusted and unexpired.
@@ -149,7 +152,7 @@
                   ['absent '()]
                   ['revoked '(revoked)]
                   [#f '(unavailable)])))]
-            [else '(no-crls)]))
+            [else '(no-sources)]))
 
     ;; get-crl-status : ... -> (U 'absent 'revoked #f)
     ;; If result is 'absent or 'revoked, from trusted and unexpired CRL.

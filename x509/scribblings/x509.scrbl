@@ -515,10 +515,13 @@ following symbols:
 
 @item{@racket['revoked] --- The certificate is revoked.}
 
+@item{@racket['no-sources] --- The certificate's status is unknown because the
+certificate listed no usable OCSP responder URLs. (This library uses only URLS
+with the scheme @racket["http"] or @racket["https"].)}
+
 @item{@racket['unknown] --- The certificate's status is unknown, either because
-the certificate listed no OCSP responder URLs, or because no responder produced
-a valid response, or because the response indicated that the responder does not
-know the certificate's status.}
+no responder produced a valid response, or because the response indicated that
+the responder does not know the certificate's status.}
 
 ]
 }
@@ -533,7 +536,7 @@ non-empty, it will contain at least one of the following symbols:
 
 @item{@racket['revoked] --- The certificate is revoked.}
 
-@item{@racket['no-crls] --- The certificate does not list any usable CRL
+@item{@racket['no-sources] --- The certificate does not list any usable CRL
 URLs. (This library only uses URLs with the scheme @racket["http"] or
 @racket["https"].)}
 
