@@ -8,6 +8,8 @@
          (submod "test.rkt" util))
 (provide (all-defined-out))
 
+(define CRL? #t)
+
 (crypto-factories libcrypto-factory)
 
 (define good-dir (build-path working-dir "good"))
@@ -52,11 +54,18 @@
 (define store (send (empty-certificate-store)
                     add-trusted-from-openssl-directory "/etc/ssl/certs"))
 
+(define rev-db (build-path working-dir "revocations.db"))
+(define rev (make-revocation-checker rev-db))
+(define urev (make-revocation-checker rev-db #:trust-db? #f))
+
 (for ([site good-sites])
   (test-case (format "good: ~a" site)
     (define c (send store pem-file->chain (build-path good-dir site)))
-    ;; FIXME: CRL
-    ;; FIXME: OCSP
+    (check-pred null? (send rev check-ocsp c))
+    (check-pred null? (send urev check-ocsp c))
+    (when CRL?
+      (check-pred null? (send rev check-crl c))
+      (check-pred null? (send urev check-crl c)))
     (void)))
 
 (for ([site+fail bad-sites])
@@ -72,6 +81,18 @@
       [(chain) (void)]
       [(tls) (check-pred pair? tls-errs)]
       [else (check-pred null? tls-errs)])
-    ;; FIXME: CRL
-    ;; FIXME: OCSP
+    (case fail
+      [(chain) (void)]
+      [(revoked)
+       (check member 'revoked (send rev check-ocsp c))
+       (check member 'revoked (send urev check-ocsp c))
+       (when CRL?
+         (check member 'revoked (send rev check-crl c))
+         (check member 'revoked (send urev check-crl c)))]
+      [else
+       (check-pred null? (send rev check-ocsp c))
+       (check-pred null? (send urev check-ocsp c))
+       (when CRL?
+         (check-pred null? (send rev check-crl c))
+         (check-pred null? (send rev check-crl c)))])
     (void)))

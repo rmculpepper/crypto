@@ -27,7 +27,7 @@
            (->* [path-string?] [#:count (or/c exact-nonnegative-integer? +inf.0)]
                 (listof certificate?))]
           [make-revocation-checker
-           (->* [path-string?]
+           (->* [(or/c path-string? 'memory 'temporary)]
                 [#:trust-db? boolean?
                  #:fetch-ocsp? boolean?
                  #:fetch-crl? boolean?]

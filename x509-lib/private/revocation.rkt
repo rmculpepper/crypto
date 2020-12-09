@@ -250,10 +250,12 @@
   (define pk (bit-string-bytes (hash-ref spki 'subjectPublicKey)))
   (sha1-bytes pk))
 
+;; Note: Use no-params version of certID for all db keys, regardless
+;; of responder certID format.
 (define (make-certid chain)
   (define cert (send chain get-certificate))
   (define issuer (send chain get-issuer-or-self))
-  (hasheq 'hashAlgorithm (hasheq 'algorithm id-sha1)
+  (hasheq 'hashAlgorithm (hasheq 'algorithm id-sha1) ;; no params
           'issuerNameHash (sha1-bytes (asn1->bytes/DER Name (send issuer get-subject)))
           'issuerKeyHash (certificate-keyhash issuer)
           'serialNumber (send cert get-serial-number)))
