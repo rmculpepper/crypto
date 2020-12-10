@@ -400,7 +400,7 @@
 
 (define openssl-Name-canon-memo-table (make-weak-hasheq))
 
-;; ossl-Name-canon : Name -> Bytes
+;; openssl-Name-canon : Name -> Bytes
 ;; Name canonicalization compatible with OpenSSL.
 (define (openssl-Name-canon name)
   (hash-ref! openssl-Name-canon-memo-table name
@@ -633,9 +633,12 @@
       (recur (get-der)))
 
     (define/public (custom-write out)
-      (fprintf out "#<certificate: ~a>" (Name->string (get-subject))))
+      (fprintf out "#<certificate: ~a>" (get-subject-name-string)))
     (define/public (custom-display out)
       (custom-write out))
+
+    (define/public (get-subject-name-string)
+      (Name->string (get-subject)))
 
     (define/public (-serialize)
       (vector der reject-ekus replace-ekus))

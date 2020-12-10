@@ -2,6 +2,7 @@
 (require racket/class
          racket/match
          racket/list
+         racket/serialize
          crypto
          "interfaces.rkt"
          "asn1.rkt"
@@ -15,8 +16,6 @@
 ;; - RFC 8398 and 8399 (Internationalization) (https://tools.ietf.org/html/rfc8398,
 ;;   https://tools.ietf.org/html/rfc8399)
 ;; - CA/Browser Forum Baseline Recommendations (v1.7.3)
-
-;; FIXME: need mechanism for disallowing obsolete algorithms (eg, 1024-bit RSA / DSA)
 
 ;; ============================================================
 
@@ -267,7 +266,7 @@
           (cond [(<= (max from-time cert-from) (min to-time cert-to)) '()]
                 [else (map add-index '(validity-period:empty-intersection))])])
        ;; 6.1.3 (a)(3) (not revoked)
-       #| CRL NOT SUPPORTED |#
+       #| CRL checked separately |#
        ;; 6.1.3 (a)(4) issuer
        (cond [(Name-equal? (send new-cert get-issuer) (get-subject)) '()]
              [else (map add-index '(issuer:name-mismatch))])
@@ -357,8 +356,27 @@
 
 ;; ============================================================
 
+(define serializable-chain<%>
+  (interface*
+   ()
+   ([prop:serializable
+     (make-serialize-info (lambda (c) (send c -serialize))
+                          #'deserialize-info:certificate-chain%
+                          #f
+                          (or (current-load-relative-directory)
+                              (current-directory)))])))
+
+(define deserialize-info:certificate-chain%
+  (make-deserialize-info
+   (lambda (issuer-chain cert)
+     (cond [issuer-chain (send issuer-chain extend-chain cert)]
+           [else (make-anchor-chain cert)]))
+   (lambda () (error 'deserialize-certificate-chain "cycles not allowed"))))
+
+;; ============================================================
+
 (define certificate-chain%
-  (class* pre-chain% (-certificate-chain<%> writable<%>)
+  (class* pre-chain% (-certificate-chain<%> writable<%> serializable-chain<%>)
     (inherit-field issuer-chain cert)
     (inherit get-certificate
              get-anchor
@@ -378,6 +396,9 @@
                (Name->string (send (get-certificate) get-subject))))
     (define/public (custom-display out)
       (custom-write out))
+
+    (define/public (-serialize)
+      (vector issuer-chain cert))
 
     ;; trusted? : Store/#f Seconds Seconds -> Boolean
     (define/public (trusted? store [from-time (current-seconds)] [to-time from-time])

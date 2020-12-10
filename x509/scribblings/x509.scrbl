@@ -79,12 +79,17 @@ certificates in the chain:
 (send racket-chain get-certificates)
 ]
 
-Finally, we check whether the certificate (more precisely, the certificate
+We check whether the certificate (more precisely, the certificate
 chain) is suitable for identifying a TLS server---and specifically,
 @racket["www.racket-lang.org"]:
 @examples[#:eval the-eval #:label #f
 (send racket-chain suitable-for-tls-server? "www.racket-lang.org")
 (send racket-chain suitable-for-tls-server? "www.scheme.com")
+]
+
+Finally, we can extract the end certificate's public key:
+@examples[#:eval the-eval #:label #f
+(define racket-pk (send racket-chain get-public-key))
 ]
 
 @; ----------------------------------------
