@@ -4,6 +4,7 @@
          racket/list
          racket/port
          net/url
+         net/uri-codec
          db/base
          db/sqlite3
          asn1
@@ -81,7 +82,7 @@
     ;; The resulting SingleResponse is trusted and unexpired.
     (define/private (get-ocsp-single-response now chain ocsp-url certid-der req-der)
       (define (handle-sr sr [accept void])
-        (cond [(and sr (<= now (single-response-expiration-time sr)))
+        (cond [(and sr (single-response-valid-now? sr now))
                (begin (accept sr) sr)]
               [else #f]))
       (or (handle-sr (cond [(db-get-trusted-ocsp ocsp-url certid-der)
@@ -113,7 +114,7 @@
     (define/public (get-ocsp-response now chain ocsp-url req-der)
       (define (handle-r whence r [accept void])
         (cond [(not r) #f]
-              [(not (<= now (send r get-expiration-time)))
+              [(not (send r valid-now? now))
                (begin (log-revocation-debug " ~a ocsp expired" whence) #f)]
               [(not (send r ok-signature? (send chain get-issuer-chain-or-self)))
                (begin (log-revocation-debug " ~a ocsp bad sig" whence) #f)]
@@ -228,18 +229,21 @@
 (define (do-fetch-ocsp ocsp-url req-der)
   (let loop ([try-get? #t])
     (define headers '("Content-Type: application/ocsp-request"))
-    (define req-b64
-      (and try-get? (< (bytes-length req-der) 192)
-           (bytes->string/utf-8 (base64-encode req-der))))
+    (define req-b64-url
+      (and try-get?
+           (let* ([req-b64 (uri-encode (bytes->string/utf-8 (base64-encode req-der)))]
+                  [req-url (string->url (string-append ocsp-url "/" req-b64))])
+             (and (<= (string-length (url->string req-url)) 255)
+                  req-url))))
     (define resp-in
-      (cond [req-b64 (get-impure-port (string->url (string-append ocsp-url "/" req-b64)) headers)]
+      (cond [req-b64-url => (lambda (req-url) (get-impure-port req-url headers))]
             [else (post-impure-port (string->url ocsp-url) req-der headers)]))
     (define header (purify-port resp-in))
     (define resp-bytes (port->bytes resp-in))
     (close-input-port resp-in)
     (cond [(regexp-match? #rx"^HTTP/[0-9.]* 200" header)
            (parse-ocsp-response resp-bytes)]
-          [req-b64 (loop #f)]
+          [req-b64-url (loop #f)]
           [else 'failed-to-fetch])))
 
 (define SubjectPublicKeyInfo-shallow
@@ -300,6 +304,10 @@
     (define/public (get-responses) (hash-ref rdata 'responses))
     ;; FIXME: process extensions
 
+    (define/public (valid-now? now)
+      (for/and ([sr (in-list (get-responses))])
+        (single-response-valid-now? sr now)))
+
     (define/public (get-expiration-time)
       (apply min (map single-response-expiration-time (get-responses))))
 
@@ -348,10 +356,17 @@
         sr))
     ))
 
-(define (single-response-expiration-time resp)
-  (cond [(hash-ref resp 'nextUpdate #f) => asn1-generalized-time->seconds]
-        [else (+ (asn1-generalized-time->seconds (hash-ref resp 'thisUpdate))
-                 DEFAULT-VALID-TIME)]))
+(define (single-response-valid-now? sr now)
+  ;; RFC 5019 says must reject if nextUpdate is absent.
+  (define nextUpdate (hash-ref sr 'nextUpdate #f))
+  (and nextUpdate
+       (<= (asn1-generalized-time->seconds (hash-ref sr 'thisUpdate))
+           now
+           (asn1-generalized-time->seconds nextUpdate))))
+
+(define (single-response-expiration-time sr)
+  (cond [(hash-ref sr 'nextUpdate #f) => asn1-generalized-time->seconds]
+        [else #| treat it like past |# 0]))
 
 ;; ============================================================
 ;; CRL
