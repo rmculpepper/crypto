@@ -30,6 +30,10 @@
 (define-runtime-path libgcrypt-so
   '(so "libgcrypt" ("20" #f)))
 
+;; depended on by libgcrypt
+(define-runtime-path libgpg-error-so
+  '(so "libgpg-error"))
+
 (define-values (libgcrypt gcrypt-load-error)
   (ffi-lib-or-why-not libgcrypt-so '("20" #f)))
 
