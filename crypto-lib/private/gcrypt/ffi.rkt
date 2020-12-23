@@ -14,16 +14,24 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require ffi/unsafe
-         ffi/unsafe/define
+
+(require (for-syntax racket/base)
+         ffi/unsafe
          ffi/unsafe/alloc
          ffi/unsafe/atomic
-         "../common/ffi.rkt"
-         "../common/error.rkt")
+         ffi/unsafe/define
+         racket/runtime-path
+         "../common/error.rkt"
+         "../common/ffi.rkt")
+
 (provide (protect-out (all-defined-out)))
 
+;; Cooperate with `raco distribute`.
+(define-runtime-path libgcrypt-so
+  '(so "libgcrypt" ("20" #f)))
+
 (define-values (libgcrypt gcrypt-load-error)
-  (ffi-lib-or-why-not "libgcrypt" '("20" #f)))
+  (ffi-lib-or-why-not libgcrypt-so '("20" #f)))
 
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)

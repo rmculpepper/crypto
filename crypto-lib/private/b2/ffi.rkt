@@ -14,13 +14,21 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require ffi/unsafe
+
+(require (for-syntax racket/base)
+         ffi/unsafe
          ffi/unsafe/define
+         racket/runtime-path
          "../common/ffi.rkt")
+
 (provide (protect-out (all-defined-out)))
 
+;; Cooperate with `raco distribute`.
+(define-runtime-path libb2-so
+  '(so "libb2" ("1" #f)))
+
 (define-values (libb2 b2-load-error)
-  (ffi-lib-or-why-not "libb2" '("1" #f)))
+  (ffi-lib-or-why-not libb2-so '("1" #f)))
 
 (define-ffi-definer define-b2 libb2
   #:default-make-fail make-not-available)

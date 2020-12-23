@@ -14,13 +14,21 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require ffi/unsafe
+
+(require (for-syntax racket/base)
+         ffi/unsafe
          ffi/unsafe/define
+         racket/runtime-path
          "../common/ffi.rkt")
+
 (provide (protect-out (all-defined-out)))
 
+;; Cooperate with `raco distribute`.
+(define-runtime-path libsodium-so
+  '(so "libsodium" ("23" "18" #f)))
+
 (define-values (libsodium sodium-load-error)
-  (ffi-lib-or-why-not "libsodium" '("23" "18" #f)))
+  (ffi-lib-or-why-not libsodium-so '("23" "18" #f)))
 
 (define-ffi-definer define-na libsodium
   #:default-make-fail make-not-available)
