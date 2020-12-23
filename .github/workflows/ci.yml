@@ -1,0 +1,31 @@
+on: [push, pull_request]
+name: CI
+jobs:
+  build:
+    name: "Build on Racket '${{ matrix.racket-version }}' (${{ matrix.racket-variant }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        racket-version: ["stable", "current"]
+        racket-variant: ["BC", "CS"]
+    steps:
+      - uses: actions/checkout@master
+      - uses: Bogdanp/setup-racket@v0.12
+        with:
+          architecture: x64
+          distribution: full
+          variant: ${{ matrix.racket-variant }}
+          version: ${{ matrix.racket-version }}
+      - name: Install library dependencies
+        run: |
+          sudo apt-get update && \
+            sudo apt-get install -y \
+              libargon2-dev \
+              libb2-dev \
+              libsodium-dev \
+              nettle-dev
+      - name: Install the package
+        run: sudo raco pkg install --auto crypto-lib/ crypto-test/ crypto-doc/ crypto/
+      - name: Run the tests
+        run: raco test crypto-test/
