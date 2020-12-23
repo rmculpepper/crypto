@@ -26,10 +26,12 @@
 ;;     - 3274, 3779, 6019, 4073, 4231, 4334, 5083, 5652, 5752
 ;; - RFC 5915: EC private key structure
 ;; - RFC 5958: PKCS #8 private key info
+;; - RFC 7693: BLAKE2
 ;; - RFC 7914: scrypt
 ;; - RFC 8018: PKCS #5 password-based cryptography
 ;; - RFC 8103: Chacha20-Poly1305
 ;; - RFC 8410: {Ed,X}{25519,448}
+;; - RFC 8692: PSS and ECDSA using SHAKEs
 ;; - NIST: AES, SHA2, SHA3
 ;;   - https://csrc.nist.gov/projects/computer-security-objects-register/algorithm-registration
 ;; - PKCS #3: DH
@@ -422,6 +424,27 @@
 (define id-Ed25519 (build-OID id-edwards-curve-algs 112))
 (define id-Ed448 (build-OID id-edwards-curve-algs 113))
 
+;; from RFC 7693 (BLAKE2):
+
+;; "The same OID can be used for both keyed and unkeyed hashing since
+;; in the latter case the key simply has zero length."
+
+(define blake2-hashAlgs
+  (OID (iso 1) (identified-organization 3) (dod 6) (internet 1)
+       (private 4) (enterprise 1) (kudelski 1722) (cryptography 12) 2))
+
+(define id-blake2b (build-OID blake2-hashAlgs 1))
+(define id-blake2s (build-OID blake2-hashAlgs 2))
+
+(define id-blake2b160 (build-OID id-blake2b 5))
+(define id-blake2b256 (build-OID id-blake2b 8))
+(define id-blake2b384 (build-OID id-blake2b 12))
+(define id-blake2b512 (build-OID id-blake2b 16))
+
+(define id-blake2s128 (build-OID id-blake2s 4))
+(define id-blake2s160 (build-OID id-blake2s 5))
+(define id-blake2s224 (build-OID id-blake2s 7))
+(define id-blake2s256 (build-OID id-blake2s 8))
 
 ;; ============================================================
 ;; Types and Relations
@@ -813,4 +836,14 @@
    [id-sha3-512   'sha3-512   NULL 'preferredAbsent]
    [id-shake128-len 'shake128 INTEGER 'present]
    [id-shake256-len 'shake256 INTEGER 'present]
+
+   ;; RFC 7693 (BLAKE2)
+   [id-blake2b160 'blake2b-160 NULL 'preferredAbsent]
+   [id-blake2b256 'blake2b-256 NULL 'preferredAbsent]
+   [id-blake2b384 'blake2b-384 NULL 'preferredAbsent]
+   [id-blake2b512 'blake2b-512 NULL 'preferredAbsent]
+   [id-blake2s128 'blake2s-128 NULL 'preferredAbsent]
+   [id-blake2s160 'blake2s-160 NULL 'preferredAbsent]
+   [id-blake2s224 'blake2s-224 NULL 'preferredAbsent]
+   [id-blake2s256 'blake2s-256 NULL 'preferredAbsent]
    ))
