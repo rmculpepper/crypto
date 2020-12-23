@@ -313,24 +313,25 @@
     (for/and ([v (in-hash-values h)]) (<= v 1))))
 
 ;; String for display and debugging, don't rely on contents.
-;; (Among other issues, chars like #\, and #\= in value are not escaped.)
-(define (Name->string n)
+;; (Among other issues, chars like #\/ and #\= in value are not escaped.)
+(define (Name->string n [sep1 "/"] [sep2 "+"])
   (match n
     [(list 'rdnSequence rdns)
      (string-join
-      (flatten
-       (for*/list ([rdn (in-list rdns)]
-                   [av (in-list rdn)])
-         (define value (get-attr-value (hash-ref av 'value) (lambda (x) #f)))
-         (match (and value (hash-ref av 'type))
-           [(== id-at-countryName) (format "C=~a" value)]
-           [(== id-at-stateOrProvinceName) (format "ST=~a" value)]
-           [(== id-at-localityName) (format "L=~a" value)]
-           [(== id-at-commonName) (format "CN=~a" value)]
-           [(== id-at-organizationName) (format "O=~a" value)]
-           [(== id-at-organizationalUnitName) (format "OU=~a" value)]
-           [_ null])))
-      ",")]))
+      (for/list ([rdn (in-list rdns)])
+        (string-join
+         (for/list ([av (in-list rdn)])
+           (define value (get-attr-value (hash-ref av 'value) (lambda (x) #f)))
+           (match (and value (hash-ref av 'type))
+             [(== id-at-countryName) (format "C=~a" value)]
+             [(== id-at-stateOrProvinceName) (format "ST=~a" value)]
+             [(== id-at-localityName) (format "L=~a" value)]
+             [(== id-at-commonName) (format "CN=~a" value)]
+             [(== id-at-organizationName) (format "O=~a" value)]
+             [(== id-at-organizationalUnitName) (format "OU=~a" value)]
+             [_ "?"]))
+         sep2))
+      "/")]))
 
 (define (Name-equal? dn1 dn2)
   (Name-match? dn1 dn2 =))
