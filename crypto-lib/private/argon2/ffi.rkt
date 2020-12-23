@@ -14,16 +14,26 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require ffi/unsafe
+
+(require (for-syntax racket/base)
+         ffi/unsafe
          ffi/unsafe/define
-         "../common/ffi.rkt"
-         "../common/error.rkt")
+         racket/runtime-path
+         "../common/error.rkt"
+         "../common/ffi.rkt")
+
 (provide (protect-out (all-defined-out)))
 
 ;; Reference: https://github.com/P-H-C/phc-winner-argon2
 
+;; Cooperate with `raco distribute` to include the library in
+;; distributions if present.
+(define-runtime-path libargon2-so
+  '(so "libargon2" ("1" "0" #f)))
+
 (define-values (libargon2 argon2-load-error)
-  (ffi-lib-or-why-not "libargon2" '("1" "0" #f)))
+  (ffi-lib-or-why-not libargon2-so '("1" "0" #f)))
+
 (define-ffi-definer define-argon2 libargon2
   #:default-make-fail make-not-available)
 
