@@ -555,3 +555,24 @@ failure or server problem), or the retrieved CRL had a bad signature, or
 }
 
 @(close-eval the-eval)
+
+@bibliography[
+#:tag "x509-bibliography"
+
+@bib-entry[#:key "CAB-BR"
+           #:title "Baseline Requirements for the Issuance and Management of Publicly-Trusted Certificates"
+           #:url "https://cabforum.org/baseline-requirements-documents/"]
+
+@bib-entry[#:key "OCSP"
+           #:title "RFC 6960: X.509 Internet Public Key Infrastructure Online Certificate Status Protocol - OCSP"
+           #:url "https://tools.ietf.org/html/rfc6960"]
+
+@bib-entry[#:key "LightOCSP"
+           #:title "RFC 5019: The Lightweight Online Certificate Status Protocol (OCSP) Profile for High-Volume Environments"
+           #:url "https://tools.ietf.org/html/rfc5019"]
+
+@bib-entry[#:key "SP800-57-1"
+           #:title "NIST Special Publication 800-57 Part 1 Revision 5: Recommendation for Key Management: Part 1 - General"
+           #:url "https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final"]
+
+]
