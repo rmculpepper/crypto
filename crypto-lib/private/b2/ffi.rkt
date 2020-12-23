@@ -27,6 +27,10 @@
 (define-runtime-path libb2-so
   '(so "libb2" ("1" #f)))
 
+;; depended on by libb2-so
+(define-runtime-path libgomp-so
+  '(so "libgomp"))
+
 (define-values (libb2 b2-load-error)
   (ffi-lib-or-why-not libb2-so '("1" #f)))
 
