@@ -26,8 +26,7 @@
 
 ;; Reference: https://github.com/P-H-C/phc-winner-argon2
 
-;; Cooperate with `raco distribute` to include the library in
-;; distributions if present.
+;; Cooperate with `raco distribute`.
 (define-runtime-path libargon2-so
   '(so "libargon2" ("1" "0" #f)))
 

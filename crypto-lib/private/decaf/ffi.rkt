@@ -14,13 +14,21 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require ffi/unsafe
+
+(require (for-syntax racket/base)
+         ffi/unsafe
          ffi/unsafe/define
+         racket/runtime-path
          "../common/ffi.rkt")
+
 (provide (protect-out (all-defined-out)))
 
+;; Cooperate with `raco distribute`.
+(define-runtime-path libdecaf-so
+  '(so "libdecaf"))
+
 (define-values (libdecaf decaf-load-error)
-  (ffi-lib-or-why-not "libdecaf" '(#f)))
+  (ffi-lib-or-why-not libdecaf-so '(#f)))
 
 (define-ffi-definer define-decaf libdecaf
   #:default-make-fail make-not-available)

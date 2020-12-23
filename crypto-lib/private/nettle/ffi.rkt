@@ -14,16 +14,24 @@
 ;; along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 #lang racket/base
-(require ffi/unsafe
+
+(require (for-syntax racket/base)
+         ffi/unsafe
          ffi/unsafe/alloc
          (only-in '#%foreign ffi-obj)
          ffi/unsafe/define
          (rename-in gmp/unsafe [_mpz _mpz_t])
+         racket/runtime-path
          "../common/ffi.rkt")
+
 (provide (protect-out (all-defined-out)))
 
+;; Cooperate with `raco distribute`.
+(define-runtime-path libnettle-so
+  '(so "libnettle" ("8" "7" "6" #f)))
+
 (define-values (libnettle nettle-load-error)
-  (ffi-lib-or-why-not "libnettle" '("8" "7" "6" #f)))
+  (ffi-lib-or-why-not libnettle-so '("8" "7" "6" #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
