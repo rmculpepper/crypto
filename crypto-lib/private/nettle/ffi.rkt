@@ -469,8 +469,12 @@
 
 ;; ============================================================
 
+(define-runtime-path libhogweed-so
+  '(so "libhogweed" ("6" "5" "4" #f)))
+
 (define-values (libhogweed hogweed-load-error)
-  (ffi-lib-or-why-not "libhogweed" '("6" "5" "4" #f)))
+  (ffi-lib-or-why-not libhogweed-so '("6" "5" "4" #f)))
+
 (define-ffi-definer define-nettleHW libhogweed
   #:default-make-fail make-not-available)
 
