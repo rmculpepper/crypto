@@ -504,9 +504,9 @@
            (let ([qB (sexp-get-data pub "ecc" "q")])
              (encode-pub-ec fmt curve-oid qB))))
 
-    (define/private (get-curve [sexp pub])
+    (define/public (get-curve [sexp pub])
       (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
-    (define/private (get-curve-oid sexp)
+    (define/public (get-curve-oid [sexp pub])
       (curve-alias->oid (get-curve sexp)))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
@@ -542,9 +542,7 @@
     ;; ECDH support is not documented, but described in comments in
     ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
     (define/override (-compute-secret peer-pubkey)
-      (define peer
-        (cond [(bytes? peer-pubkey) peer-pubkey]
-              [else (sexp-get-data (get-field pub peer-pubkey) "ecc" "q")]))
+      (define peer (sexp-get-data (get-field pub peer-pubkey) "ecc" "q"))
       (define dh-sexp (gcry_sexp_build/%b "(enc-val (ecdh (e %b)))" peer))
       (define sh (gcry_pk_decrypt dh-sexp priv))
       (define shb (gcry_sexp_nth_data sh 1))
@@ -552,6 +550,12 @@
       ;; cf (unsigned->base256 (car (bytes->ec-point shb)))
       (define shblen (bytes-length shb))
       (subbytes shb 1 (+ 1 (quotient shblen 2))))
+
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      (equal? (get-curve-oid) (send peer-pubkey get-curve-oid)))
+
+    (define/override (-convert-for-key-agree bs)
+      (send impl make-public-key (get-curve-oid) bs))
     ))
 
 ;; ============================================================
@@ -756,9 +760,7 @@
     ;; ECDH support is not documented, but described in comments in
     ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
     (define/override (-compute-secret peer-pubkey)
-      (define peer
-        (cond [(bytes? peer-pubkey) peer-pubkey]
-              [else (sexp-get-data (get-field pub peer-pubkey) "ecc" "q")]))
+      (define peer (sexp-get-data (get-field pub peer-pubkey) "ecc" "q"))
       (define dh-sexp (gcry_sexp_build/%b "(enc-val (ecdh (e %b)))" peer))
       (define sh (gcry_pk_decrypt dh-sexp priv))
       (define shb (gcry_sexp_nth_data sh 1))
@@ -767,6 +769,12 @@
       (unless (and (= (bytes-length shb) 33) (= (bytes-ref shb 0) #x40))
         (crypto-error "failed; implementation returned ill-formed result"))
       (subbytes shb 1))
+
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      #t)
+
+    (define/override (-convert-for-key-agree bs)
+      (send impl make-public-key 'x25519 bs))
 
     (define/override (sign-make-data-sexp) #f)
     (define/override (sign-unpack-sig-sexp) #f)

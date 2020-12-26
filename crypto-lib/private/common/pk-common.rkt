@@ -165,21 +165,37 @@
 
     (define/public (compute-secret peer-pubkey)
       (-check-key-agree)
-      (cond [(pk-key? peer-pubkey)
-             (cond [(eq? (send peer-pubkey get-impl) impl)
-                    (-compute-secret peer-pubkey)]
-                   [else ;; public key from different impl, must convert
-                    (define (bad)
-                      (crypto-error "peer key has different implementation~a\n  peer: ~a\n  key: ~a"
-                                    ";\n and conversion to this implementation failed"
-                                    (send peer-pubkey about) (about)))
-                    (define peer-pub (or (send peer-pubkey -write-key 'rkt-public) (bad)))
-                    (define peer-pubkey*
-                      (let* ([factory (send impl get-factory)]
-                             [reader (send factory get-pk-reader)])
-                        (or (send reader read-key peer-pub 'rkt-public) (bad))))
-                    (-compute-secret peer-pubkey*)])]
-            [else (-compute-secret peer-pubkey)]))
+      (let ([peer-pubkey
+             (cond [(pk-key? peer-pubkey) peer-pubkey]
+                   [else (-convert-for-key-agree peer-pubkey)])])
+        (unless (pk-key? peer-pubkey)
+          (internal-error "failed to convert peer key"))
+        (let ([peer-pubkey
+               (cond [(eq? (send peer-pubkey get-impl) impl) peer-pubkey]
+                     [else ;; public key from different impl, must convert
+                      (define (bad)
+                        (crypto-error "~a~a\n  peer: ~a\n  key: ~a"
+                                      "peer key has different implementation"
+                                      ";\n and conversion to this implementation failed"
+                                      (send peer-pubkey about) (about)))
+                      (define peer-pub (or (send peer-pubkey -write-key 'rkt-public) (bad)))
+                      (define peer-pubkey*
+                        (let* ([factory (send impl get-factory)]
+                               [reader (send factory get-pk-reader)])
+                          (or (send reader read-key peer-pub 'rkt-public) (bad))))
+                      (unless (eq? (send peer-pubkey* get-impl) impl) (bad))
+                      peer-pubkey*])])
+          (unless (-compatible-for-key-agree? peer-pubkey)
+            (crypto-error "peer key is not compatible\n  peer: ~a\n  key: ~a"
+                          (send peer-pubkey about) (about)))
+          (-compute-secret peer-pubkey))))
+
+    (define/public (-compatible-for-key-agree? peer-pubkey)
+      ;; PRE: peer-pubkey is key with same impl as this
+      (err/no-impl this))
+
+    (define/public (-convert-for-key-agree bs)
+      (crypto-error "cannot convert peer public key\n  key: ~a" (about)))
 
     (define/private (-check-encrypt pad)
       (unless (send impl can-encrypt? #f)
@@ -197,7 +213,9 @@
       (unless (send impl can-key-agree?)
         (crypto-error "key agreement not supported\n  key: ~a" (about))))
 
-    (define/public (-compute-secret peer-pubkey) (err/no-impl this))
+    (define/public (-compute-secret peer-pubkey)
+      ;; PRE: peer-pubkey is either pk w/ same impl, or not pk (eg, bytes)
+      (err/no-impl this))
     ))
 
 ;; ------------------------------------------------------------

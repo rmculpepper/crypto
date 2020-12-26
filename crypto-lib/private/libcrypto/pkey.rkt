@@ -295,9 +295,7 @@
 
     (define/override (-compute-secret peer-pubkey0)
       (define peer-pubkey
-        (cond [(bytes? peer-pubkey0)
-               (-convert-peer-pubkey peer-pubkey0)]
-              [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
+        (cond [(and (is-a? peer-pubkey0 libcrypto-pk-key%)
                     (eq? (send peer-pubkey0 get-impl) impl))
                (get-field evp peer-pubkey0)]
               [else (internal-error "bad peer public key")]))
@@ -309,8 +307,8 @@
       (define outlen2 (EVP_PKEY_derive ctx buf (bytes-length buf)))
       (shrink-bytes buf outlen2))
 
-    (define/public (-convert-peer-pubkey peer-pubkey)
-      (internal-error "unsupported"))
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      (EVP_PKEY_cmp_parameters evp (get-field evp peer-pubkey)))
     ))
 
 ;; ============================================================
@@ -517,7 +515,7 @@
     (inherit-field impl evp private?)
     (super-new)
 
-    (define/override (-convert-peer-pubkey peer-pubkey0)
+    (define/override (-convert-for-key-agree peer-pubkey0)
       (define peer-dh
         (let ([dh0 (EVP_PKEY_get1_DH evp)])
           (begin0 (DHparams_dup dh0)
@@ -613,7 +611,7 @@
                (EC_KEY_free ec))]
             [else (super -write-key fmt)]))
 
-    (define/override (-convert-peer-pubkey peer-pubkey0)
+    (define/override (-convert-for-key-agree peer-pubkey0)
       (define ec (EVP_PKEY_get1_EC_KEY evp))
       (define group (EC_KEY_get0_group ec))
       (define group-degree (EC_GROUP_get_degree group))
@@ -760,7 +758,7 @@
     (define/override (get-params)
       (send impl curve->params (nid->x-curve (EVP->type evp))))
 
-    (define/override (-convert-peer-pubkey peer-pubkey)
+    (define/override (-convert-for-key-agree peer-pubkey)
       (EVP_PKEY_new_raw_public_key (EVP->type evp) peer-pubkey (bytes-length peer-pubkey)))
 
     (define/override (-write-key fmt)

@@ -205,4 +205,10 @@
       (define secret (make-bytes crypto_scalarmult_curve25519_BYTES))
       (crypto_scalarmult_curve25519 secret priv peer-pub)
       secret)
+
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      #t)
+
+    (define/override (-convert-for-key-agree bs)
+      (send impl make-public-key 'x25519 bs))
     ))

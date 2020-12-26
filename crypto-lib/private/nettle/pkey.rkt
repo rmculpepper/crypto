@@ -475,15 +475,21 @@
 
     (define/override (-compute-secret peer-pubkey)
       (define ecc (ecc_scalar_struct-ecc priv))
-      (define peer-ecp
-        (cond [(bytes? peer-pubkey) (bytes->ecc_point ecc peer-pubkey)]
-              [else (get-field pub peer-pubkey)]))
+      (define peer-ecp (get-field pub peer-pubkey))
       (define shared-ecp (new-ecc_point ecc))
       (nettle_ecc_point_mul shared-ecp priv peer-ecp)
       (define x (mpz)) (define y (mpz))
       (nettle_ecc_point_get shared-ecp x y)
       (define ecc-size (ceil/ (nettle_ecc_bit_size ecc) 8))
       (mpz->bytes x ecc-size #f #t))
+
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      (ptr-equal? (ecc_point_struct-ecc pub)
+                  (ecc_point_struct-ecc (get-field pub peer-pubkey))))
+
+    (define/override (-convert-for-key-agree bs)
+      (define curve-oid (ecc->curve-oid (ecc_point_struct-ecc pub)))
+      (send impl make-public-key curve-oid bs))
     ))
 
 (define (ecc_point=? a b)
@@ -764,12 +770,16 @@
            (equal? pub (get-field pub other))))
 
     (define/override (-compute-secret peer-pubkey)
-      (define peer-pub
-        (cond [(bytes? peer-pubkey) (make-sized-copy X25519_KEY_SIZE peer-pubkey)]
-              [else (get-field pub peer-pubkey)]))
+      (define peer-pub (get-field pub peer-pubkey))
       (define secret (make-bytes X25519_KEY_SIZE))
       (nettle_curve25519_mul secret priv peer-pub)
       secret)
+
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      (is-a? peer-pubkey nettle-x25519-key%))
+
+    (define/override (-convert-for-key-agree bs)
+      (send impl make-public-key 'x25519 bs))
     ))
 
 (define nettle-x448-key%
@@ -796,10 +806,14 @@
            (equal? pub (get-field pub other))))
 
     (define/override (-compute-secret peer-pubkey)
-      (define peer-pub
-        (cond [(bytes? peer-pubkey) (make-sized-copy X448_KEY_SIZE peer-pubkey)]
-              [else (get-field pub peer-pubkey)]))
+      (define peer-pub (get-field pub peer-pubkey))
       (define secret (make-bytes X448_KEY_SIZE))
       (nettle_curve448_mul secret priv peer-pub)
       secret)
+
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      (is-a? peer-pubkey nettle-x448-key%))
+
+    (define/override (-convert-for-key-agree bs)
+      (send impl make-public-key 'x448 bs))
     ))

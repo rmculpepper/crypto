@@ -781,7 +781,7 @@
   (_fun _EVP_PKEY _EVP_PKEY -> _int)
   #:wrap (err-wrap 'EVP_PKEY_cmp_parameters
                    (lambda (r) (member r '(0 1)))
-                   #:convert (lambda (r) (case r ((0) #f) ((1) #t)))))
+                   #:convert (lambda (r) (case r ((1) #t) (else #f)))))
 
 (define-crypto EVP_PKEY_type
   (_fun _int -> _int)

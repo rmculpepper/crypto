@@ -214,6 +214,10 @@
       (and (is-a? other decaf-x*-key%)
            (equal? (get-curve) (send other get-curve))
            (equal? pub (get-field pub other))))
+    (define/override (-compatible-for-key-agree? peer-pubkey)
+      (equal? (get-curve) (send peer-pubkey get-curve)))
+    (define/override (-convert-for-key-agree bs)
+      (send impl make-public-key (get-curve) bs))
     ))
 
 (define decaf-x25519-key%
@@ -222,10 +226,7 @@
     (super-new)
     (define/override (get-curve) 'x25519)
     (define/override (-compute-secret peer-pubkey)
-      (define peer-pub
-        (cond [(bytes? peer-pubkey)
-               (make-sized-copy DECAF_X25519_PUBLIC_BYTES peer-pubkey)]
-              [else (get-field pub peer-pubkey)]))
+      (define peer-pub (get-field pub peer-pubkey))
       (or (decaf_x25519 peer-pub priv)
           (crypto-error "operation failed")))
     ))
@@ -236,10 +237,7 @@
     (super-new)
     (define/override (get-curve) 'x448)
     (define/override (-compute-secret peer-pubkey)
-      (define peer-pub
-        (cond [(bytes? peer-pubkey)
-               (make-sized-copy DECAF_X448_PUBLIC_BYTES peer-pubkey)]
-              [else (get-field pub peer-pubkey)]))
+      (define peer-pub (get-field pub peer-pubkey))
       (or (decaf_x448 peer-pub priv)
           (crypto-error "operation failed")))
     ))

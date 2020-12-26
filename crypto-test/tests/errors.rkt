@@ -126,5 +126,5 @@
 (check-exn #rx"wrong size for digest\n  expected: 32 bytes\n  given: 20 bytes"
            (lambda () (pk-sign-digest rsapriv 'sha256 (digest 'sha1 #"message"))))
 
-(check-exn #rx"peer key has different implementation\n  peer: "
+(check-exn #rx"peer key has different implementation.*\n  peer: "
            (lambda () (pk-derive-secret ecxpriv ecpub)))
