@@ -565,6 +565,15 @@
     (inherit-field impl pevp)
     (super-new)
 
+    (define/public (get-curve)
+      (define ec (EVP_PKEY_get0_EC_KEY pevp))
+      (define group (and ec (EC_KEY_get0_group ec)))
+      (define nid (and group (EC_GROUP_get_curve_name group)))
+      (find-curve-name-by-nid nid))
+
+    (define/public (get-curve-oid)
+      (curve-alias->oid (get-curve)))
+
     (define/override (-write-params fmt)
       (case fmt
         [(AlgorithmIdentifier)
@@ -650,6 +659,14 @@
       (define nid (EC_builtin_curve-nid ci))
       (values (string->symbol (OBJ_nid2sn nid))
               (cons nid (EC_builtin_curve-comment ci))))))
+
+;; find-curve-name-by-nid : Nat -> Symbol/#f
+(define (find-curve-name-by-nid nid)
+  (hash-ref curve-name=>nid nid #f))
+
+(define curve-name=>nid
+  (for/hash ([(name nid+comment) (in-hash curve-table)])
+    (values (car nid+comment) name)))
 
 ;; ============================================================
 

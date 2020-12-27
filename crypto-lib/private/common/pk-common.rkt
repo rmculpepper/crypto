@@ -220,11 +220,32 @@
 
 ;; ------------------------------------------------------------
 
+(define pk-ec-params%
+  (class pk-params-base%
+    (inherit-field impl)
+    (super-new)
+
+    (abstract get-curve)
+
+    (define/public (get-curve-oid)
+      (curve-alias->oid (get-curve)))
+
+    (define/override (-write-params fmt)
+      (define curve-oid (get-curve-oid))
+      (and curve-oid (encode-params-ec fmt curve-oid)))
+
+    (define/override (generate-key config)
+      (check-config config '() "EC key generation")
+      (send impl generate-key-from-params this))
+    ))
+
 (define pk-eddsa-params%
   (class pk-params-base%
     (inherit-field impl)
     (init-field curve)
     (super-new)
+
+    (define/public (get-curve) curve)
 
     (define/override (-write-params fmt)
       (encode-params-eddsa fmt curve))
@@ -239,6 +260,8 @@
     (inherit-field impl)
     (init-field curve)
     (super-new)
+
+    (define/public (get-curve) curve)
 
     (define/override (-write-params fmt)
       (encode-params-ecx fmt curve))

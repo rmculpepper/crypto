@@ -544,6 +544,9 @@
   (_fun _int -> _EC_GROUP/null)
   #:wrap (err-wrap/pointer 'EC_GROUP_new_by_curve_name))
 
+(define-crypto EC_GROUP_get_curve_name
+  (_fun _EC_GROUP -> _int))
+
 (define-crypto i2d_ECPKParameters
   (_fun _EC_GROUP (_ptr i _pointer) -> _int)
   #:wrap (err-wrap 'i2d_ECPKParameters))
@@ -830,6 +833,9 @@
 (define-crypto EVP_PKEY_get1_EC_KEY
   (_fun _EVP_PKEY -> _EC_KEY/null)
   #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'EVP_PKEY_get1_EC_KEY)))
+
+(define-crypto EVP_PKEY_get0_EC_KEY
+  (_fun _EVP_PKEY -> _EC_KEY/null))
 
 (define-crypto EVP_PKEY_sign_init
   (_fun _EVP_PKEY_CTX -> _int)

@@ -54,7 +54,7 @@
     (inherit-field factory)
     (super-new)
 
-    (define/public (*generate-key keygen-sexp key-class)
+    (define/public (-generate-keypair keygen-sexp)
       (define result
         (or (gcry_pk_genkey keygen-sexp)
             (crypto-error "failed to generate key")))
@@ -64,7 +64,7 @@
       (define priv
         (or (gcry_sexp_find_token result "private-key")
             (crypto-error "failed to generate private key component")))
-      (new key-class (impl this) (pub pub) (priv priv)))
+      (values pub priv))
 
     (define/public (-known-digest? dspec)
       (or (not dspec) (and (send factory get-digest dspec) #t)))
@@ -116,7 +116,7 @@
 (define gcrypt-rsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? *generate-key)
+    (inherit -known-digest? -generate-keypair)
     (super-new (spec 'rsa))
 
     (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
@@ -128,11 +128,12 @@
         (check/ref-config '(nbits e) config config:rsa-keygen "RSA key generation"))
       (let (;; e default 0 means use gcrypt default "secure and fast value"
             [e (or e 0)])
-        (*generate-key 
-         (gcry_sexp_build "(genkey (rsa %S %S))"
-                          (gcry_sexp_build/%u "(nbits %u)" nbits)
-                          (gcry_sexp_build/%u "(rsa-use-e %u)" e))
-         gcrypt-rsa-key%)))
+        (define-values (pub priv)
+          (-generate-keypair
+           (gcry_sexp_build "(genkey (rsa %S %S))"
+                            (gcry_sexp_build/%u "(nbits %u)" nbits)
+                            (gcry_sexp_build/%u "(rsa-use-e %u)" e))))
+        (new gcrypt-rsa-key% (impl this) (pub pub) (priv priv))))
 
     ;; ----
 
@@ -281,7 +282,7 @@
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? *generate-key)
+    (inherit -known-digest? -generate-keypair)
     (super-new (spec 'dsa))
 
     (define/override (can-sign? pad) (memq pad '(#f)))
@@ -290,11 +291,12 @@
       (define-values (nbits qbits)
         (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA parameters generation"))
       (let ([qbits (or qbits 256)])
-        (*generate-key
-         (gcry_sexp_build "(genkey (dsa %S %S))" 
-                          (gcry_sexp_build/%u "(nbits %u)" nbits)
-                          (gcry_sexp_build/%u "(qbits %u)" qbits))
-         gcrypt-dsa-key%)))
+        (define-values (pub priv)
+          (-generate-keypair
+           (gcry_sexp_build "(genkey (dsa %S %S))"
+                            (gcry_sexp_build/%u "(nbits %u)" nbits)
+                            (gcry_sexp_build/%u "(qbits %u)" qbits))))
+        (new gcrypt-dsa-key% (impl this) (pub pub) (priv priv))))
 
     ;; ----
 
@@ -383,7 +385,7 @@
 (define gcrypt-ec-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? *generate-key)
+    (inherit -known-digest? -generate-keypair)
     (super-new (spec 'ec))
 
     (define/override (can-sign? pad) (memq pad '(#f)))
@@ -400,6 +402,15 @@
       (unless (memq curve* gcrypt-curves)
         (err/no-curve curve this))
       (new gcrypt-ec-params% (impl this) (curve curve*)))
+
+    (define/public (generate-key-from-params params)
+      (define curve (send params get-curve))
+      (define-values (pub priv)
+        (-generate-keypair
+         (gcry_sexp_build "(genkey (ecc (curve %s)))"
+                          (let ([curve (if (symbol? curve) (symbol->string curve) curve)])
+                            (string->bytes/utf-8 curve)))))
+      (new gcrypt-ec-key% (impl this) (pub pub) (priv priv)))
 
     ;; ----
 
@@ -464,22 +475,10 @@
     ))
 
 (define gcrypt-ec-params%
-  (class pk-params-base%
-    (inherit-field impl)
+  (class pk-ec-params%
     (init-field curve)
     (super-new)
-
-    (define/override (-write-params fmt)
-      (define curve-oid (curve-name->oid curve))
-      (and curve-oid (encode-params-ec fmt curve-oid)))
-
-    (define/override (generate-key config)
-      (check-config config '() "EC key generation from parameters")
-      (send impl *generate-key
-            (gcry_sexp_build "(genkey (ecc (curve %s)))"
-                             (let ([curve (if (symbol? curve) (symbol->string curve) curve)])
-                               (string->bytes/utf-8 curve)))
-            gcrypt-ec-key%))
+    (define/override (get-curve) curve)
     ))
 
 (define gcrypt-ec-key%
@@ -563,7 +562,7 @@
 (define gcrypt-eddsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? *generate-key)
+    (inherit -known-digest? -generate-keypair)
     (super-new (spec 'eddsa))
 
     (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
@@ -583,9 +582,10 @@
         (case curve
           [(ed25519) #"Ed25519"]
           [else (err/no-curve curve this)]))
-      (*generate-key
-       (gcry_sexp_build "(genkey (ecc (curve %s) (flags eddsa)))" curve-name)
-       gcrypt-ed25519-key%))
+      (define-values (pub priv)
+        (-generate-keypair
+         (gcry_sexp_build "(genkey (ecc (curve %s) (flags eddsa)))" curve-name)))
+      (new gcrypt-ed25519-key% (impl this) (pub pub) (priv priv)))
 
     ;; ----
 
@@ -679,7 +679,7 @@
 (define gcrypt-ecx-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit *generate-key)
+    (inherit -generate-keypair)
     (super-new (spec 'ecx))
 
     (define/override (can-key-agree?) #t)
@@ -697,10 +697,11 @@
     (define/public (generate-key-from-params curve)
       (case curve
         [(x25519)
-         (*generate-key
-          ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
-          (gcry_sexp_build "(genkey (ecdh (flags no-keytest) (curve Curve25519)))")
-          gcrypt-x25519-key%)]))
+         (define-values (pub priv)
+           (-generate-keypair
+            ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
+            (gcry_sexp_build "(genkey (ecdh (flags no-keytest) (curve Curve25519)))")))
+         (new gcrypt-x25519-key% (impl this) (pub pub) (priv priv))]))
 
     ;; ----
 

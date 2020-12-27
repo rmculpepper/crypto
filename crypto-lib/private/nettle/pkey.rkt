@@ -381,6 +381,13 @@
       (unless ecc (err/no-curve (config-ref config 'curve) this))
       (new nettle-ec-params% (impl this) (ecc ecc)))
 
+    (define/public (generate-key-from-params params)
+      (define ecc (get-field ecc params))
+      (define pub (new-ecc_point ecc))
+      (define priv (new-ecc_scalar ecc))
+      (nettle_ecdsa_generate_keypair pub priv (get-random-ctx))
+      (new nettle-ec-key% (impl this) (pub pub) (priv priv)))
+
     ;; ---- EC ----
 
     (define/override (make-params curve-oid)
@@ -414,20 +421,12 @@
     ))
 
 (define nettle-ec-params%
-  (class pk-params-base%
+  (class pk-ec-params%
     (init-field ecc)
-    (inherit-field impl)
     (super-new)
 
-    (define/override (generate-key config)
-      (check-config config '() "EC key generation from parameters")
-      (define pub (new-ecc_point ecc))
-      (define priv (new-ecc_scalar ecc))
-      (nettle_ecdsa_generate_keypair pub priv (send impl get-random-ctx))
-      (new nettle-ec-key% (impl impl) (pub pub) (priv priv)))
-
-    (define/override (-write-params fmt)
-      (encode-params-ec fmt (ecc->curve-oid ecc)))
+    (define/override (get-curve) (ecc->curve-name ecc))
+    (define/override (get-curve-oid) (ecc->curve-oid ecc))
     ))
 
 (define nettle-ec-key%
