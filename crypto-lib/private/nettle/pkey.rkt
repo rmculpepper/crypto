@@ -404,7 +404,8 @@
       (define pub (and ecc (make-ec-public-key ecc qB)))
       (cond [(and ecc pub)
              (define priv (new-ecc_scalar ecc))
-             (nettle_ecc_scalar_set priv (integer->mpz d))
+             (unless (nettle_ecc_scalar_set priv (integer->mpz d))
+               (crypto-error "invalid private key"))
              (new nettle-ec-key% (impl this) (pub pub) (priv priv))]
             [else #f]))
 

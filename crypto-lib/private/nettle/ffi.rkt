@@ -532,9 +532,9 @@
      k)))
 
 (define-nettleHW nettle_rsa_public_key_prepare
-  (_fun _rsa_public_key -> _void))
+  (_fun _rsa_public_key -> _bool))
 (define-nettleHW nettle_rsa_private_key_prepare
-  (_fun _rsa_private_key -> _void))
+  (_fun _rsa_private_key -> _bool))
 
 (define-nettleHW nettle_rsa_md5_sign_digest    (_fun _rsa_private_key _bytes _mpz_t -> _bool))
 (define-nettleHW nettle_rsa_sha1_sign_digest   (_fun _rsa_private_key _bytes _mpz_t -> _bool))
@@ -727,7 +727,7 @@
      (nettle_ecc_point_init p ecc)
      p)))
 
-(define-nettleHW nettle_ecc_point_set (_fun _ecc_point _mpz_t _mpz_t -> _int)) ;; 0 = err
+(define-nettleHW nettle_ecc_point_set (_fun _ecc_point _mpz_t _mpz_t -> _bool)) ;; 0 = err
 (define-nettleHW nettle_ecc_point_get (_fun _ecc_point _mpz_t _mpz_t -> _void))
 
 (define-nettleHW nettle_ecc_scalar_clear (_fun _ecc_scalar -> _void))
