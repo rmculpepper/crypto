@@ -409,11 +409,12 @@
 
     (define/override (make-private-key curve-oid qB d)
       (define ecc (curve-oid->ecc curve-oid))
-      (define pub (and ecc (make-ec-public-key ecc qB)))
-      (cond [(and ecc pub)
+      (cond [ecc
              (define priv (new-ecc_scalar ecc))
              (unless (nettle_ecc_scalar_set priv (integer->mpz d))
                (crypto-error "invalid private key"))
+             (define pub (recompute-ec-q ecc priv))
+             (when qB (check-recomputed-qB (ecc_point->bytes ecc pub) qB))
              (new nettle-ec-key% (impl this) (pub pub) (priv priv))]
             [else #f]))
 
@@ -427,6 +428,11 @@
                     (err/off-curve "public key"))
                   pub)]
             [else #f]))
+
+    (define/private (recompute-ec-q ecc priv)
+      (define pub (new-ecc_point ecc))
+      (nettle_ecc_point_mul_g pub priv)
+      pub)
     ))
 
 (define nettle-ec-params%
@@ -456,10 +462,7 @@
       (define ecc (ecc_point_struct-ecc pub))
       (define curve-oid (ecc->curve-oid ecc))
       (define mlen (ecc->mlen ecc))
-      (define qB
-        (let ([xz (new-mpz)] [yz (new-mpz)])
-          (nettle_ecc_point_get pub xz yz)
-          (ec-point->bytes mlen (mpz->integer xz) (mpz->integer yz))))
+      (define qB (ecc_point->bytes ecc pub))
       (cond [priv
              (define dz (new-mpz))
              (nettle_ecc_scalar_get priv dz)
@@ -509,6 +512,11 @@
          (and (mpz=? ax bx)
               (mpz=? ay by)))))
 
+(define (ecc_point->bytes ecc pub)
+  (let ([xz (new-mpz)] [yz (new-mpz)])
+    (nettle_ecc_point_get pub xz yz)
+    (ec-point->bytes (ecc->mlen ecc) (mpz->integer xz) (mpz->integer yz))))
+
 (define (ecc_scalar=? a b)
   (and (ptr-equal? (ecc_scalar_struct-ecc a) (ecc_scalar_struct-ecc b))
        (let ([az (new-mpz)] [bz (new-mpz)])
@@ -532,13 +540,6 @@
 
 (define (curve-oid->ecc curve-oid)
   (curve-name->ecc (curve-oid->name curve-oid)))
-
-(define (bytes->ecc_point ecc b)
-  (define ecp (new-ecc_point ecc))
-  (define x+y (bytes->ec-point b))
-  (unless (nettle_ecc_point_set ecp (mpz (car x+y)) (mpz (cdr x+y)))
-    (err/off-curve "public key"))
-  ecp)
 
 ;; ============================================================
 ;; Ed25519 and Ed448

@@ -446,9 +446,8 @@
     (define/override (make-private-key curve-oid qB d)
       (cond [(curve-oid->name-string curve-oid)
              => (lambda (curve-name)
-                  (define qB*
-                    (cond [qB (begin0 qB (check-ec-q curve-name qB))]
-                          [else (recompute-ec-q curve-name d)]))
+                  (define qB* (recompute-ec-q curve-name d))
+                  (when qB (check-recomputed-qB qB* qB))
                   (define pub (make-ec-public-key curve-name qB*))
                   (define priv (make-ec-private-key curve-name qB* d))
                   (new gcrypt-ec-key% (impl this) (pub pub) (priv priv)))]

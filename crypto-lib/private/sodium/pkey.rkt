@@ -81,9 +81,9 @@
          (define priv (make-bytes crypto_sign_ed25519_SECRETKEYBYTES))
          (define pub (make-bytes crypto_sign_ed25519_PUBLICKEYBYTES))
          (crypto_sign_ed25519_seed_keypair pub priv seed)
-         ;; FIXME: check against qB, dB
          (unless (equal? seed (subbytes priv 0 32))
            (crypto-error "failed to recompute key from seed"))
+         (when qB (check-recomputed-qB pub qB))
          (new sodium-ed25519-key% (impl this) (pub pub) (priv priv))]
         [else #f]))
     ))
@@ -165,12 +165,13 @@
          (new sodium-x25519-key% (impl this) (pub qB) (priv #f))]
         [else #f]))
 
-    (define/override (make-private-key curve _qB dB)
+    (define/override (make-private-key curve qB dB)
       (case curve
         [(x25519)
          (define priv (make-sized-copy crypto_scalarmult_curve25519_SCALARBYTES dB))
          (define pub (make-bytes crypto_scalarmult_curve25519_BYTES))
          (crypto_scalarmult_curve25519_base pub priv)
+         (when qB (check-recomputed-qB pub qB))
          (new sodium-x25519-key% (impl this) (pub pub) (priv priv))]
         [else #f]))
     ))

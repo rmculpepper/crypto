@@ -687,6 +687,12 @@
 ;; Makes a fresh copy when given bytes.
 (define (bcopy x) (if (bytes? x) (bytes-copy x) x))
 
+;; check-recomputed-qB : Bytes (U Bytes #f) -> Void
+(define (check-recomputed-qB new-qB maybe-old-qB)
+  (when maybe-old-qB
+    (unless (equal? new-qB maybe-old-qB)
+      (crypto-error "public key does not match private key"))))
+
 ;; ============================================================
 ;; Writing Keys
 

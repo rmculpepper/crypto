@@ -79,10 +79,12 @@
         [(ed25519)
          (define priv (make-sized-copy DECAF_EDDSA_25519_PRIVATE_BYTES dB))
          (define pub (decaf_ed25519_derive_public_key priv))
+         (when qB (check-recomputed-qB pub qB))
          (new decaf-ed25519-key% (impl this) (pub pub) (priv priv))]
         [(ed448)
          (define priv (make-sized-copy DECAF_EDDSA_448_PRIVATE_BYTES dB))
          (define pub (decaf_ed448_derive_public_key priv))
+         (when qB (check-recomputed-qB pub qB))
          (new decaf-ed448-key% (impl this) (pub pub) (priv priv))]
         [else #f]))
     ))
@@ -181,15 +183,17 @@
          (new decaf-x448-key% (impl this) (pub qB) (priv #f))]
         [else #f]))
 
-    (define/override (make-private-key curve _qB dB)
+    (define/override (make-private-key curve qB dB)
       (case curve
         [(x25519)
          (define priv (make-sized-copy DECAF_X25519_PRIVATE_BYTES dB))
          (define pub  (decaf_x25519_derive_public_key priv))
+         (when qB (check-recomputed-qB pub qB))
          (new decaf-x25519-key% (impl this) (pub pub) (priv priv))]
         [(x448)
          (define priv (make-sized-copy DECAF_X448_PRIVATE_BYTES dB))
          (define pub  (decaf_x448_derive_public_key priv))
+         (when qB (check-recomputed-qB pub qB))
          (new decaf-x448-key% (impl this) (pub pub) (priv priv))]
         [else #f]))
     ))
