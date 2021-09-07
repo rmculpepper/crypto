@@ -38,7 +38,7 @@
     (for/fold ([acc 0])
               ([i (in-range 0 (bytes-length msg) 16)])
       (define end (min (bytes-length msg) (+ i 16)))
-      (define n0 (bytes->integer msg #f #f i (min (bytes-length msg) (+ i 16))))
+      (define n0 (bytes->integer msg #f #f i end))
       (define n1 (+ n0 (expt 2 (* 8 (- end i)))))
       (modulo (* r (+ acc n1)) P)))
   (bitwise-bit-field (+ acc s) 0 128))
