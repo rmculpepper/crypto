@@ -108,11 +108,14 @@
 
 (define (i2d i2d_Type x)
   (define outlen (i2d_Type x #f))
-  (define outbuf (make-bytes outlen 0))
+  ; buffer must not move since pointer passed to i2d_Type does not trace it
+  (define outbuf (malloc outlen 'atomic-interior))
   (define outlen2 (i2d_Type x outbuf))
-  (if (< outlen2 outlen)
-      (subbytes outbuf 0 outlen2)
-      outbuf))
+  (when (> outlen2 outlen)
+    (error 'i2d "openssl promised i2d result of length at most ~a but returned length ~a" outlen outlen2))
+  (define res (make-bytes outlen2 0))
+  (memcpy res outbuf outlen2)
+  res)
 
 (define-crypto OBJ_nid2sn
   (_fun _int -> _string/utf-8))
@@ -146,6 +149,25 @@
            (or (> vb b)
                (and (= vb b)
                     (>= vc c))))))
+
+; _fun argument type to pass pointer q to pointer p to freshly-allocated buffer
+; - buffer is initialized with the argued bytes?
+; - modification of p will not interfere with garbage collection
+; - the buffer is collected after p
+(define-fun-syntax _dptr_to_bytes
+  (syntax-id-rules (_dptr_to_bytes)
+    [_dptr_to_bytes
+      (type: _pointer
+       pre: (x => (begin
+                    (unless (bytes? x)
+                      (error '_dptr_to_bytes "expected bytes?"))
+                    (let ([p (malloc _pointer 1 'atomic)]
+                          [b (malloc _byte (bytes-length x) 'raw)])
+                      (register-finalizer p
+                        (lambda (_) (free b)))
+                      (memcpy b x (bytes-length x))
+                      (ptr-set! p _pointer b)
+                      p))))]))
 
 ;; ============================================================
 ;; Bignum
@@ -459,7 +481,7 @@
   (_fun _DH (_ptr i _pointer) -> _int)
   #:wrap (err-wrap 'i2d_DHparams))
 (define-crypto d2i_DHparams
-  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _DH/null)
+  (_fun (_pointer = #f) _dptr_to_bytes _long -> _DH/null)
   #:wrap (compose (allocator DH_free) (err-wrap/pointer 'd2i_DHparams)))
 
 (define-crypto DH_check   ;; -> #t, or flags for failure
@@ -546,7 +568,7 @@
   #:wrap (err-wrap 'i2d_ECPKParameters))
 
 (define-crypto d2i_ECPKParameters
-  (_fun (_pointer = #f) (_ptr i _pointer) _long
+  (_fun (_pointer = #f) _dptr_to_bytes _long
         -> _EC_GROUP)
   #:wrap (err-wrap/pointer 'd2i_ECPKParameters))
 
@@ -904,11 +926,11 @@
   #:wrap (err-wrap 'EVP_PKEY_param_check) #:fail (K (K 1)))
 
 (define-crypto d2i_PublicKey
-  (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
+  (_fun _int (_pointer = #f) _dptr_to_bytes _long -> _EVP_PKEY/null)
   #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PublicKey)))
 
 (define-crypto d2i_PrivateKey
-  (_fun _int (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
+  (_fun _int (_pointer = #f) _dptr_to_bytes _long -> _EVP_PKEY/null)
   #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PrivateKey)))
 
 (define-crypto i2d_PublicKey
@@ -920,7 +942,7 @@
   #:wrap (err-wrap 'i2d_PrivateKey))
 
 (define-crypto d2i_PUBKEY
-  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EVP_PKEY/null)
+  (_fun (_pointer = #f) _dptr_to_bytes _long -> _EVP_PKEY/null)
   #:wrap (compose (allocator EVP_PKEY_free) (err-wrap/pointer 'd2i_PUBKEY)))
 (define-crypto i2d_PUBKEY
   (_fun _EVP_PKEY (_ptr i _pointer) -> _int)
@@ -938,7 +960,7 @@
   #:wrap (compose (allocator PKCS8_PRIV_KEY_INFO_free) (err-wrap/pointer 'EVP_PKEY2PKCS8)))
 
 (define-crypto d2i_PKCS8_PRIV_KEY_INFO
-  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _PKCS8_PRIV_KEY_INFO/null)
+  (_fun (_pointer = #f) _dptr_to_bytes _long -> _PKCS8_PRIV_KEY_INFO/null)
   #:wrap (compose (allocator PKCS8_PRIV_KEY_INFO_free)
                   (err-wrap/pointer 'd2i_PKCS8_PRIV_KEY_INFO)))
 (define-crypto i2d_PKCS8_PRIV_KEY_INFO
@@ -946,7 +968,7 @@
   #:wrap (err-wrap 'i2d_PKCS8_PRIV_KEY_INFO))
 
 (define-crypto d2i_DSAparams
-  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _DSA/null)
+  (_fun (_pointer = #f) _dptr_to_bytes _long -> _DSA/null)
   #:wrap (compose (allocator DSA_free) (err-wrap/pointer 'd2i_DSAparams)))
 
 (define-crypto i2d_DSAparams
@@ -954,7 +976,7 @@
   #:wrap (err-wrap 'i2d_DSAparams))
 
 (define-crypto d2i_ECPrivateKey
-  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EC_KEY/null)
+  (_fun (_pointer = #f) _dptr_to_bytes _long -> _EC_KEY/null)
   #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'd2i_ECPrivateKey)))
 
 (define-crypto i2d_ECPrivateKey
@@ -962,7 +984,7 @@
   #:wrap (err-wrap 'i2d_ECPrivateKey))
 
 (define-crypto o2i_ECPublicKey
-  (_fun (_pointer = #f) (_ptr i _pointer) _long -> _EC_KEY/null)
+  (_fun (_pointer = #f) _dptr_to_bytes _long -> _EC_KEY/null)
   #:wrap (compose (allocator EC_KEY_free) (err-wrap/pointer 'o2i_ECPublicKey)))
 
 (define-crypto i2o_ECPublicKey
