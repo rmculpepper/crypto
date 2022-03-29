@@ -184,9 +184,6 @@
     #:optional)
    (crlExtensions #:explicit 0 Extensions #:optional)))
 
-
-;; XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
 ;; ------------------------------------------------------------
 ;; Translation of PKIX1Explicit88
 
