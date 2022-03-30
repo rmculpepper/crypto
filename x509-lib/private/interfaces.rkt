@@ -1,45 +1,73 @@
 #lang racket/base
 (require racket/contract
-         racket/class)
+         racket/class
+         (only-in asn1 bit-string?))
 (provide (all-defined-out))
 
 (define (certificate? v) (is-a? v -certificate<%>))
 (define (certificate-chain? v) (is-a? v -certificate-chain<%>))
 (define (certificate-store? v) (is-a? v -certificate-store<%>))
 
+(define asn1-oid/c (flat-named-contract 'asn1-oid/c (listof exact-nonnegative-integer?)))
+(define asn1-algorithm-identifier/c (flat-named-contract 'asn1-algorithm-identifier/c hash?))
+(define x509-extension/c (flat-named-contract 'x509-extension/c hash?))
+(define x509-name/c (flat-named-contract 'x509-name/c any/c))
+(define x509-name-constraints/c (flat-named-contract 'x509-name-constraints/c hash?))
+(define x509-validity/c (flat-named-contract 'x509-validity hash?))
+
+(define key-usage/c
+  (or/c 'digitalSignature 'nonRepudiation 'keyEncipherment 'dataEncipherment
+        'keyAgreement 'keyCertSign 'cRLSign 'encipherOnly 'decipherOnly))
+
+(define x509-general-name-tag/c
+  (or/c 'otherName 'rfc822Name 'dNSName 'x400Address 'directoryName
+        'ediPartyName 'uniformResourceIdentifier 'iPAddress 'registeredID))
+(define x509-general-name/c
+  (or/c (list/c 'otherName any/c)
+        (list/c 'rfc822Name string?)
+        (list/c 'dNSName string?)
+        (list/c 'x400Address any/c)
+        (list/c 'directoryName x509-name/c)
+        (list/c 'ediPartyName any/c)
+        (list/c 'uniformResourceIdentifier string?)
+        (list/c 'iPAddress bytes?)
+        (list/c 'registeredID asn1-oid/c)))
+
 (define certificate-data<%>
   (interface ()
-   has-same-public-key?
+    [has-same-public-key? (->m certificate? boolean?)]
 
-   get-der
-   get-cert-signature-info
+    [get-der (->m bytes?)]
+    [get-cert-signature-info (->m (values asn1-algorithm-identifier/c bytes? bytes?))]
 
-   get-version
-   get-serial-number
-   get-issuer
-   get-validity
-   get-subject
-   get-spki
-   get-issuer-unique-id
-   get-subject-unique-id
-   get-extensions
-   get-subject-common-names
+    [get-version (->m exact-integer?)] ;; Note: 2 represents v3
+    [get-serial-number (->m exact-integer?)]
+    [get-issuer (->m x509-name/c)]
+    [get-validity (->m x509-validity/c)]
+    [get-subject (->m x509-name/c)]
+    [get-spki (->m bytes?)]
+    [get-issuer-unique-id (->m (or/c #f bit-string?))]
+    [get-subject-unique-id (->m (or/c #f bit-string?))]
+    [get-extensions (->m (listof x509-extension/c))]
+    [get-subject-common-names (->m (listof string?))]
 
-   is-CA?
-   is-self-issued?
-   is-self-signed?
-   get-key-uses
-   ok-key-use?
-   get-eku
-   get-ekus
+    [is-CA? (->m boolean?)]
+    [is-self-issued? (->m boolean?)]
+    [is-self-signed? (->m boolean?)] ;; FIXME: remove?
+    [get-key-uses (->m (listof key-usage/c))]
+    [ok-key-use? (->*m [key-usage/c] [any/c] any/c)]
+    [get-eku (->m asn1-oid/c (or/c 'yes 'no 'unset))]
+    [get-ekus (->m (listof asn1-oid/c))]
 
-   get-extension
-   get-extension-value
+    [get-extension (->m asn1-oid/c (or/c #f x509-extension/c))]
+    [get-extension-value (->m asn1-oid/c any/c any/c)]
 
-   get-name-constraints
-   get-subject-alt-names
-   get-validity-seconds
-   ))
+    [get-name-constraints (->m (or/c #f x509-name-constraints/c))]
+    [get-subject-alt-names
+     (case->m (-> (listof x509-general-name/c))
+              (-> x509-general-name-tag/c (listof string?)))]
+    [get-validity-seconds (->m (list/c rational? rational?))]
+    ))
 
 (define certificate<%>
   (interface (certificate-data<%> equal<%> writable<%>)
