@@ -67,7 +67,7 @@
     [get-subject-alt-names
      (->*m [] [(or/c #f x509-general-name-tag/c)]
            (or/c (listof string?) (listof x509-general-name/c)))]
-    [get-validity-seconds (->m (list/c rational? rational?))]
+    [get-validity-seconds (->m (list/c exact-integer? exact-integer?))]
     ))
 
 (define certificate<%>
