@@ -220,11 +220,14 @@
 ;; OCSP
 
 ;; It seems that OCSP responders are very fragile and finicky.
-;; - Might respond "malformed" if request does not use sha1.
+;; - Might respond "malformed" if request does not use sha1 for CertID hash.
 ;; - Might respond only to first certificate in request. (Probably to enable
 ;;   static responses.)
 ;; - Might not support GET request.
 ;; So: use sha1, limit request to single certificate.
+
+;; Discussion about sha1 as CertID hash algorithm:
+;; - (2019) https://groups.google.com/g/mozilla.dev.security.policy/c/ImCmDRMj-JU
 
 (define (do-fetch-ocsp ocsp-url req-der)
   (let loop ([try-get? #t])
