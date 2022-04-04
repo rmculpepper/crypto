@@ -291,7 +291,8 @@ users.
 
 @defmethod[(get-certificate) certificate?]{
 
-Returns the certificate that the chain certifies.
+Returns the chain's end certificate --- that is, the certificate that the
+chain certifies.
 }
 
 @defmethod[(get-certificates) (listof certificate?)]{
@@ -301,10 +302,13 @@ certificate and ending with the @tech{trust anchor} (that is, most-specific
 first).
 }
 
-@defmethod[(get-public-key) public-only-key?]{
+@defmethod[(get-public-key [factories
+                            (or/c crypto-factory? (listof crypto-factory?))
+                            (crypto-factories)])
+           public-only-key?]{
 
 Creates a public key from the SubjectPublicKeyInfo in the certificate
-using a factory from @racket[(crypto-factories)].
+using an implementation from @racket[factories].
 }
 
 @defmethod[(trusted? [store certificate-store?]
@@ -319,7 +323,7 @@ from @racket[from-time] to @racket[to-time]; otherwise, returns @racket[#f].
 
 @defmethod[(get-issuer-chain) (or/c certificate-chain? #f)]{
 
-Returns the tail of the certificate chain corresponding to this certificate's
+Returns the prefix of the certificate chain corresponding to this certificate's
 issuer, or @racket[#f] if the current certificate is the @emph{trust anchor}.
 }
 
@@ -337,6 +341,32 @@ Equivalent to
 @racketblock[
 (send (send #,(this-obj) #,(method certificate-chain<%> get-certificate))
       #,(method certificate<%> get-subject-alt-names) kind)
+]}
+
+@defmethod[(ok-extended-key-usage? [eku (listof exact-nonnegative-integer?)]) boolean?]{
+
+Returns @racket[#t] if the extended key usage identified by @racket[eku] (a
+representation of an ASN.1 @tt{OBJECT IDENTIFIER}) is allowed for the end
+certificate of @(this-obj); returns @racket[#f] otherwise.
+
+The extended key usage @racket[eku] is allowed if all of the following are true:
+@itemlist[
+
+@item{The end certificate contains an @tt{ExtendedKeyUsage} extension and the
+extension's value contains @racket[eku].}
+
+@item{In every preceding certificate in the chain (that is, the trust anchor and
+intermediate CA certificates), if the @tt{ExtendedKeyUsage} extension is
+present, then its value contains @racket[eku].}
+
+]
+Note: this method does not treat @tt{anyExtendedKeyUsage} specially.
+
+@examples[#:eval the-eval
+(define id-kp-serverAuth '(1 3 6 1 5 5 7 3 1))
+(send racket-chain ok-extended-key-usage? id-kp-serverAuth)
+(define id-kp-codeSigning '(1 3 6 1 5 5 7 3 3))
+(send racket-chain ok-extended-key-usage? id-kp-codeSigning)
 ]}
 
 @defmethod[(suitable-for-tls-server? [host (or/c string? #f)]) boolean?]{
