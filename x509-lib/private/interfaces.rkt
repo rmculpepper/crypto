@@ -1,7 +1,8 @@
 #lang racket/base
 (require racket/contract
          racket/class
-         (only-in asn1 bit-string?))
+         (only-in asn1 bit-string?)
+         (only-in crypto crypto-factory? public-only-key?))
 (provide (all-defined-out))
 
 (define (certificate? v) (is-a? v -certificate<%>))
@@ -64,8 +65,8 @@
 
     [get-name-constraints (->m (or/c #f x509-name-constraints/c))]
     [get-subject-alt-names
-     (case->m (-> (listof x509-general-name/c))
-              (-> x509-general-name-tag/c (listof string?)))]
+     (->*m [] [(or/c #f x509-general-name-tag/c)]
+           (or/c (listof string?) (listof x509-general-name/c)))]
     [get-validity-seconds (->m (list/c rational? rational?))]
     ))
 
@@ -78,18 +79,21 @@
 
 (define certificate-chain<%>
   (interface ()
-    get-certificate
-    get-issuer-chain
-    get-anchor
-    is-anchor?
+    [get-certificate (->m certificate?)]
+    [get-issuer-chain (->m (or/c #f certificate-chain?))]
+    [get-anchor (->m certificate?)]
+    [is-anchor? (->m boolean?)]
 
-    get-subject
-    get-subject-alt-names
-    ok-key-use?
-    ok-extended-key-usage?
+    [get-subject (->m x509-name/c)]
+    [get-subject-alt-names
+     (->*m [] [(or/c #f x509-general-name-tag/c)]
+           (or/c (listof string?) (listof x509-general-name/c)))]
+    [ok-key-use? (->*m [key-usage/c] [any/c] any/c)]
+    [ok-extended-key-usage? (->*m [asn1-oid/c] [any/c] any/c)]
 
-    get-public-key
-    check-signature
+    [get-public-key
+     (->*m [] [(or/c crypto-factory? (listof crypto-factory?))] public-only-key?)]
+    [check-signature (->m asn1-algorithm-identifier/c bytes? bytes? list?)] ;; FIXME ?
 
     [trusted?
      (->*m [(or/c #f certificate-store?)] [time/c time/c]
@@ -103,12 +107,10 @@
     get-subject
     ))
 
-(define Name/c any/c) ;; FIXME: contract from asn1?
-
 (define x509-lookup<%>
   (interface ()
     [trust?            (->m certificate? boolean?)]
-    [lookup-by-subject (->m Name/c (listof certificate?))]
+    [lookup-by-subject (->m x509-name/c (listof certificate?))]
     ))
 
 (define certificate-store<%>

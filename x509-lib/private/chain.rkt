@@ -106,13 +106,15 @@
 
     ;; ----------------------------------------
 
-    ;; public-key-cache : WeakHasheq[(Listof crypto-factory?) => pk-key?]
-    ;; The crypto-factories parameter can change; cache for current factories.
+    ;; public-key-cache : WeakHasheq[Factory/s => pk-key?]
+    ;; The factories can change; cache for current factories.
     (define public-key-cache (make-weak-hasheq))
 
-    (define/public (get-public-key)
-      (hash-ref! public-key-cache (crypto-factories)
-                 (lambda () (datum->pk-key (send cert get-spki) 'SubjectPublicKeyInfo))))
+    (define/public (get-public-key [factory/s (crypto-factories)])
+      (hash-ref! public-key-cache factory/s
+                 (lambda ()
+                   (parameterize ((crypto-factories factory/s))
+                     (datum->pk-key (send cert get-spki) 'SubjectPublicKeyInfo)))))
 
     (define/public (check-signature algid tbs sig)
       (check-signature/algid (get-public-key) algid tbs sig))
