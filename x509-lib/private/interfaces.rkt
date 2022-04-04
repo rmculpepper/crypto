@@ -167,12 +167,12 @@
 
 (define revocation-checker<%>
   (interface ()
-    check-ocsp ;; CertificateChain -> ErrorList
-    check-crl  ;; CertificateChain -> ErrorList
+    [check-ocsp (->m certificate-chain? list?)]
+    [check-crl (->m certificate-chain? list?)]
     ))
 
 (define cachable<%>
   (interface ()
-    get-expiration-time ;; Seconds
-    get-der ;; -> Bytes
+    [get-expiration-time (->m rational?)] ;; Seconds
+    [get-der (->m bytes?)]
     ))
