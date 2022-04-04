@@ -73,9 +73,9 @@
     (define/public (get-extension-value id default)
       (cond [(get-extension id) => extension-value] [else default]))
 
-    (define/public (get-key-uses)
+    (define/public (get-key-usages)
       (get-extension-value id-ce-keyUsage null))
-    (define/public (ok-key-use? use [default #f])
+    (define/public (ok-key-usage? use [default #f])
       (cond [(get-extension-value id-ce-keyUsage #f)
              => (lambda (uses) (and (memq use uses) #t))]
             [else (if (procedure? default) (default) default)]))
@@ -174,7 +174,7 @@
          (unless (wf-time? ok-start) (bad! 'validity:start-not-well-formed))
          (unless (wf-time? ok-end) (bad! 'validity:end-not-well-formed))])
       ;; 4.1.2.6 Subject
-      (when (or (is-CA?) (memq 'cRLSign (get-key-uses)))
+      (when (or (is-CA?) (memq 'cRLSign (get-key-usages)))
         (when (Name-empty? (get-subject))
           (bad! 'subject:empty-but-CA/CRL-issuer)))
       (when (Name-empty? (get-subject))
@@ -251,11 +251,11 @@
              (bad/ca-must! 'subject-directory-attributes:critical))]
           ;; 4.2.1.9 Basic Constraints
           [(equal? ext-id id-ce-basicConstraints)
-           (when (memq 'keyCertSign (get-key-uses))
+           (when (memq 'keyCertSign (get-key-usages))
              (unless critical?
                (bad/ca-must! 'basic-constraints:not-critical-but-keyCertSign)))
            (when (hash-ref (extension-value ext) 'pathLenConstraint #f)
-             (unless (and (is-CA?) (memq 'keyCertSign (get-key-uses)))
+             (unless (and (is-CA?) (memq 'keyCertSign (get-key-usages)))
                (bad! 'basic-constraints:pathLenConstraint-but-not-keyCertSign)))]
           ;; 4.2.1.10 Name Constraints
           [(equal? ext-id id-ce-nameConstraints)

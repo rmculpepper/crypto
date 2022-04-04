@@ -55,8 +55,8 @@
     [is-CA? (->m boolean?)]
     [is-self-issued? (->m boolean?)]
     [is-self-signed? (->m boolean?)] ;; FIXME: remove?
-    [get-key-uses (->m (listof key-usage/c))]
-    [ok-key-use? (->*m [key-usage/c] [any/c] any/c)]
+    [get-key-usages (->m (listof key-usage/c))]
+    [ok-key-usage? (->*m [key-usage/c] [any/c] any/c)]
     [get-eku (->m asn1-oid/c (or/c 'yes 'no 'unset))]
     [get-ekus (->m (listof asn1-oid/c))]
 
@@ -88,7 +88,7 @@
     [get-subject-alt-names
      (->*m [] [(or/c #f x509-general-name-tag/c)]
            (or/c (listof string?) (listof x509-general-name/c)))]
-    [ok-key-use? (->*m [key-usage/c] [any/c] any/c)]
+    [ok-key-usage? (->*m [key-usage/c] [any/c] any/c)]
     [ok-extended-key-usage? (->*m [asn1-oid/c] [any/c] any/c)]
 
     [get-public-key

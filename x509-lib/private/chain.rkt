@@ -237,7 +237,7 @@
              [else (map add-index '(intermediate:not-CA))])
        ;; 6.1.4 (m) -- in constructor
        ;; 6.1.4 (n)
-       (cond [(send cert ok-key-use? 'keyCertSign #t) '()]
+       (cond [(send cert ok-key-usage? 'keyCertSign #t) '()]
              [else (map add-index '(intermediate:missing-keyCertSign))])
        ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
        #| checked in certificate% |#))
@@ -454,7 +454,7 @@
       ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
       ;; - CA/B Baseline Requirements (Section 7.1 Certificate Profile)
       (define USE-CN? #f)
-      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
+      (append (cond [(for/or ([use (in-list tls-key-usages)]) (ok-key-usage? use #t)) '()]
                     [else '(tls:missing-key-usage)])
               (cond [(ok-extended-key-usage? id-kp-serverAuth #f) '()]
                     [else '(tls:missing-serverAuth-eku)])
@@ -471,7 +471,7 @@
       (null? (check-suitable-for-tls-client name)))
 
     (define/public (check-suitable-for-tls-client name)
-      (append (cond [(for/or ([use (in-list tls-key-uses)]) (ok-key-use? use #t)) '()]
+      (append (cond [(for/or ([use (in-list tls-key-usages)]) (ok-key-usage? use #t)) '()]
                     [else '(tls:missing-key-usage)])
               (cond [(ok-extended-key-usage? id-kp-clientAuth #f) '()]
                     [else '(tls:missing-clientAuth-eku)])
@@ -482,8 +482,8 @@
                      '()]
                     [else '(tls:name-mismatch)])))
 
-    (define/public (ok-key-use? use [default #f]) (send cert ok-key-use? use default))
+    (define/public (ok-key-usage? use [default #f]) (send cert ok-key-usage? use default))
     ))
 
-;; tls-key-uses is approximation; actually depends on TLS cipher negotiated
-(define tls-key-uses '(digitalSignature keyEncipherment keyAgreement))
+;; tls-key-usages is approximation; actually depends on TLS cipher negotiated
+(define tls-key-usages '(digitalSignature keyEncipherment keyAgreement))
