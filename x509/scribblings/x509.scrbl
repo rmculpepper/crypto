@@ -343,6 +343,27 @@ Equivalent to
       #,(method certificate<%> get-subject-alt-names) kind)
 ]}
 
+@defmethod[(ok-key-usage? [usage
+                           (or/c 'digitalSignature 'nonRepudiation 'keyEncipherment
+                                 'dataEncipherment 'keyAgreement 'keyCertSign 'cRLSign
+                                 'encipherOnly 'decipherOnly)]
+                          [default any/c #f])
+           any/c]{
+
+Returns @racket[#t] if the end certificate has the @tt{KeyUsage} extension and
+the extension's value contains the key usage named by @racket[usage]. If the
+extension is present but does not contain @racket[usage], returns
+@racket[#f]. If the end certificate does not have a @tt{KeyUsage} extension,
+returns either the result of @racket[(default)] if @racket[default] is a
+procedure; otherwise, returns @racket[default].
+
+@examples[#:eval the-eval
+(send racket-chain ok-key-usage? 'keyAgreement)
+(send racket-chain ok-key-usage? 'keyCertSign)
+(let ([ca-chain (send racket-chain get-issuer-chain)])
+  (send ca-chain ok-key-usage? 'keyCertSign))
+]}
+
 @defmethod[(ok-extended-key-usage? [eku (listof exact-nonnegative-integer?)]) boolean?]{
 
 Returns @racket[#t] if the extended key usage identified by @racket[eku] (a
