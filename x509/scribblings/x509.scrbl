@@ -207,14 +207,21 @@ usually better to validate the certificate first and then call the chain's
 
 @defmethod[(get-key-usages) (listof x509-key-usage/c)]{
 
+Gets the value of the KeyUsage extension, if present; if the extension is absent,
+returns @racket[null]. See also @xmethod[certificate-chain<%> ok-key-usage?].
+
 @examples[#:eval the-eval #:label #f
 (send racket-cert get-key-usages)
 ]}
 
-@defmethod[(get-ekus) (or/c #f (listof asn1-oid?))]{
+@defmethod[(get-extended-key-usages) (listof asn1-oid?)]{
+
+Gets the value of the ExtendedKeyUsage extension, if present; if the extension
+is absent, returns @racket[null]. See also @xmethod[certificate-chain<%>
+ok-extended-key-usage?].
 
 @examples[#:eval the-eval #:label #f
-(send racket-cert get-ekus)
+(send racket-cert get-extended-key-usages)
 ]}
 
 @defmethod[(get-der) bytes?]{
