@@ -1,7 +1,7 @@
 #lang racket/base
 (require racket/contract
          racket/class
-         (only-in asn1 bit-string?)
+         (only-in asn1 asn1-oid? bit-string?)
          (only-in crypto crypto-factory? public-only-key?))
 (provide (all-defined-out))
 
@@ -9,20 +9,20 @@
 (define (certificate-chain? v) (is-a? v -certificate-chain<%>))
 (define (certificate-store? v) (is-a? v -certificate-store<%>))
 
-(define asn1-oid/c (flat-named-contract 'asn1-oid/c (listof exact-nonnegative-integer?)))
 (define asn1-algorithm-identifier/c (flat-named-contract 'asn1-algorithm-identifier/c hash?))
 (define x509-extension/c (flat-named-contract 'x509-extension/c hash?))
 (define x509-name/c (flat-named-contract 'x509-name/c any/c))
 (define x509-name-constraints/c (flat-named-contract 'x509-name-constraints/c hash?))
-(define x509-validity/c (flat-named-contract 'x509-validity hash?))
+(define x509-validity/c (flat-named-contract 'x509-validity/c hash?))
 
-(define key-usage/c
+(define x509-key-usage/c
   (or/c 'digitalSignature 'nonRepudiation 'keyEncipherment 'dataEncipherment
         'keyAgreement 'keyCertSign 'cRLSign 'encipherOnly 'decipherOnly))
 
 (define x509-general-name-tag/c
   (or/c 'otherName 'rfc822Name 'dNSName 'x400Address 'directoryName
         'ediPartyName 'uniformResourceIdentifier 'iPAddress 'registeredID))
+
 (define x509-general-name/c
   (or/c (list/c 'otherName any/c)
         (list/c 'rfc822Name string?)
@@ -32,7 +32,7 @@
         (list/c 'ediPartyName any/c)
         (list/c 'uniformResourceIdentifier string?)
         (list/c 'iPAddress bytes?)
-        (list/c 'registeredID asn1-oid/c)))
+        (list/c 'registeredID asn1-oid?)))
 
 (define certificate-data<%>
   (interface ()
@@ -55,13 +55,13 @@
     [is-CA? (->m boolean?)]
     [is-self-issued? (->m boolean?)]
     [is-self-signed? (->m boolean?)] ;; FIXME: remove?
-    [get-key-usages (->m (listof key-usage/c))]
-    [ok-key-usage? (->*m [key-usage/c] [any/c] any/c)]
-    [get-eku (->m asn1-oid/c (or/c 'yes 'no 'unset))]
-    [get-ekus (->m (listof asn1-oid/c))]
+    [get-key-usages (->m (listof x509-key-usage/c))]
+    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any/c)]
+    [get-eku (->m asn1-oid? (or/c 'yes 'no 'unset))]
+    [get-ekus (->*m [] [any/c] any)]
 
-    [get-extension (->m asn1-oid/c (or/c #f x509-extension/c))]
-    [get-extension-value (->m asn1-oid/c any/c any/c)]
+    [get-extension (->m asn1-oid? (or/c #f x509-extension/c))]
+    [get-extension-value (->m asn1-oid? any/c any/c)]
 
     [get-name-constraints (->m (or/c #f x509-name-constraints/c))]
     [get-subject-alt-names
@@ -88,8 +88,8 @@
     [get-subject-alt-names
      (->*m [] [(or/c #f x509-general-name-tag/c)]
            (or/c (listof string?) (listof x509-general-name/c)))]
-    [ok-key-usage? (->*m [key-usage/c] [any/c] any/c)]
-    [ok-extended-key-usage? (->*m [asn1-oid/c] [any/c] any/c)]
+    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any/c)]
+    [ok-extended-key-usage? (->*m [asn1-oid?] [any/c] any/c)]
 
     [get-public-key
      (->*m [] [(or/c crypto-factory? (listof crypto-factory?))] public-only-key?)]

@@ -16,6 +16,8 @@
          (struct-out exn:x509)
          (struct-out exn:x509:certificate)
          (struct-out exn:x509:chain)
+         x509-key-usage/c
+         x509-general-name-tag/c
 
          (contract-out
           [bytes->certificate
