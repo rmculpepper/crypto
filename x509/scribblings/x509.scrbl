@@ -8,6 +8,7 @@
           (for-label racket/base
                      racket/class
                      racket/contract
+                     (only-in asn1 asn1-oid?)
                      crypto crypto/libcrypto x509))
 
 @(define-runtime-path log-file "eval-logs/x509.rktd")
@@ -204,13 +205,13 @@ usually better to validate the certificate first and then call the chain's
 @method[certificate-chain<%> get-public-key] method.
 }
 
-@defmethod[(get-key-usages) (listof key-usage/c)]{
+@defmethod[(get-key-usages) (listof x509-key-usage/c)]{
 
 @examples[#:eval the-eval #:label #f
 (send racket-cert get-key-usages)
 ]}
 
-@defmethod[(get-ekus) (or/c #f (listof (listof exact-nonnegative-integer?)))]{
+@defmethod[(get-ekus) (or/c #f (listof asn1-oid?))]{
 
 @examples[#:eval the-eval #:label #f
 (send racket-cert get-ekus)
@@ -276,9 +277,9 @@ Contract for symbols tagging kinds of @rfc-ref[#:at
 
 A @deftech{certificate chain} contains a non-empty list of certificates,
 starting with a @deftech{trust anchor} (typically a root CA certificate) and
-ending with the certificate whose identity, public key, and purpose are of
-interest to the application. The list of certificates satisfies the
-@emph{chain-validity} properties:
+ending with the @deftech{end certificate} --- that is, the certificate whose
+identity, public key, and purpose are of interest to the application. The list
+of certificates satisfies the @emph{chain-validity} properties:
 @itemlist[
 
 @item{Each certificate is the issuer of the next---that is, the subject name of
@@ -336,15 +337,15 @@ users.
 
 @defmethod[(get-certificate) certificate?]{
 
-Returns the chain's end certificate --- that is, the certificate that the
+Returns the chain's @tech{end certificate} --- that is, the certificate that the
 chain certifies.
 }
 
 @defmethod[(get-certificates) (listof certificate?)]{
 
-Returns all of the certificates in @(this-obj), starting with the end
-certificate and ending with the @tech{trust anchor} (that is, most-specific
-first).
+Returns all of the certificates in @(this-obj), in ``reversed'' order: that is,
+the @tech{end certificate} is the first element of the resulting list and the
+@tech{trust anchor} is last.
 }
 
 @defmethod[(get-public-key [factories
@@ -352,8 +353,8 @@ first).
                             (crypto-factories)])
            public-only-key?]{
 
-Creates a public key from the SubjectPublicKeyInfo in the certificate
-using an implementation from @racket[factories].
+Creates a public key from the end certificate's SubjectPublicKeyInfo using an
+implementation from @racket[factories].
 }
 
 @defmethod[(trusted? [store certificate-store?]
@@ -399,8 +400,7 @@ Returns @racket[#t] if the end certificate has the @tt{KeyUsage} extension and
 the extension's value contains the key usage named by @racket[usage]. If the
 extension is present but does not contain @racket[usage], returns
 @racket[#f]. If the end certificate does not have a @tt{KeyUsage} extension,
-returns either the result of @racket[(default)] if @racket[default] is a
-procedure; otherwise, returns @racket[default].
+returns @racket[default].
 
 @examples[#:eval the-eval
 (send racket-chain ok-key-usage? 'keyAgreement)
