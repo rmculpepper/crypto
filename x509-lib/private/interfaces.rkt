@@ -55,18 +55,21 @@
     [is-CA? (->m boolean?)]
     [is-self-issued? (->m boolean?)]
     [is-self-signed? (->m boolean?)] ;; FIXME: remove?
-    [get-key-usages (->m (listof x509-key-usage/c))]
-    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any/c)]
+    [get-key-usages (case->m (-> (listof x509-key-usage/c))
+                             (-> any/c any/c))]
+    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
     [get-eku (->m asn1-oid? (or/c 'yes 'no 'unset))]
-    [get-ekus (->*m [] [any/c] any)]
+    [get-ekus (case->m (-> (listof asn1-oid?))
+                       (-> any/c any/c))]
 
     [get-extension (->m asn1-oid? (or/c #f x509-extension/c))]
-    [get-extension-value (->m asn1-oid? any/c any/c)]
+    [get-extension-value (->m asn1-oid? any/c any)]
 
     [get-name-constraints (->m (or/c #f x509-name-constraints/c))]
     [get-subject-alt-names
-     (->*m [] [(or/c #f x509-general-name-tag/c)]
-           (or/c (listof string?) (listof x509-general-name/c)))]
+     (case->m (-> (listof x509-general-name/c))
+              (-> (or/c #f x509-general-name-tag/c)
+                  (or/c (listof string?) (listof x509-general-name/c))))]
     [get-validity-seconds (->m (list/c exact-integer? exact-integer?))]
     ))
 
@@ -86,10 +89,11 @@
 
     [get-subject (->m x509-name/c)]
     [get-subject-alt-names
-     (->*m [] [(or/c #f x509-general-name-tag/c)]
-           (or/c (listof string?) (listof x509-general-name/c)))]
-    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any/c)]
-    [ok-extended-key-usage? (->*m [asn1-oid?] [any/c] any/c)]
+     (case->m (-> (listof x509-general-name/c))
+              (-> (or/c #f x509-general-name-tag/c)
+                  (or/c (listof string?) (listof x509-general-name/c))))]
+    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
+    [ok-extended-key-usage? (->*m [asn1-oid?] [any/c] any)]
 
     [get-public-key
      (->*m [] [(or/c crypto-factory? (listof crypto-factory?))] public-only-key?)]

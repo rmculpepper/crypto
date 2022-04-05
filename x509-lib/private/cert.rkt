@@ -73,12 +73,12 @@
     (define/public (get-extension-value id default)
       (cond [(get-extension id) => extension-value] [else default]))
 
-    (define/public (get-key-usages)
-      (get-extension-value id-ce-keyUsage null))
+    (define/public (get-key-usages [default null])
+      (get-extension-value id-ce-keyUsage default))
     (define/public (ok-key-usage? use [default #f])
       (cond [(get-extension-value id-ce-keyUsage #f)
              => (lambda (uses) (and (memq use uses) #t))]
-            [else (if (procedure? default) (default) default)]))
+            [else default]))
 
     (define/public (get-ekus [default null])
       (get-extension-value id-ce-extKeyUsage default))
