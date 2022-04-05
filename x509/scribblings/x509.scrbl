@@ -522,7 +522,7 @@ There are two main @deftech{certificate revocation} mechanisms: CRLs
 (send rev check-crl racket-chain)
 ]
 
-@defproc[(make-revocation-checker [db-file path-string?]
+@defproc[(make-revocation-checker [db-file (or/c path-string? 'memory 'temporary)]
                                   [#:trust-db? trust-db? boolean? #t]
                                   [#:fetch-ocsp? fetch-ocsp? boolean? #t]
                                   [#:fetch-crl? fetch-crl? boolean? #t])
@@ -558,8 +558,8 @@ Public interface for checking revocation of certificates.
 Both the @method[revocation-checker<%> check-ocsp] and
 @method[revocation-checker<%> check-crl] methods take certificate chains rather
 than certificates, because verifying revocation responses requires the public
-key of the certificate's issuer. Both methods check only the final certificate
-in the chain for revocation.
+key of the certificate's issuer. Both methods check only the end certificate in
+the chain for revocation.
 
 @defmethod[(check-ocsp [chain certificate-chain?]) list?]{
 
@@ -572,7 +572,7 @@ following symbols:
 @item{@racket['revoked] --- The certificate is revoked.}
 
 @item{@racket['no-sources] --- The certificate's status is unknown because the
-certificate listed no usable OCSP responder URLs. (This library uses only URLS
+certificate listed no usable OCSP responder URLs. (This library uses only URLs
 with the scheme @racket["http"] or @racket["https"].)}
 
 @item{@racket['unknown] --- The certificate's status is unknown, either because
