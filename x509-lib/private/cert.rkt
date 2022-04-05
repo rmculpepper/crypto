@@ -80,11 +80,11 @@
              => (lambda (uses) (and (memq use uses) #t))]
             [else default]))
 
-    (define/public (get-ekus [default null])
+    (define/public (get-extended-key-usages [default null])
       (get-extension-value id-ce-extKeyUsage default))
 
-    (define/public (get-eku eku) ;; (U 'yes 'no 'unset)
-      (cond [(get-ekus #f)
+    (define/public (get-extended-key-usage eku) ;; (U 'yes 'no 'unset)
+      (cond [(get-extended-key-usages #f)
              => (lambda (ekus) (if (member eku ekus) 'yes 'no))]
             [else 'unset]))
 
@@ -276,7 +276,7 @@
            (when critical? (bad! 'policy-constraints:critical-but-unsupported))]
           ;; 4.2.1.12 Extended Key Usage
           [(equal? ext-id id-ce-extKeyUsage)
-           (when (member anyExtendedKeyUsage (get-ekus))
+           (when (member anyExtendedKeyUsage (get-extended-key-usages))
              (when critical?
                (bad/should! 'extended-key-usage:critical-but-anyExtendedKeyUse)))]
           ;; 4.2.1.13 CRL Distribution points
@@ -646,11 +646,11 @@
 
     ;; ----------------------------------------
 
-    (define/override (get-eku eku)
+    (define/override (get-extended-key-usage eku)
       (define (member* x xs) (or (member x xs) (member anyExtendedKeyUsage xs)))
       (cond [(member* eku reject-ekus) 'no]
             [replace-ekus (if (member* eku replace-ekus) 'yes 'no)]
-            [else (super get-eku eku)]))
+            [else (super get-extended-key-usage eku)]))
     ))
 
 ;; ============================================================

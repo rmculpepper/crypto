@@ -174,13 +174,13 @@
           [(yes) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'unset])]
           [(no) 'no]
           [(unset) cert-result]))
-      (define result (foldr join 'unset (get-eku-chain eku)))
+      (define result (foldr join 'unset (get-extended-key-usage-chain eku)))
       (case result [(yes) #t] [(no) #f] [else on-unset]))
 
-    ;; get-eku-chain : OID -> (Listof (U 'yes 'no 'unset)), leaf first, root CA last
-    (define/public (get-eku-chain eku)
-      (cons (send cert get-eku eku)
-            (if issuer-chain (send issuer-chain get-eku-chain eku) '())))
+    ;; get-extended-key-usage-chain : OID -> (Listof (U 'yes 'no 'unset)), leaf first, root CA last
+    (define/public (get-extended-key-usage-chain eku)
+      (cons (send cert get-extended-key-usage eku)
+            (if issuer-chain (send issuer-chain get-extended-key-usage-chain eku) '())))
 
     ;; {from,to}-time : Seconds
     (define-values (from-time to-time)
@@ -387,7 +387,7 @@
              get-subject
              get-subject-alt-names
              ok-extended-key-usage?
-             get-eku-chain
+             get-extended-key-usage-chain
              check-as-final
              check-security-level
              check-validity-period)
@@ -438,7 +438,7 @@
           ;; in the responder certificate. One reason: Including the EKU in
           ;; ancestor CA certificates would allow every subordinate CA to sign
           ;; OCSP responses for its issuer CAs.
-          (and (eq? (send cert get-eku id-kp-OCSPSigning) 'yes)
+          (and (eq? (send cert get-extended-key-usage id-kp-OCSPSigning) 'yes)
                (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
     (define/public (suitable-for-tls-server? host)

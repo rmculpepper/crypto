@@ -58,9 +58,9 @@
     [get-key-usages (case->m (-> (listof x509-key-usage/c))
                              (-> any/c any/c))]
     [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
-    [get-eku (->m asn1-oid? (or/c 'yes 'no 'unset))]
-    [get-ekus (case->m (-> (listof asn1-oid?))
-                       (-> any/c any/c))]
+    [get-extended-key-usage (->m asn1-oid? (or/c 'yes 'no 'unset))]
+    [get-extended-key-usages (case->m (-> (listof asn1-oid?))
+                                      (-> any/c any/c))]
 
     [get-extension (->m asn1-oid? (or/c #f x509-extension/c))]
     [get-extension-value (->m asn1-oid? any/c any)]
