@@ -16,6 +16,10 @@
 @(the-eval '(require racket/class crypto crypto/libcrypto x509))
 @(the-eval '(crypto-factories libcrypto-factory))
 
+@(define (rfc-ref #:at fragment . content)
+   (define loc (format "https://datatracker.ietf.org/doc/html/rfc5280#~a" fragment))
+   (apply hyperlink loc content))
+
 @title[#:tag "x509"]{X.509 Certificates}
 
 @defmodule[x509]
@@ -165,19 +169,20 @@ typical certificate has at most one Common Name.
 ]
 }
 
-@defmethod[(get-subject-alt-names [kind (or/c #f symbol?) #f]) (listof any/c)]
+@defmethod[(get-subject-alt-names [kind (or/c #f x509-general-name-tag/c) #f])
+           (listof any/c)]{
 
 Returns a list of the certificate's Subject Alternative Names (SAN).
 
 If @racket[kind] is a symbol, only subject alternative names of the given kind
 are returned, and they are returned untagged. If @racket[kind] is @racket[#f],
 then all SAN entries are returned, and each entry is tagged with a kind symbol
-(the symbol identifies the variant of the X.509 @tt{GeneralName} type).
+(see @racket[x509-general-name-tag/c]).
 
 @examples[#:eval the-eval #:label #f
 (send racket-cert get-subject-alt-names)
 (send racket-cert get-subject-alt-names 'dNSName)
-]
+]}
 
 @defmethod[(get-validity-seconds) (list/c exact-integer? exact-integer?)]{
 
@@ -189,6 +194,27 @@ etc).
 (send racket-cert get-validity-seconds)
 ]
 }
+
+@defmethod[(get-spki) bytes?]{
+
+Gets the DER encoding of the certificate's SubjectPublicKeyInfo (SPKI).
+
+This can be converted to a public key with @racket[datum->pk-key], but it is
+usually better to validate the certificate first and then call the chain's
+@method[certificate-chain<%> get-public-key] method.
+}
+
+@defmethod[(get-key-usages) (listof key-usage/c)]{
+
+@examples[#:eval the-eval #:label #f
+(send racket-cert get-key-usages)
+]}
+
+@defmethod[(get-ekus) (or/c #f (listof (listof exact-nonnegative-integer?)))]{
+
+@examples[#:eval the-eval #:label #f
+(send racket-cert get-ekus)
+]}
 
 @defmethod[(get-der) bytes?]{
 
@@ -225,6 +251,25 @@ intermixed with other diagnostic messages during TLS handshaking.
 Like @racket[read-pem-certificates], but reads from the given
 @racket[pem-file].
 }
+
+@defthing[x509-key-usage/c contract?]{
+
+Contract for symbols representing members of a @rfc-ref[#:at
+"section-4.2.1.3"]{@tt{KeyUsage}} extension value. Equivalent to
+@racketblock[
+(or/c 'digitalSignature 'nonRepudiation 'keyEncipherment 'dataEncipherment
+      'keyAgreement 'keyCertSign 'cRLSign 'encipherOnly 'decipherOnly)
+]}
+
+@defthing[x509-general-name-tag/c contract?]{
+
+Contract for symbols tagging kinds of @rfc-ref[#:at
+"section-4.2.1.6"]{@tt{GeneralName}}. Equivalent to
+@racketblock[
+(or/c 'otherName 'rfc822Name 'dNSName 'x400Address 'directoryName
+      'ediPartyName 'uniformResourceIdentifier 'iPAddress 'registeredID)
+]}
+
 
 @; ----------------------------------------
 @section[#:tag "chains"]{Certificate Chains}
