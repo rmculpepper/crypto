@@ -1,12 +1,20 @@
 #lang scribble/doc
 @(require scribble/manual
           scribble/basic
+          scribble/example
           racket/list
+          racket/runtime-path
           crypto/private/common/catalog
           (for-label racket/base
                      racket/class
                      racket/contract
                      crypto x509))
+
+@(define-runtime-path log-file "eval-logs/x509.rktd")
+@(define-runtime-path racket-pem-file "eval-logs/racket.pem")
+@(define the-eval (make-log-based-eval log-file 'replay))
+@(the-eval '(require racket/class crypto crypto/libcrypto x509))
+@(the-eval '(crypto-factories libcrypto-factory))
 
 @title[#:tag "x509"]{X.509 Certificates}
 
@@ -46,20 +54,73 @@ Note that @racket[(certificate? _v)] implies @racket[(is-a? _v
 certificate<%>)], but not vice versa. That is, a certificate object
 implements additional internal interfaces not exposed to users.
 
-@defmethod[(get-public-key) public-only-key?]{
+@(the-eval `(define racket-cert (car (pem-file->certificates ,(path->string racket-pem-file)))))
+@examples[#:eval the-eval #:label #f
+racket-cert
+]
 
-Creates a public key from the SubjectPublicKeyInfo in the certificate
-using a factory from @racket[(crypto-factories)].
+Two certificates are @racket[equal?] if they have the same DER encodings.
+
+@defmethod[(get-subject) any/c]{
+
+Returns the @tt{Name} of the certificate's subject.
+
+The result is a X.509 @tt{Name} value represented according to the rules of the
+@racketmodname[asn1] library. See @cite["PKIX"] for the definition of @tt{Name}.
+
+@examples[#:eval the-eval #:label #f
+(send racket-cert get-subject)
+]
 }
 
-@defmethod[(suitable-for-tls-server? [host string?]) boolean?]{
+@defmethod[(get-issuer) any/c]{
 
-Returns @racket[#t] if the certificate is suitable for identifying a TLS server
-and establishing a TLS connection, and if the certificate's subject common name
-(CN) or subject alternative name (SAN) matches the given @racket[host] name;
-otherwise, returns @racket[#f].
+Returns the @tt{Name} of the certificate's issuer.
+
+@examples[#:eval the-eval #:label #f
+(send racket-cert get-issuer)
+]
 }
 
+@defmethod[(get-subject-common-names) (listof string?)]{
+
+Returns a list of Common Names (CN) occuring in the certificate's subject. A
+typical certificate has at most one Common Name.
+
+@examples[#:eval the-eval #:label #f
+(send racket-cert get-subject-common-names)
+]
+}
+
+@defmethod[(get-subject-alt-names [kind (or/c #f symbol?) #f]) (listof any/c)]
+
+Returns a list of the certificate's Subject Alternative Names (SAN).
+
+If @racket[kind] is a symbol, only subject alternative names of the given kind
+are returned, and they are returned untagged. If @racket[kind] is @racket[#f],
+then all SAN entries are returned, and each entry is tagged with a kind symbol
+(the symbol identifies the variant of the X.509 @tt{GeneralName} type).
+
+@examples[#:eval the-eval #:label #f
+(send racket-cert get-subject-alt-names)
+(send racket-cert get-subject-alt-names 'dNSName)
+]
+
+@defmethod[(get-validity-seconds) (list/c exact-integer? exact-integer?)]{
+
+Returns the validity period of the certificate (from @tt{notBefore} to
+@tt{notAfter}) in seconds (see @racket[current-seconds], @racket[seconds->date],
+etc).
+
+@examples[#:eval the-eval #:label #f
+(send racket-cert get-validity-seconds)
+]
+}
+
+@defmethod[(get-der) bytes?]{
+
+Gets the DER encoding of the certificate.
+}
 }
 
 @defproc[(bytes->certificate [bs bytes?]) certificate?]{
@@ -77,11 +138,11 @@ be encoded in the RFC 7468 textual format @cite["RFC7468"]. (This format is ofte
 conflated with ``PEM'', although technically the two formats are not completely
 compatible.)
 
-Certificates are delimited by @tt{----BEGIN CERTIFICATE-----} and @tt{-----END
-CERTIFICATE-----} lines. Data outside of the delimiters is ignored and
-discarded, so certificates may be interleaved with other text. For example,
-the @exec{openssl s_client -showcerts} command logs certificates intermixed with
-other diagnostic messages during TLS handshaking.
+Certificates are delimited by @racket["----BEGIN CERTIFICATE-----"] and
+@racket["-----END CERTIFICATE-----"] lines. Data outside of the delimiters is
+ignored and discarded, so certificates may be interleaved with other text. For
+example, the @exec{openssl s_client -showcerts} command logs certificates
+intermixed with other diagnostic messages during TLS handshaking.
 }
 
 @defproc[(pem-file->certificates [pem-file path-string?]
@@ -101,13 +162,33 @@ otherwise. Certificate chains implement the @racket[certificate-chain<%>]
 interface.
 
 A @deftech{certificate chain} contains a non-empty list of certificates,
-starting with a root CA certificate and ending with the certificate whose
-identity, public key, and purpose are of interest to the application. The list
-of certificates satisfies the @emph{chain-validity} properties: each certificate
-is the issuer of the next, each certificate in the chain has a valid signature,
-and the validity period of the chain is non-empty. However,
-@emph{chain-validity} is only a basic well-formedness property; it does not mean
-that the end certificate is @emph{valid for a given purpose}. In particular:
+starting with a @deftech{trust anchor} (typically a root CA certificate) and
+ending with the certificate whose identity, public key, and purpose are of
+interest to the application. The list of certificates satisfies the
+@emph{chain-validity} properties:
+@itemlist[
+
+@item{Each certificate is the issuer of the next---that is, the subject name of
+each certificate ``matches'' @cite["PKIX"] the issuer name of the next
+certificate.}
+
+@item{Each certificate that acts as an issuer (that is, every certificate in the
+chain except possibly for the final certificate) is suitable as a CA
+certificate.}
+
+@item{Each certificate's public key verifies the signature of the next
+certificate in the chain. (Note that the trust anchor certificate's signature is
+not checked; its trust is determined by the certificate store.)}
+
+@item{The validity period of the chain is non-empty. The validity period of the
+chain is the intersection of the validity periods of all of the certificates in
+the chain. The certificates are not required to have strictly nested validity
+periods.}
+
+]
+However, @emph{chain-validity} is only a basic well-formedness property; it does
+not mean that the end certificate is @emph{valid for a given purpose}. In
+particular:
 @itemlist[
 
 @item{A chain does not necessarily start with a trusted root CA.}
@@ -134,9 +215,15 @@ certificate-chain<%>)], but not vice versa. That is, a certificate
 chain object implements additional internal interfaces not exposed to
 users.
 
-@defmethod[(get-end-certificate) certificate?]{
+@defmethod[(get-certificate) certificate?]{
 
 Returns the certificate that the chain certifies.
+}
+
+@defmethod[(get-public-key) public-only-key?]{
+
+Creates a public key from the SubjectPublicKeyInfo in the certificate
+using a factory from @racket[(crypto-factories)].
 }
 
 @defmethod[(trusted? [store certificate-store?]
@@ -144,23 +231,52 @@ Returns the certificate that the chain certifies.
                      [to-time exact-integer? (current-seconds)])
            boolean?]{
 
-Returns @racket[#t] if the chain starts with a root CA certificate that is
-trusted according to @racket[store] and if the validity of the chain includes
-the period from @racket[from-time] to @racket[to-time]; otherwise, returns
-@racket[#f].
+Returns @racket[#t] if the chain's @tech{trust anchor} certificate is trusted
+according to @racket[store] and if the validity of the chain includes the period
+from @racket[from-time] to @racket[to-time]; otherwise, returns @racket[#f].
 }
 
-@defmethod[(suitable-for-tls-server? [host string?]) boolean?]{
+@defmethod[(get-issuer-chain) (or/c certificate-chain? #f)]{
 
-Returns @racket[#t] if the chain ends with a certificate that is suitable for
-identifying a TLS server and matches the given @racket[host] DNS name;
-otherwise, returns @racket[#f].
+Returns the tail of the certificate chain corresponding to this certificate's
+issuer, or @racket[#f] if the current certificate is the @emph{trust anchor}.
+}
+
+@defmethod[(get-anchor) certificate-chain?]{
+
+Returns the tail of the certificate chain corresponding to the @tech{trust anchor}.
+}
+
+@defmethod[(get-subject) any/c]{
 
 Equivalent to
 @racketblock[
-(send (send @#,(this-obj) get-end-certificate)
-      suitable-for-tls-server? host)
+(send (send #,(this-obj) #,(method certificate-chain<%> get-certificate)) #,(method certificate<%> get-subject))
 ]
+}
+
+@defmethod[(get-subject-alt-names [kind (or/c symbol? #f) #f]) (listof any/c)]{
+
+Equivalent to
+@racketblock[
+(send (send #,(this-obj) #,(method certificate-chain<%> get-certificate))
+      #,(method certificate<%> get-subject-alt-names) kind)
+]}
+
+@defmethod[(suitable-for-tls-server? [host (or/c string? #f)]) boolean?]{
+
+Returns @racket[#t] if the chain ends with a certificate that is suitable for
+identifying a TLS server, and if the certificate has a subject alternative name
+(SAN) that matches the given @racket[host] DNS name; otherwise, returns
+@racket[#f]. If @racket[host] is @racket[#f], the DNS name check is omitted.
+}
+
+@defmethod[(suitable-for-tls-client? [name any/c #f]) boolean?]{
+
+Returns @racket[#t] if the chain's certificate is suitable for identifying a
+client to a TLS server, and if the certificate has a subject name or subject
+alternative name (SAN) that matches the given @racket[name]; otherwise, returns
+@racket[#f]. If @racket[name] is @racket[#f], then the name check is omitted.
 }
 }
 
@@ -172,13 +288,25 @@ Returns @racket[#f] if @racket[v] is a certificate store, @racket[#f]
 otherwise. Certificate stores implement the @racket[certificate-store<%>]
 interface.
 
-A @deftech{certificate store} contains certificates for the a priori trusted
-root CAs. Root CA certificates are typically self-issued and self-signed. The
-store may also contain certificates that are not directly trusted, but may be
-used in the construction of chains.
+A @deftech{certificate store} determines which certificates are trusted a
+priori---usually, these trusted certificates correspond to root CAs, which are
+typically self-issued and self-signed. In this context, ``trusted'' means that
+the assertion that the certificate represents (binding a public key to
+identities and purposes) is accepted at face value; it does not mean that the
+certificate is automatically accepted as suitable for every purpose.
+
+The store may also contain certificates that are not directly trusted, but may
+be used in the construction of chains.
 }
 
 @definterface[certificate-store<%> ()]{
+
+Public interface for certificate stores.
+
+Note that @racket[(certificate-store? _v)] implies @racket[(is-a? _v
+certificate-store<%>)], but not vice versa. That is, a certificate
+store object implements additional internal interfaces not exposed to
+users.
 
 @defmethod[(add [#:trusted-certs trusted-certs (listof certificate?) null]
                 [#:untrusted-certs untrusted-certs (listof certificate?) null])
@@ -188,7 +316,7 @@ Creates a new certificate store like @(this-obj) but where
 @itemlist[
 @item{The @racket[trusted-certs] and @racket[untrusted-certs] are available for
 building certificate chains.}
-@item{The @racket[trusted-certs] are considered trusted roots.}
+@item{The @racket[trusted-certs] are considered trusted.}
 ]
 Note: trust is monotonic. That is, if a certificate is already trusted, then
 adding it again as an untrusted certificate does not make it untrusted.
@@ -213,13 +341,15 @@ in @racket[dir], which uses OpenSSL-style hashing.
                         [valid-time exact-integer? (current-seconds)])
            certificate-chain?]{
 
-Builds a certificate chain starting with some trusted root CA and ending with
-@racket[end-cert]. The chain may be built from intermediate certificates from
-@racket[other-untrusted-certs] in addition to the certificates already in the
-store. The result chain is chain-valid; it is valid for a period including
-@racket[valid-time]; and it starts with a root CA trusted by @(this-obj).
+Builds a certificate chain starting with some trusted certificate and ending
+with @racket[end-cert]. The chain may be built from intermediate certificates
+from @racket[other-untrusted-certs] in addition to the certificates already in
+the store. The result chain is chain-valid; it is valid for a period including
+@racket[valid-time]; and it starts with an anchor trusted by @(this-obj).
 
-If no such chain can be constructed, an exception is raised.
+If no such chain can be constructed, an exception is raised. If multiple chains
+can be constructed, one is selected, but there are no guarantees about how it is
+selected.
 }
 
 @defmethod[(build-chains [end-cert certificate?]
@@ -246,3 +376,5 @@ period including @racket[valid-time]; and it starts with a root CA trusted by
 }
 
 }
+
+@(close-eval the-eval)
