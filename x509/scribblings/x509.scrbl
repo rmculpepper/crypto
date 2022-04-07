@@ -31,9 +31,6 @@ and interpretations defined by @cite["PKIX"] and the
 @hyperlink["https://cabforum.org/baseline-requirements/"]{Baseline
 Requirements}.
 
-Note that @racketmodname[x509] is provided by the @tt{x509-lib}
-package, not @tt{crypto-lib}.
-
 @section[#:tag "cert-intro"]{Introduction to Using Certificates}
 
 The following example shows how to configure a @tech{certificate store} with
@@ -569,7 +566,7 @@ There are two main @deftech{certificate revocation} mechanisms: CRLs
 (Certificate Revocation Lists) and OCSP (Online Certificate Status Protocol).
 
 @examples[#:eval the-eval
-(define rev (make-revocation-checker "/tmp/rev.db" #:fetch-crl? #f))
+(define rev (make-revocation-checker 'temporary #:fetch-crl? #f))
 (send rev check-ocsp racket-chain)
 (send rev check-crl racket-chain)
 ]
@@ -584,7 +581,7 @@ Returns an object for performing certificate revocation checks using OCSP and
 CRLs.
 
 The @racket[db-file] is a SQLite3 database file used to cache OCSP and CRL
-responses. These responses carry signatures, so they can cached even if the
+responses. These responses carry signatures, so they can be cached even if the
 cache is untrusted. (When the cache contains a response, the response is
 re-verified, and if verification fails then the cached response is discarded and
 a new response is retrieved.)
@@ -610,14 +607,14 @@ Public interface for checking revocation of certificates.
 Both the @method[revocation-checker<%> check-ocsp] and
 @method[revocation-checker<%> check-crl] methods take certificate chains rather
 than certificates, because verifying revocation responses requires the public
-key of the certificate's issuer. Both methods check only the end certificate in
-the chain for revocation.
+key of the certificate's issuer. Both methods check only the @tech{end
+certificate} of the chain for revocation.
 
 @defmethod[(check-ocsp [chain certificate-chain?]) list?]{
 
 Returns @racket['()] to indicate success (at least one OCSP response indicated
-that the certificate is good) or a non-empty list to indicate failure or another
-condition. If the list is non-empty, it will contain at least one of the
+that the end certificate is good) or a non-empty list to indicate failure or
+another condition. If the list is non-empty, it will contain at least one of the
 following symbols:
 @itemlist[
 
@@ -637,7 +634,7 @@ the responder does not know the certificate's status.}
 @defmethod[(check-crl [chain certificate-chain?]) list?]{
 
 Returns @racket['()] to indicate success (at least one CRL was found and the
-certificate of @racket[chain] was absent from its revocation list) or a
+end certificate of @racket[chain] was absent from its revocation list) or a
 non-empty list to indicate failure or another condition. If the list is
 non-empty, it will contain at least one of the following symbols:
 @itemlist[
@@ -661,6 +658,14 @@ failure or server problem), or the retrieved CRL had a bad signature, or
 
 @bibliography[
 #:tag "x509-bibliography"
+
+@bib-entry[#:key "PKIX"
+           #:title "RFC 5280: Internet X.509 Public Key Infrastructure: Certificate and CRL Profile"
+           #:url "https://tools.ietf.org/html/rfc5280"]
+
+@bib-entry[#:key "RFC7468"
+           #:title "Textual Encodings of PKIX, PKCS, and CMS Structures"
+           #:url "https://tools.ietf.org/html/rfc7468"]
 
 @bib-entry[#:key "CAB-BR"
            #:title "Baseline Requirements for the Issuance and Management of Publicly-Trusted Certificates"
