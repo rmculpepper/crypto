@@ -4,7 +4,7 @@
          racket/list
          racket/class
          racket/pretty
-         "x509.rkt")
+         x509)
 (provide (all-defined-out))
 
 (module util racket/base
