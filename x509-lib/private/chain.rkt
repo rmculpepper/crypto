@@ -338,41 +338,41 @@
     ;; ----------------------------------------
     ;; Checking security level
 
-    (define/public (get-public-key-security-bits)
+    (define/public (get-public-key-security-strength)
       (send (get-public-key) get-security-bits))
-    (define/public (get-signature-security-bits [use-issuer-key? #t])
+    (define/public (get-signature-security-strength [use-issuer-key? #t])
       (define-values (algid _tbs _sig) (send cert get-cert-signature-info))
-      (define sig-secbits (sig-alg-security-bits algid))
+      (define sig-secbits (sig-alg-security-strength algid))
       (define issuer-key-secbits
         (and use-issuer-key? issuer-chain
-             (send issuer-chain get-public-key-security-bits)))
+             (send issuer-chain get-public-key-security-strength)))
       (cond [(and sig-secbits issuer-key-secbits) (min sig-secbits issuer-key-secbits)]
             [else (or sig-secbits issuer-key-secbits)]))
 
     (define/public (get-public-key-security-level)
-      (security-bits->level (get-public-key-security-bits)))
+      (security-strength->level (get-public-key-security-strength)))
     (define/public (get-signature-security-level [use-issuer-key? #t])
-      (define secbits (get-signature-security-bits use-issuer-key?))
-      (and secbits (security-bits->level secbits)))
+      (define secbits (get-signature-security-strength use-issuer-key?))
+      (and secbits (security-strength->level secbits)))
 
-    ;; check-security-bits : Nat -> (Result #t (Listof (cons Nat Symbol)))
-    (define/public (check-security-bits target-secbits)
+    ;; check-security-strength : Nat -> (Result #t (Listof (cons Nat Symbol)))
+    (define/public (check-security-strength target-secbits)
       (append-results
-       (cond [(>= (get-public-key-security-bits) target-secbits) (ok #t)]
+       (cond [(>= (get-public-key-security-strength) target-secbits) (ok #t)]
              ;; Note: here index means owner of public key.
              [else (bad (list (cons index 'security-level:weak-public-key)))])
        (cond [issuer-chain
               (append-results
-               (let ([sig-secbits (get-signature-security-bits #f)])
+               (let ([sig-secbits (get-signature-security-strength #f)])
                  (cond [(or (eq? sig-secbits #f) (>= sig-secbits target-secbits)) (ok #t)]
                        ;; Note: here index means site of signature (created by issuer!).
                        [else (bad (list (cons index 'security-level:weak-signature-algorithm)))]))
-               (send issuer-chain check-security-bits target-secbits))]
+               (send issuer-chain check-security-strength target-secbits))]
              [else (ok #t)])))
 
     ;; check-security-level : Nat[0-5] -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-security-level level)
-      (check-security-bits (security-level->bits level)))
+      (check-security-strength (security-level->strength level)))
     ))
 
 (define bad-chain%

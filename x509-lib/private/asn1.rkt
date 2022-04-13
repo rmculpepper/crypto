@@ -5,7 +5,7 @@
 (require racket/match
          asn1 asn1/util/names
          crypto/private/common/asn1
-         (only-in crypto/private/common/catalog digest-security-bits)
+         (only-in crypto/private/common/catalog digest-spec-security-strength)
          "interfaces.rkt")
 (provide (all-defined-out)
          relation-ref)
@@ -629,11 +629,11 @@
      #t]
     [else #f]))
 
-;; sig-alg-security-bits : AlgorithmIdentifier -> Nat/#f
+;; sig-alg-security-strength : AlgorithmIdentifier -> Nat/#f
 ;; Returns the security bits for the *digest* used by the signature algorithm.
 ;; The public key strength is not considered. Returns #f when there is no separate
 ;; digest, 0 for unknown digest.
-(define (sig-alg-security-bits alg)
+(define (sig-alg-security-strength alg)
   (define alg-oid (hash-ref alg 'algorithm))
   (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
     [(list 'eddsa #f) #f]
@@ -645,9 +645,9 @@
              [(pss-with-digest? alg-params id-sha384 48) 'sha384]
              [(pss-with-digest? alg-params id-sha512 64) 'sha512]
              [else #f]))
-     (if di (digest-security-bits di #t) 0)]
+     (if di (digest-spec-security-strength di #t) 0)]
     [(list pk di)
-     (digest-security-bits di #t)]
+     (digest-spec-security-strength di #t)]
     [_ 0]))
 
 (module+ verify

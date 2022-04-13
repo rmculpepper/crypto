@@ -115,8 +115,8 @@
            [time/c time/c #:security-level exact-nonnegative-integer?]
            (result/c #t (listof (cons/c exact-nonnegative-integer? any/c))))]
 
-    [get-public-key-security-bits (->m exact-nonnegative-integer?)]
-    [get-signature-security-bits (->*m [] [boolean?] (or/c #f exact-nonnegative-integer?))]
+    [get-public-key-security-strength (->m exact-nonnegative-integer?)]
+    [get-signature-security-strength (->*m [] [boolean?] (or/c #f exact-nonnegative-integer?))]
 
     [get-public-key-security-level (->m security-level/c)]
     [get-signature-security-level (->*m [] [boolean?] (or/c #f security-level/c))]
