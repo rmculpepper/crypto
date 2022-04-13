@@ -387,22 +387,27 @@ public key and the algorithm specified by @racket[algid].}
 
 @defmethod[(trusted? [store certificate-store?]
                      [from-time exact-integer? (current-seconds)]
-                     [to-time exact-integer? from-time])
+                     [to-time exact-integer? from-time]
+                     [#:security-level security-level exact-nonnegative-integer? 0])
            boolean?]{
 
 Returns @racket[#t] if the chain's @tech{trust anchor} certificate is trusted
-according to @racket[store] and if the validity of the chain includes the period
-from @racket[from-time] to @racket[to-time]; otherwise, returns @racket[#f].
+according to @racket[store], the validity of the chain includes the period from
+@racket[from-time] to @racket[to-time], and the security level of all public
+keys and signatures in the chain is at least @racket[security-level]; otherwise,
+returns @racket[#f].
 
 Equivalent to
 @racketblock[
-(ok? (send #,(this-obj) #,(method certificate-chain<%> check-trust) store from-time to-time))
+(ok? (send #,(this-obj) #,(method certificate-chain<%> check-trust) store from-time to-time
+           #:security-level security-level))
 ]
 }
 
 @defmethod[(check-trust [store certificate-store?]
                         [from-time exact-integer? (current-seconds)]
-                        [to-time exact-integer? from-time])
+                        [to-time exact-integer? from-time]
+                        [#:security-level security-level exact-nonnegative-integer? 0])
            (result/c #t (listof (cons/c exact-nonnegative-integer? any/c)))]{
 
 Similar to @method[certificate-chain<%> trusted?], but the result is one of the
@@ -410,14 +415,50 @@ following:
 @itemlist[
 
 @item{The result is @racket[(ok #t)] if the chain's @tech{trust anchor}
-certificate is trusted by @racket[store] and if the validity of the chain
-includes the period from @racket[from-time] to @racket[to-time].}
+certificate is trusted by @racket[store], the validity of the chain includes the
+period from @racket[from-time] to @racket[to-time], and the security level of
+all public keys and signatures in the chain is at least
+@racket[security-level].}
 
 @item{The result is @racket[(bad (list (cons _cert-index _fault) ...))]
 otherwise, where each @racket[_cert-index] is the index of the certificate where
 the problem occurred (starting with 0 for the @tech{trust anchor}) and
 @racket[_fault] is a value (usually a symbol) describing the problem.}
 
+]}
+
+@defmethod[(get-public-key-security-level) (integer-in 0 5)]{
+
+Returns the security level of the end certificate's public key.
+
+The result corresponds to an
+@hyperlink["https://www.openssl.org/docs/man3.0/man3/SSL_CTX_set_security_level.html"]{OpenSSL
+security level}.
+
+@examples[#:eval the-eval
+(send racket-chain get-public-key-security-level)
+]}
+
+@defmethod[(get-signature-security-level [use-issuer-key? #t])
+           (or/c #f (integer-in 0 5))]{
+
+Returns the security level of the signature in the end certificate performed by
+the end certificate's issuer.
+
+If @racket[use-issuer-key?] is true, then the security level takes into account
+both the signature algorithm and the security level of the issuer's key (if
+@method[certificate-chain<%> get-issuer-chain] does not return @racket[#f]),
+returning the minimum of the two levels. If @racket[use-issuer-key?] is false,
+then only the security level of the signature algorithm is used.
+
+The result is @racket[#f] if the signature algorithm has no security level
+independent of the issuer's key (for example, EdDSA) and either the issuer is
+not in the chain or @racket[user-issuer-key?] was @racket[#f].
+
+@examples[#:eval the-eval
+(send racket-chain get-signature-security-level)
+(let ([issuer-chain (send racket-chain get-issuer-chain)])
+  (send issuer-chain get-signature-security-level))
 ]}
 
 @defmethod[(get-issuer-chain) (or/c certificate-chain? #f)]{
