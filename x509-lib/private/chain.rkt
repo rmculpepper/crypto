@@ -3,11 +3,13 @@
          racket/match
          racket/list
          racket/serialize
+         scramble/result
          crypto
          "interfaces.rkt"
          "asn1.rkt"
          (submod "asn1.rkt" verify)
-         "cert.rkt")
+         "cert.rkt"
+         "util.rkt")
 (provide (all-defined-out))
 
 ;; References:
@@ -30,17 +32,14 @@
 ;; A CandidateChain is (list TrustAnchor Cert ...),
 ;; where TrustAnchor is currently always also a Cert.
 
-;; check-candidate-chain : CandidateChain -> (values CertificateChain/#f ErrorList)
+;; check-candidate-chain : CandidateChain -> (Result CertificateChain List)
 ;; Checks the properties listed under certificate-chain%.
 (define (check-candidate-chain certs)
   (define pre-chain
     (for/fold ([chain (make-anchor-chain (car certs))])
               ([cert (in-list (cdr certs))])
       (send chain extend-chain cert)))
-  (cond [(is-a? pre-chain bad-chain%)
-         (values #f (send pre-chain get-errors))]
-        [(is-a? pre-chain certificate-chain%)
-         (values pre-chain null)]))
+  (send pre-chain get-validation-result))
 
 ;; ============================================================
 
@@ -116,6 +115,7 @@
                    (parameterize ((crypto-factories factory/s))
                      (datum->pk-key (send cert get-spki) 'SubjectPublicKeyInfo)))))
 
+    ;; check-signature : AlgorithmIdentifier Bytes Bytes -> (Result #t (Listof Symbol))
     (define/public (check-signature algid tbs sig)
       (check-signature/algid (get-public-key) algid tbs sig))
 
@@ -208,45 +208,50 @@
     (define/public (extend-chain new-cert)
       (hash-ref! extension-cache new-cert
                  (lambda ()
-                   (define errors
-                     (append (check-as-intermediate)
-                             (check-chain-addition new-cert)
-                             (get-errors)))
-                   (cond [(pair? errors)
-                          (new bad-chain% (issuer-chain this) (cert new-cert) (errors errors))]
-                         [else (new certificate-chain% (issuer-chain this) (cert new-cert))]))))
+                   (define result
+                     (append-results (check-as-intermediate)
+                                     (check-chain-addition new-cert)
+                                     (get-validation-result)))
+                   (match result
+                     [(ok _)
+                      (new certificate-chain% (issuer-chain this) (cert new-cert))]
+                     [(? bad?)
+                      (new bad-chain% (issuer-chain this) (cert new-cert)
+                           (validation-result result))]))))
 
-    (define/public (get-errors) null)
+    ;; get-validation-result : -> (Result CertificateChain (Listof (cons Nat Any)))
+    (abstract get-validation-result)
 
-    ;; check-as-intermediate : -> ErrList
+    ;; check-as-intermediate : -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-as-intermediate)
       (define (add-index what) (cons (get-index) what))
       ;; 6.1.4
-      (append
+      (append-results
        ;; 6.1.4 (a-b) policy-mappings, policies, ...
        #| POLICIES NOT SUPPORTED |#
        ;; 6.1.4 (c-f) handled by get-public-key method instead
        ;; 6.1.4 (g) name constraints -- in constructor
        ;; 6.1.4 (h, l) decrement counters -- in constructor
-       (cond [(>= (or max-path-length +inf.0) 0) '()]
-             [else (map add-index '(intermediate:max-path-length))])
+       (cond [(>= (or max-path-length +inf.0) 0) (ok #t)]
+             [else (bad (list (add-index 'intermediate:max-path-length)))])
        ;; 6.1.4 (i, j) policy-mapping, inhibit-anypolicy, ...
        #| POLICIES NOT SUPPORTED |#
        ;; 6.1.4 (k) check CA (reject if no basicConstraints extension)
-       (cond [(send cert is-CA?) '()]
-             [else (map add-index '(intermediate:not-CA))])
+       (cond [(send cert is-CA?) (ok #t)]
+             [else (bad (list (add-index 'intermediate:not-CA)))])
        ;; 6.1.4 (m) -- in constructor
        ;; 6.1.4 (n)
-       (cond [(send cert ok-key-usage? 'keyCertSign #t) '()]
-             [else (map add-index '(intermediate:missing-keyCertSign))])
+       (cond [(send cert ok-key-usage? 'keyCertSign #t) (ok #t)]
+             [else (bad (list (add-index 'intermediate:missing-keyCertSign)))])
        ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
        #| checked in certificate% |#))
 
-    ;; check-as-final : -> ErrList
+    ;; check-as-final : -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-as-final)
-      (append
+      (append-results
        ;; 6.1.3 (b,c) -- deferred
-       (if issuer-chain (send issuer-chain check-certificate-name-constraints cert) '())
+       (cond [issuer-chain (send issuer-chain check-certificate-name-constraints cert)]
+             [else (ok #t)])
        ;; 6.1.5
        ;; 6.1.5 (a,b) explicit-policy, policies
        #| POLICIES NOT SUPPORTED |#
@@ -255,72 +260,80 @@
        ;; 6.1.5 (g) policies ...
        #| POLICIES NOT SUPPORTED |#))
 
-    ;; check-with-issuer-chain : Chain -> ErrList
+    ;; check-chain-addition : Cert -> (Result #t (Listof (cons Nat Any)))
     (define/public (check-chain-addition new-cert)
       (define (add-index what) (cons (add1 index) what))
       ;; 6.1.3
-      (append
+      (append-results
        ;; 6.1.3 (a)(1) verify signature
-       (map add-index (check-certificate-signature new-cert))
+       (bad-map add-index (check-certificate-signature new-cert))
        ;; 6.1.3 (a)(2) currently valid
        (match (send new-cert get-validity-seconds)
          [(list cert-from cert-to)
-          (cond [(<= (max from-time cert-from) (min to-time cert-to)) '()]
-                [else (map add-index '(validity-period:empty-intersection))])])
+          (cond [(<= (max from-time cert-from) (min to-time cert-to)) (ok #t)]
+                [else (bad (list (add-index 'validity-period:empty-intersection)))])])
        ;; 6.1.3 (a)(3) (not revoked)
        #| CRL checked separately |#
        ;; 6.1.3 (a)(4) issuer
-       (cond [(Name-equal? (send new-cert get-issuer) (get-subject)) '()]
-             [else (map add-index '(issuer:name-mismatch))])
+       (cond [(Name-equal? (send new-cert get-issuer) (get-subject)) (ok #t)]
+             [else (bad (list (add-index 'issuer:name-mismatch)))])
        ;; 6.1.3 (b,c) check name constraints
        (cond [(send new-cert is-self-issued?)
               ;; Check self-issued cert's name constraints only if final.
               ;; So skip now, add to check-for-final
-              null]
-             [else (map add-index (check-certificate-name-constraints new-cert))])
+              (ok #t)]
+             [else (bad-map add-index (check-certificate-name-constraints new-cert))])
        ;; 6.1.3 (d-f) process policies; set/check valid-policy-tree, explicit-policy
        #| POLICIES NOT SUPPORTED |#))
 
+    ;; check-certificate-signature : Cert -> (Result #t (Listof Symbol))
     (define/public (check-certificate-signature new-cert)
       (define-values (algid tbs-der sig) (send new-cert get-cert-signature-info))
       (check-signature algid tbs-der sig))
 
+    ;; check-certificate-name-constraints : Cert -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-certificate-name-constraints new-cert)
       (define subject-name (send new-cert get-subject))
       (define alt-names (send new-cert get-subject-alt-names))
-      (append
+      (append-results
        (check-name-constraints (list 'directoryName subject-name) 'subject)
-       (append*
+       (append*-results
         (match subject-name
           [(list 'rdnSequence rdns)
-           (for*/list ([rdn (in-list rdns)] [av (in-list rdn)]
+           (for*/list ([rdn (in-list rdns)]
+                       [av (in-list rdn)]
                        #:when (equal? (hash-ref av 'type) id-emailAddress))
              (check-name-constraints (list 'rfc822Name (hash-ref av 'value)) 'subject-email))]))
-       (append* (for/list ([san (in-list alt-names)])
-                  (check-name-constraints san 'alt)))))
+       (append*-results
+        (for/list ([san (in-list alt-names)])
+          (check-name-constraints san 'alt)))))
 
+    ;; check-name-constraints : GeneralName Symbol -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-name-constraints gname kind)
       ;; 6.1.4 (g) name constraints
-      (append
-       (cond [(name-constraints-name-ok? name-constraints gname) null]
-             [else (case kind
+      (append-results
+       (cond [(name-constraints-name-ok? name-constraints gname) (ok #t)]
+             [else
+              (bad (case kind
                      [(subject) (list (cons index 'name-constraints:subject-rejected))]
                      [(subject-email) (list (cons index 'name-constraint:subject-email-rejected))]
-                     [else (list (cons index 'name-constraints:subjectAltName-rejected))])])
-       (if issuer-chain (send issuer-chain check-name-constraints gname kind) null)))
+                     [else (list (cons index 'name-constraints:subjectAltName-rejected))]))])
+       (if issuer-chain (send issuer-chain check-name-constraints gname kind) (ok #t))))
 
+    ;; check-validity-period : Real Real -> (Result #t (Listof Nat Symbol))
     (define/public (check-validity-period from-time to-time)
       (match-define (list ok-start ok-end) (get-validity-seconds))
-      (cond [(<= ok-start from-time to-time ok-end) '()]
-            [else
-             (cons (cons index 'validity-period:not-contained)
-                   (if issuer-chain
-                       (send issuer-chain check-validity-period from-time to-time)
-                       null))]))
+      (if (<= ok-start from-time to-time ok-end)
+          (ok #t)
+          (append*-results
+           (bad (list (cons index 'validity-period:not-contained)))
+           (cond [issuer-chain (send issuer-chain check-validity-period from-time to-time)]
+                 [else (ok #t)]))))
 
     ;; ----------------------------------------
     ;; Checking security level
 
+    ;; get-security-bits-chain : -> (Listof Nat)
     (define/public (get-security-bits-chain)
       (cons (send (get-public-key) get-security-bits)
             (cond [issuer-chain
@@ -329,21 +342,24 @@
                          (send issuer-chain get-security-bits-chain))]
                   [else null])))
 
+    ;; check-security-bits : Nat -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-security-bits sec-bits)
-      (append
+      (append-results
        (let ([pk (get-public-key)])
-         (cond [(<= sec-bits (send pk get-security-bits)) '()]
+         (cond [(<= sec-bits (send pk get-security-bits)) (ok #t)]
                ;; Note: here index means owner of public key.
-               [else (list (cons index 'security-level:weak-public-key))]))
+               [else (bad (list (cons index 'security-level:weak-public-key)))]))
        (cond [issuer-chain
               (define-values (algid _tbs _sig) (send cert get-cert-signature-info))
               (define sig-level (sig-alg-security-bits algid))
-              (append (cond [(<= sec-bits sig-level) '()]
-                            ;; Note: here index means site of signature (created by issuer!).
-                            [else (list (cons index 'security-level:weak-signature-algorithm))])
-                      (send issuer-chain check-security-bits sec-bits))]
-             [else null])))
+              (append-results
+               (cond [(<= sec-bits sig-level) (ok #t)]
+                     ;; Note: here index means site of signature (created by issuer!).
+                     [else (bad (list (cons index 'security-level:weak-signature-algorithm)))])
+               (send issuer-chain check-security-bits sec-bits))]
+             [else (ok #t)])))
 
+    ;; check-security-level : Nat -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-security-level level)
       (check-security-bits
        (case level [(0) 0] [(1) 80] [(2) 112] [(3) 128] [(4) 192] [(5) 256] [else 256])))
@@ -352,9 +368,9 @@
 (define bad-chain%
   (class pre-chain%
     (inherit-field issuer-chain)
-    (init-field errors)
+    (init-field validation-result)
     (super-new)
-    (define/override (get-errors) errors)))
+    (define/override (get-validation-result) validation-result)))
 
 ;; ============================================================
 
@@ -393,6 +409,8 @@
              check-validity-period)
     (super-new)
 
+    (define/override (get-validation-result) (ok this))
+
     (define/public (custom-write out)
       (fprintf out "#<certificate-chain: ~a>"
                (Name->string (send (get-certificate) get-subject))))
@@ -404,21 +422,22 @@
 
     ;; trusted? : Store/#f Seconds Seconds -> Boolean
     (define/public (trusted? store [from-time (current-seconds)] [to-time from-time])
-      (null? (check-trust store from-time to-time)))
+      (ok? (check-trust store from-time to-time)))
 
-    ;; check-trust : Store/#f Seconds Seconds -> ErrorList
+    ;; check-trust : Store/#f Seconds Seconds -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-trust store [from-time (current-seconds)] [to-time from-time]
                                 #:security-level [security-level 0])
-      (append (cond [(not store) '()]
-                    [(send store trust? (get-anchor)) '()]
-                    [else '((0 . anchor:not-trusted))])
-              (check-security-level security-level)
-              (check-as-final)
-              (check-validity-period from-time to-time)))
+      (append-results
+       (cond [(not store) (ok #t)]
+             [(send store trust? (get-anchor)) (ok #t)]
+             [else (bad '((0 . anchor:not-trusted)))])
+       (check-security-level security-level)
+       (check-as-final)
+       (check-validity-period from-time to-time)))
 
     ;; ok-validity-period? : Seconds [Seconds] -> Boolean
     (define/public (ok-validity-period? [from-time (current-seconds)] [to-time from-time])
-      (null? (check-validity-period from-time to-time)))
+      (ok? (check-validity-period from-time to-time)))
 
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
@@ -442,7 +461,7 @@
                (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
     (define/public (suitable-for-tls-server? host)
-      (null? (check-suitable-for-tls-server host)))
+      (ok? (check-suitable-for-tls-server host)))
 
     (define/public (check-suitable-for-tls-server host)
       ;; FIXME: add option to accept anyExtendedKeyUsage?
@@ -454,35 +473,38 @@
       ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
       ;; - CA/B Baseline Requirements (Section 7.1 Certificate Profile)
       (define USE-CN? #f)
-      (append (cond [(for/or ([use (in-list tls-key-usages)]) (ok-key-usage? use #t)) '()]
-                    [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-usage? id-kp-serverAuth #f) '()]
-                    [else '(tls:missing-serverAuth-eku)])
-              (cond [(or (not host)
-                         (for/or ([pattern (in-list (get-subject-alt-names 'dNSName))])
-                           (host-matches? host pattern))
-                         (and USE-CN?
-                              (for/or ([cn (in-list (send cert get-subject-common-names))])
-                                (and cn (host-matches? host cn)))))
-                     '()]
-                    [else '(tls:host-mismatch)])))
+      (append-results
+       (cond [(for/or ([use (in-list tls-key-usages)]) (ok-key-usage? use #t)) (ok #t)]
+             [else (bad '(tls:missing-key-usage))])
+       (cond [(ok-extended-key-usage? id-kp-serverAuth #f) (ok #t)]
+             [else (bad '(tls:missing-serverAuth-eku))])
+       (cond [(or (not host)
+                  (for/or ([pattern (in-list (get-subject-alt-names 'dNSName))])
+                    (host-matches? host pattern))
+                  (and USE-CN?
+                       (for/or ([cn (in-list (send cert get-subject-common-names))])
+                         (and cn (host-matches? host cn)))))
+              (ok #t)]
+             [else (bad '(tls:host-mismatch))])))
 
     (define/public (suitable-for-tls-client? name)
-      (null? (check-suitable-for-tls-client name)))
+      (ok? (check-suitable-for-tls-client name)))
 
     (define/public (check-suitable-for-tls-client name)
-      (append (cond [(for/or ([use (in-list tls-key-usages)]) (ok-key-usage? use #t)) '()]
-                    [else '(tls:missing-key-usage)])
-              (cond [(ok-extended-key-usage? id-kp-clientAuth #f) '()]
-                    [else '(tls:missing-clientAuth-eku)])
-              (cond [(or (not name)
-                         (GeneralName-equal? name (list 'directoryName (get-subject)))
-                         (for/or ([altname (in-list (get-subject-alt-names #f))])
-                           (GeneralName-equal? name altname)))
-                     '()]
-                    [else '(tls:name-mismatch)])))
+      (append-results
+       (cond [(for/or ([use (in-list tls-key-usages)]) (ok-key-usage? use #t)) (ok #t)]
+             [else (bad '(tls:missing-key-usage))])
+       (cond [(ok-extended-key-usage? id-kp-clientAuth #f) (ok #t)]
+             [else (bad '(tls:missing-clientAuth-eku))])
+       (cond [(or (not name)
+                  (GeneralName-equal? name (list 'directoryName (get-subject)))
+                  (for/or ([altname (in-list (get-subject-alt-names #f))])
+                    (GeneralName-equal? name altname)))
+              (ok #t)]
+             [else (bad '(tls:name-mismatch))])))
 
-    (define/public (ok-key-usage? use [default #f]) (send cert ok-key-usage? use default))
+    (define/public (ok-key-usage? use [default #f])
+      (send cert ok-key-usage? use default))
     ))
 
 ;; tls-key-usages is approximation; actually depends on TLS cipher negotiated

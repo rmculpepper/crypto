@@ -647,17 +647,27 @@
     [_ 0]))
 
 (module+ verify
-  (require racket/class crypto)
-  (provide check-signature/algid
-           verify/algid)
+  (require racket/class
+           racket/contract
+           scramble/result
+           crypto)
+  (provide (contract-out
+            [check-signature/algid
+             (-> pk-key? asn1-algorithm-identifier/c bytes? bytes?
+                 (result/c #t (listof symbol?)))]
+            [verify/algid
+             (-> pk-key? asn1-algorithm-identifier/c bytes? bytes?
+                 boolean?)]))
 
+  ;; check-signature/algid : PublicKey AlgorithmIdentifier Bytes Bytes
+  ;;                      -> (Result #t (Listof Symbol))
   (define (check-signature/algid pk alg tbs sig)
     (define alg-oid (hash-ref alg 'algorithm))
     (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
       [(list 'eddsa #f)
-       (cond [(not (eq? 'eddsa (send pk get-spec))) '(signature:key:wrong-type)]
-             [(pk-verify pk tbs sig) '()]
-             [else '(signature:bad)])]
+       (cond [(not (eq? 'eddsa (send pk get-spec))) (bad '(signature:key:wrong-type))]
+             [(pk-verify pk tbs sig) (ok #t)]
+             [else (bad '(signature:bad))])]
       [(list 'rsa #f) ;; means RSA w/ PSS
        (define alg-params (hash-ref alg 'parameters))
        (define di
@@ -666,18 +676,19 @@
                [(pss-with-digest? alg-params id-sha384 48) 'sha384]
                [(pss-with-digest? alg-params id-sha512 64) 'sha512]
                [else #f]))
-       (cond [(not (eq? 'rsa (send pk get-spec))) '(signature:key:wrong-type)]
-             [(not di) '(signature:unknown-pss-digest)]
-             [(not (pk-can-sign? pk 'pss di)) '(signature:key:unsupported-padding/digest)]
-             [(digest/verify pk di tbs sig #:pad 'pss) '()]
-             [else '(signature:bad)])]
+       (cond [(not (eq? 'rsa (send pk get-spec))) (bad '(signature:key:wrong-type))]
+             [(not di) (bad '(signature:unknown-pss-digest))]
+             [(not (pk-can-sign? pk 'pss di)) (bad '(signature:key:unsupported-padding/digest))]
+             [(digest/verify pk di tbs sig #:pad 'pss) (ok #t)]
+             [else (bad '(signature:bad))])]
       [(list pk-type di)
-       (cond [(not (eq? pk-type (send pk get-spec))) '(signature:key:wrong-type)]
-             [(not (pk-can-sign? pk #f di)) '(signature:key:unsupported-padding/digest)]
-             [(digest/verify pk di tbs sig) '()]
-             [else '(signature:bad)])]
-      [_ '(signature:unknown-algorithm)]))
+       (cond [(not (eq? pk-type (send pk get-spec))) (bad '(signature:key:wrong-type))]
+             [(not (pk-can-sign? pk #f di)) (bad '(signature:key:unsupported-padding/digest))]
+             [(digest/verify pk di tbs sig) (ok #t)]
+             [else (bad '(signature:bad))])]
+      [_ (bad '(signature:unknown-algorithm))]))
 
+  ;; verify/algid : PublicKey AlgorithmIdentifier Bytes Bytes -> Boolean
   ;; If key is wrong type just return #f, no error.
   (define (verify/algid pk alg tbs sig)
-    (null? (check-signature/algid pk alg tbs sig))))
+    (ok? (check-signature/algid pk alg tbs sig))))

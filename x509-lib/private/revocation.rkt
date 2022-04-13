@@ -3,6 +3,7 @@
          racket/class
          racket/list
          racket/port
+         scramble/result
          net/url
          net/uri-codec
          db/base
@@ -15,7 +16,8 @@
          (only-in "asn1.rkt" Name CertificateList CertificateList-for-verify-sig)
          (only-in "ocsp-asn1.rkt" OCSPRequest CertID id-pkix-ocsp-basic
                   OCSPResponse ResponseData SingleResponse BasicOCSPResponse)
-         "interfaces.rkt")
+         "interfaces.rkt"
+         "util.rkt")
 (provide (all-defined-out))
 
 (define-logger revocation)
@@ -60,6 +62,7 @@
 
     ;; ============================================================
 
+    ;; check-ocsp : Chain Seconds -> (Result #t Symbol)
     (define/public (check-ocsp chain [now (current-seconds)])
       (define cert (send chain get-certificate))
       (define certid-der (asn1->bytes/DER CertID (make-certid chain)))
@@ -71,12 +74,12 @@
                    (cond [(get-ocsp-single-response now chain ocsp-url certid-der req-der)
                           => (lambda (sr)
                                (match (hash-ref sr 'certStatus)
-                                 [(list 'good _) '()]
-                                 [(list 'revoked info) '(revoked)]
+                                 [(list 'good _) (ok #t)]
+                                 [(list 'revoked info) (bad 'revoked)]
                                  [(list 'unknown _) #f]))]
                          [else #f]))
-                 '(unknown))]
-            [else '(no-sources)]))
+                 (bad 'unknown))]
+            [else (bad 'no-sources)]))
 
     ;; get-ocsp-single-response : ... -> decoded-SingleResponse or #f
     ;; The resulting SingleResponse is trusted and unexpired.
@@ -142,18 +145,19 @@
 
     ;; ============================================================
 
+    ;; check-crl : Chain Seconds -> (Result #t (Listof Symbol))
     (define/public (check-crl chain [now (current-seconds)])
       ;; FIXME: require CRL issuer to be same as cert issuer
       (define crl-urls (certificate-crl-urls (send chain get-certificate)))
       (cond [(pair? crl-urls)
-             (append*
+             (append*-results
               (for/list ([crl-url (in-list crl-urls)])
                 (log-revocation-debug "trying CRL url: ~e" crl-url)
                 (match (get-crl-status now chain crl-url)
-                  ['absent '()]
-                  ['revoked '(revoked)]
-                  [#f '(unavailable)])))]
-            [else '(no-sources)]))
+                  ['absent (ok #t)]
+                  ['revoked (bad '(revoked))]
+                  [#f (bad '(unavailable))])))]
+            [else (bad '(no-sources))]))
 
     ;; get-crl-status : ... -> (U 'absent 'revoked #f)
     ;; If result is 'absent or 'revoked, from trusted and unexpired CRL.
@@ -322,7 +326,7 @@
                     [(bit-string sig-bytes 0) sig-bytes]))
       (define responder-chain (get-responder-chain issuer-chain))
       (and responder-chain
-           (null? (send responder-chain check-signature algid tbs-der sig))))
+           (ok? (send responder-chain check-signature algid tbs-der sig))))
 
     (define/public (get-responder-chain issuer-chain)
       (define (is-responder? cert)
@@ -415,7 +419,7 @@
       (define algid (hash-ref crl 'signatureAlgorithm))
       (define sig (match (hash-ref crl 'signature)
                     [(bit-string sig-bytes 0) sig-bytes]))
-      (null? (send issuer-chain check-signature algid tbs-der sig)))
+      (ok? (send issuer-chain check-signature algid tbs-der sig)))
 
     (define/public (get-this-update)
       (asn1-time->seconds (hash-ref tbs 'thisUpdate)))

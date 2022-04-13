@@ -2,12 +2,14 @@
 (require racket/match
          racket/class
          racket/list
+         scramble/result
          asn1
          crypto/pem
          "interfaces.rkt"
          "asn1.rkt"
          "cert.rkt"
-         "chain.rkt")
+         "chain.rkt"
+         "util.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================
@@ -89,7 +91,7 @@
       (define candidates (send store* build-candidate-chains end-cert))
       (unless (or (pair? candidates) empty-ok?)
         (raise-incomplete-chain-error who end-cert))
-      (check-chains candidates valid-time #:empty-ok? empty-ok? #:who who))
+      (validate-chains candidates valid-time #:empty-ok? empty-ok? #:who who))
 
     ;; build-candidate-chains : Cert -> (Listof (Listof Cert))
     (define/public (build-candidate-chains end-cert)
@@ -105,31 +107,35 @@
         (apply append complete (map (lambda (c) (loop (extend c))) incomplete)))
       (loop (list (list end-cert))))
 
-    ;; check-chain : (Listof Cert) -> CertificateChain
-    (define/public (check-chain candidate [valid-time (current-seconds)]
-                                #:who [who 'check-chain])
-      (car (check-chains (list candidate) valid-time #:empty-ok? #f #:who who)))
+    ;; validate-chain : (Listof Cert) -> CertificateChain
+    (define/public (validate-chain candidate [valid-time (current-seconds)]
+                                   #:who [who 'validate-chain])
+      (car (validate-chains (list candidate) valid-time #:empty-ok? #f #:who who)))
 
-    ;; check-chains : (Listof (Listof Cert)) -> (Listof CertificateChain)
+    ;; validate-chains : (Listof (Listof Cert)) -> (Listof CertificateChain)
     ;; Discards invalid chains, returns certificate-chain% objects for valid.
-    (define/public (check-chains candidates [valid-time (current-seconds)]
-                                 #:empty-ok? [empty-ok? #f]
-                                 #:who [who 'check-chains])
-      (define cv-chains
-        (fault-filter candidates empty-ok?
-                      (lambda (candidate)
-                        (check-candidate-chain candidate))
-                      (lambda (candidate errs)
-                        (raise-invalid-chain-error who candidate errs))))
-      (define trusted-chains
-        (fault-filter cv-chains empty-ok?
-                      (lambda (chain)
-                        (define errs
-                          (send chain check-trust this valid-time
-                                #:security-level security-level))
-                        (if (null? errs) (values chain null) (values #f errs)))
-                      (lambda (chain errs)
-                        (raise-invalid-chain-error who chain errs))))
+    (define/public (validate-chains candidates [valid-time (current-seconds)]
+                                    #:empty-ok? [empty-ok? #f]
+                                    #:who [who 'validate-chains])
+      (define cv-chains ;; (Listof CertificateChain)
+        (match (filter-results
+                #:empty-ok? empty-ok?
+                (for/list ([candidate (in-list candidates)])
+                  (check-candidate-chain candidate)))
+          [(ok cv-chains) cv-chains]
+          [(bad (cons errs _))
+           (raise-invalid-chain-error who errs)]))
+      (define trusted-chains ;; (Listof CertificateChain)
+        (match (filter-results
+                #:empty-ok? empty-ok?
+                (for/list ([chain (in-list cv-chains)])
+                  (match (send chain check-trust this valid-time
+                               #:security-level security-level)
+                    [(ok #t) (ok chain)]
+                    [(bad errs) (bad errs)])))
+          [(ok chains) chains]
+          [(bad (cons errs _))
+           (raise-invalid-chain-error who errs)]))
       trusted-chains)
 
     ;; ----------------------------------------
@@ -141,7 +147,7 @@
       (build-chain (car certs) certs valid-time #:who who))
     ))
 
-(define (raise-invalid-chain-error who end-cert errs)
+(define (raise-invalid-chain-error who errs)
   (let/ec escape
     (define msg (format "~s: chain validation failed\n  errors: ~e" who errs))
     (raise (exn:x509:chain msg (continuation-marks escape) errs))))
@@ -149,17 +155,6 @@
   (let/ec escape
     (define msg (format "~s: failed to build complete chain\n  end certificate: ~e" who end-cert))
     (raise (exn:x509:chain msg (continuation-marks escape) '(incomplete)))))
-
-;; fault-filter : (Listof X) Bool (X -> (values Y/#f List)) (X List -> Z)
-;;             -> (Listof Y) or Z
-(define (fault-filter xs empty-ok? get-y/errs handle-errs)
-  (define-values (ok-ys errss)
-    (for/lists (ys errss #:result (values (filter values ys) errss))
-               ([x (in-list xs)])
-      (get-y/errs x)))
-  (cond [(or (pair? ok-ys) empty-ok?) ok-ys]
-        [(pair? errss) (handle-errs (car xs) (car errss))]
-        [else (error 'fault-filter "internal error: given empty list")]))
 
 ;; ----------------------------------------
 

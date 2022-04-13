@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/contract
          racket/class
+         scramble/result
          (only-in asn1 asn1-oid? bit-string?)
          (only-in crypto crypto-factory? public-only-key?))
 (provide (all-defined-out))
@@ -97,11 +98,17 @@
 
     [get-public-key
      (->*m [] [(or/c crypto-factory? (listof crypto-factory?))] public-only-key?)]
-    [check-signature (->m asn1-algorithm-identifier/c bytes? bytes? list?)] ;; FIXME ?
+    [check-signature
+     (->m asn1-algorithm-identifier/c bytes? bytes?
+          (result/c #t (listof symbol?)))]
 
     [trusted?
      (->*m [(or/c #f certificate-store?)] [time/c time/c]
            boolean?)]
+    [check-trust
+     (->*m [(or/c #f certificate-store?)]
+           [time/c time/c #:security-level exact-nonnegative-integer?]
+           (result/c #t (listof (cons/c exact-nonnegative-integer? any/c))))]
     ))
 
 ;; Note: for documentation; not actually implemented
@@ -152,10 +159,10 @@
     [build-candidate-chains
      (->m certificate?
           (listof candidate-chain/c))]
-    [check-chain
+    [validate-chain
      (->*m [candidate-chain/c] [time/c]
            certificate-chain?)]
-    [check-chains
+    [validate-chains
      (->*m [(listof candidate-chain/c)] [time/c #:empty-ok? boolean?]
            (listof certificate-chain?))]
     ))
@@ -171,8 +178,8 @@
 
 (define revocation-checker<%>
   (interface ()
-    [check-ocsp (->m certificate-chain? list?)]
-    [check-crl (->m certificate-chain? list?)]
+    [check-ocsp (->m certificate-chain? (result/c #t (listof symbol?)))]
+    [check-crl (->m certificate-chain? (result/c #t (listof symbol?)))]
     ))
 
 (define cachable<%>

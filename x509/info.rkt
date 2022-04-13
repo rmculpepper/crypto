@@ -10,7 +10,7 @@
 ;; collection info
 
 (define name "x509")
-(define scribblings '(("scribblings/x509.scrbl" (multi-page))))
+(define scribblings '(("scribblings/x509.scrbl" (#;multi-page))))
 
 (define compile-omit-paths '("examples"))
 (define test-omit-paths '("examples"))

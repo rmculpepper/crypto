@@ -4,7 +4,7 @@
 
 (define version "1.0")
 (define collection "x509")
-(define deps '("base" "asn1-lib" "crypto-lib" "db-lib"))
+(define deps '("base" "asn1-lib" "crypto-lib" "db-lib" "scramble-lib"))
 (define pkg-authors '(ryanc))
 
 ;; collection info
