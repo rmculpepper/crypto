@@ -20,6 +20,10 @@
          "error.rkt")
 (provide (all-defined-out))
 
+;; Security Strength
+;; Reference: NIST 800-57 Part 1 Section 5.6
+;; SecurityStrength = (U #f Nat), #f is unknown, 0 if known insecure.
+
 ;; ============================================================
 ;; Digests
 
@@ -28,55 +32,64 @@
     get-spec        ;; -> DigestSpec
     get-size        ;; -> Nat
     get-block-size  ;; -> Nat
+    get-security-strength ;; Boolean -> (U #f Nat)
     ))
 
 (define digest-info%
   (class* object% (digest-info<%>)
-    (init-field spec size block-size max-key-len)
+    (init-field spec size block-size max-key-len ci-secbits cr-secbits)
     (super-new)
     (define/public (get-spec) spec)
     (define/public (get-size) size)
     (define/public (get-block-size) block-size)
     (define/public (get-max-key-size) max-key-len)
     (define/public (key-size-ok? keysize) (<= 1 keysize (get-max-key-size)))
+
+    ;; get-security-strength : Boolean -> (U #f Nat)
+    ;; cr? indicates whether collision-resistance is needed
+    (define/public (get-security-strength cr?)
+      (cond [cr? cr-secbits] [else ci-secbits]))
     ))
 
 (define known-digests
   (let ()
-    (define (info spec size block-size [max-key-len 0])
-      (new digest-info% (spec spec) (size size) (block-size block-size) (max-key-len max-key-len)))
+    (define (info spec size block-size ci-secbits
+                  [cr-secbits (and ci-secbits (/ ci-secbits 2))]
+                  #:mkl [max-key-len 0])
+      (new digest-info% (spec spec) (size size) (block-size block-size)
+           (cr-secbits cr-secbits) (ci-secbits ci-secbits) (max-key-len max-key-len)))
     (define all
-      (list (info 'md2         16  16)
-            (info 'md4         16  64)
-            (info 'md5         16  64)
-            (info 'ripemd160   20  64)
-            (info 'tiger1      24  64)
-            (info 'tiger2      24  64)
-            (info 'whirlpool   64  64) ;; Note: 3 versions, W-0 (2000), W-T (2001), W (2003)
-            (info 'sha0        20  64)
-            (info 'sha1        20  64)
-            (info 'sha224      28  64)
-            (info 'sha256      32  64)
-            (info 'sha384      48  128)
-            (info 'sha512      64  128)
-            (info 'sha512/224  28  128)
-            (info 'sha512/256  32  128)
-            (info 'sha3-224    28  144)
-            (info 'sha3-256    32  136)
-            (info 'sha3-384    48  104)
-            (info 'sha3-512    64  72)
+      (list (info 'md2         16  16   0)
+            (info 'md4         16  64   0)
+            (info 'md5         16  64   0)
+            (info 'ripemd160   20  64   #f)
+            (info 'tiger1      24  64   #f)
+            (info 'tiger2      24  64   #f)
+            (info 'whirlpool   64  64   #f) ;; Note: 3 versions, W-0 (2000), W-T (2001), W (2003)
+            (info 'sha0        20  64   0)
+            (info 'sha1        20  64   128 0)
+            (info 'sha224      28  64   224)
+            (info 'sha256      32  64   256)
+            (info 'sha384      48  128  384)
+            (info 'sha512      64  128  512)
+            (info 'sha512/224  28  128  224)
+            (info 'sha512/256  32  128  256)
+            (info 'sha3-224    28  144  224)
+            (info 'sha3-256    32  136  256)
+            (info 'sha3-384    48  104  384)
+            (info 'sha3-512    64  72   512)
             ;; the following take keys
-            (info 'blake2b-512 64  128  64) ;; blake2b up to 64 bytes
-            (info 'blake2b-384 48  128  64)
-            (info 'blake2b-256 32  128  64)
-            (info 'blake2b-160 20  128  64)
-            (info 'blake2s-256 32  64   32) ;; blake2s up to 32 bytes
-            (info 'blake2s-224 28  64   32)
-            (info 'blake2s-160 20  64   32)
-            (info 'blake2s-128 16  64   32)
+            (info 'blake2b-512 64  128  512 #:mkl 64) ;; blake2b up to 64 bytes
+            (info 'blake2b-384 48  128  384 #:mkl 64)
+            (info 'blake2b-256 32  128  256 #:mkl 64)
+            (info 'blake2b-160 20  128  160 #:mkl 64)
+            (info 'blake2s-256 32  64   256 #:mkl 32) ;; blake2s up to 32 bytes
+            (info 'blake2s-224 28  64   224 #:mkl 32)
+            (info 'blake2s-160 20  64   160 #:mkl 32)
+            (info 'blake2s-128 16  64   128 #:mkl 32)
             ;; the following are XOFs (extensible output functions) -- put #f for output size
-            (info 'shake128    #f  168)
-            (info 'shake256    #f  136)))
+            (info 'shake128    #f  168  #f)
+            (info 'shake256    #f  136  #f)))
     (for/hasheq ([di (in-list all)])
       (values (send di get-spec) di))))
 
@@ -93,37 +106,11 @@
 (define (digest-spec-block-size ds)
   (send (digest-spec->info ds) get-block-size))
 
+(define (digest-spec-security-strength ds [cr? #t])
+  (send (digest-spec->info ds) get-security-strength cr?))
+
 (define (list-known-digests)
   (sort (hash-keys known-digests) symbol<?))
-
-;; Digest security levels; see NIST SP 800-57 Part 1 Section 5.6
-
-(define (digest-security-bits digest-spec [collision? #t])
-  (if collision?
-      (case digest-spec
-        [(sha1) 0]
-        [(sha224 sha512/224 sha3-224) 112]
-        [(sha256 sha512/256 sha3-256) 128]
-        [(sha384 sha3-384) 192]
-        [(sha512 sha3-512) 256]
-        [(blake2b-512) 256]
-        [(blake2b-384) 192]
-        [(blake2b-256 blake2s-256) 128]
-        [(blake2s-224) 112]
-        [(blake2b-160 blake2s-160) 80]
-        [else 0])
-      (case digest-spec
-        [(sha1) 128]
-        [(sha224 sha512/224 sha3-224) 192]
-        [(sha256 sha512/256 sha3-256) 256]
-        [(sha384 sha3-384) 256]
-        [(sha512 sha3-512) 256]
-        [(blake2b-512) 256]
-        [(blake2b-384) 256]
-        [(blake2b-256 blake2s-256) 256]
-        [(blake2s-224) 192]
-        [(blake2b-160 blake2s-160) 128]
-        [else 0])))
 
 ;; ============================================================
 

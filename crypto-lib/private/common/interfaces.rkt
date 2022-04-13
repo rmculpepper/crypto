@@ -193,7 +193,7 @@
   (interface (ctx<%>)
     generate-key    ;; Config -> pk-key<%>
     write-params    ;; Symbol -> Datum
-    get-security-bits ;; -> Nat
+    get-security-bits ;; -> Nat or #f
     ))
 
 (define pk-key<%>
@@ -201,7 +201,7 @@
     is-private?             ;; -> boolean
     get-public-key          ;; -> pk-key<%>
     get-params              ;; -> pk-params<%> or #f
-    get-security-bits       ;; -> Nat
+    get-security-bits       ;; -> Nat or #f
 
     write-key       ;; Symbol -> Datum
     equal-to-key?   ;; pk-key<%> -> boolean

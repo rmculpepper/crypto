@@ -37,6 +37,7 @@
     (define/override (about) (format "~a digest" (super about)))
     (define/public (get-size) (send info get-size))
     (define/public (get-block-size) (send info get-block-size))
+    (define/public (get-security-strength cr?) (send info get-security-strength cr?))
     (define/public (key-size-ok? keysize) (send info key-size-ok? keysize))
 
     (define/public (sanity-check #:size [size #f] #:block-size [block-size #f])

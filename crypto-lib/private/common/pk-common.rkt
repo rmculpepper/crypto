@@ -97,7 +97,7 @@
     (define/public (get-security-bits)
       (if (send impl has-params?)
           (send (get-params) get-security-bits)
-          (err/no-impl this)))
+          #f))
 
     (abstract is-private?)
     (abstract get-public-key)
@@ -999,13 +999,13 @@
   `((curve ,(lambda (x) (memq x '(x25519 x448))) "(or/c 'x25519 'x448)" #:req)))
 
 ;; ============================================================
-;; Security levels
+;; Security strength levels
 
 ;; Reference:
 ;; - NIST SP-800-57 Part 1 Section 5.6: Guidance for Cryptographic Algorithm and Key-Size...
 ;;   (https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r5.pdf)
 
-;; Levels: 0, 80, 112, 128, 192, 256
+;; Strength ratings: 0, 80, 112, 128, 192, 256
 
 (define (rsa-security-bits nbits)
   (cond [(>= nbits 15360) 256]
@@ -1049,7 +1049,7 @@
     [(sect409k1 sect409r1) (ec 409)]
     [(sect571k1 sect571r1) (ec 571)]
     ;; --
-    [else 0]))
+    [else #f]))
 
 (define (rkt-params-security-bits params)
   (match params
@@ -1059,4 +1059,4 @@
      (curve-security-bits (curve-oid->name curve-oid))]
     [(list 'eddsa 'params curve) (curve-security-bits curve)]
     [(list 'ecx 'params curve) (curve-security-bits curve)]
-    [else 0]))
+    [else #f]))

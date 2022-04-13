@@ -40,6 +40,11 @@
          (struct-out bytes-range)
          input/c
 
+         security-strength/c
+         security-level/c
+         security-level->strength
+         security-strength->level
+
          ;; util
          (recontract-out
           hex->bytes
@@ -138,6 +143,8 @@
    (-> (or/c digest-spec? digest-impl? digest-ctx?) exact-nonnegative-integer?)]
   [digest-block-size
    (-> (or/c digest-spec? digest-impl? digest-ctx?) exact-nonnegative-integer?)]
+  [digest-security-strength
+   (-> (or/c digest-spec? digest-impl? digest-ctx?) boolean? (or/c #f security-strength/c))]
   [digest
    (->* [digest/c input/c] [#:key (or/c bytes? #f)] bytes?)]
   [hmac
@@ -169,6 +176,10 @@
 (define (digest-block-size o)
   (with-crypto-entry 'digest-block-size
     (send (-get-digest-info o) get-block-size)))
+
+(define (digest-security-strength o [cr? #t])
+  (with-crypto-entry 'digest-security-strength
+    (send (-get-digest-info o) get-security-strength cr?)))
 
 ;; ----
 
@@ -517,6 +528,9 @@
   [pk-has-parameters?
    (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
 
+  [pk-security-strength
+   (-> (or/c pk-key? pk-parameters?) (or/c #f security-strength/c))]
+
   [pk-key->parameters
    (-> pk-key? (or/c pk-parameters? #f))]
 
@@ -621,6 +635,10 @@
     (cond [(pk-spec? pki) (pk-spec-has-parameters? pki)]
           [else (and (send (to-impl pki) has-params?) #t)])))
 
+(define (pk-security-strength pk)
+  (with-crypto-entry 'pk-security-strength
+    (send pk get-security-bits)))
+
 (define (pk-key->parameters pk)
   (with-crypto-entry 'pk-key->parameters
     (and (pk-has-parameters? pk)
@@ -716,3 +734,22 @@
   (with-crypto-entry 'generate-pk-parameters
     (let ([pki (-get-impl pki)])
       (send pki generate-params config))))
+
+;; ============================================================
+;; Security bits and levels
+
+(define security-strength/c exact-nonnegative-integer?)
+(define security-level/c (integer-in 0 5))
+
+;; security-level->strength : Nat[0-5] -> Nat
+(define (security-level->strength level)
+  (case level [(0) 0] [(1) 80] [(2) 112] [(3) 128] [(4) 192] [(5) 256] [else 256]))
+
+;; security-strength->level : Nat -> Nat[0-5]
+(define (security-strength->level secbits)
+  (cond [(< secbits 80) 0]
+        [(< secbits 112) 1]
+        [(< secbits 128) 2]
+        [(< secbits 192) 3]
+        [(< secbits 256) 4]
+        [else 5]))
