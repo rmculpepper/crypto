@@ -327,7 +327,7 @@
       (match-define (list ok-start ok-end) (get-validity-seconds))
       (if (<= ok-start from-time to-time ok-end)
           (ok #t)
-          (append*-results
+          (append-results
            (bad (list (cons index 'validity-period:not-contained)))
            (cond [issuer-chain (send issuer-chain check-validity-period from-time to-time)]
                  [else (ok #t)]))))
