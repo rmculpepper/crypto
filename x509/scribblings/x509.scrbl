@@ -391,7 +391,7 @@ public key and the algorithm specified by @racket[algid].}
 @defmethod[(trusted? [store certificate-store?]
                      [from-time exact-integer? (current-seconds)]
                      [to-time exact-integer? from-time]
-                     [#:security-level security-level exact-nonnegative-integer? 0])
+                     [#:security-level security-level security-level/c 0])
            boolean?]{
 
 Returns @racket[#t] if the chain's @tech{trust anchor} certificate is trusted
@@ -410,7 +410,7 @@ Equivalent to
 @defmethod[(check-trust [store certificate-store?]
                         [from-time exact-integer? (current-seconds)]
                         [to-time exact-integer? from-time]
-                        [#:security-level security-level exact-nonnegative-integer? 0])
+                        [#:security-level security-level security-level/c 0])
            (result/c #t (listof (cons/c exact-nonnegative-integer? any/c)))]{
 
 Similar to @method[certificate-chain<%> trusted?], but the result is one of the
@@ -430,7 +430,7 @@ the problem occurred (starting with 0 for the @tech{trust anchor}) and
 
 ]}
 
-@defmethod[(get-public-key-security-level) (integer-in 0 5)]{
+@defmethod[(get-public-key-security-level) security-level/c]{
 
 Returns the @ctech{security level} of the end certificate's public key.
 
@@ -439,7 +439,7 @@ Returns the @ctech{security level} of the end certificate's public key.
 ]}
 
 @defmethod[(get-signature-security-level [use-issuer-key? #t])
-           (or/c #f (integer-in 0 5))]{
+           (or/c #f security-level/c)]{
 
 Returns the @ctech{security level} of the signature in the end certificate
 performed by the end certificate's issuer.
