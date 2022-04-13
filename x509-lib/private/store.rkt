@@ -34,8 +34,6 @@
 
 (define (empty-certificate-store) (new certificate-store%))
 
-(define INIT-SECURITY-LEVEL 1)
-
 (define certificate-store%
   (class* object% (-certificate-store<%>)
     (init-field [trusted-h '#hash()] ;; Certificate => #t

@@ -9,6 +9,8 @@
          (only-in crypto crypto-factory? public-only-key? security-level/c))
 (provide (all-defined-out))
 
+(define INIT-SECURITY-LEVEL 2)
+
 (define (certificate? v) (is-a? v -certificate<%>))
 (define (certificate-chain? v) (is-a? v -certificate-chain<%>))
 (define (certificate-store? v) (is-a? v -certificate-store<%>))

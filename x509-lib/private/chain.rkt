@@ -432,12 +432,12 @@
 
     ;; trusted? : Store/#f Seconds Seconds -> Boolean
     (define/public (trusted? store [from-time (current-seconds)] [to-time from-time]
-                             #:security-level [security-level 0])
+                             #:security-level [security-level INIT-SECURITY-LEVEL])
       (ok? (check-trust store from-time to-time #:security-level security-level)))
 
     ;; check-trust : Store/#f Seconds Seconds -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-trust store [from-time (current-seconds)] [to-time from-time]
-                                #:security-level [security-level 0])
+                                #:security-level [security-level INIT-SECURITY-LEVEL])
       (append-results
        (cond [(not store) (ok #t)]
              [(send store trust? (get-anchor)) (ok #t)]
