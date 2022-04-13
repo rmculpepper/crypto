@@ -203,8 +203,7 @@
     (define certs (append (pem-file->certificates (cert-file "ca"))
                           (pem-file->certificates (cert-file "end"))))
     (check-exn (chain-exn? '((1 . issuer:name-mismatch)))
-               (lambda ()
-                 (send (current-x509-store) check-chain certs))))
+               (lambda () (send (current-x509-store) validate-chain certs))))
   ;; 6.1.3.{b,c} name constraints
   (test-case "name constraints"
     (make-end "intca" "cz-end" '("C=CZ" "L=Praha" "CN=test.cz") '("test.cz"))
@@ -224,8 +223,7 @@
                           (pem-file->certificates (cert-file "end"))))
     (check-exn (chain-exn? '((1 . intermediate:not-CA)
                              (1 . intermediate:missing-keyCertSign)))
-               (lambda ()
-                 (send (current-x509-store) check-chain certs))))
+               (lambda () (send (current-x509-store) validate-chain certs))))
   ;; 6.1.4.m intermediate: path length constraint -- TODO
   ;; 6.1.4.n intermediate: keyCertSign -- see 6.1.4.k
   ;; 6.1.5.{a,b,g} -- policies not supported
