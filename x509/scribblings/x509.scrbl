@@ -22,6 +22,9 @@
    (define loc (format "https://datatracker.ietf.org/doc/html/rfc5280#~a" fragment))
    (apply hyperlink loc content))
 
+@(define (ctech . content)
+   (apply tech #:doc '(lib "crypto/scribblings/crypto.scrbl") content))
+
 @title[#:tag "x509"]{X.509 Certificates}
 
 @defmodule[x509]
@@ -429,11 +432,7 @@ the problem occurred (starting with 0 for the @tech{trust anchor}) and
 
 @defmethod[(get-public-key-security-level) (integer-in 0 5)]{
 
-Returns the security level of the end certificate's public key.
-
-The result corresponds to an
-@hyperlink["https://www.openssl.org/docs/man3.0/man3/SSL_CTX_set_security_level.html"]{OpenSSL
-security level}.
+Returns the @ctech{security level} of the end certificate's public key.
 
 @examples[#:eval the-eval
 (send racket-chain get-public-key-security-level)
@@ -442,8 +441,8 @@ security level}.
 @defmethod[(get-signature-security-level [use-issuer-key? #t])
            (or/c #f (integer-in 0 5))]{
 
-Returns the security level of the signature in the end certificate performed by
-the end certificate's issuer.
+Returns the @ctech{security level} of the signature in the end certificate
+performed by the end certificate's issuer.
 
 If @racket[use-issuer-key?] is true, then the security level takes into account
 both the signature algorithm and the security level of the issuer's key (if
