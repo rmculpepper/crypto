@@ -391,7 +391,7 @@ public key and the algorithm specified by @racket[algid].}
 @defmethod[(trusted? [store certificate-store?]
                      [from-time exact-integer? (current-seconds)]
                      [to-time exact-integer? from-time]
-                     [#:security-level security-level security-level/c 0])
+                     [#:security-level security-level security-level/c 2])
            boolean?]{
 
 Returns @racket[#t] if the chain's @tech{trust anchor} certificate is trusted
@@ -410,7 +410,7 @@ Equivalent to
 @defmethod[(check-trust [store certificate-store?]
                         [from-time exact-integer? (current-seconds)]
                         [to-time exact-integer? from-time]
-                        [#:security-level security-level security-level/c 0])
+                        [#:security-level security-level security-level/c 2])
            (result/c #t (listof (cons/c exact-nonnegative-integer? any/c)))]{
 
 Similar to @method[certificate-chain<%> trusted?], but the result is one of the
