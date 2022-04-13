@@ -626,6 +626,7 @@
      #t]
     [else #f]))
 
+;; sig-alg-security-bits : AlgorithmIdentifier -> Nat/#f
 ;; Returns the security bits for the *digest* used by the signature algorithm.
 ;; The public key strength is not considered. Returns #f when there is no separate
 ;; digest, 0 for unknown digest.

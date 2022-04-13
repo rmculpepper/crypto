@@ -335,37 +335,55 @@
     ;; ----------------------------------------
     ;; Checking security level
 
-    ;; get-security-bits-chain : -> (Listof Nat)
-    (define/public (get-security-bits-chain)
-      (cons (send (get-public-key) get-security-bits)
-            (cond [issuer-chain
-                   (cons (let-values ([(algid _tbs _sig) (send cert get-cert-signature-info)])
-                           (sig-alg-security-bits algid))
-                         (send issuer-chain get-security-bits-chain))]
-                  [else null])))
+    (define/public (get-public-key-security-bits)
+      (send (get-public-key) get-security-bits))
+    (define/public (get-signature-security-bits [use-issuer-key? #t])
+      (define-values (algid _tbs _sig) (send cert get-cert-signature-info))
+      (define sig-secbits (sig-alg-security-bits algid))
+      (define issuer-key-secbits
+        (and use-issuer-key? issuer-chain
+             (send issuer-chain get-public-key-security-bits)))
+      (cond [(and sig-secbits issuer-key-secbits) (min sig-secbits issuer-key-secbits)]
+            [else (or sig-secbits issuer-key-secbits)]))
+
+    (define/public (get-public-key-security-level)
+      (security-bits->level (get-public-key-security-bits)))
+    (define/public (get-signature-security-level [use-issuer-key? #t])
+      (define secbits (get-signature-security-bits use-issuer-key?))
+      (and secbits (security-bits->level secbits)))
 
     ;; check-security-bits : Nat -> (Result #t (Listof (cons Nat Symbol)))
-    (define/public (check-security-bits sec-bits)
+    (define/public (check-security-bits target-secbits)
       (append-results
-       (let ([pk (get-public-key)])
-         (cond [(<= sec-bits (send pk get-security-bits)) (ok #t)]
-               ;; Note: here index means owner of public key.
-               [else (bad (list (cons index 'security-level:weak-public-key)))]))
+       (cond [(>= (get-public-key-security-bits) target-secbits) (ok #t)]
+             ;; Note: here index means owner of public key.
+             [else (bad (list (cons index 'security-level:weak-public-key)))])
        (cond [issuer-chain
-              (define-values (algid _tbs _sig) (send cert get-cert-signature-info))
-              (define sig-level (sig-alg-security-bits algid))
               (append-results
-               (cond [(<= sec-bits sig-level) (ok #t)]
-                     ;; Note: here index means site of signature (created by issuer!).
-                     [else (bad (list (cons index 'security-level:weak-signature-algorithm)))])
-               (send issuer-chain check-security-bits sec-bits))]
+               (let ([sig-secbits (get-signature-security-bits #f)])
+                 (cond [(or (eq? sig-secbits #f) (>= sig-secbits target-secbits)) (ok #t)]
+                       ;; Note: here index means site of signature (created by issuer!).
+                       [else (bad (list (cons index 'security-level:weak-signature-algorithm)))]))
+               (send issuer-chain check-security-bits target-secbits))]
              [else (ok #t)])))
 
-    ;; check-security-level : Nat -> (Result #t (Listof (cons Nat Symbol)))
+    ;; check-security-level : Nat[0-5] -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-security-level level)
-      (check-security-bits
-       (case level [(0) 0] [(1) 80] [(2) 112] [(3) 128] [(4) 192] [(5) 256] [else 256])))
+      (check-security-bits (security-level->bits level)))
     ))
+
+;; security-level->bits : Nat[0-5] -> Nat
+(define (security-level->bits level)
+  (case level [(0) 0] [(1) 80] [(2) 112] [(3) 128] [(4) 192] [(5) 256] [else 256]))
+
+;; security-bits->level : Nat -> Nat[0-5]
+(define (security-bits->level secbits)
+  (cond [(< secbits 80) 0]
+        [(< secbits 112) 1]
+        [(< secbits 128) 2]
+        [(< secbits 192) 3]
+        [(< secbits 256) 4]
+        [else 5]))
 
 (define bad-chain%
   (class pre-chain%
@@ -423,8 +441,9 @@
       (vector issuer-chain cert))
 
     ;; trusted? : Store/#f Seconds Seconds -> Boolean
-    (define/public (trusted? store [from-time (current-seconds)] [to-time from-time])
-      (ok? (check-trust store from-time to-time)))
+    (define/public (trusted? store [from-time (current-seconds)] [to-time from-time]
+                             #:security-level [security-level 0])
+      (ok? (check-trust store from-time to-time #:security-level security-level)))
 
     ;; check-trust : Store/#f Seconds Seconds -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-trust store [from-time (current-seconds)] [to-time from-time]

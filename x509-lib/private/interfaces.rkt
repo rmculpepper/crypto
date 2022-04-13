@@ -81,6 +81,8 @@
 (define time/c exact-integer?)
 (define candidate-chain/c (non-empty-listof certificate?))
 
+(define security-level/c (integer-in 0 5))
+
 (define certificate-chain<%>
   (interface ()
     [get-certificate (->m certificate?)]
@@ -104,12 +106,19 @@
            (result/c #t (listof symbol?)))]
 
     [trusted?
-     (->*m [(or/c #f certificate-store?)] [time/c time/c]
+     (->*m [(or/c #f certificate-store?)]
+           [time/c time/c #:security-level exact-nonnegative-integer?]
            boolean?)]
     [check-trust
      (->*m [(or/c #f certificate-store?)]
            [time/c time/c #:security-level exact-nonnegative-integer?]
            (result/c #t (listof (cons/c exact-nonnegative-integer? any/c))))]
+
+    [get-public-key-security-bits (->m exact-nonnegative-integer?)]
+    [get-signature-security-bits (->*m [] [boolean?] (or/c #f exact-nonnegative-integer?))]
+
+    [get-public-key-security-level (->m security-level/c)]
+    [get-signature-security-level (->*m [] [boolean?] (or/c #f security-level/c))]
     ))
 
 ;; Note: for documentation; not actually implemented
