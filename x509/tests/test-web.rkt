@@ -3,6 +3,7 @@
          racket/match
          racket/file
          racket/class
+         scramble/result
          crypto crypto/all
          x509
          (submod "test.rkt" util))
@@ -61,11 +62,11 @@
 (for ([site good-sites])
   (test-case (format "good: ~a" site)
     (define c (send store pem-file->chain (build-path good-dir site)))
-    (check-pred null? (send rev check-ocsp c))
-    (check-pred null? (send urev check-ocsp c))
+    (check-equal? (send rev check-ocsp c) (ok #t))
+    (check-equal? (send urev check-ocsp c) (ok #t))
     (when CRL?
-      (check-pred null? (send rev check-crl c))
-      (check-pred null? (send urev check-crl c)))
+      (check-equal? (send rev check-crl c) (ok #t))
+      (check-equal? (send urev check-crl c) (ok #t)))
     (void)))
 
 (for ([site+fail bad-sites])
@@ -76,23 +77,23 @@
       (case fail
         [(chain) (check-exn (chain-exn? '()) get-chain) #f]
         [else (get-chain)]))
-    (define tls-errs (and c (send c check-suitable-for-tls-server site)))
+    (define tls-result (and c (send c check-suitable-for-tls-server site)))
     (case fail
       [(chain) (void)]
-      [(tls) (check-pred pair? tls-errs)]
-      [else (check-pred null? tls-errs)])
+      [(tls) (check-pred bad? tls-result)]
+      [else (check-pred ok? tls-result)])
     (case fail
       [(chain) (void)]
       [(revoked)
-       (check member 'revoked (send rev check-ocsp c))
-       (check member 'revoked (send urev check-ocsp c))
+       (check-equal? (send rev check-ocsp c) (bad 'revoked))
+       (check-equal? (send urev check-ocsp c) (bad 'revoked))
        (when CRL?
-         (check member 'revoked (send rev check-crl c))
-         (check member 'revoked (send urev check-crl c)))]
+         (check-equal? (send rev check-crl c) (bad 'revoked))
+         (check-equal? (send urev check-crl c) (bad 'revoked)))]
       [else
-       (check-pred null? (send rev check-ocsp c))
-       (check-pred null? (send urev check-ocsp c))
+       (check-equal? (send rev check-ocsp c) (ok #t))
+       (check-equal? (send urev check-ocsp c) (ok #t))
        (when CRL?
-         (check-pred null? (send rev check-crl c))
-         (check-pred null? (send rev check-crl c)))])
+         (check-equal? (send rev check-crl c) (ok #t))
+         (check-equal? (send urev check-crl c) (ok #t)))])
     (void)))
