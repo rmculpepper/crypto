@@ -659,48 +659,50 @@ than certificates, because verifying revocation responses requires the public
 key of the certificate's issuer. Both methods check only the @tech{end
 certificate} of the chain for revocation.
 
-@defmethod[(check-ocsp [chain certificate-chain?]) list?]{
+@defmethod[(check-ocsp [chain certificate-chain?])
+           (result/c #t (or/c 'revoked 'unknown 'no-sources))]{
 
-Returns @racket['()] to indicate success (at least one OCSP response indicated
-that the end certificate is good) or a non-empty list to indicate failure or
-another condition. If the list is non-empty, it will contain at least one of the
-following symbols:
+Returns one of the following:
 @itemlist[
 
-@item{@racket['revoked] --- The certificate is revoked.}
+@item{@racket[(ok #t)] --- Some OCSP response indicated that the end certificate
+is good.}
 
-@item{@racket['no-sources] --- The certificate's status is unknown because the
-certificate listed no usable OCSP responder URLs. (This library uses only URLs
-with the scheme @racket["http"] or @racket["https"].)}
+@item{@racket[(bad 'revoked)] --- Some OCSP response indicated that the end
+certificate is revoked.}
 
-@item{@racket['unknown] --- The certificate's status is unknown, either because
-no responder produced a valid response, or because the response indicated that
-the responder does not know the certificate's status.}
+@item{@racket[(bad 'unknown)] --- No responder produced a valid response, or the
+response indicated that the responder does not know the certificate's status.}
 
-]
-}
+@item{@racket[(bad 'no-sources)] --- The certificate has no usable OCSP
+responder URLs. This library uses only URLs with the scheme @racket["http"] or
+@racket["https"].}
 
-@defmethod[(check-crl [chain certificate-chain?]) list?]{
+]}
 
-Returns @racket['()] to indicate success (at least one CRL was found and the
-end certificate of @racket[chain] was absent from its revocation list) or a
-non-empty list to indicate failure or another condition. If the list is
-non-empty, it will contain at least one of the following symbols:
+@defmethod[(check-crl [chain certificate-chain?])
+           (result/c #t (listof (or/c 'revoked 'unknown 'no-sources)))]{
+
+Returns one of the following:
 @itemlist[
 
-@item{@racket['revoked] --- The certificate is revoked.}
+@item{@racket[(ok #t)] --- All usable CRLs were checked and the end certificate
+of @racket[chain] was absent from all of the revocation lists.}
 
-@item{@racket['no-sources] --- The certificate does not list any usable CRL
-URLs. (This library only uses URLs with the scheme @racket["http"] or
-@racket["https"].)}
+@item{@racket[(bad 'revoked)] --- Some CRL indicated that the certificate is
+revoked.}
 
-@item{@racket['unavailable] --- The certificate listed a CRL URL whose content
-was unavailable, either because retrieving it failed (perhaps due to a network
-failure or server problem), or the retrieved CRL had a bad signature, or
-@(this-obj) was configured not to fetch CRLs (and it was not in the cache).}
+@item{@racket[(bad 'unknown)] --- Some CRL source was unavailable or
+contained an invalid CRL, either because retrieving it failed (perhaps due to a
+network failure or server problem), or the retrieved CRL had a bad signature, or
+@(this-obj) was configured not to fetch CRLs and it was not in the cache.}
 
-]
-}
+@item{@racket[(bad 'no-sources)] --- The certificate has no usable CRL
+sources. This library uses only URLs with the scheme @racket["http"] or
+@racket["https"].}
+
+]}
+
 }
 
 @(close-eval the-eval)

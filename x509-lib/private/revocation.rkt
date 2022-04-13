@@ -145,19 +145,20 @@
 
     ;; ============================================================
 
-    ;; check-crl : Chain Seconds -> (Result #t (Listof Symbol))
+    ;; check-crl : Chain Seconds -> (Result #t Symbol)
     (define/public (check-crl chain [now (current-seconds)])
       ;; FIXME: require CRL issuer to be same as cert issuer
       (define crl-urls (certificate-crl-urls (send chain get-certificate)))
       (cond [(pair? crl-urls)
-             (append*-results
-              (for/list ([crl-url (in-list crl-urls)])
-                (log-revocation-debug "trying CRL url: ~e" crl-url)
-                (match (get-crl-status now chain crl-url)
-                  ['absent (ok #t)]
-                  ['revoked (bad '(revoked))]
-                  [#f (bad '(unavailable))])))]
-            [else (bad '(no-sources))]))
+             (define responses
+               (for/list ([crl-url (in-list crl-urls)])
+                 (log-revocation-debug "trying CRL url: ~e" crl-url)
+                 (or (get-crl-status now chain crl-url) 'unavailable)))
+             (cond [(memq 'revoked responses) (bad 'revoked)]
+                   [(memq 'unavailable responses) (bad 'unknown)]
+                   [(andmap (lambda (resp) (eq? resp 'absent)) responses) (ok #t)]
+                   [else (bad 'unknown)])]
+            [else (bad 'no-sources)]))
 
     ;; get-crl-status : ... -> (U 'absent 'revoked #f)
     ;; If result is 'absent or 'revoked, from trusted and unexpired CRL.

@@ -179,8 +179,8 @@
 
 (define revocation-checker<%>
   (interface ()
-    [check-ocsp (->m certificate-chain? (result/c #t (listof symbol?)))]
-    [check-crl (->m certificate-chain? (result/c #t (listof symbol?)))]
+    [check-ocsp (->m certificate-chain? (result/c #t symbol?))]
+    [check-crl (->m certificate-chain? (result/c #t symbol?))]
     ))
 
 (define cachable<%>
