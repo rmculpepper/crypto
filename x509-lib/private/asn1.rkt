@@ -653,15 +653,16 @@
            crypto)
   (provide (contract-out
             [check-signature/algid
-             (-> pk-key? asn1-algorithm-identifier/c bytes? bytes?
+             (-> pk-key? (or/c bytes? asn1-algorithm-identifier/c) bytes? bytes?
                  (result/c #t (listof symbol?)))]
             [verify/algid
-             (-> pk-key? asn1-algorithm-identifier/c bytes? bytes?
+             (-> pk-key? (or/c bytes? asn1-algorithm-identifier/c) bytes? bytes?
                  boolean?)]))
 
-  ;; check-signature/algid : PublicKey AlgorithmIdentifier Bytes Bytes
+  ;; check-signature/algid : PublicKey (U Bytes AlgorithmIdentifier) Bytes Bytes
   ;;                      -> (Result #t (Listof Symbol))
-  (define (check-signature/algid pk alg tbs sig)
+  (define (check-signature/algid pk algid tbs sig)
+    (define alg (if (bytes? algid) (bytes->asn1 AlgorithmIdentifier algid) algid))
     (define alg-oid (hash-ref alg 'algorithm))
     (match (relation-ref* SIGNING 'oid alg-oid '(pk digest))
       [(list 'eddsa #f)

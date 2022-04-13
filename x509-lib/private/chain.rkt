@@ -115,9 +115,11 @@
                    (parameterize ((crypto-factories factory/s))
                      (datum->pk-key (send cert get-spki) 'SubjectPublicKeyInfo)))))
 
-    ;; check-signature : AlgorithmIdentifier Bytes Bytes -> (Result #t (Listof Symbol))
-    (define/public (check-signature algid tbs sig)
-      (check-signature/algid (get-public-key) algid tbs sig))
+    ;; check-signature : (U Bytes AlgorithmIdentifier) Bytes Bytes
+    ;;                -> (Result #t (Listof Symbol))
+    (define/public (check-signature algid tbs sig
+                                    #:factories [factories (crypto-factories)])
+      (check-signature/algid (get-public-key factories) algid tbs sig))
 
     ;; ----------------------------------------
 

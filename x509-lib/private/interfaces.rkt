@@ -99,8 +99,9 @@
     [get-public-key
      (->*m [] [(or/c crypto-factory? (listof crypto-factory?))] public-only-key?)]
     [check-signature
-     (->m asn1-algorithm-identifier/c bytes? bytes?
-          (result/c #t (listof symbol?)))]
+     (->*m [(or/c bytes? asn1-algorithm-identifier/c) bytes? bytes?]
+           [#:factories (or/c crypto-factory? (listof crypto-factory?))]
+           (result/c #t (listof symbol?)))]
 
     [trusted?
      (->*m [(or/c #f certificate-store?)] [time/c time/c]

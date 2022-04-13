@@ -8,6 +8,7 @@
           (for-label racket/base
                      racket/class
                      racket/contract
+                     scramble/result
                      (only-in asn1 asn1-oid?)
                      crypto crypto/libcrypto x509))
 
@@ -361,6 +362,29 @@ Creates a public key from the end certificate's SubjectPublicKeyInfo using an
 implementation from @racket[factories].
 }
 
+@defmethod[(check-signature [algid (or/c bytes? asn1-algorithm-identifier?)]
+                            [msg bytes?]
+                            [sig bytes?])
+           (result/c #t (listof symbol?))]{
+
+Verifies that the signature @racket[sig] is valid for the data @racket[msg]
+using the end certificate's public key and the signature algorithm specified by
+@racket[algid] (an @tt{AlgorithmIdentifier}, either DER-encoded as a byte string
+or the parsed representation).
+
+The result is one of the following:
+@itemlist[
+
+@item{The result is @racket[(ok #t)] if the signature is valid.}
+
+@item{The result is @racket[(bad _faults)] if verification failed, where
+@racket[_faults] is a list of symbols describing the failure. The symbol
+@racket['signature:bad] indicates a bad signature; other symbols indicate
+situations like problems interpreting @racket[algid] and mismatches between the
+public key and the algorithm specified by @racket[algid].}
+
+]}
+
 @defmethod[(trusted? [store certificate-store?]
                      [from-time exact-integer? (current-seconds)]
                      [to-time exact-integer? from-time])
@@ -369,7 +393,32 @@ implementation from @racket[factories].
 Returns @racket[#t] if the chain's @tech{trust anchor} certificate is trusted
 according to @racket[store] and if the validity of the chain includes the period
 from @racket[from-time] to @racket[to-time]; otherwise, returns @racket[#f].
+
+Equivalent to
+@racketblock[
+(ok? (send #,(this-obj) #,(method certificate-chain<%> check-trust) store from-time to-time))
+]
 }
+
+@defmethod[(check-trust [store certificate-store?]
+                        [from-time exact-integer? (current-seconds)]
+                        [to-time exact-integer? from-time])
+           (result/c #t (listof (cons/c exact-nonnegative-integer? any/c)))]{
+
+Similar to @method[certificate-chain<%> trusted?], but the result is one of the
+following:
+@itemlist[
+
+@item{The result is @racket[(ok #t)] if the chain's @tech{trust anchor}
+certificate is trusted by @racket[store] and if the validity of the chain
+includes the period from @racket[from-time] to @racket[to-time].}
+
+@item{The result is @racket[(bad (list (cons _cert-index _fault) ...))]
+otherwise, where each @racket[_cert-index] is the index of the certificate where
+the problem occurred (starting with 0 for the @tech{trust anchor}) and
+@racket[_fault] is a value (usually a symbol) describing the problem.}
+
+]}
 
 @defmethod[(get-issuer-chain) (or/c certificate-chain? #f)]{
 
