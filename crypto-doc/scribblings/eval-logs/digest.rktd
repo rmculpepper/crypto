@@ -10,6 +10,12 @@
 ((digest-size 'sha1) ((3) 0 () 0 () () (q values 20)) #"" #"")
 ((digest-size 'sha256) ((3) 0 () 0 () () (q values 32)) #"" #"")
 ((digest-block-size 'sha1) ((3) 0 () 0 () () (q values 64)) #"" #"")
+((digest-security-strength 'sha1 #t) ((3) 0 () 0 () () (q values 0)) #"" #"")
+((digest-security-strength 'sha1 #f) ((3) 0 () 0 () () (q values 128)) #"" #"")
+((digest-security-strength 'sha384 #t)
+ ((3) 0 () 0 () () (q values 192))
+ #""
+ #"")
 ((digest 'sha1 "Hello world!")
  ((3)
   0

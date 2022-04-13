@@ -89,6 +89,28 @@ function's block size.
 ]
 }
 
+@defproc[(digest-security-strength [di (or/c digest-spec? digest-impl? digest-ctx?)]
+                                   [cr? boolean?])
+         (or/c #f security-strength/c)]{
+
+Returns the @tech{security strength} rating of the digest algorithm
+represented by @racket[di], or @racket[#f] if the rating is
+unknown. The result may be @racket[0] for algorithms considered
+insecure.
+
+If @racket[cr?] is true, the result reflects @racket[di]'s strength in
+contexts requiring collision resistance (such as digital signatures);
+if @racket[cr?] is false, the result reflects @racket[di]'s strength
+assuming collision resistance is not required (such as with HMAC).
+
+@examples[#:eval the-eval
+(digest-security-strength 'sha1 #t)
+(digest-security-strength 'sha1 #f)
+(digest-security-strength 'sha384 #t)
+]
+
+@history[#:added "1.8"]}
+
 @defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
          bytes?]{
 

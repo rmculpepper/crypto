@@ -150,6 +150,15 @@ Returns a value representing the key parameters of @racket[pk], or
 @racket[#f] if @racket[pk]'s cryptosystem does not use key parameters.
 }
 
+@defproc[(pk-security-strength [pk (or/c pk-key? pk-parameters?)])
+         (or/c #f security-strength/c)]{
+
+Returns the @tech{security strength} rating for the given PK key or
+parameters. If @racket[pk] does not support strength calculation,
+@racket[#f] is returned.
+
+@history[#:added "1.8"]}
+
 @defproc[(public-key=? [pk1 pk-key?] [pk2 pk-key?] ...) boolean?]{
 
 Returns @racket[#t] if the public key components of @racket[pk1] and
