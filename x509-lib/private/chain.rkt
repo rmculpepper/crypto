@@ -372,19 +372,6 @@
       (check-security-bits (security-level->bits level)))
     ))
 
-;; security-level->bits : Nat[0-5] -> Nat
-(define (security-level->bits level)
-  (case level [(0) 0] [(1) 80] [(2) 112] [(3) 128] [(4) 192] [(5) 256] [else 256]))
-
-;; security-bits->level : Nat -> Nat[0-5]
-(define (security-bits->level secbits)
-  (cond [(< secbits 80) 0]
-        [(< secbits 112) 1]
-        [(< secbits 128) 2]
-        [(< secbits 192) 3]
-        [(< secbits 256) 4]
-        [else 5]))
-
 (define bad-chain%
   (class pre-chain%
     (inherit-field issuer-chain)

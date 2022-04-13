@@ -3,7 +3,7 @@
          racket/class
          scramble/result
          (only-in asn1 asn1-oid? bit-string?)
-         (only-in crypto crypto-factory? public-only-key?))
+         (only-in crypto crypto-factory? public-only-key? security-level/c))
 (provide (all-defined-out))
 
 (define (certificate? v) (is-a? v -certificate<%>))
@@ -80,8 +80,6 @@
 
 (define time/c exact-integer?)
 (define candidate-chain/c (non-empty-listof certificate?))
-
-(define security-level/c (integer-in 0 5))
 
 (define certificate-chain<%>
   (interface ()
