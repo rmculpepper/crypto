@@ -1,3 +1,6 @@
+;; Copyright 2020 Ryan Culpepper
+;; SPDX-License-Identifier: Apache-2.0
+
 #lang info
 
 ;; pkg info
