@@ -38,4 +38,5 @@
                  #:fetch-crl? boolean?]
                 any)])
 
-         empty-certificate-store)
+         empty-store
+         default-store)

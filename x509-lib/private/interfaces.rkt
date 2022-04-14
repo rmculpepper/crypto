@@ -141,10 +141,15 @@
   (interface (x509-lookup<%>)
     [add
      (->*m []
-           [#:trusted-certs (listof certificate?)
-            #:untrusted-certs (listof certificate?)
-            #:set-security-level (or/c 0 1 2 3 4 5)]
+           [#:trusted (listof certificate?)
+            #:untrusted (listof certificate?)]
            certificate-store?)]
+    [add-lookups
+     (->m (listof (is-a?/c x509-lookup<%>))
+          certificate-store?)]
+    [set-security-level
+     (->m security-level/c
+          certificate-store?)]
     [add-trusted-from-pem-file
      (->m path-string? certificate-store?)]
     [add-trusted-from-openssl-directory
@@ -176,7 +181,8 @@
      (->*m [candidate-chain/c] [time/c]
            certificate-chain?)]
     [validate-chains
-     (->*m [(listof candidate-chain/c)] [time/c #:empty-ok? boolean?]
+     (->*m [(listof candidate-chain/c)]
+           [time/c #:empty-ok? boolean?]
            (listof certificate-chain?))]
     ))
 

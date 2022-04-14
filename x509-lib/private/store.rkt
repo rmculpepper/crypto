@@ -5,6 +5,7 @@
 (require racket/match
          racket/class
          racket/list
+         racket/promise
          scramble/result
          asn1
          crypto/pem
@@ -12,6 +13,7 @@
          "asn1.rkt"
          "cert.rkt"
          "chain.rkt"
+         "store-os.rkt"
          "util.rkt")
 (provide (all-defined-out))
 
@@ -32,31 +34,38 @@
 
 ;; ============================================================
 
-(define (empty-certificate-store) (new certificate-store%))
+(define (empty-store #:security-level [security-level INIT-SECURITY-LEVEL])
+  (new certificate-store% (security-level security-level)))
 
 (define certificate-store%
   (class* object% (-certificate-store<%>)
     (init-field [trusted-h '#hash()] ;; Certificate => #t
                 [cert-h    '#hash()] ;; Certificate => #t
-                [stores null]
+                [lookups   null]
                 [security-level INIT-SECURITY-LEVEL])
     (super-new)
 
     (define/public (trust? cert)
       (or (hash-ref trusted-h cert #f)
-          (for/or ([store (in-list stores)]) (send store trust? cert))))
+          (for/or ([lu (in-list lookups)]) (send lu trust? cert))))
 
     (define/public (lookup-by-subject dn)
       (apply append
              (for/list ([cert (in-hash-keys cert-h)]
                         #:when (Name-equal? dn (send cert get-subject)))
                cert)
-             (for/list ([store (in-list stores)]) (send store lookup-by-subject dn))))
+             (for/list ([lu (in-list lookups)])
+               (send lu lookup-by-subject dn))))
 
-    (define/public (add #:untrusted-certs [untrusted-certs null]
-                        #:trusted-certs [trusted-certs null]
-                        #:stores [new-stores null]
-                        #:set-security-level [security-level security-level])
+    (define/private (copy #:trusted-h [trusted-h trusted-h]
+                          #:cert-h [cert-h cert-h]
+                          #:lookups [lookups lookups]
+                          #:security-level [security-level security-level])
+      (new this% (trusted-h trusted-h) (cert-h cert-h)
+           (lookups lookups) (security-level security-level)))
+
+    (define/public (add #:untrusted [untrusted-certs null]
+                        #:trusted [trusted-certs null])
       (define ((mkcons v) vs) (cons v vs))
       (define cert-h*
         (for*/fold ([h cert-h])
@@ -67,13 +76,32 @@
         (for/fold ([h trusted-h])
                   ([cert (in-list trusted-certs)])
           (hash-set h cert #t)))
-      (new this% (trusted-h trusted-h*) (cert-h cert-h*)
-           (stores (append stores new-stores)) (security-level security-level)))
+      (copy #:trusted-h trusted-h* #:cert-h cert-h*))
+
+    (define/public (add-lookups new-lookups)
+      (copy #:lookups (append lookups new-lookups)))
+    (define/public (set-security-level new-security-level)
+      (cond [(eq? security-level new-security-level) this]
+            [else (copy #:security-level new-security-level)]))
 
     (define/public (add-trusted-from-pem-file pem-file)
-      (add #:trusted-certs (pem-file->certificates pem-file)))
+      (add #:trusted (pem-file->certificates pem-file)))
     (define/public (add-trusted-from-openssl-directory dir)
-      (add #:stores (list (new x509-lookup:openssl-trusted-directory% (dir dir)))))
+      (add-lookups (list (new x509-lookup:openssl-trusted-directory% (dir dir)))))
+
+    (define/public (add-default-trusted #:who [who 'certificate-store:add-default-trusted])
+      (case (system-type)
+        [(unix)
+         (define-values (cert-dirs cert-files) (openssl-trust-sources who))
+         (cond [(pair? cert-dirs) (add-trusted-from-openssl-directory (car cert-dirs))]
+               [(pair? cert-files) (add-trusted-from-pem-file (car cert-files))]
+               [error who "failed to find usable trust sources"])]
+        [(macosx)
+         (define cert-der-list (macos-trust-anchors who))
+         (add #:trusted (map bytes->certificate cert-der-list))]
+        [(windows)
+         (define cert-der-list (win32-trust-anchors who "ROOT"))
+         (add #:trusted (map bytes->certificate cert-der-list))]))
 
     ;; ----------------------------------------
 
@@ -88,7 +116,7 @@
                                  [valid-time (current-seconds)]
                                  #:empty-ok? [empty-ok? #f]
                                  #:who [who 'build-chains])
-      (define store* (add #:untrusted-certs other-untrusted-certs))
+      (define store* (add #:untrusted other-untrusted-certs))
       (define candidates (send store* build-candidate-chains end-cert))
       (unless (or (pair? candidates) empty-ok?)
         (raise-incomplete-chain-error who end-cert))
@@ -193,3 +221,13 @@
         [(list cert) cert]
         [_ (begin0 #f (log-x509-error "bad certificate PEM file: ~e" file))]))
     ))
+
+;; ----------------------------------------
+
+(define default-store-p
+  (let ([base-store (empty-store)])
+    (delay/sync (send base-store add-default-trusted #:who 'default-store))))
+
+;; default-store : -> CertificateStore
+(define (default-store #:security-level [security-level INIT-SECURITY-LEVEL])
+  (send (force default-store-p) set-security-level security-level))
