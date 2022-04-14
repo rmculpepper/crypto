@@ -118,6 +118,12 @@
         [(hash-table ['notBefore ok-start] ['notAfter ok-end])
          (list (asn1-time->seconds ok-start) (asn1-time->seconds ok-end))]))
 
+    (define/public (get-subject-name-string)
+      (Name->string (get-subject)))
+
+    (define/public (get-issuer-name-string)
+      (Name->string (get-issuer)))
+
     ;; ============================================================
     ;; Checking well-formed
 
@@ -587,12 +593,7 @@
 
 (define deserialize-info:certificate%
   (make-deserialize-info
-   (lambda (der reject-ekus replace-ekus)
-     (cond [(or (pair? reject-ekus) replace-ekus)
-            (new certificate% (der (bytes->immutable-bytes der))
-                 (reject-ekus reject-ekus) (replace-ekus replace-ekus)
-                 (check-who 'deserialize-certificate))]
-           [else (bytes->certificate der #:who 'deserialize-certificate)]))
+   (lambda (der) (bytes->certificate der #:who 'deserialize-certificate))
    (lambda () (error 'deserialize-cert "cycles not allowed"))))
 
 ;; ============================================================
@@ -601,12 +602,7 @@
   (class* certificate-data% (-certificate<%> serializable-certificate<%>)
     (init [check-who 'certificate])
     (inherit-field der)
-    (init-field [reject-ekus null] ;; (Listof OID)
-                [replace-ekus #f]) ;; #f or (Listof OID) -- #f means use cert EKUs
-    (inherit get-der
-             get-spki
-             get-subject
-             check)
+    (inherit check get-subject-name-string)
     (super-new)
 
     ;; ----------------------------------------
@@ -627,33 +623,16 @@
     ;; ----------------------------------------
 
     (define/public (equal-to? other [recur equal?])
-      (and (recur (get-der) (send other get-der))
-           (recur reject-ekus (get-field reject-ekus other))
-           (recur replace-ekus (get-field replace-ekus other))))
+      (and (recur der (get-field der other))))
 
-    (define/public (equal-hash-code-of recur)
-      (recur (get-der)))
-    (define/public (equal-secondary-hash-code-of recur)
-      (recur (get-der)))
+    (define/public (equal-hash-code-of recur) (recur der))
+    (define/public (equal-secondary-hash-code-of recur) (recur der))
 
     (define/public (custom-write out)
-      (fprintf out "#<certificate: ~a>" (get-subject-name-string)))
-    (define/public (custom-display out)
-      (custom-write out))
+      (fprintf out "#<certificate: ~.a>" (get-subject-name-string)))
+    (define/public (custom-display out) (custom-write out))
 
-    (define/public (get-subject-name-string)
-      (Name->string (get-subject)))
-
-    (define/public (-serialize)
-      (vector der reject-ekus replace-ekus))
-
-    ;; ----------------------------------------
-
-    (define/override (get-extended-key-usage eku)
-      (define (member* x xs) (or (member x xs) (member anyExtendedKeyUsage xs)))
-      (cond [(member* eku reject-ekus) 'no]
-            [replace-ekus (if (member* eku replace-ekus) 'yes 'no)]
-            [else (super get-extended-key-usage eku)]))
+    (define/public (-serialize) (vector der))
     ))
 
 ;; ============================================================
@@ -667,18 +646,3 @@
 
 (define (make-certificate der who)
   (new certificate% (der der) (check-who who)))
-
-;; ============================================================
-
-;; Support for OpenSSL's TRUSTED CERTIFICATE: a certificate with additional
-;; trusted and rejected EKUs.
-(module+ openssl-trusted-cert
-  (provide (all-defined-out))
-
-  (define (bytes->certificate/override-uses der #:who [who 'bytes->certificate/override-uses])
-    (define in (open-input-bytes der))
-    (define cert-der (begin (read-asn1 ANY in) (subbytes der 0 (file-position in))))
-    (define aux (read-asn1 CertAux in))
-    (new certificate% (der (bytes->immutable-bytes cert-der))
-         (reject-ekus (hash-ref aux 'reject null))
-         (replace-ekus (hash-ref aux 'trust #f)))))
