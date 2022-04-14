@@ -45,7 +45,7 @@
     [has-same-public-key? (->m certificate? boolean?)]
 
     [get-der (->m bytes?)]
-    [get-cert-signature-info (->m (values asn1-algorithm-identifier/c bytes? bytes?))]
+    [get-signature-info (->m (values asn1-algorithm-identifier/c bytes? bytes?))]
 
     [get-version (->m exact-integer?)] ;; Note: 2 represents v3
     [get-serial-number (->m exact-integer?)]
@@ -91,19 +91,20 @@
 
 (define certificate-chain<%>
   (interface ()
+    ;; Structure of chain
     [get-certificate (->m certificate?)]
     [get-issuer-chain (->m (or/c #f certificate-chain?))]
     [get-anchor (->m certificate?)]
     [is-anchor? (->m boolean?)]
 
+    ;; Convenience, forwarded to certificate
     [get-subject (->m x509-name/c)]
     [get-subject-alt-names
      (case->m (-> (listof x509-general-name/c))
               (-> (or/c #f x509-general-name-tag/c)
                   (or/c (listof string?) (listof x509-general-name/c))))]
-    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
-    [ok-extended-key-usage? (->*m [asn1-oid?] [any/c] any)]
 
+    ;; Signature verification
     [get-public-key
      (->*m [] [(or/c crypto-factory? (listof crypto-factory?))] public-only-key?)]
     [check-signature
@@ -111,6 +112,22 @@
            [#:factories (or/c crypto-factory? (listof crypto-factory?))]
            (result/c #t (listof symbol?)))]
 
+    ;; Validity of self chain
+    [get-index (->m exact-nonnegative-integer?)]
+    [get-max-path-length (->m exact-integer?)]
+    [get-validity-seconds (->m (list/c time/c time/c))]
+
+    ;; Security level of self chain
+    [get-public-key-security-strength (->m exact-nonnegative-integer?)]
+    [get-public-key-security-level (->m security-level/c)]
+    [get-signature-security-strength (->*m [] [boolean?] (or/c #f exact-nonnegative-integer?))]
+    [get-signature-security-level (->*m [] [boolean?] (or/c #f security-level/c))]
+
+    ;; Purpose of self chain
+    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
+    [ok-extended-key-usage? (->*m [asn1-oid?] [any/c #:recur boolean?] any)]
+
+    ;; Validity of self chain (high-level)
     [trusted?
      (->*m [(or/c #f certificate-store?)]
            [time/c time/c #:security-level exact-nonnegative-integer?]
@@ -119,12 +136,14 @@
      (->*m [(or/c #f certificate-store?)]
            [time/c time/c #:security-level exact-nonnegative-integer?]
            (result/c #t (listof (cons/c exact-nonnegative-integer? any/c))))]
+    [ok-validity-period?
+     (->*m [] [time/c time/c] boolean?)]
 
-    [get-public-key-security-strength (->m exact-nonnegative-integer?)]
-    [get-signature-security-strength (->*m [] [boolean?] (or/c #f exact-nonnegative-integer?))]
-
-    [get-public-key-security-level (->m security-level/c)]
-    [get-signature-security-level (->*m [] [boolean?] (or/c #f security-level/c))]
+    ;; Suitability for purpose
+    ;; FIXME: suitable-for-CA?
+    [suitable-for-ocsp-signing? (->m certificate-chain? boolean?)]
+    [suitable-for-tls-server? (->m (or/c #f string?) boolean?)]
+    [suitable-for-tls-client? (->m (or/c #f x509-general-name/c) boolean?)]
     ))
 
 ;; Note: for documentation; not actually implemented

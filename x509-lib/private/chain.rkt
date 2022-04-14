@@ -80,31 +80,25 @@
 (define pre-chain%
   (class object%
     (init-field issuer-chain  ;; Chain or #f if anchor
-                cert)         ;; Certificate
+                cert          ;; Certificate
+                [override-trust-ekus  #f]  ;; #f or (Listof OID)
+                [override-reject-ekus #f]) ;; #f or (Listof OID)
     (super-new)
 
     (define/public (get-issuer-chain) issuer-chain)
     (define/public (get-certificate) cert)
-
     (define/public (get-certificates)
       (cons cert (if issuer-chain (send issuer-chain get-certificates) null)))
-
-    (define/public (get-issuer-chain-or-self)
-      (or issuer-chain this))
     (define/public (get-issuer-or-self)
-      (send (get-issuer-chain-or-self) get-certificate))
-
+      (send (or issuer-chain this) get-certificate))
     (define/public (get-anchor-chain)
       (if issuer-chain (send issuer-chain get-anchor-chain) this))
-    (define/public (get-anchor)
-      (send (get-anchor-chain) get-certificate))
+    (define/public (get-anchor) (send (get-anchor-chain) get-certificate))
     (define/public (is-anchor?) (not issuer-chain))
 
     (define/public (get-subject) (send cert get-subject))
     (define/public (get-subject-alt-names [kind #f])
       (send cert get-subject-alt-names kind))
-    (define/public (get-index) index)
-    (define/public (get-max-path-length) max-path-length)
 
     ;; ----------------------------------------
 
@@ -125,9 +119,12 @@
       (check-signature/algid (get-public-key factories) algid tbs sig))
 
     ;; ----------------------------------------
+    ;; Validity of Self Chain
 
     ;; index : Nat  -- 0 is anchor
     (define index (if issuer-chain (add1 (send issuer-chain get-index)) 0))
+
+    (define/public (get-index) index)
 
     ;; max-path-length : Integer or #f
     ;; The maximum number of *intermediate* certificates that can *follow* this one.
@@ -149,181 +146,20 @@
                       [else max-path-length]))])
         max-path-length))
 
-    ;; name-constraints : ParsedNameConstraints
-    ;; Only for the current certificate; see recursive check-name-constraints.
-    ;; 6.1.4 (g) name constraints
-    (define name-constraints
-      (cond [(send cert get-name-constraints)
-             => (lambda (ncs) (extend-name-constraints null index ncs))]
-            [else null]))
+    (define/public (get-max-path-length) max-path-length)
 
-    (define/public (ok-extended-key-usage? eku [on-unset #f])
-      ;; This code attempts to follow the CA/B Basic Requirements interpretation
-      ;; of EKU extensions in CA certificates, mainly following OpenSSL's tests
-      ;; to resolve ambiguities. In particular:
-      ;; - If a CA contains the EKU extension, then the effective EKUs of any
-      ;;   descendent are limited to the EKUs in the CA cert. (If the descendent
-      ;;   contains others, they are ignored, but the cert is not considered
-      ;;   invalid.)
-      ;; - Clarifications, with the issuer is written on the left of the arrow:
-      ;;   - In a chain with {eku} -> {} -> {eku}, eku is NOT in the set of
-      ;;     effective EKUs.
-      ;;   - In a chain with {eku} -> unset -> {eku}, eku is in the set of
-      ;;     effective EKUs.
-      ;;   - In a chain ending with {eku} -> unset, eku is NOT in the set of
-      ;;     effective EKUs.
-      ;; - In summary, in an intermediate cert, unset is equivalent to allowing
-      ;;   all EKUs; in a leaf cert, it is equivalent to {}.
-      (define (join cert-result issuer-result) ;; (U 'yes 'no 'unset)
-        (case issuer-result
-          [(yes) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'unset])]
-          [(no) 'no]
-          [(unset) cert-result]))
-      (define result (foldr join 'unset (get-extended-key-usage-chain eku)))
-      (case result [(yes) #t] [(no) #f] [else on-unset]))
+    ;; valid-{from,to}-time : Seconds
+    (define-values (valid-from-time valid-to-time)
+      (match (send cert get-validity-seconds)
+        [(list cert-from cert-to)
+         (match (and issuer-chain (send issuer-chain get-validity-seconds))
+           [(list issuer-from issuer-to)
+            (values (max cert-from issuer-from) (min cert-to issuer-to))]
+           [#f (values cert-from cert-to)])]))
 
-    ;; get-extended-key-usage-chain : OID -> (Listof (U 'yes 'no 'unset)), leaf first, root CA last
-    (define/public (get-extended-key-usage-chain eku)
-      (cons (send cert get-extended-key-usage eku)
-            (if issuer-chain (send issuer-chain get-extended-key-usage-chain eku) '())))
-
-    ;; {from,to}-time : Seconds
-    (define-values (from-time to-time)
-      (let ()
-        (match-define (list cert-from cert-to) (send cert get-validity-seconds))
-        (match (and issuer-chain (send issuer-chain get-validity-seconds))
-          [(list issuer-from issuer-to)
-           (values (max cert-from issuer-from) (min cert-to issuer-to))]
-          [else (values cert-from cert-to)])))
-
+    ;; get-validity-seconds : (list Seconds Seconds)
     (define/public (get-validity-seconds)
-      (list from-time to-time))
-
-    (define/public (print-chain)
-      (let loop ([chain this])
-        (when chain
-          (eprintf "~s : ~e\n" (send chain get-index) chain)
-          (loop (send chain get-issuer-chain)))))
-
-    ;; ----------------------------------------
-    ;; Extension
-
-    (define extension-cache (make-weak-hasheq))
-
-    (define/public (extend-chain new-cert)
-      (hash-ref! extension-cache new-cert
-                 (lambda ()
-                   (define result
-                     (append-results (check-as-intermediate)
-                                     (check-chain-addition new-cert)
-                                     (get-validation-result)))
-                   (match result
-                     [(ok _)
-                      (new certificate-chain% (issuer-chain this) (cert new-cert))]
-                     [(? bad?)
-                      (new bad-chain% (issuer-chain this) (cert new-cert)
-                           (validation-result result))]))))
-
-    ;; get-validation-result : -> (Result CertificateChain (Listof (cons Nat Any)))
-    (abstract get-validation-result)
-
-    ;; check-as-intermediate : -> (Result #t (Listof (cons Nat Symbol)))
-    (define/public (check-as-intermediate)
-      (define (add-index what) (cons (get-index) what))
-      ;; 6.1.4
-      (append-results
-       ;; 6.1.4 (a-b) policy-mappings, policies, ...
-       #| POLICIES NOT SUPPORTED |#
-       ;; 6.1.4 (c-f) handled by get-public-key method instead
-       ;; 6.1.4 (g) name constraints -- in constructor
-       ;; 6.1.4 (h, l) decrement counters -- in constructor
-       (cond [(>= (or max-path-length +inf.0) 0) (ok #t)]
-             [else (bad (list (add-index 'intermediate:max-path-length)))])
-       ;; 6.1.4 (i, j) policy-mapping, inhibit-anypolicy, ...
-       #| POLICIES NOT SUPPORTED |#
-       ;; 6.1.4 (k) check CA (reject if no basicConstraints extension)
-       (cond [(send cert is-CA?) (ok #t)]
-             [else (bad (list (add-index 'intermediate:not-CA)))])
-       ;; 6.1.4 (m) -- in constructor
-       ;; 6.1.4 (n)
-       (cond [(send cert ok-key-usage? 'keyCertSign #t) (ok #t)]
-             [else (bad (list (add-index 'intermediate:missing-keyCertSign)))])
-       ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
-       #| checked in certificate% |#))
-
-    ;; check-as-final : -> (Result #t (Listof (cons Nat Symbol)))
-    (define/public (check-as-final)
-      (append-results
-       ;; 6.1.3 (b,c) -- deferred
-       (cond [issuer-chain (send issuer-chain check-certificate-name-constraints cert)]
-             [else (ok #t)])
-       ;; 6.1.5
-       ;; 6.1.5 (a,b) explicit-policy, policies
-       #| POLICIES NOT SUPPORTED |#
-       ;; 6.1.5 (c-e) handled by get-public-key method instead
-       ;; 6.1.5 (f) process other critical extensions: errors gathered in construction
-       ;; 6.1.5 (g) policies ...
-       #| POLICIES NOT SUPPORTED |#))
-
-    ;; check-chain-addition : Cert -> (Result #t (Listof (cons Nat Any)))
-    (define/public (check-chain-addition new-cert)
-      (define (add-index what) (cons (add1 index) what))
-      ;; 6.1.3
-      (append-results
-       ;; 6.1.3 (a)(1) verify signature
-       (bad-map add-index (check-certificate-signature new-cert))
-       ;; 6.1.3 (a)(2) currently valid
-       (match (send new-cert get-validity-seconds)
-         [(list cert-from cert-to)
-          (cond [(<= (max from-time cert-from) (min to-time cert-to)) (ok #t)]
-                [else (bad (list (add-index 'validity-period:empty-intersection)))])])
-       ;; 6.1.3 (a)(3) (not revoked)
-       #| CRL checked separately |#
-       ;; 6.1.3 (a)(4) issuer
-       (cond [(Name-equal? (send new-cert get-issuer) (get-subject)) (ok #t)]
-             [else (bad (list (add-index 'issuer:name-mismatch)))])
-       ;; 6.1.3 (b,c) check name constraints
-       (cond [(send new-cert is-self-issued?)
-              ;; Check self-issued cert's name constraints only if final.
-              ;; So skip now, add to check-for-final
-              (ok #t)]
-             [else (bad-map add-index (check-certificate-name-constraints new-cert))])
-       ;; 6.1.3 (d-f) process policies; set/check valid-policy-tree, explicit-policy
-       #| POLICIES NOT SUPPORTED |#))
-
-    ;; check-certificate-signature : Cert -> (Result #t (Listof Symbol))
-    (define/public (check-certificate-signature new-cert)
-      (define-values (algid tbs-der sig) (send new-cert get-cert-signature-info))
-      (check-signature algid tbs-der sig))
-
-    ;; check-certificate-name-constraints : Cert -> (Result #t (Listof (cons Nat Symbol)))
-    (define/public (check-certificate-name-constraints new-cert)
-      (define subject-name (send new-cert get-subject))
-      (define alt-names (send new-cert get-subject-alt-names))
-      (append-results
-       (check-name-constraints (list 'directoryName subject-name) 'subject)
-       (append*-results
-        (match subject-name
-          [(list 'rdnSequence rdns)
-           (for*/list ([rdn (in-list rdns)]
-                       [av (in-list rdn)]
-                       #:when (equal? (hash-ref av 'type) id-emailAddress))
-             (check-name-constraints (list 'rfc822Name (hash-ref av 'value)) 'subject-email))]))
-       (append*-results
-        (for/list ([san (in-list alt-names)])
-          (check-name-constraints san 'alt)))))
-
-    ;; check-name-constraints : GeneralName Symbol -> (Result #t (Listof (cons Nat Symbol)))
-    (define/public (check-name-constraints gname kind)
-      ;; 6.1.4 (g) name constraints
-      (append-results
-       (cond [(name-constraints-name-ok? name-constraints gname) (ok #t)]
-             [else
-              (bad (case kind
-                     [(subject) (list (cons index 'name-constraints:subject-rejected))]
-                     [(subject-email) (list (cons index 'name-constraint:subject-email-rejected))]
-                     [else (list (cons index 'name-constraints:subjectAltName-rejected))]))])
-       (if issuer-chain (send issuer-chain check-name-constraints gname kind) (ok #t))))
+      (list valid-from-time valid-to-time))
 
     ;; check-validity-period : Real Real -> (Result #t (Listof Nat Symbol))
     (define/public (check-validity-period from-time to-time)
@@ -336,12 +172,12 @@
                  [else (ok #t)]))))
 
     ;; ----------------------------------------
-    ;; Checking security level
+    ;; Security Level of Self Chain
 
     (define/public (get-public-key-security-strength)
       (send (get-public-key) get-security-bits))
     (define/public (get-signature-security-strength [use-issuer-key? #t])
-      (define-values (algid _tbs _sig) (send cert get-cert-signature-info))
+      (define-values (algid _tbs _sig) (send cert get-signature-info))
       (define sig-secbits (sig-alg-security-strength algid))
       (define issuer-key-secbits
         (and use-issuer-key? issuer-chain
@@ -373,6 +209,187 @@
     ;; check-security-level : Nat[0-5] -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-security-level level)
       (check-security-strength (security-level->strength level)))
+
+    ;; ----------------------------------------
+    ;; Purposes of Self Chain
+
+    (define/public (ok-key-usage? use [default #f])
+      (send cert ok-key-usage? use default))
+
+    (define/public (ok-extended-key-usage? eku [on-unset #f] #:recur [recur? #t])
+      ;; FIXME: might want to generalize #:recur to support other rules?
+      (cond [recur?
+             ;; This code attempts to follow the CA/B Basic Requirements interpretation
+             ;; of EKU extensions in CA certificates, mainly following OpenSSL's tests
+             ;; to resolve ambiguities. In particular:
+             ;; - If a CA contains the EKU extension, then the effective EKUs of any
+             ;;   descendent are limited to the EKUs in the CA cert. (If the descendent
+             ;;   contains others, they are ignored, but the cert is not considered
+             ;;   invalid.)
+             ;; - Clarifications, with the issuer is written on the left of the arrow:
+             ;;   - In a chain with {eku} -> {} -> {eku}, eku is NOT in the set of
+             ;;     effective EKUs.
+             ;;   - In a chain with {eku} -> unset -> {eku}, eku is in the set of
+             ;;     effective EKUs.
+             ;;   - In a chain ending with {eku} -> unset, eku is NOT in the set of
+             ;;     effective EKUs.
+             ;; - In summary, in an intermediate cert, unset is equivalent to allowing
+             ;;   all EKUs; in a leaf cert, it is equivalent to {}.
+             (define (join cert-result issuer-result) ;; (U 'yes 'no 'unset)
+               (case issuer-result
+                 [(yes) (case cert-result [(yes) 'yes] [(no) 'no] [(unset) 'unset])]
+                 [(no) 'no]
+                 [(unset) cert-result]))
+             (define result (foldr join 'unset (get-extended-key-usage-chain eku)))
+             (case result [(yes) #t] [(no) #f] [else on-unset])]
+            [else (case (get-extended-key-usage eku)
+                    [(yes) #t] [(no) #f] [else on-unset])]))
+
+    ;; get-extended-key-usage-chain : OID -> (Listof (U 'yes 'no 'unset)), leaf first, root CA last
+    (define/public (get-extended-key-usage-chain eku)
+      (cons (get-extended-key-usage eku)
+            (if issuer-chain (send issuer-chain get-extended-key-usage-chain eku) '())))
+
+    ;; get-extended-key-usage : OID -> (U 'yes 'no 'unset)
+    (define/public (get-extended-key-usage eku)
+      ;; Note: This interprets override-{trust,reject}-ekus as applying only to
+      ;; this cert. That's conservative if this cert is not the anchor.
+      (cond [(member eku (or override-reject-ekus null)) 'no]
+            [override-trust-ekus (if (member eku override-trust-ekus) 'yes 'no)]
+            [else (send cert get-extended-key-usage eku)]))
+
+    ;; ----------------------------------------
+    ;; Chain Extension
+
+    ;; extension-cache : Hasheq[Certificate => PreChain]
+    (define extension-cache (make-weak-hasheq))
+
+    ;; extend-chain : Certificate -> PreChain
+    (define/public (extend-chain new-cert)
+      (hash-ref! extension-cache new-cert (lambda () (-extend-chain new-cert))))
+
+    (define/private (-extend-chain new-cert)
+      (define result
+        (append-results (check-self-as-intermediate)
+                        (check-certificate-as-addition new-cert)
+                        (get-validation-result)))
+      (match result
+        [(ok _) (new certificate-chain% (issuer-chain this) (cert new-cert))]
+        [(? bad?) (new bad-chain% (issuer-chain this) (cert new-cert)
+                       (validation-result result))]))
+
+    ;; get-validation-result : -> (Result CertificateChain (Listof (cons Nat Any)))
+    (abstract get-validation-result)
+
+    ;; check-self-as-intermediate : -> (Result #t (Listof (cons Nat Symbol)))
+    (define/public (check-self-as-intermediate)
+      (define (add-index what) (cons (get-index) what))
+      ;; 6.1.4
+      (append-results
+       ;; 6.1.4 (a-b) policy-mappings, policies, ...
+       #| POLICIES NOT SUPPORTED |#
+       ;; 6.1.4 (c-f) handled by get-public-key method instead
+       ;; 6.1.4 (g) name constraints -- in constructor
+       ;; 6.1.4 (h, l) decrement counters -- in constructor
+       (cond [(>= (or max-path-length +inf.0) 0) (ok #t)]
+             [else (bad (list (add-index 'intermediate:max-path-length)))])
+       ;; 6.1.4 (i, j) policy-mapping, inhibit-anypolicy, ...
+       #| POLICIES NOT SUPPORTED |#
+       ;; 6.1.4 (k) check CA (reject if no basicConstraints extension)
+       (cond [(send cert is-CA?) (ok #t)]
+             [else (bad (list (add-index 'intermediate:not-CA)))])
+       ;; 6.1.4 (m) -- in constructor
+       ;; 6.1.4 (n)
+       (cond [(send cert ok-key-usage? 'keyCertSign #t) (ok #t)]
+             [else (bad (list (add-index 'intermediate:missing-keyCertSign)))])
+       ;; 6.1.4 (o) process other critical extensions: errors gathered in construction
+       #| checked in certificate% |#))
+
+    ;; check-self-as-final : -> (Result #t (Listof (cons Nat Symbol)))
+    (define/public (check-self-as-final)
+      (append-results
+       ;; 6.1.3 (b,c) -- deferred
+       (cond [issuer-chain (send issuer-chain check-certificate-name-constraints cert)]
+             [else (ok #t)])
+       ;; 6.1.5
+       ;; 6.1.5 (a,b) explicit-policy, policies
+       #| POLICIES NOT SUPPORTED |#
+       ;; 6.1.5 (c-e) handled by get-public-key method instead
+       ;; 6.1.5 (f) process other critical extensions: errors gathered in construction
+       ;; 6.1.5 (g) policies ...
+       #| POLICIES NOT SUPPORTED |#))
+
+    ;; ------------------------------------------
+    ;; Self-as-CA Operations
+
+    ;; check-certificate-as-addition : Certificate -> (Result #t (Listof (cons Nat Any)))
+    (define/public (check-certificate-as-addition new-cert)
+      (define (add-index what) (cons (add1 index) what))
+      ;; 6.1.3
+      (append-results
+       ;; 6.1.3 (a)(1) verify signature
+       (bad-map add-index (check-certificate-signature new-cert))
+       ;; 6.1.3 (a)(2) currently valid
+       (match (send new-cert get-validity-seconds)
+         [(list cert-from cert-to)
+          (cond [(<= (max valid-from-time cert-from) (min valid-to-time cert-to)) (ok #t)]
+                [else (bad (list (add-index 'validity-period:empty-intersection)))])])
+       ;; 6.1.3 (a)(3) (not revoked)
+       #| CRL checked separately |#
+       ;; 6.1.3 (a)(4) issuer
+       (cond [(Name-equal? (send new-cert get-issuer) (get-subject)) (ok #t)]
+             [else (bad (list (add-index 'issuer:name-mismatch)))])
+       ;; 6.1.3 (b,c) check name constraints
+       (cond [(send new-cert is-self-issued?)
+              ;; Check self-issued cert's name constraints only if final.
+              ;; So skip now, add to check-for-final
+              (ok #t)]
+             [else (bad-map add-index (check-certificate-name-constraints new-cert))])
+       ;; 6.1.3 (d-f) process policies; set/check valid-policy-tree, explicit-policy
+       #| POLICIES NOT SUPPORTED |#))
+
+    ;; check-certificate-signature : Cert -> (Result #t (Listof Symbol))
+    (define/public (check-certificate-signature new-cert)
+      (define-values (algid tbs-der sig) (send new-cert get-signature-info))
+      (check-signature algid tbs-der sig))
+
+    ;; check-certificate-name-constraints : Cert -> (Result #t (Listof (cons Nat Symbol)))
+    (define/public (check-certificate-name-constraints new-cert)
+      (define subject-name (send new-cert get-subject))
+      (define alt-names (send new-cert get-subject-alt-names))
+      (append-results
+       (check-name-constraints (list 'directoryName subject-name) 'subject)
+       (append*-results
+        (match subject-name
+          [(list 'rdnSequence rdns)
+           (for*/list ([rdn (in-list rdns)]
+                       [av (in-list rdn)]
+                       #:when (equal? (hash-ref av 'type) id-emailAddress))
+             (check-name-constraints (list 'rfc822Name (hash-ref av 'value)) 'subject-email))]))
+       (append*-results
+        (for/list ([san (in-list alt-names)])
+          (check-name-constraints san 'alt)))))
+
+    ;; name-constraints : ParsedNameConstraints
+    ;; Only from the current certificate; see recursive check-name-constraints.
+    ;; 6.1.4 (g) name constraints
+    (define name-constraints
+      (cond [(send cert get-name-constraints)
+             => (lambda (ncs) (parse-name-constraints index ncs))]
+            [else null]))
+
+    ;; check-name-constraints : GeneralName Symbol -> (Result #t (Listof (cons Nat Symbol)))
+    ;; Check the given name against the constraints of this certificate and issuer chain.
+    (define/public (check-name-constraints gname kind)
+      ;; 6.1.4 (g) name constraints
+      (append-results
+       (cond [(name-constraints-name-ok? name-constraints gname) (ok #t)]
+             [else
+              (bad (case kind
+                     [(subject) (list (cons index 'name-constraints:subject-rejected))]
+                     [(subject-email) (list (cons index 'name-constraint:subject-email-rejected))]
+                     [else (list (cons index 'name-constraints:subjectAltName-rejected))]))])
+       (if issuer-chain (send issuer-chain check-name-constraints gname kind) (ok #t))))
     ))
 
 (define bad-chain%
@@ -412,8 +429,9 @@
              get-issuer-or-self
              get-subject
              get-subject-alt-names
+             ok-key-usage?
              ok-extended-key-usage?
-             get-extended-key-usage-chain
+             get-extended-key-usage
              check-as-final
              check-security-level
              check-validity-period)
@@ -422,10 +440,8 @@
     (define/override (get-validation-result) (ok this))
 
     (define/public (custom-write out)
-      (fprintf out "#<certificate-chain: ~a>"
-               (Name->string (send (get-certificate) get-subject))))
-    (define/public (custom-display out)
-      (custom-write out))
+      (fprintf out "#<certificate-chain: ~a>" (send cert get-subject-name-string)))
+    (define/public (custom-display out) (custom-write out))
 
     (define/public (-serialize)
       (vector issuer-chain cert))
@@ -468,7 +484,7 @@
           ;; in the responder certificate. One reason: Including the EKU in
           ;; ancestor CA certificates would allow every subordinate CA to sign
           ;; OCSP responses for its issuer CAs.
-          (and (eq? (send cert get-extended-key-usage id-kp-OCSPSigning) 'yes)
+          (and (ok-extended-key-usage? id-kp-OCSPSigning #f #:recur #f)
                (send (get-issuer-or-self) has-same-public-key? for-ca-cert))))
 
     (define/public (suitable-for-tls-server? host)
@@ -513,9 +529,6 @@
                     (GeneralName-equal? name altname)))
               (ok #t)]
              [else (bad '(tls:name-mismatch))])))
-
-    (define/public (ok-key-usage? use [default #f])
-      (send cert ok-key-usage? use default))
     ))
 
 ;; tls-key-usages is approximation; actually depends on TLS cipher negotiated

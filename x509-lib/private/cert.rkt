@@ -36,7 +36,7 @@
     (define/public (has-same-public-key? other-cert)
       (equal? (get-spki) (send other-cert get-spki)))
 
-    (define/public (get-cert-signature-info)
+    (define/public (get-signature-info)
       (define vcert (bytes->asn1 Certificate-for-verify-sig der))
       (values (hash-ref vcert 'signatureAlgorithm)
               (hash-ref vcert 'tbsCertificate)
@@ -496,16 +496,15 @@
 
 (struct nclayer (mode index gnames) #:prefab)
 
-(define (extend-name-constraints cs index ncs)
-  (define (add base mode sts)
-    (cons (nclayer mode index (map (lambda (st) (hash-ref st 'base)) sts)) base))
-  (let* ([cs (cond [(hash-ref ncs 'permittedSubtrees #f)
-                    => (lambda (sts) (add cs 'permit sts))]
-                   [else cs])]
-         [cs (cond [(hash-ref ncs 'excludedSubtrees #f)
-                      => (lambda (sts) (add cs 'exclude sts))]
-                     [else cs])])
-    cs))
+;; parse-name-constraints : Nat NameConstraints -> ParsedNameConstraints
+(define (parse-name-constraints index ncs)
+  (define (GST-base st) (hash-ref st 'base)) ;; GeneralSubtree -> GeneralName
+  (append (cond [(hash-ref ncs 'permittedSubtrees #f)
+                 => (lambda (sts) (list (nclayer 'permit index (map GST-base sts))))]
+                [else null])
+          (cond [(hash-ref ncs 'excludedSubtrees #f)
+                 => (lambda (sts) (list (nclayer 'exclude index (map GST-base sts))))]
+                [else null])))
 
 ;; Note: this checks that a specific name satisfies all constraint layers. It
 ;; does not check that an intermediate certificate's constraints are narrower
