@@ -127,7 +127,7 @@
     [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
     [ok-extended-key-usage? (->*m [asn1-oid?] [any/c #:recur boolean?] any)]
 
-    ;; Validity of self chain (high-level)
+    ;; Trusted (= trusted by store + valid at time + security level)
     [trusted?
      (->*m [(or/c #f certificate-store?)]
            [time/c time/c #:security-level exact-nonnegative-integer?]
@@ -140,17 +140,10 @@
      (->*m [] [time/c time/c] boolean?)]
 
     ;; Suitability for purpose
-    ;; FIXME: suitable-for-CA?
+    [suitable-for-CA? (->m boolean?)]
     [suitable-for-ocsp-signing? (->m certificate-chain? boolean?)]
     [suitable-for-tls-server? (->m (or/c #f string?) boolean?)]
     [suitable-for-tls-client? (->m (or/c #f x509-general-name/c) boolean?)]
-    ))
-
-;; Note: for documentation; not actually implemented
-(define trust-anchor<%>
-  (interface ()
-    get-public-key
-    get-subject
     ))
 
 (define x509-lookup<%>
@@ -194,6 +187,8 @@
   (interface (certificate<%>)))
 (define -certificate-chain<%>
   (interface (certificate-chain<%>)))
+(define -trust-anchor<%>
+  (interface ()))
 (define -certificate-store<%>
   (interface (certificate-store<%>)
     [build-candidate-chains

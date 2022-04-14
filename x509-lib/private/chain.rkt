@@ -24,14 +24,6 @@
 
 ;; ============================================================
 
-;; anchor-cache : WeakHasheq[Certificate => CertChain]
-(define anchor-cache (make-weak-hasheq))
-
-(define (make-anchor-chain cert)
-  (define (do-make-anchor-chain)
-    (new certificate-chain% (issuer-chain #f) (cert cert)))
-  (hash-ref! anchor-cache cert do-make-anchor-chain))
-
 ;; A CandidateChain is (list TrustAnchor Cert ...),
 ;; where TrustAnchor is currently always also a Cert.
 
@@ -46,7 +38,8 @@
 
 ;; ============================================================
 
-;; A CertificateChain is an instance of certificate-chain%.
+;; A CertificateChain is an instance of certificate-chain% (or its subclass
+;; certificate-anchor%).
 
 ;; A certificate chain is "chain-valid" if it satisfies all of the following:
 ;; - each cert issued the next, and signatures are valid
@@ -78,11 +71,9 @@
 ;; preserving the invariant that a certificate-chain% object is chain-valid.
 
 (define pre-chain%
-  (class object%
+  (class* object% (certificate-chain<%>)
     (init-field issuer-chain  ;; Chain or #f if anchor
-                cert          ;; Certificate
-                [override-trust-ekus  #f]  ;; #f or (Listof OID)
-                [override-reject-ekus #f]) ;; #f or (Listof OID)
+                cert)         ;; Certificate
     (super-new)
 
     (define/public (get-issuer-chain) issuer-chain)
@@ -161,6 +152,10 @@
     (define/public (get-validity-seconds)
       (list valid-from-time valid-to-time))
 
+    ;; ok-validity-period? : Seconds [Seconds] -> Boolean
+    (define/public (ok-validity-period? [from-time (current-seconds)] [to-time from-time])
+      (ok? (check-validity-period from-time to-time)))
+
     ;; check-validity-period : Real Real -> (Result #t (Listof Nat Symbol))
     (define/public (check-validity-period from-time to-time)
       (match-define (list ok-start ok-end) (get-validity-seconds))
@@ -211,6 +206,25 @@
       (check-security-strength (security-level->strength level)))
 
     ;; ----------------------------------------
+    ;; Trusted
+
+    ;; trusted? : Store/#f Seconds Seconds -> Boolean
+    (define/public (trusted? store [from-time (current-seconds)] [to-time from-time]
+                             #:security-level [security-level INIT-SECURITY-LEVEL])
+      (ok? (check-trust store from-time to-time #:security-level security-level)))
+
+    ;; check-trust : Store/#f Seconds Seconds -> (Result #t (Listof (cons Nat Symbol)))
+    (define/public (check-trust store [from-time (current-seconds)] [to-time from-time]
+                                #:security-level [security-level INIT-SECURITY-LEVEL])
+      (append-results
+       (cond [(not store) (ok #t)]
+             [(send store trust? (get-anchor)) (ok #t)]
+             [else (bad '((0 . anchor:not-trusted)))])
+       (check-security-level security-level)
+       (check-self-as-final)
+       (check-validity-period from-time to-time)))
+
+    ;; ----------------------------------------
     ;; Purposes of Self Chain
 
     (define/public (ok-key-usage? use [default #f])
@@ -251,12 +265,9 @@
             (if issuer-chain (send issuer-chain get-extended-key-usage-chain eku) '())))
 
     ;; get-extended-key-usage : OID -> (U 'yes 'no 'unset)
+    ;; Note: overridden by trust-anchor%
     (define/public (get-extended-key-usage eku)
-      ;; Note: This interprets override-{trust,reject}-ekus as applying only to
-      ;; this cert. That's conservative if this cert is not the anchor.
-      (cond [(member eku (or override-reject-ekus null)) 'no]
-            [override-trust-ekus (if (member eku override-trust-ekus) 'yes 'no)]
-            [else (send cert get-extended-key-usage eku)]))
+      (send cert get-extended-key-usage eku))
 
     ;; ----------------------------------------
     ;; Chain Extension
@@ -390,84 +401,12 @@
                      [(subject-email) (list (cons index 'name-constraint:subject-email-rejected))]
                      [else (list (cons index 'name-constraints:subjectAltName-rejected))]))])
        (if issuer-chain (send issuer-chain check-name-constraints gname kind) (ok #t))))
-    ))
-
-(define bad-chain%
-  (class pre-chain%
-    (inherit-field issuer-chain)
-    (init-field validation-result)
-    (super-new)
-    (define/override (get-validation-result) validation-result)))
-
-;; ============================================================
-
-(define serializable-chain<%>
-  (interface*
-   ()
-   ([prop:serializable
-     (make-serialize-info (lambda (c) (send c -serialize))
-                          #'deserialize-info:certificate-chain%
-                          #f
-                          (or (current-load-relative-directory)
-                              (current-directory)))])))
-
-(define deserialize-info:certificate-chain%
-  (make-deserialize-info
-   (lambda (issuer-chain cert)
-     (cond [issuer-chain (send issuer-chain extend-chain cert)]
-           [else (make-anchor-chain cert)]))
-   (lambda () (error 'deserialize-certificate-chain "cycles not allowed"))))
-
-;; ============================================================
-
-(define certificate-chain%
-  (class* pre-chain% (-certificate-chain<%> writable<%> serializable-chain<%>)
-    (inherit-field issuer-chain cert)
-    (inherit get-certificate
-             get-anchor
-             get-validity-seconds
-             get-issuer-or-self
-             get-subject
-             get-subject-alt-names
-             ok-key-usage?
-             ok-extended-key-usage?
-             get-extended-key-usage
-             check-as-final
-             check-security-level
-             check-validity-period)
-    (super-new)
-
-    (define/override (get-validation-result) (ok this))
-
-    (define/public (custom-write out)
-      (fprintf out "#<certificate-chain: ~a>" (send cert get-subject-name-string)))
-    (define/public (custom-display out) (custom-write out))
-
-    (define/public (-serialize)
-      (vector issuer-chain cert))
-
-    ;; trusted? : Store/#f Seconds Seconds -> Boolean
-    (define/public (trusted? store [from-time (current-seconds)] [to-time from-time]
-                             #:security-level [security-level INIT-SECURITY-LEVEL])
-      (ok? (check-trust store from-time to-time #:security-level security-level)))
-
-    ;; check-trust : Store/#f Seconds Seconds -> (Result #t (Listof (cons Nat Symbol)))
-    (define/public (check-trust store [from-time (current-seconds)] [to-time from-time]
-                                #:security-level [security-level INIT-SECURITY-LEVEL])
-      (append-results
-       (cond [(not store) (ok #t)]
-             [(send store trust? (get-anchor)) (ok #t)]
-             [else (bad '((0 . anchor:not-trusted)))])
-       (check-security-level security-level)
-       (check-as-final)
-       (check-validity-period from-time to-time)))
-
-    ;; ok-validity-period? : Seconds [Seconds] -> Boolean
-    (define/public (ok-validity-period? [from-time (current-seconds)] [to-time from-time])
-      (ok? (check-validity-period from-time to-time)))
 
     ;; ----------------------------------------
     ;; Checking suitability for a purpose
+
+    (define/public (suitable-for-CA?)
+      (ok? (check-self-as-intermediate)))
 
     (define/public (suitable-for-ocsp-signing? for-ca-chain)
       ;; RFC 6960 4.2.2.2 says "a certificate's issuer MUST do one of the
@@ -533,3 +472,79 @@
 
 ;; tls-key-usages is approximation; actually depends on TLS cipher negotiated
 (define tls-key-usages '(digitalSignature keyEncipherment keyAgreement))
+
+;; ============================================================
+
+(define serializable-chain<%>
+  (interface*
+   ()
+   ([prop:serializable
+     (make-serialize-info (lambda (c) (send c -serialize))
+                          #'deserialize-info:certificate-chain%
+                          #f
+                          (or (current-load-relative-directory)
+                              (current-directory)))])))
+
+(define deserialize-info:certificate-chain%
+  (make-deserialize-info
+   (match-lambda*
+     [(list 'chain issuer-chain cert)
+      (send issuer-chain extend-chain cert)]
+     [(list 'anchor cert override-trust-ekus override-reject-ekus)
+      (make-anchor-chain cert override-trust-ekus override-reject-ekus)])
+   (lambda () (error 'deserialize-certificate-chain "cycles not allowed"))))
+
+;; ============================================================
+
+(define certificate-chain%
+  (class* pre-chain% (-certificate-chain<%> writable<%> serializable-chain<%>)
+    (inherit-field issuer-chain cert)
+    (super-new)
+
+    (define/override (get-validation-result) (ok this))
+
+    (define/public (custom-write out)
+      (fprintf out "#<certificate-chain: ~a>" (send cert get-subject-name-string)))
+    (define/public (custom-display out) (custom-write out))
+
+    (define/public (-serialize)
+      (vector 'chain issuer-chain cert))
+    ))
+
+;; ------------------------------------------------------------
+
+(define certificate-anchor%
+  (class* certificate-chain% (-trust-anchor<%>)
+    (inherit-field cert)
+    (init-field override-trust-ekus     ;; #f or (Listof OID)
+                override-reject-ekus)   ;; #f or (Listof OID)
+    (super-new (issuer-chain #f))
+
+    ;; get-extended-key-usage : OID -> (U 'yes 'no 'unset)
+    (define/override (get-extended-key-usage eku)
+      (cond [(member eku (or override-reject-ekus null)) 'no]
+            [override-trust-ekus (if (member eku override-trust-ekus) 'yes 'no)]
+            [else (super get-extended-key-usage eku)]))
+
+    (define/override (custom-write out)
+      (fprintf out "#<certificate-anchor: ~.a>" (send cert get-subject-name-string)))
+
+    (define/public (-serialize)
+      (vector 'anchor cert override-trust-ekus override-reject-ekus))
+    ))
+
+(define (make-anchor-chain cert
+                           #:override-trust-ekus [override-trust-ekus #f]
+                           #:override-reject-ekus [override-reject-ekus #f])
+  (new certificate-anchor% (cert cert)
+       (override-trust-ekus override-trust-ekus)
+       (override-reject-ekus override-reject-ekus)))
+
+;; ============================================================
+
+(define bad-chain%
+  (class pre-chain%
+    (inherit-field issuer-chain)
+    (init-field validation-result)
+    (super-new)
+    (define/override (get-validation-result) validation-result)))
