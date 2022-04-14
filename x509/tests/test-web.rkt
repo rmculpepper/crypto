@@ -52,7 +52,7 @@
 (parameterize ((current-directory bad-dir))
   (for-each fetch-certs (map car bad-sites)))
 
-(define store (send (empty-certificate-store)
+(define store (send (empty-store)
                     add-trusted-from-openssl-directory "/etc/ssl/certs"))
 
 (define rev-db (build-path working-dir "revocations.db"))

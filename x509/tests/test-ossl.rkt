@@ -43,10 +43,9 @@
 
 (define (verify cert purpose trusted untrusted [level LEVEL])
   (define (pemcerts name) (pem-file->certs* (format "~a.pem" name)))
-  (define store (send (empty-certificate-store) add
-                      #:trusted-certs (append* (map pemcerts trusted))
-                      #:untrusted-certs (append* (map pemcerts untrusted))
-                      #:set-security-level level))
+  (define store (send (empty-store #:security-level level) add
+                      #:trusted (append* (map pemcerts trusted))
+                      #:untrusted (append* (map pemcerts untrusted))))
   (define chain (send store pem-file->chain (format "~a.pem" cert)))
   ;; FIXME: check purpose
   chain)
