@@ -9,6 +9,7 @@
                      racket/class
                      racket/contract
                      scramble/result
+                     (only-in openssl ssl-default-verify-sources)
                      (only-in asn1 asn1-oid?)
                      crypto crypto/libcrypto x509))
 
@@ -60,17 +61,21 @@ trusted root CA.
 If we try to load the PEM file using an empty @tech{certificate store}, we get
 an error, because the store has no trusted roots:
 @examples[#:eval the-eval #:label #f
-(eval:alts (send (empty-certificate-store) pem-file->chain "racket.pem")
-           (eval:error (send (empty-certificate-store) pem-file->chain racket-pem-file)))
+(eval:alts (send (empty-store) pem-file->chain "racket.pem")
+           (eval:error (send (empty-store) pem-file->chain racket-pem-file)))
 ]
 We must configure a @tech{certificate store} with a reasonable set of trusted
 roots. We must also enable some crypto factories so that the store can verify
 certificate signatures.
 @examples[#:eval the-eval #:label #f
 (define store
-  (send (empty-certificate-store) add-trusted-from-openssl-directory
-        "/etc/ssl/certs"))
+  (send (empty-store) add-trusted-from-openssl-directory "/etc/ssl/certs"))
 (crypto-factories libcrypto-factory)
+]
+Alternatively, we can use a store initialized with the OS's default trusted
+certificates:
+@examples[#:eval the-eval #:label #f
+(define store (default-store))
 ]
 
 Now we can create a certificate chain from the saved PEM file:
@@ -565,9 +570,21 @@ otherwise. Certificate stores implement the @racket[certificate-store<%>]
 interface.
 }
 
-@defproc[(empty-certificate-store) certificate-store?]{
+@defproc[(empty-store [#:security-level security-level security-level/c 2])
+         certificate-store?]{
 
 Returns a certificate store containing no certificates (trusted or untrusted).
+The store's security level is initialized to @racket[security-level].
+}
+
+@defproc[(default-store [#:security-level security-level security-level/c 2])
+         certificate-store?]{
+
+Returns a certificate store initialized with trusted certificates from the OS.
+The store's security level is initialized to @racket[security-level]. The
+trusted certificates are the same as those specified by the
+@racketmodname[openssl] library's @racket[(ssl-default-verify-sources)] initial
+value.
 }
 
 @definterface[certificate-store<%> ()]{
@@ -579,8 +596,8 @@ certificate-store<%>)], but not vice versa. That is, a certificate
 store object implements additional internal interfaces not exposed to
 users.
 
-@defmethod[(add [#:trusted-certs trusted-certs (listof certificate?) null]
-                [#:untrusted-certs untrusted-certs (listof certificate?) null])
+@defmethod[(add [#:trusted trusted-certs (listof certificate?) null]
+                [#:untrusted untrusted-certs (listof certificate?) null])
            certificate-store?]{
 
 Creates a new certificate store like @(this-obj) but where
