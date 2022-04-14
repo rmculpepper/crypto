@@ -675,13 +675,6 @@
 (module+ openssl-trusted-cert
   (provide (all-defined-out))
 
-  (define CertAux
-    (SEQUENCE
-     [trust (SEQUENCE-OF OBJECT-IDENTIFIER) #:optional]
-     [reject #:implicit 0 (SEQUENCE-OF OBJECT-IDENTIFIER) #:optional]
-     [alias UTF8String #:optional]
-     [keyid OCTET-STRING #:optional]))
-
   (define (bytes->certificate/override-uses der #:who [who 'bytes->certificate/override-uses])
     (define in (open-input-bytes der))
     (define cert-der (begin (read-asn1 ANY in) (subbytes der 0 (file-position in))))

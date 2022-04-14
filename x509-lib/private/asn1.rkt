@@ -547,6 +547,65 @@
 (define id-pkix-ocsp id-ad-ocsp)
 (define id-pkix-ocsp-nocheck (build-OID id-pkix-ocsp 5))
 
+;; ------------------------------------------------------------
+;; From OpenSSL/crypto/x509/x_x509a.c
+
+;; A "TRUSTED CERTIFICATE" is the simple concatenation of
+;; - Certificate
+;; - CertAux
+
+(define CertAux
+  (SEQUENCE
+   [trust (SEQUENCE-OF OBJECT-IDENTIFIER) #:optional]               ;; EKUs
+   [reject #:implicit 0 (SEQUENCE-OF OBJECT-IDENTIFIER) #:optional] ;; EKUs
+   [alias UTF8String #:optional]
+   [keyid OCTET-STRING #:optional]
+   #;[other #:implicit 1 (SEQUENCE-OF (AlgorithmIdentifier ???)) #:optional]))
+
+;; ------------------------------------------------------------
+;; RFC 5914 (Trust Anchor Format)
+
+(define-asn1-type TrustAnchorInfo
+  (SEQUENCE
+   [version         INTEGER #:default 1] ;; v1 = 1
+   [pubKey          SubjectPublicKeyInfo/DER]
+   [keyId           KeyIdentifier]
+   [taTitle         UTF8String #|(SIZE (1..64))|# #:optional]
+   [certPath        CertPathControls #:optional]
+   [exts            #:explicit 1 Extensions #:optional]
+   [taTitleLangTag  #:implicit 2 UTF8String #:optional]))
+
+(define-asn1-type CertPathControls
+  (SEQUENCE
+   [taName            Name]
+   [certificate       #:implicit 0 Certificate #:optional]
+   [policySet         #:implicit 1 CertificatePolicies #:optional]
+   [policyFlags       #:implicit 2 CertPolicyFlags #:optional]
+   [nameConstr        #:implicit 3 NameConstraints #:optional]
+   [pathLenConstraint #:implicit 4 INTEGER #:optional]))
+
+(define CertPolicyFlags
+  (WRAP-NAMES BIT-STRING
+   (list (cons 'inhibitPolicyMapping    0)
+         (cons 'requireExplicitPolicy   1)
+         (cons 'inhibitAnyPolicy        2))))
+
+(define TrustAnchorChoice
+  (CHOICE
+   [certificate   Certificate]
+   [tbsCert       #:explicit 1 TBSCertificate]
+   [taInfo        #:explicit 2 TrustAnchorInfo]))
+
+(define TrustAnchorList
+  (SEQUENCE-OF TrustAnchorChoice))
+
+(define id-ct-trustAnchorList
+  (build-OID pkcs-9 (id-smime 16) (id-ct 1) 34))
+
+;; trust-anchor-list PKCS7-CONTENT-TYPE ::=
+;;    { TrustAnchorList IDENTIFIED BY id-ct-trustAnchorList }
+
+
 ;; ============================================================
 
 (define EXTENSIONS
