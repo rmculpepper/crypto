@@ -19,49 +19,6 @@
 (provide (all-defined-out))
 
 ;; ============================================================
-;; EKU Trust Modification
-
-;; EKUMod = (Hash OID => (U 'yes 'no))
-;; Represents modifications to the EKUs of a certificate.
-
-;; base-ekumod : EKUMod
-;; Means "trust according to cert contents", overriding nothing.
-(define base-ekumod '#hash())
-(define allow-all-ekumod (hash anyExtendedKeyUsage 'yes))
-(define reject-all-ekumod (hash anyExtendedKeyUsage 'no))
-
-(define (norm-ekumod ekumod)
-  (case (hash-ref ekumod anyExtendedKeyUsage #f)
-    [(yes) allow-all-ekumod]
-    [(no) reject-all-ekumod]
-    [else ekumod]))
-
-;; merge-ekumods : EKUMod EKUMod -> EKUMod
-(define (merge-ekumods x y)
-  (define (yes/no-and x y) (if (eq? x 'no) 'no y))
-  (norm-ekumod (hash-union x y #:combine yes/no-and)))
-
-;; certaux->ekumod : CertAux -> EKUMod
-(define (certaux->ekumod aux)
-  (merge-ekumods
-   (for/fold ([tm base-ekumod]) ([oid (in-list (hash-ref aux 'trust null))])
-     (hash-set tm oid 'yes))
-   (for/fold ([tm base-trust]) ([oid (in-list (hash-ref aux 'reject null))])
-     (hash-set tm oid 'no))))
-
-;; ekumod<=? : EKUMod EKUMod -> Boolean
-;; If an anchor has EKUMod `anc` and a store assigns that certificate `sto`,
-;; should the store accept the anchor as trusted?
-(define (ekumod<=? anc sto)
-  (and
-   ;; If the anchor trusts something, the store must also trust it.
-   (for/and ([(oid yn) (in-hash anc)] #:when (eq? yn 'yes))
-     (eq? (hash-ref sto oid #f) 'yes))
-   ;; If the store rejects something, the anchor must also reject it.
-   (for/and ([(oid yn) (in-hash sto)] #:when (eq? yn 'no))
-     (eq? (hash-ref anc oid #f) 'no))))
-
-;; ============================================================
 
 ;; read-pem-certificates : InputPort -> (Listof Certificate)
 ;; Reads up to `count` certificates (or until end of port); does not close.
@@ -93,11 +50,6 @@
 
 ;; ============================================================
 
-;; Trust = EKUMod
-(define base-trust base-ekumod)
-(define (merge-trust nt ot) (merge-ekumods nt ot))
-(define (certaux->trust aux) (certaux->ekumod aux))
-
 (define (empty-store #:security-level [security-level INIT-SECURITY-LEVEL])
   (new certificate-store% (security-level security-level)))
 
@@ -111,12 +63,13 @@
 
     ;; check-trust : Anchor -> (Result #t (Listof Symbol))
     (define/public (check-trust anchor)
-      (define anc-ekumod (get-field ekumod anchor))
+      (define anc-trust (get-field trust anchor))
       (cond [(get-trust (get-field cert anchor))
              => (lambda (store-trust)
-                  (define anc-ekumod (get-field ekumod anchor))
-                  (cond [(ekumod<=? anc-ekumod store-trust) (ok #t)]
-                        [else (bad '(anchor:different-trust))]))]
+                  (define anc-trust (get-field trust anchor))
+                  ;; Does the anchor require less trust than the store gives?
+                  (cond [(trust<=? anc-trust store-trust) (ok #t)]
+                        [else (bad '(anchor:insufficient-trust))]))]
             [else (bad '(anchor:not-trusted))]))
 
     ;; get-trust : Certificate -> #f or Trust
@@ -142,11 +95,14 @@
 
     (define/public (add #:untrusted [untrusted-certs null]
                         #:trusted [trusted-certs null])
-      (-add untrusted-certs trusted-certs))
+      (-add 'add untrusted-certs trusted-certs))
 
-    (define/private (-add untrusted-certs trusted-certs)
+    (define/private (-add who untrusted-certs trusted-certs)
       (define (add-trusted h cert trust)
-        (hash-update h cert (lambda (old) (merge-trust trust old)) base-trust))
+        (unless (equal? (hash-ref h cert trust) trust)
+          (error who "store already contains certificate with different trust\n  certificate: ~e"
+                 cert))
+        (hash-set h cert trust))
       (define cert-h*
         (for*/fold ([h cert-h])
                    ([certs (in-list (list untrusted-certs trusted-certs))]
@@ -169,7 +125,8 @@
             [else (copy #:security-level new-security-level)]))
 
     (define/public (add-trusted-from-pem-file pem-file #:allow-aux? [aux? #f])
-      (-add null (pem-file->certificates pem-file #:allow-aux? aux?)))
+      (let ([who 'add-trusted-from-pem-file])
+        (-add who null (pem-file->certificates pem-file #:allow-aux? aux?))))
     (define/public (add-trusted-from-openssl-directory dir)
       (add-lookups (list (new x509-lookup:openssl-trusted-directory% (dir dir)))))
 

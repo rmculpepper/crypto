@@ -152,7 +152,12 @@
     [suitable-for-tls-client? (->m (or/c #f x509-general-name/c) boolean?)]
     ))
 
-(define trust/c hash?)
+(struct trustmod
+  (replace-ekus ;; #f or (Hash OID #t) -- #f means no override
+   reject-ekus  ;; (Hash OID #t)
+   ) #:prefab)
+
+(define trust/c (flat-named-contract 'trust/c trustmod?))
 
 (define x509-lookup<%>
   (interface ()

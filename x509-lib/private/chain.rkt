@@ -5,6 +5,7 @@
 (require racket/class
          racket/match
          racket/list
+         racket/hash
          racket/serialize
          scramble/result
          crypto
@@ -496,19 +497,18 @@
     ;;   (vector 'chain issuer-chain cert))
     ))
 
-;; ------------------------------------------------------------
+;; ============================================================
 
 (define certificate-anchor%
   (class* certificate-chain% (-trust-anchor<%>)
     (inherit-field cert)
-    (init-field ekumod) ;; EKUMod (see store.rkt)
+    (init-field trust) ;; Trust
     (super-new (issuer-chain #f))
 
     ;; get-extended-key-usage : OID -> (U 'yes 'no 'unset)
     (define/override (get-extended-key-usage eku)
-      (cond [(hash-ref ekumod eku #f) => values]
-            [(hash-ref ekumod anyExtendedKeyUsage #f) => values]
-            [else (super get-extended-key-usage eku)]))
+      (or (trust-lookup-eku trust eku)
+          (super get-extended-key-usage eku)))
 
     (define/override (custom-write out)
       (fprintf out "#<certificate-anchor: ~.a>" (send cert get-subject-name-string)))
@@ -517,8 +517,59 @@
     ;;   (vector 'anchor cert trust))
     ))
 
-(define (make-anchor-chain cert ekumod)
-  (new certificate-anchor% (cert cert) (ekumod ekumod)))
+(define (make-anchor-chain cert trust)
+  (new certificate-anchor% (cert cert) (trust trust)))
+
+;; ----------------------------------------
+;; Trust Modification
+
+;; base-trust : Trust, means "trust according to cert contents", overriding nothing
+(define base-trust (trustmod #f '#hash()))
+(define allow-all-trust (trustmod (hash anyExtendedKeyUsage #t) '#hash()))
+(define reject-all-trust (trustmod #f (hash anyExtendedKeyUsage #t)))
+
+;; trust-lookup-eku : Trust EKU -> (U #f (U 'yes 'no)), #f means not overridden
+(define (trust-lookup-eku tm eku)
+  (match-define (trustmod replace-ekus reject-ekus) tm)
+  (define (has-eku? h eku) (or (hash-ref h eku #f) (hash-ref h anyExtendedKeyUsage #f)))
+  (cond [(has-eku? reject-ekus eku) 'no]
+        [replace-ekus (if (has-eku? replace-ekus eku) 'yes 'no)]
+        [else #f]))
+
+;; norm-trust : TrustMod -> Trust
+(define (norm-trust tm)
+  (match-define (trustmod replace-ekus reject-ekus) tm)
+  (cond [(hash-ref reject-ekus anyExtendedKeyUsage #f) reject-all-trust]
+        [(and replace-ekus (hash-ref replace-ekus anyExtendedKeyUsage #f))
+         (if (hash-empty? reject-ekus) allow-all-trust tm)]
+        [else tm]))
+
+;; certaux->trust : CertAux -> Trust
+(define (certaux->trust aux)
+  (define (list->hashset xs)
+    (for/fold ([h '#hash()]) ([x (in-list xs)]) (hash-set h x #t)))
+  (define replace-ekus (hash-ref aux 'trust #f))
+  (define reject-ekus (hash-ref aux 'reject null))
+  (norm-trust
+   (trustmod (and replace-ekus (list->hashset replace-ekus))
+             (list->hashset reject-ekus))))
+
+;; trust<=? : Trust Trust -> Boolean
+;; If an anchor has Trust `anc` and a store assigns that certificate `sto`,
+;; should the store accept the anchor as trusted?
+(define (trust<=? anc sto)
+  (match-define (trustmod anc-replace anc-reject) anc)
+  (match-define (trustmod sto-replace sto-reject) sto)
+  (define (has-eku? h eku) (or (hash-ref h eku) (hash-ref h anyExtendedKeyUsage)))
+  (and
+   ;; If the anchor trusts something, the store must also trust it, either
+   (or
+    ;; (1) because neither overrides cert ekus:
+    (and (eq? anc-replace #f) (eq? sto-replace #f))
+    ;; (2) or anchor trust list is subset of store trust list
+    (for/and ([eku (in-hash-keys anc-replace)]) (has-eku? sto-replace eku)))
+   ;; If the store rejects something, the anchor must also reject it.
+   (for/and ([eku (in-hash-keys sto-reject)]) (has-eku? anc-reject eku))))
 
 ;; ============================================================
 
