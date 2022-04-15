@@ -27,11 +27,19 @@
 ;; base-ekumod : EKUMod
 ;; Means "trust according to cert contents", overriding nothing.
 (define base-ekumod '#hash())
+(define allow-all-ekumod (hash anyExtendedKeyUsage 'yes))
+(define reject-all-ekumod (hash anyExtendedKeyUsage 'no))
+
+(define (norm-ekumod ekumod)
+  (case (hash-ref ekumod anyExtendedKeyUsage #f)
+    [(yes) allow-all-ekumod]
+    [(no) reject-all-ekumod]
+    [else ekumod]))
 
 ;; merge-ekumods : EKUMod EKUMod -> EKUMod
 (define (merge-ekumods x y)
   (define (yes/no-and x y) (if (eq? x 'no) 'no y))
-  (hash-union x y #:combine yes/no-and))
+  (norm-ekumod (hash-union x y #:combine yes/no-and)))
 
 ;; certaux->ekumod : CertAux -> EKUMod
 (define (certaux->ekumod aux)
@@ -73,7 +81,7 @@
        (define in (open-input-bytes der))
        (define cert-der (begin (read-asn1 ANY in) (subbytes der 0 (file-position in))))
        (define aux (read-asn1 CertAux in))
-       (certificate+aux (bytes->certificate #:who who) aux)])))
+       (certificate+aux (bytes->certificate cert-der #:who who) aux)])))
 
 ;; pem-file->certificates : PathString -> (Listof Certificate)
 (define (pem-file->certificates path
@@ -143,7 +151,9 @@
         (for*/fold ([h cert-h])
                    ([certs (in-list (list untrusted-certs trusted-certs))]
                     [cert (in-list certs)])
-          (hash-set h cert #t)))
+          (match cert
+            [(? certificate? cert) (hash-set h cert #t)]
+            [(certificate+aux cert aux) (hash-set h cert #t)])))
       (define trusted-h*
         (for/fold ([h trusted-h])
                   ([cert (in-list trusted-certs)])

@@ -29,12 +29,12 @@
            (->* [input-port?]
                 [#:count (or/c exact-nonnegative-integer? +inf.0)
                  #:allow-aux? boolean?]
-                (listof certificate?))]
+                (listof (or/c certificate? certificate+aux?)))]
           [pem-file->certificates
            (->* [path-string?]
                 [#:count (or/c exact-nonnegative-integer? +inf.0)
                  #:allow-aux? boolean?]
-                (listof certificate?))]
+                (listof (or/c certificate? certificate+aux?)))]
           [make-revocation-checker
            (->* [(or/c path-string? 'memory 'temporary)]
                 [#:trust-db? boolean?

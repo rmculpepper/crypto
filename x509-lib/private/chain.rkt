@@ -507,6 +507,7 @@
     ;; get-extended-key-usage : OID -> (U 'yes 'no 'unset)
     (define/override (get-extended-key-usage eku)
       (cond [(hash-ref ekumod eku #f) => values]
+            [(hash-ref ekumod anyExtendedKeyUsage #f) => values]
             [else (super get-extended-key-usage eku)]))
 
     (define/override (custom-write out)
