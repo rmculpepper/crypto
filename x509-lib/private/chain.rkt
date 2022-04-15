@@ -460,29 +460,29 @@
 
 ;; ============================================================
 
-(define serializable-chain<%>
-  (interface*
-   ()
-   ([prop:serializable
-     (make-serialize-info (lambda (c) (send c -serialize))
-                          #'deserialize-info:certificate-chain%
-                          #f
-                          (or (current-load-relative-directory)
-                              (current-directory)))])))
+;; (define serializable-chain<%>
+;;   (interface*
+;;    ()
+;;    ([prop:serializable
+;;      (make-serialize-info (lambda (c) (send c -serialize))
+;;                           #'deserialize-info:certificate-chain%
+;;                           #f
+;;                           (or (current-load-relative-directory)
+;;                               (current-directory)))])))
 
-(define deserialize-info:certificate-chain%
-  (make-deserialize-info
-   (match-lambda*
-     [(list 'chain issuer-chain cert)
-      (send issuer-chain extend-chain cert)]
-     [(list 'anchor cert ekumod)
-      (make-anchor-chain cert ekumod)])
-   (lambda () (error 'deserialize-certificate-chain "cycles not allowed"))))
+;; (define deserialize-info:certificate-chain%
+;;   (make-deserialize-info
+;;    (match-lambda*
+;;      [(list 'chain issuer-chain cert)
+;;       (send issuer-chain extend-chain cert)]
+;;      [(list 'anchor cert tm)
+;;       (make-anchor-chain cert tm)])
+;;    (lambda () (error 'deserialize-certificate-chain "cycles not allowed"))))
 
 ;; ============================================================
 
 (define certificate-chain%
-  (class* pre-chain% (-certificate-chain<%> writable<%> serializable-chain<%>)
+  (class* pre-chain% (-certificate-chain<%> writable<%> #;serializable-chain<%>)
     (inherit-field issuer-chain cert)
     (super-new)
 
@@ -492,8 +492,8 @@
       (fprintf out "#<certificate-chain: ~a>" (send cert get-subject-name-string)))
     (define/public (custom-display out) (custom-write out))
 
-    (define/public (-serialize)
-      (vector 'chain issuer-chain cert))
+    ;; (define/public (-serialize)
+    ;;   (vector 'chain issuer-chain cert))
     ))
 
 ;; ------------------------------------------------------------
@@ -513,8 +513,8 @@
     (define/override (custom-write out)
       (fprintf out "#<certificate-anchor: ~.a>" (send cert get-subject-name-string)))
 
-    (define/override (-serialize)
-      (vector 'anchor cert ekumod))
+    ;; (define/override (-serialize)
+    ;;   (vector 'anchor cert trust))
     ))
 
 (define (make-anchor-chain cert ekumod)
