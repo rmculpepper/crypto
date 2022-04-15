@@ -26,10 +26,14 @@
           [bytes->certificate
            (-> bytes? certificate?)]
           [read-pem-certificates
-           (->* [input-port?] [#:count (or/c exact-nonnegative-integer? +inf.0)]
+           (->* [input-port?]
+                [#:count (or/c exact-nonnegative-integer? +inf.0)
+                 #:allow-aux? boolean?]
                 (listof certificate?))]
           [pem-file->certificates
-           (->* [path-string?] [#:count (or/c exact-nonnegative-integer? +inf.0)]
+           (->* [path-string?]
+                [#:count (or/c exact-nonnegative-integer? +inf.0)
+                 #:allow-aux? boolean?]
                 (listof certificate?))]
           [make-revocation-checker
            (->* [(or/c path-string? 'memory 'temporary)]

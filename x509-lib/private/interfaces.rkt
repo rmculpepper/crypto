@@ -15,6 +15,9 @@
 (define (certificate-chain? v) (is-a? v -certificate-chain<%>))
 (define (certificate-store? v) (is-a? v -certificate-store<%>))
 
+(define (pre-chain? v) (is-a? v certificate-chain<%>))
+(define (trust-anchor? v) (is-a? v -trust-anchor<%>))
+
 (define asn1-algorithm-identifier/c (flat-named-contract 'asn1-algorithm-identifier/c hash?))
 (define x509-extension/c (flat-named-contract 'x509-extension/c hash?))
 (define x509-name/c (flat-named-contract 'x509-name/c any/c))
@@ -86,6 +89,9 @@
   (interface (certificate-data<%> equal<%> writable<%>)
     ))
 
+;; Represents TRUSTED CERTIFICATE: concatenation of Certificate + CertAux
+(struct certificate+aux (cert aux) #:transparent)
+
 (define time/c exact-integer?)
 (define candidate-chain/c (non-empty-listof certificate?))
 
@@ -94,7 +100,7 @@
     ;; Structure of chain
     [get-certificate (->m certificate?)]
     [get-issuer-chain (->m (or/c #f certificate-chain?))]
-    [get-anchor (->m certificate?)]
+    [get-anchor (->m trust-anchor?)]
     [is-anchor? (->m boolean?)]
 
     ;; Convenience, forwarded to certificate
@@ -114,7 +120,7 @@
 
     ;; Validity of self chain
     [get-index (->m exact-nonnegative-integer?)]
-    [get-max-path-length (->m exact-integer?)]
+    [get-max-path-length (->m (or/c #f exact-integer?))]
     [get-validity-seconds (->m (list/c time/c time/c))]
 
     ;; Security level of self chain
@@ -146,17 +152,21 @@
     [suitable-for-tls-client? (->m (or/c #f x509-general-name/c) boolean?)]
     ))
 
+(define trust/c hash?)
+
 (define x509-lookup<%>
   (interface ()
-    [trust?            (->m certificate? boolean?)]
+    [get-trust         (->m certificate? (or/c #f trust/c))]
     [lookup-by-subject (->m x509-name/c (listof certificate?))]
     ))
 
 (define certificate-store<%>
   (interface (x509-lookup<%>)
+    [check-trust
+     (->m trust-anchor? (result/c #t (listof symbol?)))]
     [add
      (->*m []
-           [#:trusted (listof certificate?)
+           [#:trusted (listof (or/c certificate? certificate+aux?))
             #:untrusted (listof certificate?)]
            certificate-store?)]
     [add-lookups
@@ -166,7 +176,8 @@
      (->m security-level/c
           certificate-store?)]
     [add-trusted-from-pem-file
-     (->m path-string? certificate-store?)]
+     (->*m [path-string?] [#:allow-aux? boolean?]
+           certificate-store?)]
     [add-trusted-from-openssl-directory
      (->m path-string? certificate-store?)]
 
@@ -188,20 +199,9 @@
 (define -certificate-chain<%>
   (interface (certificate-chain<%>)))
 (define -trust-anchor<%>
-  (interface ()))
+  (interface (certificate-chain<%>)))
 (define -certificate-store<%>
-  (interface (certificate-store<%>)
-    [build-candidate-chains
-     (->m certificate?
-          (listof candidate-chain/c))]
-    [validate-chain
-     (->*m [candidate-chain/c] [time/c]
-           certificate-chain?)]
-    [validate-chains
-     (->*m [(listof candidate-chain/c)]
-           [time/c #:empty-ok? boolean?]
-           (listof certificate-chain?))]
-    ))
+  (interface (certificate-store<%>)))
 
 (struct exn:x509 exn:fail () #:transparent)
 (struct exn:x509:certificate exn:x509 (errors) #:transparent)

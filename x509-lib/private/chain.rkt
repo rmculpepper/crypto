@@ -24,20 +24,6 @@
 
 ;; ============================================================
 
-;; A CandidateChain is (list TrustAnchor Cert ...),
-;; where TrustAnchor is currently always also a Cert.
-
-;; check-candidate-chain : CandidateChain -> (Result CertificateChain List)
-;; Checks the properties listed under certificate-chain%.
-(define (check-candidate-chain certs)
-  (define pre-chain
-    (for/fold ([chain (make-anchor-chain (car certs))])
-              ([cert (in-list (cdr certs))])
-      (send chain extend-chain cert)))
-  (send pre-chain get-validation-result))
-
-;; ============================================================
-
 ;; A CertificateChain is an instance of certificate-chain% (or its subclass
 ;; certificate-anchor%).
 
@@ -80,11 +66,11 @@
     (define/public (get-certificate) cert)
     (define/public (get-certificates)
       (cons cert (if issuer-chain (send issuer-chain get-certificates) null)))
+    (define/public (get-issuer-chain-or-self) (or issuer-chain this))
     (define/public (get-issuer-or-self)
-      (send (or issuer-chain this) get-certificate))
-    (define/public (get-anchor-chain)
-      (if issuer-chain (send issuer-chain get-anchor-chain) this))
-    (define/public (get-anchor) (send (get-anchor-chain) get-certificate))
+      (send (get-issuer-chain-or-self) get-certificate))
+    (define/public (get-anchor)
+      (if issuer-chain (send issuer-chain get-anchor) this))
     (define/public (is-anchor?) (not issuer-chain))
 
     (define/public (get-subject) (send cert get-subject))
@@ -216,10 +202,9 @@
     ;; check-trust : Store/#f Seconds Seconds -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-trust store [from-time (current-seconds)] [to-time from-time]
                                 #:security-level [security-level INIT-SECURITY-LEVEL])
+      (define (add-index0 v) (cons 0 v))
       (append-results
-       (cond [(not store) (ok #t)]
-             [(send store trust? (get-anchor)) (ok #t)]
-             [else (bad '((0 . anchor:not-trusted)))])
+       (if store (bad-map add-index0 (send store check-trust (get-anchor))) (ok #t))
        (check-security-level security-level)
        (check-self-as-final)
        (check-validity-period from-time to-time)))
@@ -490,8 +475,8 @@
    (match-lambda*
      [(list 'chain issuer-chain cert)
       (send issuer-chain extend-chain cert)]
-     [(list 'anchor cert override-trust-ekus override-reject-ekus)
-      (make-anchor-chain cert override-trust-ekus override-reject-ekus)])
+     [(list 'anchor cert ekumod)
+      (make-anchor-chain cert ekumod)])
    (lambda () (error 'deserialize-certificate-chain "cycles not allowed"))))
 
 ;; ============================================================
@@ -516,29 +501,23 @@
 (define certificate-anchor%
   (class* certificate-chain% (-trust-anchor<%>)
     (inherit-field cert)
-    (init-field override-trust-ekus     ;; #f or (Listof OID)
-                override-reject-ekus)   ;; #f or (Listof OID)
+    (init-field ekumod) ;; EKUMod (see store.rkt)
     (super-new (issuer-chain #f))
 
     ;; get-extended-key-usage : OID -> (U 'yes 'no 'unset)
     (define/override (get-extended-key-usage eku)
-      (cond [(member eku (or override-reject-ekus null)) 'no]
-            [override-trust-ekus (if (member eku override-trust-ekus) 'yes 'no)]
+      (cond [(hash-ref ekumod eku #f) => values]
             [else (super get-extended-key-usage eku)]))
 
     (define/override (custom-write out)
       (fprintf out "#<certificate-anchor: ~.a>" (send cert get-subject-name-string)))
 
-    (define/public (-serialize)
-      (vector 'anchor cert override-trust-ekus override-reject-ekus))
+    (define/override (-serialize)
+      (vector 'anchor cert ekumod))
     ))
 
-(define (make-anchor-chain cert
-                           #:override-trust-ekus [override-trust-ekus #f]
-                           #:override-reject-ekus [override-reject-ekus #f])
-  (new certificate-anchor% (cert cert)
-       (override-trust-ekus override-trust-ekus)
-       (override-reject-ekus override-reject-ekus)))
+(define (make-anchor-chain cert ekumod)
+  (new certificate-anchor% (cert cert) (ekumod ekumod)))
 
 ;; ============================================================
 
