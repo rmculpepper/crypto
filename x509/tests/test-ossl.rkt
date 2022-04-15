@@ -5,7 +5,6 @@
          rackunit
          crypto crypto/all
          crypto/pem
-         (submod x509/private/cert openssl-trusted-cert)
          x509)
 (provide (all-defined-out))
 
@@ -24,29 +23,33 @@
 ;(crypto-factories gcrypt-factory)    ;; all tests enabled pass
 ;(crypto-factories nettle-factory)    ;; can't handle PSS w/ sha1; others pass
 
-(define (pem-file->certs* pem-file)
-  (call-with-input-file* pem-file
-    (lambda (in)
-      (define (do-read in)
-        (read-pem in #:only '(#"CERTIFICATE" #"TRUSTED CERTIFICATE")))
-      (for/list ([v (in-port do-read in)])
-        (case (car v)
-          [(#"CERTIFICATE")
-           (bytes->certificate (cdr v))]
-          [(#"TRUSTED CERTIFICATE")
-           (bytes->certificate/override-uses (cdr v))])))))
-
 ;; ============================================================
 ;; Adapted from $SRC/test/recipes/25-test_verify.t
 
-(define LEVEL 1)
+(module setup racket/base
+  (require racket/class
+           racket/list
+           crypto/pem
+           x509)
+  (provide (all-defined-out))
 
-(define (verify cert purpose trusted untrusted [level LEVEL])
-  (define (pemcerts name) (pem-file->certs* (format "~a.pem" name)))
-  (define store (send (empty-store #:security-level level) add
-                      #:trusted (append* (map pemcerts trusted))
-                      #:untrusted (append* (map pemcerts untrusted))))
-  (define chain (send store pem-file->chain (format "~a.pem" cert)))
+  (define LEVEL 1)
+
+  (define (pemcerts name)
+    (pem-file->certificates (format "~a.pem" name) #:allow-aux? #t))
+
+  (define (make-store trusted untrusted [level LEVEL])
+    (send (empty-store #:security-level level) add
+          #:trusted (append* (map pemcerts trusted))
+          #:untrusted (append* (map pemcerts untrusted))))
+  (define (make-chain store certname)
+    (send store pem-file->chain (format "~a.pem" certname))))
+
+(require 'setup)
+
+(define (verify certname purpose trusted untrusted [level LEVEL])
+  (define store (make-store trusted untrusted level))
+  (define chain (make-chain store certname))
   ;; FIXME: check purpose
   chain)
 
