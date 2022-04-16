@@ -9,6 +9,7 @@
 (define collection "x509")
 (define deps '("base" "asn1-lib" "crypto-lib" "db-lib" "scramble-lib"))
 (define pkg-authors '(ryanc))
+(define license 'Apache-2.0)
 
 ;; collection info
 
