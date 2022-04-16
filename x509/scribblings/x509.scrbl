@@ -464,30 +464,6 @@ Returns the @ctech{security strength} of the end certificate's public key. Equiv
 (send racket-chain get-public-key-security-strength)
 ]}
 
-@;{
-@defmethod[(get-signature-security-level [use-issuer-key? #t])
-           (or/c #f security-level/c)]{
-
-Returns the @ctech{security level} of the signature in the end certificate
-performed by the end certificate's issuer.
-
-If @racket[use-issuer-key?] is true, then the security level takes into account
-both the signature algorithm and the security level of the issuer's key (if
-@method[certificate-chain<%> get-issuer-chain] does not return @racket[#f]),
-returning the minimum of the two levels. If @racket[use-issuer-key?] is false,
-then only the security level of the signature algorithm is used.
-
-The result is @racket[#f] if the signature algorithm has no security level
-independent of the issuer's key (for example, EdDSA) and either the issuer is
-not in the chain or @racket[user-issuer-key?] was @racket[#f].
-
-@examples[#:eval the-eval
-(send racket-chain get-signature-security-level)
-(let ([issuer-chain (send racket-chain get-issuer-chain)])
-  (send issuer-chain get-signature-security-level))
-]}
-}
-
 @; ----------------------------------------
 @; Trust evaluation
 
