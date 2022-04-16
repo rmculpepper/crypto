@@ -8,6 +8,7 @@
           (for-label racket/base
                      racket/class
                      racket/contract
+                     racket/date
                      scramble/result
                      (only-in openssl ssl-default-verify-sources)
                      (only-in asn1 asn1-oid?)
@@ -16,7 +17,7 @@
 @(define-runtime-path log-file "eval-logs/x509.rktd")
 @(define-runtime-path racket-pem-file "eval-logs/racket.pem")
 @(define the-eval (make-log-based-eval log-file 'replay))
-@(the-eval '(require racket/class crypto crypto/libcrypto x509))
+@(the-eval '(require racket/class racket/date crypto crypto/libcrypto x509))
 @(the-eval '(crypto-factories libcrypto-factory))
 
 @(define (rfc-ref #:at fragment . content)
@@ -114,7 +115,7 @@ public key} is tied to an @emph{identity}, to be used for a particular
 For example, a secure web site (serving HTTP over TLS) would present a
 certificate with their public key, their identity in the form of their DNS name,
 and the purpose of identifying a TLS server. That certificate's issuer would own
-a certificate for the purpose of acting as a @emph{certificate authority} (CA),
+a certificate for the purpose of acting as a @deftech{certificate authority} (CA),
 and its public key should verify the signature on the TLS server's certificate.
 
 One does not decide whether to trust a certificate in isolation; it depends on
@@ -193,9 +194,8 @@ then all SAN entries are returned, and each entry is tagged with a kind symbol
 
 @defmethod[(get-validity-seconds) (list/c exact-integer? exact-integer?)]{
 
-Returns the validity period of the certificate (from @tt{notBefore} to
-@tt{notAfter}) in seconds (see @racket[current-seconds], @racket[seconds->date],
-etc).
+Returns the validity period of the certificate (from notBefore to notAfter) in
+seconds (see @racket[current-seconds], @racket[seconds->date], etc).
 
 @examples[#:eval the-eval #:label #f
 (send racket-cert get-validity-seconds)
@@ -269,7 +269,7 @@ Like @racket[read-pem-certificates], but reads from the given
 @defthing[x509-key-usage/c contract?]{
 
 Contract for symbols representing members of a @rfc-ref[#:at
-"section-4.2.1.3"]{@tt{KeyUsage}} extension value. Equivalent to
+"section-4.2.1.3"]{KeyUsage} extension value. Equivalent to
 @racketblock[
 (or/c 'digitalSignature 'nonRepudiation 'keyEncipherment 'dataEncipherment
       'keyAgreement 'keyCertSign 'cRLSign 'encipherOnly 'decipherOnly)
@@ -361,6 +361,45 @@ the @tech{end certificate} is the first element of the resulting list and the
 @tech{trust anchor} is last.
 }
 
+@defmethod[(get-issuer-chain) (or/c certificate-chain? #f)]{
+
+Returns the prefix of the certificate chain corresponding to this certificate's
+issuer, or @racket[#f] if the current chain is a @emph{trust anchor}.
+}
+
+@defmethod[(get-anchor) certificate-chain?]{
+
+Returns the certificate chain's @tech{trust anchor}.
+}
+
+@defmethod[(is-anchor?) boolean?]{
+
+Returns @racket[#t] if @(this-obj) is a @tech{trust anchor}, @racket[#f]
+otherwise. A trust anchor is a chain that has no issuer chain.
+}
+
+@; ----------------------------------------
+@; Certificate convenience
+
+@defmethod[(get-subject) any/c]{
+
+Equivalent to
+@racketblock[
+(send (send #,(this-obj) #,(method certificate-chain<%> get-certificate)) #,(method certificate<%> get-subject))
+]
+}
+
+@defmethod[(get-subject-alt-names [kind (or/c symbol? #f) #f]) (listof any/c)]{
+
+Equivalent to
+@racketblock[
+(send (send #,(this-obj) #,(method certificate-chain<%> get-certificate))
+      #,(method certificate<%> get-subject-alt-names) kind)
+]}
+
+@; ----------------------------------------
+@; Signature verification
+
 @defmethod[(get-public-key [factories
                             (or/c crypto-factory? (listof crypto-factory?))
                             (crypto-factories)])
@@ -370,7 +409,7 @@ Creates a public key from the end certificate's SubjectPublicKeyInfo using an
 implementation from @racket[factories].
 }
 
-@defmethod[(check-signature [algid (or/c bytes? asn1-algorithm-identifier?)]
+@defmethod[(check-signature [algid (or/c bytes? asn1-algorithm-identifier/c)]
                             [msg bytes?]
                             [sig bytes?])
            (result/c #t (listof symbol?))]{
@@ -392,6 +431,65 @@ situations like problems interpreting @racket[algid] and mismatches between the
 public key and the algorithm specified by @racket[algid].}
 
 ]}
+
+@defmethod[(get-security-level) security-level/c]{
+
+Returns the @ctech{security level} of the chain. Equivalent to
+@racketblock[
+(security-strength->level (send @#,(this-obj) @#,method[certificate-chain<%> get-security-strength]))
+]
+
+@examples[#:eval the-eval
+(send racket-chain get-security-level)
+]}
+
+@defmethod[(get-security-strength) exact-nonnegative-integer?]{
+
+Returns the @ctech{security strength} of the chain, which is the minimum of the
+strengths of each public key and signature in the chain, except for the
+signature within the @tech{trust anchor}.
+
+@examples[#:eval the-eval
+(send racket-chain get-security-strength)
+]}
+
+@defmethod[(get-public-key-security-strength) exact-nonnegative-integer?]{
+
+Returns the @ctech{security strength} of the end certificate's public key. Equivalent to
+@racketblock[
+(pk-security-strength (send @#,(this-obj) @#,method[certificate-chain<%> get-public-key]))
+]
+
+@examples[#:eval the-eval
+(send racket-chain get-public-key-security-strength)
+]}
+
+@;{
+@defmethod[(get-signature-security-level [use-issuer-key? #t])
+           (or/c #f security-level/c)]{
+
+Returns the @ctech{security level} of the signature in the end certificate
+performed by the end certificate's issuer.
+
+If @racket[use-issuer-key?] is true, then the security level takes into account
+both the signature algorithm and the security level of the issuer's key (if
+@method[certificate-chain<%> get-issuer-chain] does not return @racket[#f]),
+returning the minimum of the two levels. If @racket[use-issuer-key?] is false,
+then only the security level of the signature algorithm is used.
+
+The result is @racket[#f] if the signature algorithm has no security level
+independent of the issuer's key (for example, EdDSA) and either the issuer is
+not in the chain or @racket[user-issuer-key?] was @racket[#f].
+
+@examples[#:eval the-eval
+(send racket-chain get-signature-security-level)
+(let ([issuer-chain (send racket-chain get-issuer-chain)])
+  (send issuer-chain get-signature-security-level))
+]}
+}
+
+@; ----------------------------------------
+@; Trust evaluation
 
 @defmethod[(trusted? [store certificate-store?]
                      [from-time exact-integer? (current-seconds)]
@@ -433,95 +531,57 @@ otherwise, where each @racket[_cert-index] is the index of the certificate where
 the problem occurred (starting with 0 for the @tech{trust anchor}) and
 @racket[_fault] is a value (usually a symbol) describing the problem.}
 
-]}
-
-@defmethod[(get-public-key-security-level) security-level/c]{
-
-Returns the @ctech{security level} of the end certificate's public key.
-
-@examples[#:eval the-eval
-(send racket-chain get-public-key-security-level)
-]}
-
-@defmethod[(get-signature-security-level [use-issuer-key? #t])
-           (or/c #f security-level/c)]{
-
-Returns the @ctech{security level} of the signature in the end certificate
-performed by the end certificate's issuer.
-
-If @racket[use-issuer-key?] is true, then the security level takes into account
-both the signature algorithm and the security level of the issuer's key (if
-@method[certificate-chain<%> get-issuer-chain] does not return @racket[#f]),
-returning the minimum of the two levels. If @racket[use-issuer-key?] is false,
-then only the security level of the signature algorithm is used.
-
-The result is @racket[#f] if the signature algorithm has no security level
-independent of the issuer's key (for example, EdDSA) and either the issuer is
-not in the chain or @racket[user-issuer-key?] was @racket[#f].
-
-@examples[#:eval the-eval
-(send racket-chain get-signature-security-level)
-(let ([issuer-chain (send racket-chain get-issuer-chain)])
-  (send issuer-chain get-signature-security-level))
-]}
-
-@defmethod[(get-issuer-chain) (or/c certificate-chain? #f)]{
-
-Returns the prefix of the certificate chain corresponding to this certificate's
-issuer, or @racket[#f] if the current certificate is the @emph{trust anchor}.
-}
-
-@defmethod[(get-subject) any/c]{
-
-Equivalent to
-@racketblock[
-(send (send #,(this-obj) #,(method certificate-chain<%> get-certificate)) #,(method certificate<%> get-subject))
 ]
-}
 
-@defmethod[(get-subject-alt-names [kind (or/c symbol? #f) #f]) (listof any/c)]{
-
-Equivalent to
-@racketblock[
-(send (send #,(this-obj) #,(method certificate-chain<%> get-certificate))
-      #,(method certificate<%> get-subject-alt-names) kind)
+@examples[#:eval the-eval
+(send racket-chain check-trust (default-store) #:security-level 2)
+(send racket-chain check-trust (empty-store) #:security-level 3)
 ]}
 
-@defmethod[(ok-key-usage? [usage
-                           (or/c 'digitalSignature 'nonRepudiation 'keyEncipherment
-                                 'dataEncipherment 'keyAgreement 'keyCertSign 'cRLSign
-                                 'encipherOnly 'decipherOnly)]
+@defmethod[(get-validity-seconds) (list/c exact-integer? exact-integer?)]{
+
+Gets the validity period of the chain, which is the intersection of the validity
+periods of all certificates in the chain.
+
+@examples[#:eval the-eval
+(send racket-chain get-validity-seconds)
+]}
+
+@; ----------------------------------------
+@; Suitability for purpose
+
+@defmethod[(ok-key-usage? [usage key-usage/c]
                           [default any/c #f])
            any/c]{
 
-Returns @racket[#t] if the end certificate has the @tt{KeyUsage} extension and
+Returns @racket[#t] if the end certificate has the KeyUsage extension and
 the extension's value contains the key usage named by @racket[usage]. If the
 extension is present but does not contain @racket[usage], returns
-@racket[#f]. If the end certificate does not have a @tt{KeyUsage} extension,
+@racket[#f]. If the end certificate does not have a KeyUsage extension,
 returns @racket[default].
 
 @examples[#:eval the-eval
-(send racket-chain ok-key-usage? 'keyAgreement)
+(send racket-chain ok-key-usage? 'digitalSignature)
 (send racket-chain ok-key-usage? 'keyCertSign)
 (let ([ca-chain (send racket-chain get-issuer-chain)])
   (send ca-chain ok-key-usage? 'keyCertSign))
 ]}
 
-@defmethod[(ok-extended-key-usage? [eku (listof exact-nonnegative-integer?)]) boolean?]{
+@defmethod[(ok-extended-key-usage? [eku asn1-oid?]) boolean?]{
 
-Returns @racket[#t] if the extended key usage identified by @racket[eku] (a
-representation of an ASN.1 @tt{OBJECT IDENTIFIER}) is allowed for the end
-certificate of @(this-obj); returns @racket[#f] otherwise.
+Returns @racket[#t] if the extended key usage identified by @racket[eku] (an
+@tt{OBJECT IDENTIFIER}) is allowed for the end certificate of @(this-obj);
+returns @racket[#f] otherwise.
 
 The extended key usage @racket[eku] is allowed if all of the following are true:
 @itemlist[
 
-@item{The end certificate contains an @tt{ExtendedKeyUsage} extension and the
+@item{The end certificate contains an ExtendedKeyUsage extension and the
 extension's value contains @racket[eku].}
 
 @item{In every preceding certificate in the chain (that is, the trust anchor and
-intermediate CA certificates), if the @tt{ExtendedKeyUsage} extension is
-present, then its value contains @racket[eku].}
+intermediate CA certificates), if the ExtendedKeyUsage extension is present,
+then its value contains @racket[eku].}
 
 ]
 Note: this method does not treat @tt{anyExtendedKeyUsage} specially.
@@ -533,13 +593,30 @@ Note: this method does not treat @tt{anyExtendedKeyUsage} specially.
 (send racket-chain ok-extended-key-usage? id-kp-codeSigning)
 ]}
 
+@defmethod[(suitable-for-CA?) boolean?]{
+
+Returns @racket[#t] if the chain ends with a certificate that is suitable for a
+@tech{certificate authority} --- specifically, for signing other
+certificates. Returns @racket[#f] otherwise.
+
+@examples[#:eval the-eval
+(send racket-chain suitable-for-CA?)
+(let ([issuer-chain (send racket-chain get-issuer-chain)])
+  (send issuer-chain suitable-for-CA?))
+]}
+
 @defmethod[(suitable-for-tls-server? [host (or/c string? #f)]) boolean?]{
 
 Returns @racket[#t] if the chain ends with a certificate that is suitable for
 identifying a TLS server, and if the certificate has a subject alternative name
 (SAN) that matches the given @racket[host] DNS name; otherwise, returns
 @racket[#f]. If @racket[host] is @racket[#f], the DNS name check is omitted.
-}
+
+@examples[#:eval the-eval
+(send racket-chain suitable-for-tls-server? "racket-lang.org")
+(send racket-chain suitable-for-tls-server? "example.com")
+(send racket-chain suitable-for-tls-server? #f)
+]}
 
 @defmethod[(suitable-for-tls-client? [name any/c]) boolean?]{
 
