@@ -77,18 +77,20 @@
     (define/public (get-subject) (send cert get-subject))
     (define/public (get-subject-alt-names [kind #f])
       (send cert get-subject-alt-names kind))
+    (define/public (get-spki) (send cert get-spki))
 
     ;; ----------------------------------------
 
-    ;; public-key-cache : WeakHasheq[Factory/s => pk-key?]
+    ;; pubkey-cache : WeakHasheq[Factory/s => pk-key?]
     ;; The factories can change; cache for current factories.
-    (define public-key-cache (make-weak-hasheq))
+    (define pubkey-cache (make-weak-hasheq))
 
-    (define/public (get-public-key [factory/s (crypto-factories)])
-      (hash-ref! public-key-cache factory/s
-                 (lambda ()
-                   (parameterize ((crypto-factories factory/s))
-                     (datum->pk-key (send cert get-spki) 'SubjectPublicKeyInfo)))))
+    (define/public (get-public-key [factories (crypto-factories)])
+      (hash-ref! pubkey-cache factories (lambda () (-get-public-key factories))))
+
+    (define/private (-get-public-key factories)
+      (parameterize ((crypto-factories factories))
+        (datum->pk-key (get-spki) 'SubjectPublicKeyInfo)))
 
     ;; check-signature : (U Bytes AlgorithmIdentifier) Bytes Bytes
     ;;                -> (Result #t (Listof Symbol))
@@ -99,15 +101,17 @@
     ;; ----------------------------------------
     ;; Validity of Self Chain
 
-    ;; index : Nat  -- 0 is anchor
-    (define index (if issuer-chain (add1 (send issuer-chain get-index)) 0))
-
+    ;; get-index : -> Nat  -- 0 is anchor
     (define/public (get-index) index)
 
-    ;; max-path-length : Integer or #f
+    (define index (if issuer-chain (add1 (send issuer-chain get-index)) 0))
+
+    ;; get-max-path-length : -> Integer or #f
     ;; The maximum number of *intermediate* certificates that can *follow* this one.
     ;; Thus if zero, can still extend with end certificate but not new intermediate.
     ;; If less than zero, cannot extend; but -1 is okay for end certificate.
+    (define/public (get-max-path-length) max-path-length)
+
     (define max-path-length
       (let* ([issuer-max-path-length
               (and issuer-chain (send issuer-chain get-max-path-length))]
@@ -124,7 +128,9 @@
                       [else max-path-length]))])
         max-path-length))
 
-    (define/public (get-max-path-length) max-path-length)
+    ;; get-validity-seconds : -> (list Seconds Seconds)
+    (define/public (get-validity-seconds)
+      (list valid-from-time valid-to-time))
 
     ;; valid-{from,to}-time : Seconds
     (define-values (valid-from-time valid-to-time)
@@ -134,10 +140,6 @@
            [(list issuer-from issuer-to)
             (values (max cert-from issuer-from) (min cert-to issuer-to))]
            [#f (values cert-from cert-to)])]))
-
-    ;; get-validity-seconds : (list Seconds Seconds)
-    (define/public (get-validity-seconds)
-      (list valid-from-time valid-to-time))
 
     ;; ok-validity-period? : Seconds [Seconds] -> Boolean
     (define/public (ok-validity-period? [from-time (current-seconds)] [to-time from-time])
@@ -168,14 +170,9 @@
 
     (define/public (get-public-key-security-strength)
       (send (get-public-key) get-security-bits))
-    (define/public (get-signature-security-strength [use-issuer-key? #t])
+    (define/public (get-signature-security-strength)
       (define-values (algid _tbs _sig) (send cert get-signature-info))
-      (define sig-secbits (sig-alg-security-strength algid))
-      (define issuer-key-secbits
-        (and use-issuer-key? issuer-chain
-             (send issuer-chain get-public-key-security-strength)))
-      (cond [(and sig-secbits issuer-key-secbits) (min sig-secbits issuer-key-secbits)]
-            [else (or sig-secbits issuer-key-secbits)]))
+      (sig-alg-security-strength algid))
 
     ;; check-security-strength : Nat -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-security-strength target-secbits)
