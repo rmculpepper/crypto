@@ -99,6 +99,7 @@
   (interface ()
     ;; Structure of chain
     [get-certificate (->m certificate?)]
+    [get-certificates (->m (listof certificate?))]
     [get-issuer-chain (->m (or/c #f certificate-chain?))]
     [get-anchor (->m trust-anchor?)]
     [is-anchor? (->m boolean?)]
@@ -124,14 +125,10 @@
     [get-validity-seconds (->m (list/c time/c time/c))]
 
     ;; Security level of self chain
+    [get-security-level (->m security-level/c)]
+    [get-security-strength (->m exact-nonnegative-integer?)]
     [get-public-key-security-strength (->m exact-nonnegative-integer?)]
-    [get-public-key-security-level (->m security-level/c)]
     [get-signature-security-strength (->*m [] [boolean?] (or/c #f exact-nonnegative-integer?))]
-    [get-signature-security-level (->*m [] [boolean?] (or/c #f security-level/c))]
-
-    ;; Purpose of self chain
-    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
-    [ok-extended-key-usage? (->*m [asn1-oid?] [any/c #:recur boolean?] any)]
 
     ;; Trusted (= trusted by store + valid at time + security level)
     [trusted?
@@ -144,6 +141,10 @@
            (result/c #t (listof (cons/c exact-nonnegative-integer? any/c))))]
     [ok-validity-period?
      (->*m [] [time/c time/c] boolean?)]
+
+    ;; Purpose of self chain
+    [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]
+    [ok-extended-key-usage? (->*m [asn1-oid?] [any/c #:recur boolean?] any)]
 
     ;; Suitability for purpose
     [suitable-for-CA? (->m boolean?)]

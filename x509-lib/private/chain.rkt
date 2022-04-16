@@ -156,6 +156,16 @@
     ;; ----------------------------------------
     ;; Security Level of Self Chain
 
+    (define/public (get-security-level)
+      (security-strength->level (get-security-strength)))
+
+    (define/public (get-security-strength)
+      (define (min* x y) (if (and x y) (min x y) (or x y)))
+      (min* (get-public-key-security-strength)
+            (and issuer-chain
+                 (min* (or (get-signature-security-strength #f) 0)
+                       (send issuer-chain get-security-strength)))))
+
     (define/public (get-public-key-security-strength)
       (send (get-public-key) get-security-bits))
     (define/public (get-signature-security-strength [use-issuer-key? #t])
@@ -166,12 +176,6 @@
              (send issuer-chain get-public-key-security-strength)))
       (cond [(and sig-secbits issuer-key-secbits) (min sig-secbits issuer-key-secbits)]
             [else (or sig-secbits issuer-key-secbits)]))
-
-    (define/public (get-public-key-security-level)
-      (security-strength->level (get-public-key-security-strength)))
-    (define/public (get-signature-security-level [use-issuer-key? #t])
-      (define secbits (get-signature-security-strength use-issuer-key?))
-      (and secbits (security-strength->level secbits)))
 
     ;; check-security-strength : Nat -> (Result #t (Listof (cons Nat Symbol)))
     (define/public (check-security-strength target-secbits)
