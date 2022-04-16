@@ -22,7 +22,7 @@
 ;; Note: skips forward until a beginning "encapsulation boundary";
 ;; consumes blanks and one line terminator after the ending boundary.
 ;; Raises an error if the end boundary is missing or has a different label.
-(define (read-pem in [decode base64-decode] #:only [only #f] #:who [who 'read-pem])
+(define (read-pem in [decode base64-decode/pad] #:only [only #f] #:who [who 'read-pem])
   (define begin-rx
     #px#"(?m:^-{5}BEGIN ([\x21-\x2C\x2E-\x7E][\x20-\x7E]*)-{5}[[:blank:]]*(?:\r|\n|\r\n)?)")
   (define end-rx
@@ -41,3 +41,5 @@
                 [else (loop)])]
          [#f (error who "incomplete PEM ~e content" label1)])]
       [#f eof])))
+
+(define (base64-decode/pad bs) (base64-decode bs #:mode 'padding))
