@@ -1,5 +1,6 @@
 #lang racket/base
 (require racket/class
+         racket/match
          racket/list
          racket/cmdline
          rackunit
@@ -28,12 +29,19 @@
 
 (module setup racket/base
   (require racket/class
+           racket/match
            racket/list
            crypto/pem
-           x509)
+           x509
+           (only-in x509/private/interfaces certificate+aux))
   (provide (all-defined-out))
 
   (define LEVEL 1)
+
+  (define (strip-aux v)
+    (match v
+      [(certificate+aux cert _) cert]
+      [(? certificate? cert) cert]))
 
   (define (pemcerts name)
     (pem-file->certificates (format "~a.pem" name) #:allow-aux? #t))
@@ -41,7 +49,7 @@
   (define (make-store trusted untrusted [level LEVEL])
     (send (empty-store #:security-level level) add
           #:trusted (append* (map pemcerts trusted))
-          #:untrusted (append* (map pemcerts untrusted))))
+          #:untrusted (map strip-aux (append* (map pemcerts untrusted)))))
   (define (make-chain store certname)
     (send store pem-file->chain (format "~a.pem" certname))))
 
@@ -281,9 +289,9 @@
         "accept last-resort direct leaf match")
 (test-no "ee-cert" "sslserver" '[ee-client] '[] #:o "-partial_chain"
          "fail last-resort direct leaf non-match")
-(SKIP ;; trusted certs
+(begin
  ;; These tests require *replacing* the starting point with a
- ;; certificate from the trusted store*. Not implemented.
+ ;; certificate from the trusted store*.
  (test-v "ee-cert" "sslserver" '[ee+serverAuth] '[] #:o "-partial_chain"
          "accept direct match with server trust")
  (test-uns "ee-cert" "sslserver" '[ee-serverAuth] '[] #:o "-partial_chain"
@@ -321,7 +329,6 @@
           "failed proxy cert where last CN was added as a multivalue RDN component"))
 
 ;; Security level tests
-;; Security levels not implemented, so disable the reject tests.
 
 ;; Slightly reordered:
 (begin
