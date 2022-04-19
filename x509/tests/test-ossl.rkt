@@ -55,15 +55,14 @@
 
 (require 'setup)
 
-(define (verify certname purpose trusted untrusted [level LEVEL])
+(define (verify certname trusted untrusted [level LEVEL])
   (define store (make-store trusted untrusted level))
   (define chain (make-chain store certname))
-  ;; FIXME: check purpose
   chain)
 
 (define (test-v cert purpose trusted untrusted comment #:o [opt #f] #:level [level LEVEL])
   (test-case (format "~a / ~a" cert comment)
-    (define chain (verify cert purpose trusted untrusted level))
+    (define chain (verify cert trusted untrusted level))
     (check-pred certificate-chain? chain)
     (case purpose
       [("sslserver") (check-equal? (send chain suitable-for-tls-server? #f) #t)]
@@ -73,11 +72,11 @@
 (define (test-no cert purpose trusted untrusted comment #:o [opt #f] #:level [level LEVEL])
   (test-case (format "~a / ~a" cert comment)
     (check-exn exn:x509?
-               (lambda () (verify cert purpose trusted untrusted level)))))
+               (lambda () (verify cert trusted untrusted level)))))
 
 (define (test-uns cert purpose trusted untrusted comment #:o [opt #f] #:level [level LEVEL])
   (test-case (format "~a / ~a" cert comment)
-    (define chain (verify cert purpose trusted untrusted level))
+    (define chain (verify cert trusted untrusted level))
     (check-pred certificate-chain? chain)
     (case purpose
       [("sslserver") (check-equal? (send chain suitable-for-tls-server? #f) #f)]
