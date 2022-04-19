@@ -289,10 +289,11 @@ Contract for symbols tagging kinds of @rfc-ref[#:at
 @section[#:tag "chains"]{Certificate Chains}
 
 A @deftech{certificate chain} contains a non-empty list of certificates,
-starting with a @deftech{trust anchor} (typically a root CA certificate) and
-ending with the @deftech{end certificate} --- that is, the certificate whose
-identity, public key, and purpose are of interest to the application. The list
-of certificates satisfies the @emph{chain-validity} properties:
+starting with an @deftech{anchor} (also called a @deftech{trust anchor}, and
+typically a root CA certificate) and ending with the @deftech{end certificate}
+--- that is, the certificate whose identity, public key, and purpose are of
+interest to the application. The list of certificates satisfies the
+@emph{chain-validity} properties:
 @itemlist[
 
 @item{Each certificate is the issuer of the next---that is, the subject name of
@@ -304,7 +305,7 @@ chain except possibly for the final certificate) is suitable as a CA
 certificate.}
 
 @item{Each certificate's public key verifies the signature of the next
-certificate in the chain. (Note that the trust anchor certificate's signature is
+certificate in the chain. (Note that the anchor certificate's signature is
 not checked; its trust is determined by the certificate store.)}
 
 @item{The validity period of the chain is non-empty. The validity period of the
@@ -358,24 +359,24 @@ chain certifies.
 
 Returns all of the certificates in @(this-obj), in ``reversed'' order: that is,
 the @tech{end certificate} is the first element of the resulting list and the
-@tech{trust anchor} is last.
+@tech{anchor} is last.
 }
 
 @defmethod[(get-issuer-chain) (or/c certificate-chain? #f)]{
 
 Returns the prefix of the certificate chain corresponding to this certificate's
-issuer, or @racket[#f] if the current chain is a @emph{trust anchor}.
+issuer, or @racket[#f] if the current chain is an @emph{anchor}.
 }
 
 @defmethod[(get-anchor) certificate-chain?]{
 
-Returns the certificate chain's @tech{trust anchor}.
+Returns the certificate chain's @tech{anchor}.
 }
 
 @defmethod[(is-anchor?) boolean?]{
 
-Returns @racket[#t] if @(this-obj) is a @tech{trust anchor}, @racket[#f]
-otherwise. A trust anchor is a chain that has no issuer chain.
+Returns @racket[#t] if @(this-obj) is an @tech{anchor}, @racket[#f]
+otherwise. An anchor is a chain that has no issuer chain.
 }
 
 @; ----------------------------------------
@@ -447,7 +448,7 @@ Returns the @ctech{security level} of the chain. Equivalent to
 
 Returns the @ctech{security strength} of the chain, which is the minimum of the
 strengths of each public key and signature in the chain, except for the
-signature within the @tech{trust anchor}.
+signature within the @tech{anchor}.
 
 @examples[#:eval the-eval
 (send racket-chain get-security-strength)
@@ -473,7 +474,7 @@ Returns the @ctech{security strength} of the end certificate's public key. Equiv
                      [#:security-level security-level security-level/c 2])
            boolean?]{
 
-Returns @racket[#t] if the chain's @tech{trust anchor} certificate is trusted
+Returns @racket[#t] if the chain's @tech{anchor} certificate is trusted
 according to @racket[store], the validity of the chain includes the period from
 @racket[from-time] to @racket[to-time], and the security level of all public
 keys and signatures in the chain is at least @racket[security-level]; otherwise,
@@ -496,7 +497,7 @@ Similar to @method[certificate-chain<%> trusted?], but the result is one of the
 following:
 @itemlist[
 
-@item{The result is @racket[(ok #t)] if the chain's @tech{trust anchor}
+@item{The result is @racket[(ok #t)] if the chain's @tech{anchor}
 certificate is trusted by @racket[store], the validity of the chain includes the
 period from @racket[from-time] to @racket[to-time], and the security level of
 all public keys and signatures in the chain is at least
@@ -504,7 +505,7 @@ all public keys and signatures in the chain is at least
 
 @item{The result is @racket[(bad (list (cons _cert-index _fault) ...))]
 otherwise, where each @racket[_cert-index] is the index of the certificate where
-the problem occurred (starting with 0 for the @tech{trust anchor}) and
+the problem occurred (starting with 0 for the @tech{anchor}) and
 @racket[_fault] is a value (usually a symbol) describing the problem.}
 
 ]
@@ -555,7 +556,7 @@ The extended key usage @racket[eku] is allowed if all of the following are true:
 @item{The end certificate contains an ExtendedKeyUsage extension and the
 extension's value contains @racket[eku].}
 
-@item{In every preceding certificate in the chain (that is, the trust anchor and
+@item{In every preceding certificate in the chain (that is, the @tech{anchor} and
 intermediate CA certificates), if the ExtendedKeyUsage extension is present,
 then its value contains @racket[eku].}
 
@@ -686,7 +687,7 @@ Builds a certificate chain starting with some trusted certificate and ending
 with @racket[end-cert]. The chain may be built from intermediate certificates
 from @racket[other-untrusted-certs] in addition to the certificates already in
 the store. The result chain is chain-valid; it is valid for a period including
-@racket[valid-time]; and its anchor is trusted by @(this-obj).
+@racket[valid-time]; and its @tech{anchor} is trusted by @(this-obj).
 
 If no such chain can be constructed, an exception is raised. If multiple chains
 can be constructed, one is selected, but there are no guarantees about how it is
@@ -712,7 +713,8 @@ returned.
 Returns a certificate chain for the @emph{first} certificate in PEM format in
 @racket[pem-file], using any remaining certificates in the file as other
 untrusted certificates. The result chain is chain-valid; it is valid for a
-period including @racket[valid-time]; and its anchor is trusted by @(this-obj).
+period including @racket[valid-time]; and its @tech{anchor} is trusted by
+@(this-obj).
 }
 
 }

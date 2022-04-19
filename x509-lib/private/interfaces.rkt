@@ -16,7 +16,7 @@
 (define (certificate-store? v) (is-a? v -certificate-store<%>))
 
 (define (pre-chain? v) (is-a? v certificate-chain<%>))
-(define (trust-anchor? v) (is-a? v -trust-anchor<%>))
+(define (anchor? v) (is-a? v -anchor<%>))
 
 (define asn1-algorithm-identifier/c (flat-named-contract 'asn1-algorithm-identifier/c hash?))
 (define x509-extension/c (flat-named-contract 'x509-extension/c hash?))
@@ -100,7 +100,7 @@
     [get-certificate (->m certificate?)]
     [get-certificates (->m (listof certificate?))]
     [get-issuer-chain (->m (or/c #f certificate-chain?))]
-    [get-anchor (->m trust-anchor?)]
+    [get-anchor (->m anchor?)]
     [is-anchor? (->m boolean?)]
 
     ;; Convenience, forwarded to certificate
@@ -169,7 +169,7 @@
 (define certificate-store<%>
   (interface (x509-lookup<%>)
     [check-trust
-     (->m trust-anchor? (result/c #t (listof symbol?)))]
+     (->m anchor? (result/c #t (listof symbol?)))]
     [add
      (->*m []
            [#:trusted (listof (or/c certificate? certificate+aux?))
@@ -204,7 +204,7 @@
   (interface (certificate<%>)))
 (define -certificate-chain<%>
   (interface (certificate-chain<%>)))
-(define -trust-anchor<%>
+(define -anchor<%>
   (interface (certificate-chain<%>)))
 (define -certificate-store<%>
   (interface (certificate-store<%>)))

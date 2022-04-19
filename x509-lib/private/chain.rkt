@@ -252,7 +252,7 @@
             (if issuer-chain (send issuer-chain get-extended-key-usage-chain eku) '())))
 
     ;; get-extended-key-usage : OID -> (U 'yes 'no 'unset)
-    ;; Note: overridden by trust-anchor%
+    ;; Note: overridden by certificate-anchor%
     (define/public (get-extended-key-usage eku)
       (send cert get-extended-key-usage eku))
 
@@ -499,7 +499,7 @@
 ;; ============================================================
 
 (define certificate-anchor%
-  (class* certificate-chain% (-trust-anchor<%>)
+  (class* certificate-chain% (-anchor<%>)
     (inherit-field cert)
     (init-field trust) ;; Trust
     (super-new (issuer-chain #f))
