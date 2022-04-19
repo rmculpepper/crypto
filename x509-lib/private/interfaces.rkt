@@ -63,7 +63,6 @@
 
     [is-CA? (->m boolean?)]
     [is-self-issued? (->m boolean?)]
-    [is-self-signed? (->m boolean?)] ;; FIXME: remove?
     [get-key-usages (case->m (-> (listof x509-key-usage/c))
                              (-> any/c any/c))]
     [ok-key-usage? (->*m [x509-key-usage/c] [any/c] any)]

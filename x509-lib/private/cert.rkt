@@ -67,9 +67,6 @@
     (define/public (is-self-issued?) ;; 6.1
       (let ([subject (get-subject)] [issuer (get-issuer)])
         (Name-equal? subject issuer)))
-    (define/public (is-self-signed?)
-      ;; FIXME
-      #f)
 
     (define/public (get-extension id)
       (for/or ([ext (in-list (get-extensions))] #:when (equal? id (extension-id ext))) ext))
@@ -203,7 +200,7 @@
       ;; constraints that require extensions to be present
       (begin
         ;; 4.2.1.1 Authority Key Identifier
-        (unless (and (is-CA?) (is-self-signed?))
+        (unless (and (is-CA?) #;(is-self-signed?))
           (unless (get-extension id-ce-authorityKeyIdentifier)
             (bad/ca-must! 'authority-key-id:missing)))
         ;; 4.2.1.2 Subject Key Identifier
