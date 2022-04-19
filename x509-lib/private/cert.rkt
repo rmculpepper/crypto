@@ -206,7 +206,6 @@
         ;; 4.2.1.2 Subject Key Identifier
         (when (is-CA?)
           (unless (get-extension id-ce-subjectKeyIdentifier)
-            ;; FIXME: re-check
             (bad/ca-must! 'subject-key-id:missing-but-CA)))
         ;; 4.2.1.3 Key Usage
         (when (is-CA?)
@@ -278,7 +277,6 @@
            (unless (is-CA?) (bad! 'name-constraints:present-but-not-CA))]
           ;; 4.2.1.11 Policy Constraints
           [(equal? ext-id id-ce-policyConstraints)
-           ;; FIXME!
            (when critical? (bad! 'policy-constraints:critical-but-unsupported))]
           ;; 4.2.1.12 Extended Key Usage
           [(equal? ext-id id-ce-extKeyUsage)

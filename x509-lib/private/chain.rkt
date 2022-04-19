@@ -419,8 +419,6 @@
     (define/public (check-suitable-for-tls-server host)
       ;; FIXME: add option to accept anyExtendedKeyUsage?
       ;; FIXME: add option to use subject common name?
-      ;; FIXME: add security level check?
-      ;; FIXME: add validity period check?
       ;; References:
       ;; - https://tools.ietf.org/html/rfc5246#section-7.4.2
       ;; - https://tools.ietf.org/html/rfc5280#section-4.2.1.12
