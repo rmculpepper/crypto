@@ -165,7 +165,7 @@
       (define (min* x y) (if (and x y) (min x y) (or x y)))
       (min* (get-public-key-security-strength)
             (and issuer-chain
-                 (min* (or (get-signature-security-strength #f) 0)
+                 (min* (or (get-signature-security-strength) 0)
                        (send issuer-chain get-security-strength)))))
 
     (define/public (get-public-key-security-strength)
@@ -182,7 +182,7 @@
              [else (bad (list (cons index 'security-level:weak-public-key)))])
        (cond [issuer-chain
               (append-results
-               (let ([sig-secbits (get-signature-security-strength #f)])
+               (let ([sig-secbits (get-signature-security-strength)])
                  (cond [(or (eq? sig-secbits #f) (>= sig-secbits target-secbits)) (ok #t)]
                        ;; Note: here index means site of signature (created by issuer!).
                        [else (bad (list (cons index 'security-level:weak-signature-algorithm)))]))

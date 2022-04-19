@@ -128,7 +128,7 @@
     [get-security-level (->m security-level/c)]
     [get-security-strength (->m exact-nonnegative-integer?)]
     [get-public-key-security-strength (->m exact-nonnegative-integer?)]
-    [get-signature-security-strength (->*m [] [boolean?] (or/c #f exact-nonnegative-integer?))]
+    [get-signature-security-strength (->m (or/c #f exact-nonnegative-integer?))]
 
     ;; Trusted (= trusted by store + valid at time + security level)
     [trusted?
