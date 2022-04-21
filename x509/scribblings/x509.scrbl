@@ -3,6 +3,7 @@
           scribble/basic
           scribble/example
           racket/list
+          racket/path
           racket/runtime-path
           crypto/private/common/catalog
           (for-label racket/base
@@ -16,7 +17,9 @@
 
 @(define-runtime-path log-file "eval-logs/x509.rktd")
 @(define-runtime-path racket-pem-file "eval-logs/racket.pem")
-@(define the-eval (make-log-based-eval log-file 'replay))
+@(define the-eval
+   (parameterize ((current-directory (path-only racket-pem-file)))
+     (make-log-based-eval log-file 'replay)))
 @(the-eval '(require racket/class racket/date crypto crypto/libcrypto x509))
 @(the-eval '(crypto-factories libcrypto-factory))
 
@@ -52,7 +55,7 @@ openssl s_client -connect www.racket-lang.org:443 -showcerts \
   < /dev/null > racket.pem
 }
 
-@(the-eval `(define racket-pem-file ,(path->string racket-pem-file)))
+@(the-eval `(define racket-pem-file "racket.pem"))
 
 In general, the saved file will contain one or more PEM-encapsulated
 @tt{CERTIFICATE} blocks: one for the server, and zero or more intermediate CA

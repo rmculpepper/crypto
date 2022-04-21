@@ -7,8 +7,7 @@
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((define racket-pem-file
-   "/home/ryan/projects/packages/crypto/x509/scribblings/eval-logs/racket.pem")
+((define racket-pem-file "racket.pem")
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
