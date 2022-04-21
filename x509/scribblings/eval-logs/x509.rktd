@@ -7,11 +7,7 @@
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((define racket-pem-file "racket.pem")
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((send (empty-store) pem-file->chain racket-pem-file)
+((send (empty-store) pem-file->chain "racket.pem")
  ((3)
   0
   ()
@@ -33,7 +29,7 @@
  #""
  #"")
 ((define store (default-store)) ((3) 0 () 0 () () (c values c (void))) #"" #"")
-((define racket-chain (send store pem-file->chain racket-pem-file))
+((define racket-chain (send store pem-file->chain "racket.pem"))
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")

@@ -55,8 +55,6 @@ openssl s_client -connect www.racket-lang.org:443 -showcerts \
   < /dev/null > racket.pem
 }
 
-@(the-eval `(define racket-pem-file "racket.pem"))
-
 In general, the saved file will contain one or more PEM-encapsulated
 @tt{CERTIFICATE} blocks: one for the server, and zero or more intermediate CA
 certificates necessary for building a @tech{certificate chain} anchored by a
@@ -65,8 +63,7 @@ trusted root CA.
 If we try to load the PEM file using an empty @tech{certificate store}, we get
 an error, because the store has no trusted roots:
 @examples[#:eval the-eval #:label #f
-(eval:alts (send (empty-store) pem-file->chain "racket.pem")
-           (eval:error (send (empty-store) pem-file->chain racket-pem-file)))
+(eval:error (send (empty-store) pem-file->chain "racket.pem"))
 ]
 We must configure a @tech{certificate store} with a reasonable set of trusted
 roots. We must also enable some crypto factories so that the store can verify
@@ -84,8 +81,7 @@ certificates:
 
 Now we can create a certificate chain from the saved PEM file:
 @examples[#:eval the-eval #:label #f
-(eval:alts (define racket-chain (send store pem-file->chain "racket.pem"))
-           (define racket-chain (send store pem-file->chain racket-pem-file)))
+(define racket-chain (send store pem-file->chain "racket.pem"))
 ]
 We can extract the chain's end certificate; we can also extract all of the
 certificates in the chain:
