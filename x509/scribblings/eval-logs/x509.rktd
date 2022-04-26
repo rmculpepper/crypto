@@ -184,6 +184,31 @@
   (q values ("sni.cloudflaressl.com" "racket-lang.org" "*.racket-lang.org")))
  #""
  #"")
+((send racket-cert get-subject-name-string)
+ ((3)
+  0
+  ()
+  0
+  ()
+  ()
+  (c
+   values
+   c
+   (u
+    .
+    "C=US/ST=California/L=San Francisco/O=Cloudflare, Inc./CN=sni.cloudflaressl.com")))
+ #""
+ #"")
+((send racket-cert get-issuer-name-string)
+ ((3)
+  0
+  ()
+  0
+  ()
+  ()
+  (c values c (u . "C=US/O=Cloudflare, Inc./CN=Cloudflare Inc ECC CA-3")))
+ #""
+ #"")
 ((send racket-cert get-validity-seconds)
  ((3) 0 () 0 () () (q values (1623448800 1654984799)))
  #""

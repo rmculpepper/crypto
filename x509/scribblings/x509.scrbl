@@ -191,6 +191,26 @@ then all SAN entries are returned, and each entry is tagged with a kind symbol
 (send racket-cert get-subject-alt-names 'dNSName)
 ]}
 
+@defmethod[(get-subject-name-string) string?]{
+
+Returns a string summarizing the subject name of the certificate.
+
+@bold{Warning: } The format of the result may change in future
+versions of this library.
+
+@examples[#:eval the-eval
+(send racket-cert get-subject-name-string)
+]}
+
+@defmethod[(get-issuer-name-string) string?]{
+
+Like @method[certificate<%> get-subject-name-string], but returns a
+string representing the issuer.
+
+@examples[#:eval the-eval
+(send racket-cert get-issuer-name-string)
+]}
+
 @defmethod[(get-validity-seconds) (list/c exact-integer? exact-integer?)]{
 
 Returns the validity period of the certificate (from notBefore to notAfter) in
@@ -300,8 +320,7 @@ each certificate ``matches'' @cite["PKIX"] the issuer name of the next
 certificate.}
 
 @item{Each certificate that acts as an issuer (that is, every certificate in the
-chain except possibly for the final certificate) is suitable as a CA
-certificate.}
+chain except for the @tech{end certificate}) is suitable as a CA certificate.}
 
 @item{Each certificate's public key verifies the signature of the next
 certificate in the chain. (Note that the anchor certificate's signature is
