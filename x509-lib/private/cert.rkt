@@ -10,6 +10,7 @@
          racket/serialize
          asn1
          asn1/util/time
+         (only-in crypto/private/common/util bytes->hex)
          "interfaces.rkt"
          "asn1.rkt"
          "stringprep.rkt")
@@ -318,24 +319,53 @@
 
 ;; String for display and debugging, don't rely on contents.
 ;; (Among other issues, chars like #\/ and #\= in value are not escaped.)
-(define (Name->string n [sep1 "/"] [sep2 "+"])
+;; Reference: RFC 2253 (not strictly followed by default, though)
+(define (Name->string n [sep1 "/"] [sep2 "+"] [esc? #f] [rev? esc?])
   (match n
     [(list 'rdnSequence rdns)
      (string-join
-      (for/list ([rdn (in-list rdns)])
+      (for/list ([rdn (in-list (if rev? (reverse rdns) rdns))])
         (string-join
          (for/list ([av (in-list rdn)])
-           (define value (get-attr-value (hash-ref av 'value) (lambda (x) #f)))
-           (match (and value (hash-ref av 'type))
-             [(== id-at-countryName) (format "C=~a" value)]
-             [(== id-at-stateOrProvinceName) (format "ST=~a" value)]
-             [(== id-at-localityName) (format "L=~a" value)]
-             [(== id-at-commonName) (format "CN=~a" value)]
-             [(== id-at-organizationName) (format "O=~a" value)]
-             [(== id-at-organizationalUnitName) (format "OU=~a" value)]
-             [_ "?"]))
+           (define type (hash-ref av 'type))
+           (cond [(hash-ref at-abbrevs type #f)
+                  => (lambda (abbrev)
+                       (define value (get-attr-value (hash-ref av 'value) (lambda (x) "?")))
+                       (format "~a=~a" abbrev (escape-av value esc?)))]
+                 [else
+                  (format "~a=#~a"
+                          (string-join (map number->string type) ".")
+                          (string-upcase
+                           (bytes->string/latin-1
+                            (bytes->hex
+                             (asn1->bytes/DER (AttributeValue type)
+                                              (hash-ref av 'value))))))]))
          sep2))
-      "/")]))
+      sep1)]))
+
+(define at-abbrevs
+  (hash id-at-commonName             "CN"
+        id-at-localityName           "L"
+        id-at-stateOrProvinceName    "ST"
+        id-at-organizationName       "O"
+        id-at-organizationalUnitName "OU"
+        id-at-countryName            "C"
+        id-domainComponent           "DC"))
+
+(define (escape-av s esc?)
+  ;; if esc? is true, then use RFC 2253 escaping rules
+  (cond [(or (regexp-match? #rx"^[ #]" s)
+             (regexp-match? #rx"[ ]$" s)
+             (if esc?
+                 (regexp-match? #rx"[,+\"\\<>;]" s)
+                 (regexp-match? #rx"[+/]" s)))
+         (regexp-replace* (if esc?
+                              #rx"(?:^[ ]+)|(?:^#)|(?:[,+\"\\<>;])|(?:[ ]$)"
+                              #rx"(?:^[ ]+)|(?:^#)|(?:[+/])|(?:[ ]$)")
+                          s
+                          (lambda (sub)
+                            (string-join (for/list ([c (in-string sub)]) (string #\\ c)) "")))]
+        [else s]))
 
 (define (Name-equal? dn1 dn2)
   (Name-match? dn1 dn2 =))
