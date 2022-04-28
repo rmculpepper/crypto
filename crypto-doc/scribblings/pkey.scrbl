@@ -541,7 +541,7 @@ keys using named curves are supported.}}
 @item{@racket[(list 'dh  'public _p _g _y)]}
 @item{@racket[(list 'ec  'public _curve-oid _q)]}
 @item{@racket[(list 'eddsa 'public _curve-sym _q)]}
-@item{@racket[(list 'ecx 'private _curve-sym _q)]}
+@item{@racket[(list 'ecx 'public _curve-sym _q)]}
 
 ]}
 
