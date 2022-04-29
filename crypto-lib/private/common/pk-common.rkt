@@ -23,7 +23,8 @@
          "common.rkt"
          "error.rkt"
          "base256.rkt"
-         "asn1.rkt")
+         "asn1.rkt"
+         "../../util/bech32.rkt")
 (provide (all-defined-out)
          curve-name->oid
          curve-alias->oid
@@ -113,10 +114,19 @@
           (crypto-error "key format not supported\n  format: ~e\n  key: ~a"
                         fmt (about))))
     (define/public (-write-key fmt)
-      (cond [(or (memq fmt '(SubjectPublicKeyInfo rkt-public)) (not (is-private?)))
-             (-write-public-key fmt)]
-            [else
-             (-write-private-key fmt)]))
+      (case fmt
+        [(SubjectPublicKeyInfo rkt-public) (-write-public-key fmt)]
+        [(age/v1-public)
+         (match (-write-key 'rkt-public)
+           [(list 'ecx 'public 'x25519 pub)
+            (bech32-encode "age" pub)]
+           [_ #f])]
+        [(age/v1-private)
+         (match (-write-key 'rkt-private)
+           [(list 'ecx 'private 'x25519 pub priv)
+            (string-upcase (bech32-encode "age-secret-key-" priv))]
+           [_ #f])]
+        [else (if (is-private?) (-write-private-key fmt) (-write-public-key fmt))]))
     (define/public (-write-public-key fmt) #f)
     (define/public (-write-private-key fmt) #f)
 
@@ -289,11 +299,13 @@
 
 (define public-key-formats
   '(SubjectPublicKeyInfo
+    age/v1-public
     rkt-public))
 (define private-key-formats
   '(PrivateKeyInfo
     OneAsymmetricKey
     RSAPrivateKey
+    age/v1-private
     rkt-private))
 
 (define (public-key-format? fmt) (and (memq fmt public-key-formats) #t))
@@ -381,6 +393,18 @@
             (-make-priv-dsa p q g y x)])]
         [(rkt-private) (read-rkt-private-key sk)]
         [(rkt-public) (read-rkt-public-key sk)]
+        [(age/v1-private)
+         (-check-type fmt 'bech32-string? bech32-string? sk)
+         (match (bech32-decode sk)
+           [(list "age-secret-key-" priv)
+            (-decode-priv-ecx 'x25519 #f priv)]
+           [_ #f])]
+        [(age/v1-public)
+         (-check-type fmt 'bech32-string? bech32-string? sk)
+         (match (bech32-decode sk)
+           [(list "age" pub)
+            (-decode-pub-ecx 'x25519 pub)]
+           [_ #f])]
         [else #f]))
 
     (define/private (read-rkt-public-key sk)
@@ -610,9 +634,11 @@
     ;; ----------------------------------------
 
     (define/private (-check-bytes fmt v)
-      (unless (bytes? v)
-        (crypto-error "bad value for key format\n  expected: bytes?\n  got: ~e\n  format: ~e"
-                      v fmt)))
+      (-check-type fmt 'bytes? bytes? v))
+    (define/private (-check-type fmt what pred v)
+      (unless (pred v)
+        (crypto-error "bad value for key format\n  expected: ~a\n  got: ~e\n  format: ~e"
+                      what v fmt)))
     ))
 
 (define translate-key%
