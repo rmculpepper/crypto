@@ -247,7 +247,7 @@
          (define priv-pki (-write-key 'PrivateKeyInfo))
          (merge-rkt-private-key (translate-key priv-pki 'PrivateKeyInfo 'rkt-private)
                                 (translate-key pub-spki 'SubjectPublicKeyInfo 'rkt-public))]
-        [else #f]))
+        [else (super -write-key fmt)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other libcrypto-pk-key%)
