@@ -526,9 +526,9 @@ keys using named curves are supported.}}
 @item{@racket[(list 'rsa 'private _n _e _d)]}
 @item{@racket[(list 'dsa 'private _p _q _g _y _d)]}
 @item{@racket[(list 'dh  'private _p _g _y _x)]}
-@item{@racket[(list 'ec  'private _curve-oid _q _x)]}
-@item{@racket[(list 'eddsa 'private _curve-sym _q _d)]}
-@item{@racket[(list 'ecx 'private _curve-sym _q _d)]}
+@item{@racket[(list 'ec  'private _curve-oid _q-bytes _x)]}
+@item{@racket[(list 'eddsa 'private _curve-sym _q-bytes _d-bytes)]}
+@item{@racket[(list 'ecx 'private _curve-sym _q-bytes _d-bytes)]}
 
 ]}
 
@@ -539,9 +539,9 @@ keys using named curves are supported.}}
 @item{@racket[(list 'rsa 'public _n _e)]}
 @item{@racket[(list 'dsa 'public _p _q _g _y)]}
 @item{@racket[(list 'dh  'public _p _g _y)]}
-@item{@racket[(list 'ec  'public _curve-oid _q)]}
-@item{@racket[(list 'eddsa 'public _curve-sym _q)]}
-@item{@racket[(list 'ecx 'public _curve-sym _q)]}
+@item{@racket[(list 'ec  'public _curve-oid _q-bytes)]}
+@item{@racket[(list 'eddsa 'public _curve-sym _q-bytes)]}
+@item{@racket[(list 'ecx 'public _curve-sym _q-bytes)]}
 
 ]}
 
@@ -583,9 +583,9 @@ AlgorithmIdentifier @cite["PKIX"] representation of @racket[pkp]. All
 key parameter types are supported, and an identifier for the key
 parameter type is embedded in the encoding.
 
-For compatibility with OpenSSL, the PKCS #3 identifier and parameter
+For @racket['dh] parameters, the PKCS #3 identifier and parameter
 format @cite["PKCS3"] are used rather than those specified by
-@cite["PKIX-AlgId"].}
+@cite["PKIX-AlgId"], for compatibility with OpenSSL.}
 
 @item{@racket['DSAParameters] --- DER-encoded Dss-Parms @cite["PKIX-AlgId"]}
 
