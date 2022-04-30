@@ -18,6 +18,7 @@
          racket/match
          asn1
          binaryio/integer
+         base64
          "catalog.rkt"
          "interfaces.rkt"
          "common.rkt"
@@ -125,6 +126,23 @@
          (match (-write-key 'rkt-private)
            [(list 'ecx 'private 'x25519 pub priv)
             (string-upcase (bech32-encode "age-secret-key-" priv))]
+           [_ #f])]
+        [(openssh-public)
+         (define (bstr bs)
+           (bytes-append (integer->bytes (bytes-length bs) 4 #f) bs))
+         (define (mpint n)
+           (define nlen (integer-bytes-length n #t))
+           (bytes-append (integer->bytes nlen 4 #f) (integer->bytes n nlen #t)))
+         (match (-write-key 'rkt-public)
+           [(list 'rsa 'public n e)
+            (define bin (bytes-append (bstr #"ssh-rsa") (mpint e) (mpint n)))
+            (format "ssh-rsa ~a" (base64-encode bin))]
+           [(list 'eddsa 'public 'ed25519 pub)
+            (define bin (bytes-append (bstr #"ssh-ed25519") (bstr pub)))
+            (format "ssh-ed25519 ~a" (base64-encode bin))]
+           [(list 'eddsa 'public 'ed448 pub)
+            (define bin (bytes-append (bstr #"ssh-ed448") (bstr pub)))
+            (format "ssh-ed448 ~a" (base64-encode bin))]
            [_ #f])]
         [else (if (is-private?) (-write-private-key fmt) (-write-public-key fmt))]))
     (define/public (-write-public-key fmt) #f)
@@ -300,6 +318,7 @@
 (define public-key-formats
   '(SubjectPublicKeyInfo
     age/v1-public
+    openssh-public
     rkt-public))
 (define private-key-formats
   '(PrivateKeyInfo
@@ -404,6 +423,16 @@
          (match (bech32-decode sk)
            [(list "age" pub)
             (-decode-pub-ecx 'x25519 pub)]
+           [_ #f])]
+        [(openssh-public)
+         (-check-type fmt 'string? string? sk)
+         (match (parse-openssh-pub sk)
+           [(list 'rsa e n)
+            (-make-pub-rsa n e)]
+           [(list 'ed25519 pub)
+            (-decode-pub-eddsa 'ed25519 pub)]
+           [(list 'ed448 pub)
+            (-decode-pub-eddsa 'ed448 pub)]
            [_ #f])]
         [else #f]))
 
@@ -730,6 +759,47 @@
   (when maybe-old-qB
     (unless (equal? new-qB maybe-old-qB)
       (crypto-error "public key does not match private key"))))
+
+;; References (OpenSSH key format):
+;; - https://www.thedigitalcatonline.com/blog/2018/04/25/rsa-keys/ (overview)
+;; - RFC 4253 (https://datatracker.ietf.org/doc/html/rfc4253#section-6.6)
+;; - RFC 8709 (for Ed{25519,448} keys)
+(define (parse-openssh-pub s)
+  (cond [(regexp-match #rx"^(ssh-rsa|ssh-ed25519|ssh-ed448) ([a-zA-Z0-9+/]+)(?: |$)" s)
+         => (lambda (m) (parse-openssh-pub* (cadr m) (base64-decode (caddr m))))]
+        [else (error 'wtf) #f]))
+(define (parse-openssh-pub* outer-tag-s bin)
+  (define (bad msg) (crypto-error "invalid key encoding~a" msg))
+  (define binlen (bytes-length bin))
+  (define (check-len n) (unless (<= n binlen) (bad " (index out of range)")))
+  (define (get-uint4 n) (check-len (+ n 4)) (bytes->integer bin #f #t n (+ n 4)))
+  (define (get-bstring n len) (check-len (+ n len)) (subbytes bin n (+ n len)))
+  (define taglen (get-uint4 0))
+  (define inner-tag (get-bstring 4 taglen))
+  (unless (equal? (bytes->string/latin-1 inner-tag) outer-tag-s)
+    (bad " (key type mismatch)"))
+  (define keystart (+ 4 taglen))
+  (case inner-tag
+    [(#"ssh-rsa")
+     (define elen (get-uint4 keystart))
+     (define e (bytes->integer (get-bstring (+ keystart 4) elen) #t))
+     (define nlen (get-uint4 (+ keystart 4 elen)))
+     (define n (bytes->integer (get-bstring (+ keystart 4 elen 4) nlen) #t))
+     (unless (= binlen (+ keystart 4 elen 4 nlen)) (bad " (bytes left over)"))
+     (list 'rsa e n)]
+    [(#"ssh-ed25519")
+     (define publen (get-uint4 keystart))
+     (define pub (get-bstring (+ keystart 4) publen))
+     (unless (= publen 32) (bad " (wrong key length)"))
+     (unless (= binlen (+ keystart 4 publen)) (bad " (bytes left over)"))
+     (list 'ed25519 pub)]
+    [(#"ssh-ed448")
+     (define publen (get-uint4 keystart))
+     (define pub (get-bstring (+ keystart 4) publen))
+     (unless (= publen 57) (bad " (wrong key length)"))
+     (unless (= binlen (+ keystart 4 publen)) (bad " (bytes left over)"))
+     (list 'ed448 pub)]
+    [else #f]))
 
 ;; ============================================================
 ;; Writing Keys
