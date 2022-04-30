@@ -7,7 +7,8 @@
                      racket/contract
                      racket/random
                      crypto
-                     crypto/pem))
+                     crypto/pem
+                     crypto/util/bech32))
 
 @(module racket-links racket/base
    (require scribble/manual (for-label racket/random))
@@ -17,7 +18,7 @@
 
 @(define-runtime-path log-file "eval-logs/util.rktd")
 @(define the-eval (make-log-based-eval log-file 'replay))
-@(the-eval '(require crypto))
+@(the-eval '(require crypto crypto/util/bech32))
 
 @title[#:tag "util"]{Miscellaneous Utilities}
 
@@ -163,6 +164,43 @@ Note: This format is the PEM-based ``textual encoding''
 etc. It is commonly called ``PEM'' although it is not completely
 compatible with the original PEM format.
 }
+
+@; ------------------------------------------------------------
+@section[#:tag "bech32"]{Bech32 Encoding and Decoding}
+
+@defmodule[crypto/util/bech32]
+
+@history[#:added "1.9"]
+
+This module implements an encoder and decoder for the
+@hyperlink["https://en.bitcoin.it/wiki/Bech32"]{Bech32} format, which
+is used by the @hyperlink["https://github.com/FiloSottile/age"]{age
+encryption tool} to encode X25519 public and private keys. 
+
+@defproc[(bech32-encode [hrp string?] [data bytes?]) string?]{
+
+Encodes the ``human-readable part'' (@racket[hrp]) with the given
+@racket[data]. If @racket[hrp] contains disallowed characters, or if
+the result would be longer than 90 characters, an exception is raised.
+
+@examples[#:eval the-eval
+(bech32-encode "age" #"1234567890abcdef1234567890UVWXYZ")
+]}
+
+@defproc[(bech32-decode [s string?]) (list/c string? bytes?)]{
+
+Decodes the Bech32 string @racket[s], producing a ``human-readable
+part'' string and a data byte string.
+
+If @racket[s] is not a well-formed Bech32 string, an exception is
+raised. In particular, @racket[s] must be between 8 and 90 characters
+long, it must not contain a mixture of lowercase and uppercase
+letters, and it must end with a valid checksum.
+
+@examples[#:eval the-eval
+(bech32-decode "age1xyerxdp4xcmnswfsv93xxer9vccnyve5x5mrwwpexp24v46ct9dq3wvnf4")
+(eval:error (bech32-decode "age1xyerxdp4xcmnswfsv93xxer9vccnyve5x5mrwwpexp24v46ct9dq3wvnf"))
+]}
 
 @; ------------------------------------------------------------
 @(close-eval the-eval)
