@@ -9,7 +9,8 @@
     "asn1-lib"
     ["base64-lib" #:version "1.1"]
     "binaryio-lib"
-    ["gmp-lib" #:version "1.1"]))
+    ["gmp-lib" #:version "1.1"]
+    ["scramble-lib" #:version "0.3"]))
 (define pkg-authors '(ryanc))
 
 ;; collection info
