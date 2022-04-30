@@ -43,40 +43,37 @@
     (super-new (spec 'libcrypto-read-key))
 
     (define/public (read-key sk fmt)
-      (define-values (evp private?)
-        (let loop ([sk sk] [fmt fmt])
-          (define (check-bytes)
-            (unless (bytes? sk)
-              (crypto-error "bad value for key format\n  expected: ~s\n  got: ~e\n  format: ~e"
-                            'bytes? sk fmt)))
-          (case fmt
-            [(SubjectPublicKeyInfo)
-             (check-bytes)
-             (values (d2i_PUBKEY sk (bytes-length sk)) #f)]
-            [(OneAsymmetricKey)
-             (check-bytes)
-             (let ([txkey (translate-key sk 'OneAsymmetricKey 'PrivateKeyInfo)])
-               (if txkey (loop txkey 'PrivateKeyInfo) (values #f #f)))]
-            [(PrivateKeyInfo OneAsymmetricKey)
-             (check-bytes)
-             (define p8 (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk)))
-             (values (and p8 (EVP_PKCS82PKEY p8)) #t)]
-            [(RSAPrivateKey)
-             (check-bytes)
-             (values (d2i_PrivateKey EVP_PKEY_RSA sk (bytes-length sk)) #t)]
-            [(DSAPrivateKey)
-             (check-bytes)
-             (values (d2i_PrivateKey EVP_PKEY_DSA sk (bytes-length sk)) #t)]
-            [(ECPrivateKey)
-             (check-bytes)
-             (values (read-private-ec-key sk) #t)]
-            [(rkt-private)
-             (let ([txkey (translate-key sk 'rkt-private 'PrivateKeyInfo)])
-               (if txkey (loop txkey 'PrivateKeyInfo) (values #f #f)))]
-            [(rkt-public)
-             (let ([txkey (translate-key sk 'rkt-public 'SubjectPublicKeyInfo)])
-               (if txkey (loop txkey 'SubjectPublicKeyInfo) (values #f #f)))]
-            [else (values #f #f)])))
+      (define (check-bytes)
+        (unless (bytes? sk)
+          (crypto-error "bad value for key format\n  expected: ~s\n  got: ~e\n  format: ~e"
+                        'bytes? sk fmt)))
+      (case fmt
+        [(SubjectPublicKeyInfo)
+         (check-bytes)
+         (evp->key (d2i_PUBKEY sk (bytes-length sk)) #f)]
+        [(PrivateKeyInfo)
+         (check-bytes)
+         (define p8 (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk)))
+         (evp->key (and p8 (EVP_PKCS82PKEY p8)) #t)]
+        [(RSAPrivateKey)
+         (check-bytes)
+         (evp->key (d2i_PrivateKey EVP_PKEY_RSA sk (bytes-length sk)) #t)]
+        [(DSAPrivateKey)
+         (check-bytes)
+         (evp->key (d2i_PrivateKey EVP_PKEY_DSA sk (bytes-length sk)) #t)]
+        [(ECPrivateKey)
+         (check-bytes)
+         (evp->key (read-private-ec-key sk) #t)]
+        [else
+         (cond [(private-key-format? fmt)
+                (define txkey (translate-key sk fmt 'PrivateKeyInfo))
+                (read-key txkey 'PrivateKeyInfo)]
+               [(public-key-format? fmt)
+                (define txkey (translate-key sk fmt 'SubjectPublicKeyInfo))
+                (and txkey (read-key txkey 'SubjectPublicKeyInfo))]
+               [else #f])]))
+
+    (define/private (evp->key evp private?)
       (define impl (and evp (evp->impl evp)))
       (and evp impl
            (if private?
