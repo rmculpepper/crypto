@@ -7,11 +7,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        racket-version: ["stable", "current"]
+        racket-version: ["stable"]
         racket-variant: ["BC", "CS"]
     steps:
       - uses: actions/checkout@master
-      - uses: Bogdanp/setup-racket@v0.12
+      - uses: Bogdanp/setup-racket@v1.7
         with:
           architecture: x64
           distribution: full
