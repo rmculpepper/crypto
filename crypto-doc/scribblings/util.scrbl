@@ -9,6 +9,7 @@
                      scramble/slice
                      crypto
                      crypto/pem
+                     crypto/util/age
                      crypto/util/bech32))
 
 @(module racket-links racket/base
@@ -202,6 +203,45 @@ letters, and it must end with a valid checksum.
 (bech32-decode "age1xyerxdp4xcmnswfsv93xxer9vccnyve5x5mrwwpexp24v46ct9dq3wvnf4")
 (eval:error (bech32-decode "age1xyerxdp4xcmnswfsv93xxer9vccnyve5x5mrwwpexp24v46ct9dq3wvnf"))
 ]}
+
+@; ------------------------------------------------------------
+@section[#:tag "age"]{age Encryption}
+
+@defmodule[crypto/util/age]
+
+@history[#:added "1.9"]
+
+@(define age-spec "https://age-encryption.org/v1")
+@(define age-tool "https://github.com/FiloSottile/age")
+
+Implementation of @hyperlink[age-spec]{age-encryption.org/v1}, compatible with
+the @hyperlink[age-tool]{age encryption tool}.
+
+X25519 keys can be imported and exported in @hyperlink[age-tool]{age}-compatible
+format using @racket[pk-key->datum] and @racket[datum->pk-key] with the
+@racket['age/v1-public] and @racket['age/v1-private] format symbols.
+
+@defproc[(age-encrypt [recips (listof (or/c pk-key? (list/c 'scrypt bytes?)))]
+                      [data (or/c input-port? bytes?)])
+         bytes?]{
+
+Encrypts @racket[data] to each recipient in @racket[recips]. Each recipient must
+be either an X25519 public key (@racket[pk-key?]) or @racket[(list 'scrypt
+_passphrase)]. In addition, there must be at most one @racket['scrypt]
+recipient, and if there is an @racket['scrypt] recipient, it must be the only
+recipient; otherwise, an exception is raised.
+}
+
+@defproc[(age-decrypt [idents (listof (or/c private-key? bytes?))]
+                      [enc-data (or/c input-port? bytes?)])
+         bytes?]{
+
+Decrypts @racket[enc-data] using one of the identities listed in
+@racket[idents]. Each identity must be either an X25519 private key
+(@racket[private-key?]) or a byte string @racket[_passphrase].
+
+If decryption fails, an exception is raised.
+}
 
 @; ------------------------------------------------------------
 @(close-eval the-eval)
