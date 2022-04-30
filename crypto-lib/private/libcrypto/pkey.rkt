@@ -321,9 +321,9 @@
 
     (define/override (get-key-class) libcrypto-rsa-key%)
 
-    (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
+    (define/override (can-encrypt? pad) (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
 
-    (define/override (can-sign? pad) 'depends)
+    (define/override (can-sign pad) 'depends)
     (define/override (can-sign2? pad dspec)
       (and (memq pad '(#f pkcs1-v1.5 pss pss*))
            (-known-digest? dspec)))
@@ -390,7 +390,7 @@
     (define/override (get-params-class) libcrypto-dsa-params%)
     (define/override (get-key-class) libcrypto-dsa-key%)
 
-    (define/override (can-sign? pad) (memq pad '(#f)))
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)
@@ -552,7 +552,7 @@
     (define/override (get-params-class) libcrypto-ec-params%)
     (define/override (get-key-class) libcrypto-ec-key%)
 
-    (define/override (can-sign? pad) (memq pad '(#f)))
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
     (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
 
@@ -694,7 +694,7 @@
 
     (define/override (get-key-class) libcrypto-eddsa-key%)
 
-    (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)

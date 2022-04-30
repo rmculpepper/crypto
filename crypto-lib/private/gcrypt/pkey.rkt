@@ -119,8 +119,8 @@
     (inherit -known-digest? -generate-keypair)
     (super-new (spec 'rsa))
 
-    (define/override (can-encrypt? pad) (memq pad '(#f pkcs1-v1.5 oaep)))
-    (define/override (can-sign? pad) (memq pad '(#f pkcs1-v1.5 pss)))
+    (define/override (can-encrypt? pad) (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
+    (define/override (can-sign pad) (and (memq pad '(#f pkcs1-v1.5 pss)) 'ignoredg))
     (define/override (can-sign2? pad dspec) (-known-digest? dspec))
 
     (define/override (generate-key config)
@@ -294,7 +294,7 @@
     (inherit -known-digest? -generate-keypair)
     (super-new (spec 'dsa))
 
-    (define/override (can-sign? pad) (memq pad '(#f)))
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
 
     (define/override (generate-key config)
       (define-values (nbits qbits)
@@ -401,7 +401,7 @@
     (inherit -known-digest? -generate-keypair)
     (super-new (spec 'ec))
 
-    (define/override (can-sign? pad) (memq pad '(#f)))
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
     (define/override (can-key-agree?) #t)
     (define/override (has-params?) #t)
 
@@ -578,7 +578,7 @@
     (inherit -known-digest? -generate-keypair)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)

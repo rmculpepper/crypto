@@ -34,7 +34,7 @@
     (inherit-field spec factory)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign? pad) (and (memq pad '(#f)) 'nodigest))
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
     (define/override (has-params?) #t)
 
     (define/override (generate-params config)

@@ -46,20 +46,20 @@
     (define/public (generate-params config)
       (crypto-error "parameters not supported\n  algorithm: ~a" (about)))
 
-    ;; can-encrypt? : Padding -> Bool-like; pad=#f means "at all?"
+    ;; can-encrypt? : Padding -> Boolean; pad=#f means "at all?"
     (define/public (can-encrypt? pad) #f)
 
-    ;; can-sign? : Pad -> Result; pad=#f means "at all?"
+    ;; can-sign : Pad -> Result; pad=#f means "at all?"
     ;; Result = #f        -- not supported (eg DH)
     ;;        | 'depends  -- call can-sign2? to check specific digest arg (eg RSA)
     ;;        | 'nodigest -- supported, but digest must be 'none (eg EdDSA)
-    ;;        | other     -- supported, digest arg ignored (eg DSA, EC, for backwards-compat)
+    ;;        | 'ignoredg -- supported, digest arg ignored (eg DSA, EC, for backwards-compat)
     ;; For backwards compat, want to ignore digest arg for DSA and EC; but want to forbid
     ;; for EdDSA, so that in the future giving a digest argument can mean use EdDSAph.
-    (define/public (can-sign? pad) #f)
+    (define/public (can-sign pad) #f)
 
-    ;; can-sign2? : Pad (U DigestSpec 'none) -> Bool-like
-    ;; Only overridden if can-sign? returned 'depends.
+    ;; can-sign2? : Pad (U DigestSpec 'none) -> Boolean
+    ;; Only overridden if can-sign returned 'depends.
     (define/public (can-sign2? pad dspec) #t)
 
     (define/public (can-key-agree?) #f)
@@ -165,9 +165,9 @@
       (-verify msg dspec pad sig))
 
     (define/private (-check-sign pad dspec)
-      (case (send impl can-sign? pad)
+      (case (send impl can-sign pad)
         [(#f)
-         (unless (send impl can-sign? #f)
+         (unless (send impl can-sign #f)
            (crypto-error "sign/verify not supported\n  key: ~a" (about)))
          (crypto-error "sign/verify padding not supported\n  padding: ~e\n  key: ~a"
                        pad (about))]

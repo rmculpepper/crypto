@@ -196,10 +196,10 @@
   (interface (impl<%>)
     [generate-key    (->m pk-config/c pk-key?)]
     [generate-params (->m pk-config/c pk-parameters?)]
-    [can-encrypt?    (->m pk-enc-pad/c any/c)] ;; FIXME
+    [can-encrypt?    (->m pk-enc-pad/c boolean?)]
     [can-key-agree?  (->m boolean?)]
-    [can-sign?       (->m pk-sign-pad/c any/c)] ;; FIXME
-    [can-sign2?      (->m pk-sign-pad/c (or/c #f digest-spec?) any/c)] ;; FIXME
+    [can-sign        (->m pk-sign-pad/c (or/c #f 'depends 'nodigest 'ignoredg))]
+    [can-sign2?      (->m pk-sign-pad/c (or/c #f digest-spec?) boolean?)]
     [has-params?     (->m boolean?)]
     ))
 
