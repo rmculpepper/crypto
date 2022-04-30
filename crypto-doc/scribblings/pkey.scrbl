@@ -519,6 +519,21 @@ used by OpenSSL.}}
 representation of @racket[pk], which must be an EC private key. Only
 keys using named curves are supported.}}
 
+@item{@racket['age/v1-private] --- String representing an X25519 private key
+encoded in the @hyperlink["https://age-encryption.org/v1"]{age-encryption (v1)}
+format. The string is Bech32-encoded and has 74 characters beginning with
+@litchar{AGE-SECRET-KEY-1}.}
+
+@item{@racket['age/v1-public] --- String representing an X25519 public key
+encoded in the @hyperlink["https://age-encryption.org/v1"]{age-encryption (v1)}
+format. The string is Bech32-encoded and has 62 characters beginning with
+@litchar{age1}.}
+
+@item{@racket['openssh-public] --- A string containing an OpenSSH-format public
+key. The string starts with a tag such as @litchar{ssh-rsa} or
+@litchar{ssh-ed25519}, then contains the key data encoded in Base64. Only RSA,
+Ed25519, and Ed448 public keys are currently supported.}
+
 @item{@racket['rkt-private] --- An S-expression of one of the following forms:
 
 @itemlist[
@@ -549,9 +564,12 @@ keys using named curves are supported.}}
 
 More formats may be added in future versions of this library.
 
-@history[#:changed "1.1" @elem{Added @racket['OneAsymmetricKey],
-@racket['rkt-private], and @racket['rkt-public] support.}]
-}
+@history[
+#:changed "1.1" @elem{Added @racket['OneAsymmetricKey], @racket['rkt-private],
+and @racket['rkt-public] formats.}
+#:changed "1.9" @elem{Added @racket['age/v1-public], @racket['age/v1-private],
+and @racket['openssh-public] formats.}
+]}
 
 @defproc[(datum->pk-key [datum any/c]
                         [fmt symbol?]
