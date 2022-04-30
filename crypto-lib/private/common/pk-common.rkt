@@ -1,4 +1,4 @@
-;; Copyright 2013-2018 Ryan Culpepper
+;; Copyright 2013-2022 Ryan Culpepper
 ;; 
 ;; This library is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as published
@@ -286,6 +286,18 @@
 ;; - read-key makes a copy of bytestrings before forwarding them to implementations
 ;; - encode-*-* with 'rkt-* fmt makes a copy of bytestrings in arguments
 ;;   (but only for arguments where bytestring are expected)
+
+(define public-key-formats
+  '(SubjectPublicKeyInfo
+    rkt-public))
+(define private-key-formats
+  '(PrivateKeyInfo
+    OneAsymmetricKey
+    RSAPrivateKey
+    rkt-private))
+
+(define (public-key-format? fmt) (and (memq fmt public-key-formats) #t))
+(define (private-key-format? fmt) (and (memq fmt private-key-formats) #t))
 
 (define pk-read-key-base%
   (class* impl-base% (pk-read-key<%>)
