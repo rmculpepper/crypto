@@ -16,6 +16,7 @@
 #lang racket/base
 (require racket/class
          racket/contract/base
+         (only-in racket/base [exact-nonnegative-integer? nat?])
          "catalog.rkt")
 (provide impl<%>
          ctx<%>
@@ -54,20 +55,41 @@
 ;; equivalent to (string->bytes/utf-8 S).
 
 ;; ============================================================
+;; Predicates
+
+(define (crypto-factory? x) (is-a? x factory<%>))
+(define (digest-impl? x) (is-a? x digest-impl<%>))
+(define (digest-ctx? x) (is-a? x digest-ctx<%>))
+(define (cipher-impl? x) (is-a? x cipher-impl<%>))
+(define (cipher-ctx? x) (is-a? x cipher-ctx<%>))
+(define (pk-impl? x) (is-a? x pk-impl<%>))
+(define (pk-parameters? x) (is-a? x pk-params<%>))
+(define (pk-key? x) (is-a? x pk-key<%>))
+(define (kdf-impl? x) (is-a? x kdf-impl<%>))
+
+(define (impl? v) (is-a? v impl<%>))
+(define (ctx? v) (is-a? v ctx<%>))
+
+(define (pk-read-key? v) (is-a? v pk-read-key<%>))
+
+(define info/c any/c)
+(define spec/c any/c)
+
+;; ============================================================
 ;; General Implementation & Contexts
 
 (define impl<%>
   (interface ()
-    about       ;; -> String
-    get-info    ;; -> *Info
-    get-spec    ;; -> *Spec
-    get-factory ;; -> factory<%>
+    [about       (->m string?)]
+    [get-info    (->m info/c)]
+    [get-spec    (->m spec/c)]
+    [get-factory (->m crypto-factory?)]
     ))
 
 (define ctx<%>
   (interface ()
-    about       ;; -> String
-    get-impl    ;; -> impl<%>
+    [about      (->m string?)]
+    [get-impl   (->m impl?)]
     ))
 
 (define state<%>
@@ -106,40 +128,35 @@
 
 (define factory<%>
   (interface ()
-    get-version ;; (Listof Nat)/#f
-    info        ;; Symbol -> Any
-    print-info  ;; -> Void
-    get-name    ;; -> Symbol, for testing
-    get-digest  ;; DigestSpec -> digest-impl<%>/#f
-    get-cipher  ;; CipherSpec -> cipher-impl<%>/#f
-    get-pk      ;; PKSpec -> pk-impl<%>/#f
-    get-pk-reader ;; -> pk-read-key<%>/#f
-    get-kdf     ;; KDFSpec -> kdf-impl<%>/#f
+    [get-version    (->m (or/c (listof nat?)))]
+    [info           (->m symbol? any)]
+    [print-info     (->m void?)]
+    [get-name       (->m symbol?)]
+    [get-digest     (->m digest-spec? (or/c #f digest-impl?))]
+    [get-cipher     (->m cipher-spec? (or/c #f cipher-impl?))]
+    [get-pk         (->m pk-spec? (or/c #f pk-impl?))]
+    [get-kdf        (->m kdf-spec? (or/c #f kdf-impl?))]
+    [get-pk-reader  (->m (or/c #f pk-read-key?))]
     ))
-
-(define (crypto-factory? x) (is-a? x factory<%>))
 
 ;; ============================================================
 ;; Digests
 
 (define digest-impl<%>
   (interface (impl<%> digest-info<%>)
-    new-ctx        ;; -> digest-ctx<%>
-    new-hmac-ctx   ;; Bytes -> digest-ctx<%>
-    digest         ;; Input (U Bytes #f) -> Bytes
-    hmac           ;; Bytes Input -> Bytes
+    [new-ctx        (->m (or/c #f bytes?) digest-ctx?)]
+    [new-hmac-ctx   (->m bytes? digest-ctx?)]
+    [digest         (->m input/c (or/c #f bytes?) bytes?)]
+    [hmac           (->m bytes? input/c bytes?)]
     ))
 
 (define digest-ctx<%>
   (interface (ctx<%>)
-    digest     ;; Input -> Bytes
-    update     ;; Input -> Void
-    final      ;; -> Bytes
-    copy       ;; -> digest-ctx<%> or #f
+    [digest     (->m input/c bytes?)]
+    [update     (->m input/c void?)]
+    [final      (->m bytes?)]
+    [copy       (->m (or/c #f digest-ctx?))]
     ))
-
-(define (digest-impl? x) (is-a? x digest-impl<%>))
-(define (digest-ctx? x) (is-a? x digest-ctx<%>))
 
 ;; ============================================================
 ;; Ciphers
@@ -147,12 +164,13 @@
 ;; PadMode = (U #f #t)
 ;;  - #f means no padding
 ;;  - #t means PKCS7 for block ciphers, none for stream
-;; Maybe support more padding modes in future?
+(define cipher-pad/c boolean?)
 
 (define cipher-impl<%>
   (interface (impl<%> cipher-info<%>)
-    new-ctx         ;; Bytes Bytes/#f Bool Pad Nat/#f Bool -> cipher-ctx<%>
-                    ;; key   iv       enc? pad taglen attached?
+    [new-ctx
+     (->m bytes? (or/c #f bytes?) boolean? cipher-pad/c (or/c #f nat?) boolean?
+          cipher-ctx?)]
     ))
 
 (define cipher-ctx<%>
@@ -160,75 +178,70 @@
     ;; Sends {ciper,plain}text to given output port.
     ;; AEAD: auth tag length is set at ctx construction;
     ;; decrypt final takes auth tag (encrypt takes #f)
-    get-encrypt? ;; -> boolean
-    update-aad ;; Input -> Void
-    update     ;; Input -> Void
-    final      ;; Bytes/#f -> Void
-    get-auth-tag ;; -> Bytes/#f
+    [get-encrypt?   (->m boolean?)]
+    [update-aad     (->m input/c any)]
+    [update         (->m input/c any)]
+    [final          (->m (or/c #f bytes?) any)]
+    [get-auth-tag   (->m (or/c #f bytes?))]
     ))
-
-(define (cipher-impl? x) (is-a? x cipher-impl<%>))
-(define (cipher-ctx? x) (is-a? x cipher-ctx<%>))
 
 ;; ============================================================
 ;; Public-Key Cryptography
 
+(define pk-config/c (listof (list/c symbol? any/c)))
+(define pk-sign-pad/c (or/c #f 'pkcs1-v1.5 'pss 'pss*))
+(define pk-enc-pad/c (or/c #f 'pkcs1-v1.5 'oaep))
+
 (define pk-impl<%>
   (interface (impl<%>)
-    generate-key    ;; Config -> pk-key<%>
-    generate-params ;; Config -> pk-params<%>
-    can-key-agree?  ;; Symbol/#f -> boolean
-    can-sign?       ;; Symbol/#f DigestSpec/#f -> boolean
-    can-encrypt?    ;; -> boolean
-    has-params?     ;; -> boolean
+    [generate-key    (->m pk-config/c pk-key?)]
+    [generate-params (->m pk-config/c pk-parameters?)]
+    [can-encrypt?    (->m pk-enc-pad/c any/c)] ;; FIXME
+    [can-key-agree?  (->m boolean?)]
+    [can-sign?       (->m pk-sign-pad/c any/c)] ;; FIXME
+    [can-sign2?      (->m pk-sign-pad/c (or/c #f digest-spec?) any/c)] ;; FIXME
+    [has-params?     (->m boolean?)]
     ))
 
 (define pk-read-key<%>
   (interface (impl<%>)
-    read-key        ;; Datum Symbol -> pk-key<%>/#f
-    read-params     ;; Datum Symbol -> pk-params<%>/#f
+    [read-key        (->m any/c symbol? any/c #|(or/c #f pk-key?)|#)] ;; FIXME
+    [read-params     (->m any/c symbol? any/c #|(or/c #f pk-parameters?)|#)] ;; FIXME
     ))
 
 (define pk-params<%>
   (interface (ctx<%>)
-    generate-key    ;; Config -> pk-key<%>
-    write-params    ;; Symbol -> Datum
-    get-security-bits ;; -> Nat or #f
+    [generate-key       (->m pk-config/c pk-key?)]
+    [write-params       (->m symbol? any/c)]
+    [get-security-bits  (->m (or/c #f nat?))]
     ))
 
 (define pk-key<%>
   (interface (ctx<%>)
-    is-private?             ;; -> boolean
-    get-public-key          ;; -> pk-key<%>
-    get-params              ;; -> pk-params<%> or #f
-    get-security-bits       ;; -> Nat or #f
+    [is-private?        (->m boolean?)]
+    [get-public-key     (->m pk-key?)]
+    [get-params         (->m (or/c #f pk-parameters?))]
+    [get-security-bits  (->m (or/c #f nat?))]
 
-    write-key       ;; Symbol -> Datum
-    equal-to-key?   ;; pk-key<%> -> boolean
+    [write-key          (->m symbol? any/c)]
+    [equal-to-key?      (->m pk-key? boolean?)]
 
-    sign            ;; bytes DigestSpec Padding -> bytes
-    verify          ;; bytes DigestSpec Padding bytes -> boolean
+    [sign               (->m bytes? (or/c #f digest-spec?) pk-sign-pad/c bytes?)]
+    [verify             (->m bytes? (or/c #f digest-spec?) pk-sign-pad/c bytes? boolean?)]
     ;; In verify, if sig is not well-formed then just return #f, no error.
 
-    encrypt         ;; bytes Padding -> bytes
-    decrypt         ;; bytes Padding -> bytes
+    [encrypt            (->m bytes? pk-enc-pad/c bytes?)]
+    [decrypt            (->m bytes? pk-enc-pad/c bytes?)]
 
-    compute-secret  ;; bytes -> bytes
+    [compute-secret     (->m (or/c bytes? pk-key?) bytes?)]
     ))
-
-;; Padding is a symbol (eg 'oaep) or #f
-;;  #f means *impl-specific* default
-
-(define (pk-impl? x) (is-a? x pk-impl<%>))
-(define (pk-parameters? x) (is-a? x pk-params<%>))
-(define (pk-key? x) (is-a? x pk-key<%>))
 
 ;; ============================================================
 ;; KDFs
 
+(define kdf-params/c (listof (list/c symbol? any/c)))
+
 (define kdf-impl<%>
   (interface (impl<%>)
-    kdf0 ;; KDFParams bytes (U bytes #f) -> bytes
+    [kdf0       (->m kdf-params/c bytes? (or/c #f bytes?) bytes?)]
     ))
-
-(define (kdf-impl? x) (is-a? x kdf-impl<%>))
