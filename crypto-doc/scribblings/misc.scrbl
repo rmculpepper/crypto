@@ -36,10 +36,6 @@ instance and seeds it with entropy obtained from
 number of entropy-consuming operations have been performed since the
 last reseed.
 
-@history[#:changed "1.2" @elem{The @racketmodname[crypto] module now
-also re-exports @racket[crypto-random-bytes] from
-@racketmodname[racket/random].}]
-
 
 @subsection[#:tag "libcrypto-notes"]{Libcrypto Quirks}
 

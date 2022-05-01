@@ -68,7 +68,8 @@ Previously, @racket[bytes-range] was a distinct struct type.}]}
 
 For convenience, this library re-exports @racket:crypto-random-bytes-id
 from @racketmodname[racket/random].
-}
+
+@history[#:added "1.2"]}
 
 @; ----------------------------------------
 @subsection[#:tag "security-level"]{Security Strength Levels}
