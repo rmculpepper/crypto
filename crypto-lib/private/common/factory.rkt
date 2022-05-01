@@ -17,6 +17,7 @@
 (require racket/class
          racket/match
          racket/list
+         racket/string
          "catalog.rkt"
          "interfaces.rkt"
          "cipher.rkt"
@@ -27,12 +28,19 @@
 ;; Factory
 
 (define factory-base%
-  (class* object% (factory<%>)
+  (class* object% (factory<%> simple-write<%>)
     (init-field [ok? #t] [load-error #f])
     (super-new)
 
     (define/public (get-name) #f)
     (define/public (get-version) (and ok? '()))
+    (define/public (to-write-string prefix)
+      (format "~a~a~a"
+              (or prefix "crypto-factory:")
+              (or (get-name) "?")
+              (cond [(not ok?) ":failed"]
+                    [(null? (get-version)) ""]
+                    [else (format ":~a" (string-join (map number->string (get-version)) "."))])))
 
     (define/public (info key)
       (case key

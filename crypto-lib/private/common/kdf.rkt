@@ -49,8 +49,10 @@
 
 (define kdf-impl-base%
   (class* impl-base% (kdf-impl<%>)
-    (inherit about)
+    (inherit about get-spec get-factory)
     (super-new)
+    (define/override (to-write-string prefix)
+      (super to-write-string (or prefix "kdf:")))
     (define/public (kdf0 params pass salt)
       (kdf params pass (check-salt salt)))
     (define/public (kdf params pass salt)

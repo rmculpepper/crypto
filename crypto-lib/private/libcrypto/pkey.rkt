@@ -574,7 +574,7 @@
     ))
 
 (define libcrypto-ec-params%
-  (class libcrypto-pk-params%
+  (class* libcrypto-pk-params% (pk-curve-params<%>)
     (inherit-field impl pevp)
     (super-new)
 

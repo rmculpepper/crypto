@@ -30,8 +30,11 @@
 (define cipher-impl-base%
   (class* info-impl-base% (cipher-impl<%>)
     (inherit-field info)
-    (inherit get-spec)
+    (inherit get-spec get-factory)
     (super-new)
+
+    (define/override (to-write-string prefix)
+      (super to-write-string (or prefix "cipher:")))
 
     ;; Info methods
     (define/override (about) (format "~a cipher" (super about)))
@@ -137,6 +140,9 @@
            [out (open-output-bytes)])
     (inherit with-state set-state about)
     (super-new [state 1])
+
+    (define/override (to-write-string prefix)
+      (super to-write-string (or prefix "cipher-ctx:")))
 
     (set-state (if (send impl aead?) 1 2))
 

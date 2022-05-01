@@ -30,11 +30,12 @@
 (define digest-impl%
   (class* info-impl-base% (digest-impl<%>)
     (inherit-field info)
-    (inherit get-spec)
+    (inherit get-factory get-spec)
     (super-new)
 
     ;; Info methods
     (define/override (about) (format "~a digest" (super about)))
+    (define/override (to-write-string prefix) (super to-write-string (or prefix "digest:")))
     (define/public (get-size) (send info get-size))
     (define/public (get-block-size) (send info get-block-size))
     (define/public (get-security-strength cr?) (send info get-security-strength cr?))
@@ -93,6 +94,9 @@
     (super-new [state 'open])
     (inherit get-impl with-state)
 
+    (define/override (to-write-string prefix)
+      (super to-write-string (or prefix "digest-ctx:")))
+
     (define/public (digest src)
       (update src)
       (final))
@@ -126,6 +130,9 @@
     (init-field key [ctx #f])
     (inherit-field impl)
     (super-new)
+
+    (define/override (to-write-string prefix)
+      (send impl to-write-string (or prefix "hmac-ctx:")))
 
     (define block-size (send impl get-block-size))
     (define ipad (make-bytes block-size #x36))

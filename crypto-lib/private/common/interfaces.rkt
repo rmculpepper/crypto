@@ -29,8 +29,10 @@
          pk-impl<%>
          pk-read-key<%>
          pk-params<%>
+         pk-curve-params<%>
          pk-key<%>
          kdf-impl<%>
+         simple-write<%>
 
          input/c
          (struct-out bytes-range)
@@ -76,10 +78,19 @@
 (define spec/c any/c)
 
 ;; ============================================================
+;; Util
+
+(define simple-write<%>
+  (interface*
+   () ([prop:custom-write
+        (lambda (self out mode) (fprintf out "#<~a>" (send self to-write-string #f)))])
+   [to-write-string (->m (or/c #f string?) string?)]))
+
+;; ============================================================
 ;; General Implementation & Contexts
 
 (define impl<%>
-  (interface ()
+  (interface (simple-write<%>)
     [about       (->m string?)]
     [get-info    (->m info/c)]
     [get-spec    (->m spec/c)]
@@ -87,7 +98,7 @@
     ))
 
 (define ctx<%>
-  (interface ()
+  (interface (simple-write<%>)
     [about      (->m string?)]
     [get-impl   (->m impl?)]
     ))
@@ -150,7 +161,7 @@
 ;; Implementation Factories
 
 (define factory<%>
-  (interface ()
+  (interface (simple-write<%>)
     [get-version    (->m (or/c (listof nat?)))]
     [info           (->m symbol? any)]
     [print-info     (->m void?)]
@@ -237,6 +248,11 @@
     [generate-key       (->m pk-config/c pk-key?)]
     [write-params       (->m symbol? any/c)]
     [get-security-bits  (->m (or/c #f nat?))]
+    ))
+
+(define pk-curve-params<%>
+  (interface (pk-params<%>)
+    [get-curve          (->m (or/c #f symbol?))]
     ))
 
 (define pk-key<%>

@@ -38,6 +38,10 @@
   (class* impl-base% (pk-impl<%>)
     (inherit about get-spec get-factory)
     (super-new)
+
+    (define/override (to-write-string prefix)
+      (super to-write-string (or prefix "pk:")))
+
     (define/public (generate-key config)
       (cond [(has-params?)
              (define p (generate-params config))
@@ -76,6 +80,12 @@
     (inherit-field impl)
     (super-new)
     (define/override (about) (format "~a parameters" (send impl about)))
+    (define/override (to-write-string prefix)
+      (string-append
+       (super to-write-string (or prefix "pk-parameters:"))
+       (cond [(is-a? this pk-curve-params<%>)
+              (format ":~a" (send this get-curve))]
+             [else ""])))
     (abstract generate-key)
     (define/public (write-params fmt)
       (or (-write-params fmt)
@@ -94,6 +104,15 @@
 
     (define/override (about)
       (format "~a ~a key" (send impl about) (if (is-private?) 'private 'public)))
+    (define/override (to-write-string prefix)
+      (string-append
+       (super to-write-string (or prefix (if (is-private?) "private-key:" "public-key:")))
+       (cond [(send impl has-params?)
+              (define params (get-params))
+              (cond [(is-a? params pk-curve-params<%>)
+                     (format ":~s" (send params get-curve))]
+                    [else ""])]
+             [else ""])))
     (define/public (get-spec) (send impl get-spec))
 
     (define/public (get-security-bits)
@@ -257,7 +276,7 @@
 ;; ------------------------------------------------------------
 
 (define pk-ec-params%
-  (class pk-params-base%
+  (class* pk-params-base% (pk-curve-params<%>)
     (inherit-field impl)
     (super-new)
 
@@ -276,7 +295,7 @@
     ))
 
 (define pk-eddsa-params%
-  (class pk-params-base%
+  (class* pk-params-base% (pk-curve-params<%>)
     (inherit-field impl)
     (init-field curve)
     (super-new)
@@ -292,7 +311,7 @@
     ))
 
 (define pk-ecx-params%
-  (class pk-params-base%
+  (class* pk-params-base% (pk-curve-params<%>)
     (inherit-field impl)
     (init-field curve)
     (super-new)

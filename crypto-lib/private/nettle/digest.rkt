@@ -76,6 +76,9 @@
     (inherit-field impl)
     (super-new)
 
+    (define/override (to-write-string prefix)
+      (super to-write-string (or prefix "hmac-ctx:")))
+
     (define/override (-update buf start end)
       (nettle_hmac_update ctx nh (ptr-add buf start) (- end start)))
 
