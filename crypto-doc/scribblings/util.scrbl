@@ -6,6 +6,7 @@
           (for-label racket/base
                      racket/contract
                      racket/random
+                     scramble/slice
                      crypto
                      crypto/pem
                      crypto/util/bech32))
@@ -41,7 +42,7 @@ other values are accepted and converted as following:
 @item{@racket[string?] --- converted to bytes via @racket[string->bytes/utf-8]}
 @item{@racket[input-port?] --- read until @racket[eof] is returned (but the port
 is not closed)}
-@item{@racket[bytes-range?] --- represents a subsequence of a bytestring}
+@item{@racket[bytes-slice?] --- represents a subsequence of a bytestring}
 @item{@racket[(listof input/c)] --- concatenation of the input elements}
 ]
 Note that fixed-sized data such as keys, IVs, etc are not represented as
@@ -53,11 +54,10 @@ Note that fixed-sized data such as keys, IVs, etc are not represented as
              [start exact-nonnegative-integer?]
              [end exact-nonnegative-integer?])]{
 
-Represents a subsequence of a bytestring. See also @racket[input/c].
+Alias for @racket[slice], @racket[bytes-slice?], etc.
 
-Equivalent to @racket[(subbytes bs start end)] if @racket[bs] is not
-subsequently mutated, but avoids making a copy.
-}
+@history[#:changed "1.9" @elem{Converted to alias for @racket[slice].
+Previously, @racket[bytes-range] was a distinct struct type.}]}
 
 @; ----------------------------------------
 @subsection[#:tag "crypto-random-bytes"]{Random Bytes}

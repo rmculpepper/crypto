@@ -107,6 +107,29 @@
 ;; - InputPort
 ;; - (bytes-range Bytes Nat Nat)
 ;; - (Listof Input)
+
+;; bytes-range is alias for slice, except constructor and predicate check for bytes
+(begin
+  (require (for-syntax racket/base racket/struct-info scramble/struct-info)
+           (only-in scramble/slice
+                    slice
+                    [struct:slice struct:bytes-range]
+                    [bytes-slice? bytes-range?]
+                    [slice-value bytes-range-bs]
+                    [slice-start bytes-range-start]
+                    [slice-end bytes-range-end]))
+  (define (make-bytes-range bs start end)
+    (unless (bytes? bs) (raise-argument-error 'bytes-range "bytes?" 0 bs start end))
+    (slice bs start end))
+  (define-syntax bytes-range
+    (adjust-struct-info
+     (list #'struct:bytes-range
+           #'make-bytes-range
+           #'bytes-range?
+           (list #'bytes-range-end #'bytes-range-start #'bytes-range-bs)
+           (list #f #f #f)
+           #t))))
+#;
 (struct bytes-range (bs start end)
   #:guard (lambda (buf start end _name)
             (unless (bytes? buf)
