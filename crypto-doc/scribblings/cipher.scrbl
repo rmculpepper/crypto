@@ -3,6 +3,7 @@
           scribble/basic
           scribble/eval
           racket/list
+          racket/class
           racket/runtime-path
           crypto/private/common/catalog
           (for-label racket/base
@@ -29,10 +30,16 @@ Ciphers are organized into families that share common encryption and
 decryption algorithms but differ in parameters such as key length and
 block mode. For example, the AES family supports key lengths of 128,
 192, and 256 bits, and it supports a wide range of modes, including
-ECB, CBC, and CTR.
+CBC, CTR, and GCM.
 
 This library provides both high-level, all-at-once encryption and
 decryption operations and low-level, incremental operations.
+
+@(begin
+   (define (rktquote s) @racket[(quote @#,(racketvalfont (format "~a" s)))])
+   (define (get-blocksize ci) (send ci get-block-size))
+   (define (get-b-sort-string ci) (format "~a" (send ci get-name)))
+   (define (get-s-sort-string ci) (format "~a" (send ci get-cipher-name))))
 
 @defproc[(cipher-spec? [v any/c]) boolean?]{
 
@@ -42,20 +49,41 @@ Returns @racket[#t] if @racket[v] represents a cipher specifier,
 A cipher specifier is one of the following:
 @itemlist[
 
-@item{@racket[(list _stream-cipher 'stream)]---where
-@racket[_stream-cipher] is one of the following symbols:
-@(let ([stream-cipher-names (sort (hash-keys known-stream-ciphers) symbol<?)])
-   (add-between (for/list ([name stream-cipher-names])
-                  (racket '#,(racketvalfont (format "~a" name))))
-                ", ")).}
+@item{@racket[(list _stream-cipher 'stream)]---where @racket[_stream-cipher] is
+one of the following:
+@tabular[
+#:sep @hspace[4]
+#:column-properties '(left center)
+(cons
+ (list @bold{Stream Ciphers} @bold{AE?} @bold{Key} @bold{Nonce})
+ (let ()
+   (define all-infos (sort (hash-values known-stream-ciphers) string<? #:key get-s-sort-string))
+   (for/list ([ci (in-list all-infos)])
+     (list (rktquote (send ci get-cipher-name))
+           @elem[(format "~a" (if (send ci aead?) "yes" "no"))]
+           @elem[(let ([ks (send ci get-key-size)])
+                   (format "~s~a" ks (if (equal? (send ci get-key-sizes) (list ks)) "" "*")))]
+           @elem[(format "~s" (send ci get-iv-size))]
+           ))))
+]}
 
-@item{@racket[(list _block-cipher _block-mode)]---where 
-@racket[_block-cipher] is one of the following symbols:
-@(let ([block-cipher-names (sort (hash-keys known-block-ciphers) symbol<?)])
-   (add-between (for/list ([name block-cipher-names])
-                  (racket '#,(racketvalfont (format "~a" name))))
-                ", ")),
-and @racket[_block-mode] is one of the following symbols: 
+@item{@racket[(list _block-cipher _block-mode)]---where @racket[_block-cipher]
+is one of the following:
+@tabular[
+#:sep @hspace[4]
+#:column-properties '(left center)
+(cons
+ (list @bold{Block Ciphers} @bold{Block})
+ (let ()
+   (define all-infos (sort (hash-values known-block-ciphers) > #:key get-blocksize))
+   (for/list ([group (in-list (group-by get-blocksize all-infos))])
+     (list @elem[(add-between
+                  (for/list ([ci (in-list (sort group string<? #:key get-b-sort-string))])
+                    (rktquote (send ci get-name)))
+                  ", ")]
+           @elem[(format "~s" (send (car group) get-block-size))]))))
+]
+and @racket[_block-mode] is one of the following:
 @(add-between (for/list ([mode known-block-modes])
                 (racket '#,(racketvalfont (format "~a" mode))))
               ", ").}

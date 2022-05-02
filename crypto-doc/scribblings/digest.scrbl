@@ -3,6 +3,7 @@
           scribble/basic
           scribble/eval
           racket/list
+          racket/class
           racket/runtime-path
           crypto/private/common/catalog
           (for-label racket/base
@@ -30,19 +31,39 @@ secret key to form an authenticity and integrity mechanism
 This library provides both high-level, all-at-once digest operations
 and low-level, incremental operations.
 
+@(begin
+   (define (rktquote s) @racket[(quote @#,(racketvalfont (format "~a" s)))])
+   (define (get-size di) (or (send di get-size) +inf.0))
+   (define (get-sort-string di)
+     (define str (format "~a" (send di get-spec)))
+     (string-append (cond [(regexp-match? #rx"^sha3-" str) "3"]
+                          [(regexp-match? #rx"^sha[0-9]" str) "1"]
+                          [else "9"])
+                    str)))
+
 @defproc[(digest-spec? [v any/c]) boolean?]{
 
-Returns @racket[#t] if @racket[v] represents a digest
-specifier, @racket[#f] otherwise.
+Returns @racket[#t] if @racket[v] represents a digest specifier, @racket[#f]
+otherwise.
 
 A digest specifier is a symbol, which is interpreted as the name of a
-digest. The following symbols are valid:
-@(let ([digest-names (sort (hash-keys known-digests) symbol<?)])
-   (add-between (for/list ([digest-name digest-names])
-                  (racket '#,(racketvalfont (format "~a" digest-name))))
-                ", ")).
-Not every digest name in the list above necessarily has an available
-implementation, depending on the cryptography providers installed.
+digest. The following table lists valid digest names:
+@tabular[
+#:sep @hspace[2]
+#:column-properties '(left right)
+(cons
+ (list @bold{Digests} @bold{Size})
+ (let ()
+   (define all-infos (sort (hash-values known-digests) < #:key get-size))
+   (define by-size (group-by get-size all-infos))
+   (for/list ([group (in-list by-size)])
+     (list @elem[(add-between (for/list ([di (in-list (sort group string<? #:key get-sort-string))])
+                                (rktquote (send di get-spec)))
+                              ", ")]
+           @elem[(format "~a" (or (send (car group) get-size) "varies"))]))))
+]
+Not every digest name above necessarily has an available implementation,
+depending on the cryptography providers installed.
 
 Future versions of this library may add other forms of digest
 specifiers.
