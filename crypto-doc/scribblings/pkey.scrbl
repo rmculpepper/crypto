@@ -469,7 +469,7 @@ generate key material using a key-derivation function (see
 @section[#:tag "pk-external"]{PK External Representations}
 
 This section describes serialization of public and private keys in
-various formats.
+various formats. See also @secref["pkcs8"].
 
 @defproc[(pk-key->datum [pk pk-key?] [fmt symbol?])
          printable/c]{
@@ -519,15 +519,15 @@ used by OpenSSL.}}
 representation of @racket[pk], which must be an EC private key. Only
 keys using named curves are supported.}}
 
-@item{@racket['age/v1-private] --- String representing an X25519 private key
-encoded in the @hyperlink["https://age-encryption.org/v1"]{age-encryption (v1)}
-format. The string is Bech32-encoded and has 74 characters beginning with
-@litchar{AGE-SECRET-KEY-1}.}
+@item{@racket['age/v1-private] --- String encoded in the
+@hyperlink["https://age-encryption.org/v1"]{age-encryption (v1)} format,
+representing an X25519 private key. The string is Bech32-encoded and has 74
+characters beginning with @litchar{AGE-SECRET-KEY-1}.}
 
-@item{@racket['age/v1-public] --- String representing an X25519 public key
-encoded in the @hyperlink["https://age-encryption.org/v1"]{age-encryption (v1)}
-format. The string is Bech32-encoded and has 62 characters beginning with
-@litchar{age1}.}
+@item{@racket['age/v1-public] --- String encoded in the
+@hyperlink["https://age-encryption.org/v1"]{age-encryption (v1)} format,
+representing an X25519 public key. The string is Bech32-encoded and has 62
+characters beginning with @litchar{age1}.}
 
 @item{@racket['openssh-public] --- A string containing an OpenSSH-format public
 key. The string starts with a tag such as @litchar{ssh-rsa} or
