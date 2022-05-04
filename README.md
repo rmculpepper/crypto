@@ -8,4 +8,6 @@ The `crypto` package is available through Racket's package manager (https://pkgs
 
 ## Documentation
 
-Read the documentation online here: http://rmculpepper.github.io/crypto/.
+Read the documentation online here: 
+- crypto: https://docs.racket-lang.org/crypto/index.html
+- x509: https://docs.racket-lang.org/x509/index.html
