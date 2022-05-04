@@ -26,6 +26,6 @@ jobs:
               libsodium-dev \
               nettle-dev
       - name: Install the package
-        run: raco pkg install --auto crypto-lib/ crypto-test/ crypto-doc/ crypto/
+        run: raco pkg install --auto crypto-lib/ crypto-test/ crypto-doc/ crypto/ x509-lib/ x509/
       - name: Run the tests
-        run: raco test crypto-test/
+        run: raco test crypto-test/ x509/tests/
