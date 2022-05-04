@@ -9,7 +9,7 @@
          (submod "test.rkt" util))
 (provide (all-defined-out))
 
-(define CRL? #t)
+(define CRL? (getenv "X509_TEST_CRL"))
 
 (crypto-factories libcrypto-factory)
 
