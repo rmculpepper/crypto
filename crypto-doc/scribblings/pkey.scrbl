@@ -489,7 +489,7 @@ key type is embedded in the encoding.
 For compatibility with OpenSSL, DH keys are encoded using the PKCS #3
 identifier and parameters @cite["PKCS3"] rather than those specified by
 @cite["PKIX-AlgId"], and EdDSA keys are encoded using the algorithm
-identifiers specified in the draft @cite["PKIX-EdC"].}
+identifiers specified in @cite["PKIX-EdC"].}
 
 @item{@racket['PrivateKeyInfo] --- DER-encoded PrivateKeyInfo
 @cite["PKCS8"] representation of @racket[pk], which must be a private
