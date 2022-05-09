@@ -218,7 +218,11 @@
         -> _void))
 
 (define-crypto EVP_MD_size (_fun _EVP_MD -> _int))
+(define-crypto EVP_MD_get_size (_fun _EVP_MD -> _int)
+  #:fail (K EVP_MD_size))
 (define-crypto EVP_MD_block_size (_fun _EVP_MD -> _int))
+(define-crypto EVP_MD_get_block_size (_fun _EVP_MD -> _int)
+  #:fail (K EVP_MD_block_size))
 
 ;; New API since 1.1
 (define-crypto EVP_MD_CTX_free (_fun _EVP_MD_CTX -> _void))
