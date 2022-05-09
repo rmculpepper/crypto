@@ -27,7 +27,7 @@
     (super-new)
     (inherit get-spec get-size get-block-size sanity-check)
 
-    (sanity-check #:size (EVP_MD_size md) #:block-size (EVP_MD_block_size md))
+    (sanity-check #:size (EVP_MD_get_size md) #:block-size (EVP_MD_get_block_size md))
 
     (define/override (key-size-ok? size) #f)
 
