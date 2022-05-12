@@ -48,6 +48,9 @@
         [(all-digests) (filter (lambda (s) (get-digest s)) (list-known-digests))]
         [(all-ciphers) (filter (lambda (x) (get-cipher x)) (list-known-ciphers))]
         [(all-pks)     (filter (lambda (x) (get-pk x))     (list-known-pks))]
+        [(all-curves)  (append (info 'all-ec-curves)
+                               (info 'all-eddsa-curves)
+                               (info 'all-ecx-curves))]
         [(all-ec-curves)    '()]
         [(all-eddsa-curves) '()]
         [(all-ecx-curves)   '()]
