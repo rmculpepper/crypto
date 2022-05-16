@@ -5,7 +5,8 @@
 (define version "1.0")
 (define collection "crypto")
 (define deps '("base"))
-(define build-deps '("racket-doc"
+(define build-deps '("scramble-lib"
+                     "racket-doc"
                      "scribble-lib"
                      "crypto-lib"))
 (define pkg-authors '(ryanc))
