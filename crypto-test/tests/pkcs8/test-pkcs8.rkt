@@ -19,22 +19,22 @@
 (define openssl-version
   (if openssl (with-output-to-string (lambda () (system* openssl "version"))) ""))
 (unless openssl
-  (eprintf "-- skipping all openssl command tests\n"))
+  (printf "-- skipping all openssl command tests\n"))
 
 (define-syntax-rule (test-if kdf cipher body ...)
   (cond [(and (get-kdf kdf) (get-cipher cipher))
-         (eprintf "   running ~s ~s tests\n" kdf cipher)
+         (printf "   running ~s ~s tests\n" kdf cipher)
          body ...]
-        [else (eprintf "-  skipping ~s ~s tests\n" kdf cipher)]))
+        [else (printf "-  skipping ~s ~s tests\n" kdf cipher)]))
 
 (define (test-p8-file p8-file)
-  ;; (eprintf "+  testing ~s\n" p8-file)
+  ;; (printf "+  testing ~s\n" p8-file)
   (check-equal?
    (pkcs8-decrypt-bytes passwd (file->bytes (build-path here p8-file)))
    key-der))
 
 (define (test-decrypt p8 #:openssl [openssl-rx #""])
-  ;; (eprintf "+  testing roundtrip\n")
+  ;; (printf "+  testing roundtrip\n")
   (check-equal? (pkcs8-decrypt-bytes passwd p8) key-der)
   (when (and openssl (regexp-match openssl-rx openssl-version))
     (check-equal? (openssl-decrypt p8) key-pem)))
@@ -48,7 +48,7 @@
                  "-inform" "DER" "-outform" "PEM")))))
 
 (for ([factory all-factories])
-  (eprintf ">> testing ~a\n" (send factory get-name))
+  (printf ">> testing ~a\n" (send factory get-name))
   (parameterize ((crypto-factories factory))
     (test-if '(pbkdf2 hmac sha1) '(des-ede3 cbc)
              (test-p8-file "rsa.des3-sha1.p8")
