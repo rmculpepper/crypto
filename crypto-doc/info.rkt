@@ -6,6 +6,7 @@
 (define collection "crypto")
 (define deps '("base"))
 (define build-deps '("scramble-lib"
+                     "scramble"
                      "racket-doc"
                      "scribble-lib"
                      "crypto-lib"))
