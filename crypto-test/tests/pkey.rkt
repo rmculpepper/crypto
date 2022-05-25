@@ -34,6 +34,9 @@
 ;; Key agreement
 ;;  - privkey1+pubkey2 derives same key as privkey2+pubkey11
 
+(define (get-factory-name factory)
+  (cons (send factory get-name) (send factory get-version)))
+
 ;; readkey : Sexpr Factory -> (values (U PrivateKey 'fail #f) (U PKey 'fail #f))
 (define (readkey sexpr factory)
   (match-define (list* fmt pkspec desc curve keydata more) sexpr)
@@ -57,7 +60,7 @@
     (memq alias factory-curves)))
 
 (define (test-pk factory [pub-factories null] #:keygen? [keygen? #f])
-  (define factory-name (send factory get-name))
+  (define factory-name (get-factory-name factory))
   (when keygen?
     (for ([pk '(rsa dsa dh ec eddsa ecx)] #:when (get-pk pk factory))
       (test-keygen factory pk (get-pk pk factory))))
@@ -92,8 +95,8 @@
                           (or (not curve) (factory-has-curve? pub-factory curve))))
           (when #t
             (hprintf 2 "cross-testing (~a => ~a)\n"
-                     factory-name (send pub-factory get-name)))
-          (test-case (format "~a => ~a, ~a ~a" factory-name (send pub-factory get-name) fmt desc)
+                     factory-name (get-factory-name pub-factory)))
+          (test-case (format "~a => ~a, ~a ~a" factory-name (get-factory-name pub-factory) fmt desc)
             (define pubkey* (datum->pk-key pubkey-der 'SubjectPublicKeyInfo pub-factory))
             (test-pk-key key pubkey*)))))))
 
@@ -107,8 +110,8 @@
       (define pubkey2
         (datum->pk-key (pk-key->datum privkey 'rkt-public) 'rkt-public factory))
       (check public-key=? privkey pubkey2)))
-  (test-case (format "~a ~a keygen" (send factory get-name) spec)
-    (define factory-name (send factory get-name))
+  (test-case (format "~a ~a keygen" (get-factory-name factory) spec)
+    (define factory-name (get-factory-name factory))
     (hprintf 1 "testing keygen for ~s (~a)\n" spec factory-name)
     (case spec
       [(rsa)
@@ -160,7 +163,7 @@
       [else (void)])))
 
 (define (test-pk-pubkeys factory)
-  (define factory-name (send factory get-name))
+  (define factory-name (get-factory-name factory))
   (for ([key-sexpr (in-list public-keys)])
     (match-define (list fmt pkspec desc curve keydata) key-sexpr)
     (when (and (send factory get-pk pkspec)
@@ -242,15 +245,16 @@
                (define di* (get-digest di (get-factory key)))
                (define sig1 (pk-sign-digest key di (digest di* msg) #:pad pad))
                (define sig2 (digest/sign key di msg #:pad pad))
-               (check-true (pk-verify-digest key di (digest di* msg) sig1 #:pad pad) "pvd key sig1")
-               (check-true (pk-verify-digest key di (digest di* msg) sig2 #:pad pad) "pvd key sig2")
-               (check-true (pk-verify-digest pubkey di (digest di* msg) sig1 #:pad pad) "pvd pubkey sig1")
-               (check-true (pk-verify-digest pubkey di (digest di* msg) sig2 #:pad pad) "pvd pubkey sig2")
-               (check-true (digest/verify key di msg sig1 #:pad pad) "d/v key sig1")
-               (check-true (digest/verify key di msg sig2 #:pad pad) "d/v key sig2")
-               (check-true (digest/verify pubkey di msg sig1 #:pad pad) "d/v pubkey sig1")
-               (check-true (digest/verify pubkey di msg sig2 #:pad pad) "d/v pubkey sig2")
-               (check-false (digest/verify key di badmsg sig1 #:pad pad) "bad d/v")]
+               (define (inf str) (format "~a~s" str `((pad ,pad) (di ,di))))
+               (check-true (pk-verify-digest key di (digest di* msg) sig1 #:pad pad) (inf "pvd key sig1"))
+               (check-true (pk-verify-digest key di (digest di* msg) sig2 #:pad pad) (inf "pvd key sig2"))
+               (check-true (pk-verify-digest pubkey di (digest di* msg) sig1 #:pad pad) (inf "pvd pubkey sig1"))
+               (check-true (pk-verify-digest pubkey di (digest di* msg) sig2 #:pad pad) (inf "pvd pubkey sig2"))
+               (check-true (digest/verify key di msg sig1 #:pad pad) (inf "d/v key sig1"))
+               (check-true (digest/verify key di msg sig2 #:pad pad) (inf "d/v key sig2"))
+               (check-true (digest/verify pubkey di msg sig1 #:pad pad) (inf "d/v pubkey sig1"))
+               (check-true (digest/verify pubkey di msg sig2 #:pad pad) (inf "d/v pubkey sig2"))
+               (check-false (digest/verify key di badmsg sig1 #:pad pad) (inf "bad d/v"))]
               [else (hprintf -3 "skipping sign w/ pad = ~v, digest = ~v\n" pad di)])))))
 
 (define (encrypt-pad-ok? key pad)
