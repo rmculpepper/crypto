@@ -162,7 +162,7 @@
 
 (define factory<%>
   (interface (simple-write<%>)
-    [get-version    (->m (or/c (listof nat?)))]
+    [get-version    (->m (or/c #f (listof nat?)))]
     [info           (->m symbol? any)]
     [print-info     (->m void?)]
     [get-name       (->m symbol?)]
