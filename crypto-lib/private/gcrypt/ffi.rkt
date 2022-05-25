@@ -22,6 +22,7 @@
          ffi/unsafe/define
          racket/runtime-path
          "../common/error.rkt"
+         "../common/common.rkt"
          "../common/ffi.rkt")
 
 (provide (protect-out (all-defined-out)))
@@ -84,7 +85,8 @@
 ;; Library Initialization
 
 ;; (void (gcry_control GCRYCTL_ENABLE_QUICK_RANDOM 0))
-(void (gcry_check_version #f))
+(define gcry-version (gcry_check_version #f))
+(define v1.8/later? (version>=? (version->list gcry-version) '(1 8))) ;; see pkey.rkt
 
 ;; ----
 
