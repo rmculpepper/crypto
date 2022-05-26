@@ -9,6 +9,8 @@
          (submod "test.rkt" util))
 (provide (all-defined-out))
 
+(exit-if-pkg-build-service "test-web.rkt")
+
 (define CRL? (getenv "X509_TEST_CRL"))
 
 (crypto-factories libcrypto-factory)

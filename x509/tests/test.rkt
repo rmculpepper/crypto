@@ -15,6 +15,11 @@
            racket/file)
   (provide (all-defined-out))
 
+  (define (exit-if-pkg-build-service who)
+    (when (getenv "PLT_PKG_BUILD_SERVICE")
+      (printf "Skipping ~a because PLT_PKG_BUILD_SERVICE is defined.\n" who)
+      (exit 0)))
+
   (define-runtime-path working-dir "test-scratch")
   (make-directory* working-dir)
   (current-directory working-dir)
@@ -41,6 +46,8 @@
   (define (srl-file name) (format "~a.srl" name))
   (define (ext-file name) (format "~a.ext" name)))
 (require 'util)
+
+(exit-if-pkg-build-service "test.rkt")
 
 ;; ----
 
