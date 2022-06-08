@@ -237,10 +237,11 @@
 
 ;; version->list : String/#f -> (Listof Nat)/#f
 (define (version->list str)
-  (and str
-       (if (regexp-match? #rx"^[0-9]+(?:[.][0-9]+)*$" str)
-           (map string->number (string-split str #rx"[.]"))
-           (internal-error "invalid version string: ~e" str))))
+  (cond [(eq? str #f) #f]
+        [(regexp-match #rx"^([0-9]+(?:[.][0-9]+)*)" str)
+         => (match-lambda
+              [(list _ s) (map string->number (string-split s #rx"[.]"))])]
+        [else (internal-error "invalid version string: ~e" str)]))
 
 ;; version->string : (Listof Nat)/#f -> String/#f
 (define (version->string v)
