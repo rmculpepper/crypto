@@ -33,6 +33,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 General Public License and GNU Lesser General Public License for more
 details.
 
+@local-table-of-contents[]
+
 @include-section["intro.scrbl"]
 @include-section["factory.scrbl"]
 @include-section["digest.scrbl"]
