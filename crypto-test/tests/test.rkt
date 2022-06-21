@@ -86,6 +86,8 @@
    (go)))
 
 (module+ test
+  (module config info
+    (define timeout 240))
   ;; disable keygen tests to avoid consuming lots of system entropy
   (test-pk-keygen? #f)
   (go))
