@@ -1,3 +1,22 @@
+----------------------------------------
+
+Copyright 2012-2018 Ryan Culpepper
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+----------------------------------------
+
+The libcrypto support (private/libcrypto/*.rkt):
 Copyright 2012-2018 Ryan Culpepper
 Copyright 2007-2009 Dimitris Vyzovitis (where noted)
 
@@ -15,3 +34,9 @@ details.
 You should have received a copy of the GNU General Public License and
 GNU Lesser General Public License along with this program.  If not,
 see <http://www.gnu.org/licenses/>.
+
+----------------------------------------
+
+This Racket library is designed to dynamically link to separate shared
+library files. You must also comply with the license of any shared
+library that you use.

@@ -12,6 +12,7 @@
     ["gmp-lib" #:version "1.1"]
     ["scramble-lib" #:version "0.3"]))
 (define pkg-authors '(ryanc))
+(define license '(Apache-2.0 AND LGPL-3.0-or-later))
 
 ;; collection info
 
