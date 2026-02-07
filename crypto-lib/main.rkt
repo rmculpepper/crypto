@@ -52,8 +52,6 @@
 ;; ============================================================
 ;; Factories
 
-;; Copyright 2013-2018 Ryan Culpepper
-
 (provide
  (contract-out
   [crypto-factories
@@ -120,9 +118,6 @@
 
 ;; ============================================================
 ;; Digests
-
-;; Copyright 2012-2018 Ryan Culpepper
-;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 
 (provide
  (contract-out
@@ -217,9 +212,6 @@
 
 ;; ============================================================
 ;; Ciphers
-
-;; Copyright 2012-2018 Ryan Culpepper
-;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 
 (provide
  (contract-out
@@ -417,8 +409,6 @@
 ;; ============================================================
 ;; KDFs and Password Hashing
 
-;; Copyright 2014-2018 Ryan Culpepper
-
 (provide
  (contract-out
   [kdf
@@ -496,9 +486,6 @@
 
 ;; ============================================================
 ;; Public-key Systems
-
-;; Copyright 2012-2018 Ryan Culpepper
-;; Copyright 2007-2009 Dimitris Vyzovitis <vyzo at media.mit.edu>
 
 (provide
  private-key?
