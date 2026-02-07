@@ -32,9 +32,11 @@
       ;; Use info::get-{block-,}size directly so that subclasses can
       ;; override get-size and get-block-size.
       (when size
-        (unless (= size (send info get-size))
-          (internal-error "digest size: expected ~s but got ~s\n  digest: ~a"
-                          (send info get-size) size (about))))
+        (define info-size (send info get-size))
+        (when info-size
+          (unless (= size info-size)
+            (internal-error "digest size: expected ~s but got ~s\n  digest: ~a"
+                            (send info get-size) size (about)))))
       (when block-size
         (unless (= block-size (send info get-block-size))
           (internal-error "block size: expected ~s but got ~s\n  digest: ~a"
