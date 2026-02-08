@@ -6,11 +6,13 @@
          ffi/unsafe
          ffi/unsafe/alloc
          ffi/unsafe/define
+         ffi/unsafe/atomic
          racket/runtime-path
          (only-in openssl/libcrypto
                   libcrypto
                   libcrypto-load-fail-reason)
-         "../common/ffi.rkt")
+         "../common/ffi.rkt"
+         "../common/error.rkt")
 (provide (protect-out (all-defined-out)))
 
 (define-ffi-definer define-crypto libcrypto
@@ -61,28 +63,81 @@
 (define-crypto ERR_peek_error (_fun -> _ulong)) ;; 0 = no error
 (define-crypto ERR_get_error  (_fun -> _ulong))
 
+(define ERR_TXT_STRING-bit 1)
+
+(define-crypto ERR_get_error_all
+  (_fun [file : #|const char **|# _pointer = #f]
+        [line : #|int *|# _pointer = #f]
+        [func : #|const char **|# _pointer = #f]
+        [data : #|const char **|# (_ptr o _pointer)]
+        [flags : (_ptr o _int)]
+        -> [errcode : _ulong]
+        -> (cond [(zero? errcode) (values 0 #f)]
+                 [(bitwise-bit-set? flags ERR_TXT_STRING-bit)
+                  (values errcode (cast data _pointer _string))]
+                 [else (values errcode #f)])))
+
 (define-crypto ERR_lib_error_string
   (_fun [errcode : _ulong] -> _string))
 (define-crypto ERR_reason_error_string
   (_fun [errcode : _ulong] -> _string))
 
-;; (define-crypto ERR_get_error_all
-;;   (_fun [file : (_ptr o _string/null)]
-;;         [line : (_ptr o _int)]
-;;         [func : (_ptr o _string/null)]
-;;         [data : (_ptr o _pointer) _pointer]
-;;         [flags : (_ptr o _int)]
-;;         -> [errcode : _ulong]
-;;         -> (values errcode file line func data flags)))
+(define-syntax NOERR
+  ;; Unconditionally ignore and discard any errors.
+  (syntax-rules ()
+    [(NOERR expr)
+     (let ()
+       (start-uninterruptible)
+       (begin0 expr
+         (clear-error-queue)
+         (end-uninterruptible)))]))
 
-;; (define-crypto ERR_peek_error_all
-;;   (_fun [file : (_ptr o _string/null)]
-;;         [line : (_ptr o _int)]
-;;         [func : (_ptr o _string/null)]
-;;         [data : (_ptr o _pointer) _pointer]
-;;         [flags : (_ptr o _int)]
-;;         -> [errcode : _ulong]
-;;         -> (values errcode file line func data flags)))
+(define-syntax HANDLE
+  ;; Unconditionally check error state.
+  (syntax-rules ()
+    [(HANDLE expr)
+     (HANDLE expr (try-car 'expr))]
+    [(HANDLE expr op)
+     (let ()
+       (start-uninterruptible)
+       (begin0 expr
+         (cond [(zero? (ERR_peek_error))
+                (end-uninterruptible)]
+               [else
+                (end-uninterruptible/handle-error op)])))]))
+
+(define-syntax HANDLEp
+  ;; Only check for error if pointer result is #f (NULL).
+  ;; (Also used for other X-or-false return values, where #f means error.)
+  (syntax-rules ()
+    [(HANDLEp expr)
+     (HANDLEp expr (try-car 'expr))]
+    [(HANDLEp expr op)
+     (let ()
+       (start-uninterruptible)
+       (let ([r expr])
+         (cond [r (begin (end-uninterruptible) r)]
+               [else (begin (end-uninterruptible/handle-error op) #f)])))]))
+
+(define (ok-result? n) (> n 0))
+
+(define (try-car v) (if (pair? v) (car v) #f))
+
+(define (end-uninterruptible/handle-error op)
+  (define-values (errcode message) (ERR_get_error_all))
+  (clear-error-queue)
+  (end-uninterruptible)
+  (unless (zero? errcode) (raise-error op errcode message)))
+
+(define (raise-error op errcode message)
+  (define lib (ERR_lib_error_string errcode))
+  (define reason (ERR_reason_error_string errcode))
+  (define message-line (if message (format ";\n ~a" message) ""))
+  (define op-line (if op (format "\n  operation: ~a" op) ""))
+  (crypto-error "~a: ~a~a~a" lib reason message-line op-line))
+
+(define (clear-error-queue)
+  (unless (zero? (ERR_get_error)) (clear-error-queue)))
 
 ;; ----------------------------------------
 ;; Library Contexts
@@ -113,4 +168,4 @@
   (_fun [libctx : _OSSL_LIB_CTX]
         [cb : (_fun [provider : _OSSL_PROVIDER] [cbdata : _pointer] -> _int)]
         [cbdata : _pointer]
-        -> _int))
+        -> [r : _int] -> (ok-result? r)))
