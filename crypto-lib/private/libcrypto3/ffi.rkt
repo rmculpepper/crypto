@@ -3,6 +3,7 @@
 
 #lang racket/base
 (require (for-syntax racket/base)
+         racket/match
          ffi/unsafe
          ffi/unsafe/alloc
          ffi/unsafe/define
@@ -169,3 +170,84 @@
         [cb : (_fun [provider : _OSSL_PROVIDER] [cbdata : _pointer] -> _int)]
         [cbdata : _pointer]
         -> [r : _int] -> (ok-result? r)))
+
+;; ----------------------------------------
+;; Parameters
+
+(define-cstruct _ossl_param_st
+  ([key _pointer]
+   [type _uint]
+   [data _pointer]
+   [data_size _size]
+   [return_size _size]))
+
+(define _OSSL_PARAM _ossl_param_st-pointer)
+(define _OSSL_PARAM-array _ossl_param_st-pointer/null)
+
+(define OSSL_PARAM_INTEGER              1)
+(define OSSL_PARAM_UNSIGNED_INTEGER     2)
+(define OSSL_PARAM_REAL                 3)
+(define OSSL_PARAM_UTF8_STRING          4)
+(define OSSL_PARAM_OCTET_STRING         5)
+
+(define (make-param-array ps)
+  ;; Allocates a single block holding OSSL_PARAM[] followed by data.
+  (define (ceiling-align n)
+    (let ([n+7 (+ n 7)])
+      (- n+7 (modulo n+7 8))))
+  (define (key-size key)
+    (ceiling-align (add1 (bytes-length key))))
+  (define (data-size type data)
+    (match type
+      [(or 'int 'uint) (compiler-sizeof 'int)]
+      [(or 'long 'ulong) (compiler-sizeof 'long)]
+      ['octet-string (ceiling-align (bytes-length data))]
+      ['utf8-string (ceiling-align (add1 (string-utf-8-length data)))]))
+  (define (row-size row)
+    (match row
+      [(list key type data)
+       (+ (key-size key)
+          (data-size type data))]))
+  ;; ----
+  (define params-len (* (add1 (length ps)) (ctype-sizeof _ossl_param_st)))
+  (define data-len (for/sum ([p (in-list ps)]) (row-size p)))
+  (define buf (malloc (+ params-len data-len) 'atomic-interior))
+  (cpointer-push-tag! buf ossl_param_st-tag)
+  (memset buf 0 (+ params-len data-len)) ;; handles string NULs, END param
+  (define dpointer (ptr-add buf params-len))
+  (for ([p (in-list ps)] [pindex (in-naturals)])
+    (match-define (list key type data) p)
+    (define param (ptr-add buf pindex _ossl_param_st))
+    ;; Assert (ossl_param_st? param); ptr-add preserves tags.
+    (memcpy dpointer key (bytes-length key))
+    (set-ossl_param_st-key! param dpointer)
+    (ptr-add! dpointer (key-size key))
+    (set-ossl_param_st-data! param dpointer)
+    (match type
+      ['int
+       (set-ossl_param_st-type! param OSSL_PARAM_INTEGER)
+       (set-ossl_param_st-data_size! param (ctype-sizeof _int))
+       (ptr-set! dpointer _int data)]
+      ['uint
+       (set-ossl_param_st-type! param OSSL_PARAM_UNSIGNED_INTEGER)
+       (set-ossl_param_st-data_size! param (ctype-sizeof _uint))
+       (ptr-set! dpointer _uint data)]
+      ['long
+       (set-ossl_param_st-type! param OSSL_PARAM_INTEGER)
+       (set-ossl_param_st-data_size! param (ctype-sizeof _long))
+       (ptr-set! dpointer _long data)]
+      ['ulong
+       (set-ossl_param_st-type! param OSSL_PARAM_UNSIGNED_INTEGER)
+       (set-ossl_param_st-data_size! param (ctype-sizeof _long))
+       (ptr-set! dpointer _ulong data)]
+      ['octet-string
+       (set-ossl_param_st-type! param OSSL_PARAM_OCTET_STRING)
+       (set-ossl_param_st-data_size! param (bytes-length data))
+       (memcpy dpointer data (bytes-length data))]
+      ['utf8-string
+       (set-ossl_param_st-type! param OSSL_PARAM_UTF8_STRING)
+       (define data-bs (string->bytes/utf-8 data))
+       (set-ossl_param_st-data_size! param (bytes-length data-bs))
+       (memcpy dpointer data-bs (bytes-length data-bs))])
+    (ptr-add! dpointer (data-size type data)))
+  buf)
