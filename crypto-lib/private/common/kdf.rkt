@@ -25,6 +25,7 @@
          check-pwhash/kdf-spec
          parse-pwhash
          encode-pwhash
+         config:info-kdf
          config:pbkdf2-base
          config:pbkdf2-kdf
          config:scrypt-pwhash
