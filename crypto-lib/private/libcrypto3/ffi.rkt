@@ -522,3 +522,50 @@
         [fn : (_fun [cipher : _EVP_CIPHER] [arg : _pointer] -> _void)]
         [arg : _pointer]
         -> _void))
+
+;; ----------------------------------------
+;; KDF
+
+(define-cpointer-type _EVP_KDF)
+(define-cpointer-type _EVP_KDF_CTX)
+
+(define-crypto EVP_KDF_free
+  (_fun [kdf : _EVP_KDF] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_KDF_fetch
+  (_fun [libctx : _OSSL_LIB_CTX/null]
+        [algorithm : #;const _string]
+        [properties : #;const _string]
+        -> _EVP_KDF/null)
+  #:wrap (allocator EVP_KDF_free))
+
+(define-crypto EVP_KDF_get0_name
+  (_fun [kdf : #;const _EVP_KDF] -> _string))
+
+(define-crypto EVP_KDF_do_all_provided
+  (_fun [libctx : _OSSL_LIB_CTX]
+        [fn : (_fun [kdf : _EVP_KDF] [arg : _pointer] -> _void)]
+        [arg : _pointer]
+        -> _void))
+
+(define-crypto EVP_KDF_names_do_all
+  (_fun [libctx : #;const _EVP_KDF]
+        [fn : (_fun [name : _string] [data : _pointer] -> _void)]
+        [data : _pointer]
+        -> _int))
+
+(define-crypto EVP_KDF_CTX_free
+  (_fun [kdf : _EVP_KDF_CTX] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_KDF_CTX_new
+  (_fun [kdf : _EVP_KDF] -> _EVP_KDF_CTX/null)
+  #:wrap (allocator EVP_KDF_CTX_free))
+
+(define-crypto EVP_KDF_derive
+  (_fun [ctx : _EVP_KDF_CTX]
+        [out : _pointer]
+        [outlen : _size]
+        [params : _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
