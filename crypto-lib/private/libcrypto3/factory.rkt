@@ -13,7 +13,7 @@
          "digest.rkt"
          "cipher.rkt"
          #;"pkey.rkt"
-         #;"kdf.rkt")
+         "kdf.rkt")
 (provide libcrypto-factory)
 
 (define libcrypto-digests
@@ -111,6 +111,43 @@
             [evp/s
              (new libcrypto3-cipher-impl% (info info) (factory this) (cipher evp/s))]
             [else #f]))
+
+    (define/override (-get-kdf spec)
+      (define (fetch kdf-name)
+        (EVP_KDF_fetch libctx kdf-name #f))
+      (define (make-impl evp params0)
+        (new libcrypto3-kdf-impl% (factory this) (spec spec)
+             (evp evp) (params0 params0)))
+      (define (check/get-digest-name dspec)
+        (define di (get-digest dspec))
+        (and (is-a? di libcrypto3-digest-impl%) ;; can't use mac-as-digest
+             (EVP_MD_get0_name (get-field md di))))
+      (match spec
+        ['scrypt
+         (define evp (fetch "scrypt"))
+         (and evp (make-impl evp null))]
+        [(list 'pbkdf2 'hmac di)
+         (define evp (fetch "pbkdf2"))
+         (define dname (check/get-digest-name di))
+         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+        [(list 'hkdf di)
+         (define evp (fetch "hkdf"))
+         (define dname (check/get-digest-name di))
+         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+        [(list 'concat di)
+         (define evp (fetch "ssdf"))
+         (define dname (check/get-digest-name di))
+         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+        [(list 'concat 'hmac di)
+         (define evp (fetch "ssdf"))
+         (define dname (check/get-digest-name di))
+         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)
+                                         (#"mac" utf8-string "hmac"))))]
+        [(list 'ans-x9.63 di)
+         (define evp (fetch "X963KDF"))
+         (define dname (check/get-digest-name di))
+         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+        [_ (super -get-kdf spec)]))
     ))
 
 (define libcrypto-factory (new libcrypto3-factory%))
