@@ -254,6 +254,40 @@
     (ptr-add! dpointer (data-size type data)))
   buf)
 
+;; ----------------------------------------
+;; Nonmoving strings
+
+(define-cpointer-type _nonmoving_string)
+
+;; nonmoving : Bytes -> Pointer
+(define (nonmoving bs)
+  (define len (bytes-length bs))
+  (define p (malloc (add1 len) _byte 'atomic-interior))
+  (cpointer-push-tag! p nonmoving_string-tag)
+  (memcpy p bs len)
+  (ptr-set! p _byte len 0)
+  p)
+
+;; ----------------------------------------
+;; Misc
+
+(define-crypto CRYPTO_zalloc
+  (_fun [size : _size]
+        [file : _pointer = #f]
+        [line : _int = 0]
+        -> _pointer))
+
+(define-crypto CRYPTO_free
+  (_fun [ptr : _pointer]
+        [file : _pointer = #f]
+        [line : _int = 0]
+        -> _void))
+
+(define (pointer->bytes p len)
+  (define buf (make-bytes len))
+  (memcpy buf p len)
+  buf)
+
 ;; ============================================================
 ;; Algorithms
 
@@ -569,3 +603,362 @@
         [outlen : _size]
         [params : _OSSL_PARAM-array]
         -> [r : _int] -> (ok-result? r)))
+
+;; ============================================================
+;; PKEY
+
+;; Many int functions have nonzero results other than 1 ("success"),
+;; such as -2 for "operation not supported".
+
+(define-cpointer-type _EVP_PKEY)
+
+(define-crypto EVP_PKEY_free
+  (_fun [key : _EVP_PKEY] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_PKEY_new
+  (_fun -> _EVP_PKEY/null)
+  #:wrap (allocator EVP_PKEY_free))
+
+(define-crypto EVP_PKEY_is_a
+  (_fun [key : #;const _EVP_PKEY] [type : #;const _string] -> _bool))
+
+(define-crypto EVP_PKEY_get_security_bits
+  (_fun [pkey : #;const _EVP_PKEY] -> _int))
+
+(define-crypto EVP_PKEY_missing_parameters
+  (_fun [pkey : #;const _EVP_PKEY] -> _int))
+(define-crypto EVP_PKEY_copy_parameters
+  (_fun [to : _EVP_PKEY] [from : #;const _EVP_PKEY] -> _int))
+
+(define-crypto EVP_PKEY_parameters_eq
+  (_fun [a : #;const _EVP_PKEY]
+        [b : #;const _EVP_PKEY]
+        -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_eq
+  (_fun [a : #;const _EVP_PKEY]
+        [b : #;const _EVP_PKEY]
+        -> [r : _int] -> (ok-result? r)))
+
+;; ----------------------------------------
+;; PKEY_CTX
+
+(define-cpointer-type _EVP_PKEY_CTX)
+
+(define-crypto EVP_PKEY_CTX_free
+  (_fun [ctx : _EVP_PKEY_CTX] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_PKEY_CTX_new_from_name
+  (_fun [libctx : _OSSL_LIB_CTX]
+        [name : #;const _nonmoving_string]
+        [propq : #;const _nonmoving_string/null]
+        -> _EVP_PKEY_CTX/null)
+  #:wrap (allocator EVP_PKEY_CTX_free))
+
+(define-crypto EVP_PKEY_CTX_new_from_pkey
+  (_fun [libctx : _OSSL_LIB_CTX]
+        [pkey : _EVP_PKEY] ;; not copied, must not GC!
+        [propq : #;const _nonmoving_string/null]
+        -> _EVP_PKEY_CTX/null)
+  #:wrap (allocator EVP_PKEY_CTX_free))
+
+(define-crypto EVP_PKEY_CTX_set_params
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> _int))
+
+;; ----------------------------------------
+;; Validation
+
+(define-crypto EVP_PKEY_check
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_param_check
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_param_check_quick
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_public_check
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_public_check_quick
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_private_check
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_pairwise_check
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+
+;; ----------------------------------------
+;; Import and export components
+
+(define-crypto EVP_PKEY_fromdata_init
+  (_fun [ctx : _EVP_PKEY_CTX]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_fromdata
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [pkeyout : (_ptr io _EVP_PKEY/null) = #f]
+        [selection : _int]
+        [params : _OSSL_PARAM-array]
+        -> [r : _int] -> (and (ok-result? r) pkeyout)))
+
+(define-crypto EVP_PKEY_todata
+  (_fun [pkey : _EVP_PKEY]
+        [selection : _int]
+        [params : (_ptr o _OSSL_PARAM-array)] ;; free with OSSL_PARAM_free
+        -> [r : _int] -> (and (ok-result? r) params)))
+
+(define EVP_PKEY_KEY_PARAMETERS #x84)
+(define EVP_PKEY_PUBLIC_KEY     #x86)
+(define EVP_PKEY_KEYPAIR        #x87)
+
+;; ----------------------------------------
+;; Encoders and Decoders
+
+;; SubjectPublicKeyInfo
+
+(define-crypto d2i_PUBKEY_ex
+  (_fun [reuse : _pointer = #f]
+        [pp : (_ptr i #;const _pointer)]
+        [len : _long]
+        [libctx : _OSSL_LIB_CTX]
+        [propq : #;const _string]
+        -> _EVP_PKEY/null)
+  #:wrap (allocator EVP_PKEY_free))
+
+(define-crypto i2d_PUBKEY
+  (_fun [a : #;const _EVP_PKEY]
+        [out : (_ptr io _pointer) = #f]
+        -> [r : _int]
+        -> (and (ok-result? r)
+                (begin0 (pointer->bytes out r)
+                  (CRYPTO_free out)))))
+
+;; PrivateKeyInfo (PKCS8)
+
+(define-cpointer-type _PKCS8_PRIV_KEY_INFO)
+
+(define-crypto PKCS8_PRIV_KEY_INFO_free
+  (_fun [a : _PKCS8_PRIV_KEY_INFO] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_PKCS82PKEY_ex
+  (_fun [a : #;const _PKCS8_PRIV_KEY_INFO]
+        [libctx : _OSSL_LIB_CTX]
+        [propq : #;const _string]
+        -> _EVP_PKEY/null)
+  #:wrap (allocator EVP_PKEY_free))
+
+(define-crypto EVP_PKEY2PKCS8
+  (_fun [pkey : _EVP_PKEY] -> _PKCS8_PRIV_KEY_INFO/null)
+  #:wrap (allocator PKCS8_PRIV_KEY_INFO_free))
+
+(define-crypto d2i_PKCS8_PRIV_KEY_INFO
+  (_fun [reuse : _pointer = #f]
+        [in : (_ptr i #;const _pointer)]
+        [inlen : _long]
+        -> _PKCS8_PRIV_KEY_INFO/null)
+  #:wrap (allocator PKCS8_PRIV_KEY_INFO_free))
+
+(define-crypto i2d_PKCS8_PRIV_KEY_INFO
+  (_fun [a : _PKCS8_PRIV_KEY_INFO]
+        [out : (_ptr io _pointer) = #f]
+        -> [r : _int]
+        -> (and (ok-result? r)
+                (begin0 (pointer->bytes out r)
+                  (CRYPTO_free out)))))
+
+;; ----------------------------------------
+;; Key Generation
+
+(define-crypto EVP_PKEY_Q_keygen/none
+  (_fun #:varargs-after 3
+        [libctx : _OSSL_LIB_CTX]
+        [propq : #;const _string]
+        [type : #;const _string] ;; x25519, x448, ed25519, ed448, sm2
+        -> _EVP_PKEY/null)
+  #:c-id EVP_PKEY_Q_keygen
+  #:wrap (allocator EVP_PKEY_free))
+
+(define-crypto EVP_PKEY_Q_keygen/RSA
+  (_fun #:varargs-after 3
+        [libctx : _OSSL_LIB_CTX]
+        [propq : #;const _string]
+        [type : #;const _string = "RSA"]
+        [size : _size]
+        -> _EVP_PKEY/null)
+  #:c-id EVP_PKEY_Q_keygen
+  #:wrap (allocator EVP_PKEY_free))
+
+(define-crypto EVP_PKEY_Q_keygen/EC
+  (_fun #:varargs-after 3
+        [libctx : _OSSL_LIB_CTX]
+        [propq : #;const _string]
+        [type : #;const _string = "EC"]
+        [curve-name : _string]
+        -> _EVP_PKEY/null)
+  #:c-id EVP_PKEY_Q_keygen
+  #:wrap (allocator EVP_PKEY_free))
+
+(define-crypto EVP_PKEY_keygen_init
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_PKEY_paramgen_init
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_generate
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [pkeyout : (_ptr io _EVP_PKEY/null) = #f]
+        -> [r : _int] -> (and (ok-result? r) pkeyout))
+  #:wrap (allocator EVP_PKEY_free))
+
+;; ----------------------------------------
+;; Key Exchange
+
+(define-crypto EVP_PKEY_derive_init
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_derive_init_ex
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_derive_set_peer_ex
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [peer : _EVP_PKEY]
+        [validate_peer : _bool]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_derive
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [key : _pointer]
+        [keylen : (_ptr io _size)]
+        -> [r : _int] -> (and (ok-result? r) keylen)))
+
+;; ----------------------------------------
+;; Sign and Verify (low-level)
+
+;; Typically used on already-computed digest.
+;; May need cntl to set digest metadata, padding mode, etc.
+
+(define-crypto EVP_PKEY_sign_init_ex
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_sign
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [sig : _pointer]
+        [siglen : (_ptr io _size)]
+        [tbs : #;const _pointer]
+        [tbslen : _size]
+        -> [r : _int] -> (and (ok-result? r) siglen)))
+
+(define-crypto EVP_PKEY_verify_init_ex
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_verify
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [sig : #;const _pointer]
+        [siglen : _size]
+        [tbs : #;const _pointer]
+        [tbslen : _size]
+        -> [r : _int] -> (ok-result? r)))
+
+;; ----------------------------------------
+;; Digest+Sign and Digest+Verify
+
+;; Note: the EVP_Sign* API is obsolete. Use EVP_DigestSign* instead.
+
+(define-crypto EVP_DigestSignInit_ex
+  (_fun [ctx : _EVP_MD_CTX] ;; PRE: uninit; POST: after-update
+        [pctx : (_ptr io _EVP_PKEY_CTX/null) = #f]
+        [mdname : #;const _string]
+        [libctx : _OSSL_LIB_CTX]
+        [props : #;const _string]
+        [pkey : _EVP_PKEY]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (and (ok-result? r) pctx))) ;; borrowed, owned by ctx
+
+(define-crypto EVP_DigestSign
+  (_fun [ctx : _EVP_MD_CTX]
+        [sigret : _pointer]
+        [siglen : (_ptr io _size)]
+        [tbs : _pointer]
+        [tbslen : _size]
+        -> [r : _int] -> (and (ok-result? r) siglen)))
+
+(define-crypto EVP_DigestVerifyInit_ex
+  (_fun [ctx : _EVP_MD_CTX]
+        [pctx : (_ptr io _EVP_PKEY_CTX/null) = #f]
+        [mdname : #;const _string]
+        [libctx : _OSSL_LIB_CTX]
+        [props : #;const _string]
+        [pkey : _EVP_PKEY]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (and (ok-result? r) pctx))) ;; borrowed, owned by ctx
+
+(define-crypto EVP_DigestVerify
+  (_fun [ctx : _EVP_MD_CTX]
+        [sigret : #;const _pointer]
+        [siglen : _size]
+        [tbs : #;const _pointer]
+        [tbslen : _size]
+        -> [r : _int] -> (ok-result? r)))
+
+;; ----------------------------------------
+;; Encryption and Decryption
+
+(define-crypto EVP_PKEY_encrypt_init_ex
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_encrypt
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [out : _pointer]
+        [outlen : (_ptr io _size)]
+        [in : #;const _pointer]
+        [inlen : _size]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+
+(define-crypto EVP_PKEY_decrypt_init_ex
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_decrypt
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [out : _pointer]
+        [outlen : (_ptr io _size)]
+        [in : #;const _pointer]
+        [inlen : _size]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+
+;; ----------------------------------------
+;; Key Encapsulation
+
+(define-crypto EVP_PKEY_encapsulate_init
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_encapsulate
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [wrappedkey : _pointer]
+        [wrappedlen : (_ptr io _size)]
+        [plainkey : _pointer]
+        [plainlen : (_ptr io _size)]
+        -> [r : _int] -> (and (ok-result? r) (cons wrappedlen plainlen))))
+
+(define-crypto EVP_PKEY_decapsulate_init
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_decapsulate
+  (_fun [ctx : _EVP_PKEY_CTX]
+        [unwrappedkey : _pointer]
+        [unwrappedlen : (_ptr io _size)]
+        [wrappedkey : #;const _pointer]
+        [wrappedlen : _size]
+        -> [r : _int] -> (and (ok-result? r) unwrappedlen)))
