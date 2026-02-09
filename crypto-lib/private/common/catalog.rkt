@@ -148,7 +148,7 @@
     key-size-ok?    ;; Nat -> Boolean
     get-iv-size     ;; -> Nat
     iv-size-ok?     ;; Nat -> Boolean
-    get-auth-size   ;; -> SizeSet
+    get-auth-size   ;; -> Nat  -- 0 if not AEAD
     auth-size-ok?   ;; Nat -> Boolean
     uses-padding?   ;; -> Boolean
     ))
