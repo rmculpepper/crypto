@@ -429,3 +429,94 @@
         [fn : (_fun [mac : _EVP_MAC] [arg : _pointer] -> _void)]
         [arg : _pointer]
         -> _void))
+
+;; ----------------------------------------
+;; Cipher
+
+(define-cpointer-type _EVP_CIPHER)
+(define-cpointer-type _EVP_CIPHER_CTX)
+
+(define-crypto EVP_CIPHER_free
+  (_fun [cipher : _EVP_CIPHER] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_CIPHER_fetch
+  (_fun [ctx : _OSSL_LIB_CTX/null]
+        [algorithm : #;const _string]
+        [properties : #;const _string]
+        -> _EVP_CIPHER/null)
+  #:wrap (allocator EVP_CIPHER_free))
+
+(define-crypto EVP_CIPHER_CTX_free
+  (_fun [ctx : _EVP_CIPHER_CTX] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_CIPHER_CTX_new
+  (_fun -> _EVP_CIPHER_CTX/null)
+  #:wrap (allocator EVP_CIPHER_CTX_free))
+
+(define-crypto EVP_CIPHER_CTX_reset
+  (_fun _EVP_CIPHER_CTX -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_CipherInit_ex2
+  (_fun [ctx : _EVP_CIPHER_CTX]
+        [type : #;const _EVP_CIPHER/null]
+        [key : #;const _pointer]
+        [iv : #;const _pointer]
+        [enc : _int]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_CipherUpdate
+  (_fun [ctx : _EVP_CIPHER_CTX]
+        [out : _pointer]
+        [outlen : (_ptr o _int)]
+        [in : #;const _pointer]
+        [inlen : _int]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+
+(define-crypto EVP_CipherFinal_ex
+  (_fun [ctx : _EVP_CIPHER_CTX]
+        [out : _pointer]
+        [outlen : (_ptr o _int)]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+
+(define-crypto EVP_CIPHER_CTX_set_padding
+  (_fun [ctx : _EVP_CIPHER_CTX]
+        [padding : _int]
+        -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_CIPHER_CTX_set_key_length
+  (_fun [ctx : _EVP_CIPHER_CTX]
+        [keylen : _int]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_CIPHER_CTX_set_params
+  (_fun [ctx : _EVP_CIPHER_CTX]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_CIPHER_CTX_ctrl
+  (_fun [ctx : _EVP_CIPHER_CTX]
+        [cmd : _int]
+        [p1 : _int]
+        [p2 : _pointer]
+        -> [r : _int] -> (ok-result? r)))
+
+(define EVP_CTRL_AEAD_SET_IVLEN     #x9)
+(define EVP_CTRL_AEAD_GET_TAG       #x10)
+(define EVP_CTRL_AEAD_SET_TAG       #x11)
+
+(define-crypto EVP_CIPHER_get0_name
+  (_fun [cipher : #;const _EVP_CIPHER] -> _string))
+(define-crypto EVP_CIPHER_get_block_size
+  (_fun [cipher : #;const _EVP_CIPHER] -> _int))
+(define-crypto EVP_CIPHER_get_key_length
+  (_fun [cipher : #;const _EVP_CIPHER] -> _int))
+(define-crypto EVP_CIPHER_get_iv_length
+  (_fun [cipher : #;const _EVP_CIPHER] -> _int))
+
+(define-crypto EVP_CIPHER_do_all_provided
+  (_fun [libctx : _OSSL_LIB_CTX]
+        [fn : (_fun [cipher : _EVP_CIPHER] [arg : _pointer] -> _void)]
+        [arg : _pointer]
+        -> _void))
