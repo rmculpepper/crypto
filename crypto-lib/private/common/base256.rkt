@@ -5,10 +5,10 @@
 (require binaryio/integer)
 (provide (all-defined-out))
 
-(define (unsigned->base256 n)
+(define (unsigned->base256 n [big-endian? #t])
   (unless (exact-nonnegative-integer? n)
     (raise-argument-error 'unsigned->base256 "exact-nonnegative-integer?" n))
-  (integer->bytes n (integer-bytes-length n #f) #f #t))
+  (integer->bytes n (integer-bytes-length n #f) #f big-endian?))
 
 (define (signed->base256 n)
   (unless (exact-integer? n)
