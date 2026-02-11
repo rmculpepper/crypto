@@ -190,7 +190,7 @@
 (define OSSL_PARAM_UTF8_STRING          4)
 (define OSSL_PARAM_OCTET_STRING         5)
 
-(define (make-param-array ps)
+(define (make-param-array ps0)
   ;; Allocates a single block holding OSSL_PARAM[] followed by data.
   (define (ceiling-align n)
     (let ([n+7 (+ n 7)])
@@ -205,10 +205,12 @@
       ['utf8-string (ceiling-align (add1 (string-utf-8-length data)))]))
   (define (row-size row)
     (match row
-      [(list key type data)
+      [(list* key type data _)
        (+ (key-size key)
           (data-size type data))]))
   ;; ----
+  (define (keep-row? p) (match p [(list _ _ #f #:?) #f] [_ #t]))
+  (define ps (filter keep-row? ps0))
   (define params-len (* (add1 (length ps)) (ctype-sizeof _ossl_param_st)))
   (define data-len (for/sum ([p (in-list ps)]) (row-size p)))
   (define buf (malloc (+ params-len data-len) 'atomic-interior))
@@ -216,7 +218,7 @@
   (memset buf 0 (+ params-len data-len)) ;; handles string NULs, END param
   (define dpointer (ptr-add buf params-len))
   (for ([p (in-list ps)] [pindex (in-naturals)])
-    (match-define (list key type data) p)
+    (match-define (list* key type data _) p)
     (define param (ptr-add buf pindex _ossl_param_st))
     ;; Assert (ossl_param_st? param); ptr-add preserves tags.
     (memcpy dpointer key (bytes-length key))
