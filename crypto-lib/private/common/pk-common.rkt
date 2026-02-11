@@ -355,6 +355,8 @@
                    (-decode-pub-rsa subjectPublicKey)]
                   [(equal? alg-oid id-dsa)
                    (-decode-pub-dsa params subjectPublicKey)]
+                  [(equal? alg-oid dhpublicnumber)
+                   (-decode-pub-dhx params subjectPublicKey)]
                   [(equal? alg-oid dhKeyAgreement)
                    (-decode-pub-dh params subjectPublicKey)]
                   [(equal? alg-oid id-ecPublicKey)
@@ -378,6 +380,8 @@
                   (-decode-priv-rsa privateKey)]
                  [(equal? alg-oid id-dsa)
                   (-decode-priv-dsa alg-params publicKey privateKey)]
+                 [(equal? alg-oid dhpublicnumber)
+                  (-decode-priv-dhx alg-params publicKey privateKey)]
                  [(equal? alg-oid dhKeyAgreement)
                   (-decode-priv-dh alg-params publicKey privateKey)]
                  [(equal? alg-oid id-ecPublicKey)
@@ -453,6 +457,10 @@
          (-make-pub-rsa n e)]
         [(list 'dsa 'public (? nat? p) (? nat? q) (? nat? g) (? nat? y))
          (-make-pub-dsa p q g y)]
+        [(list 'dh 'public (? nat? p) (? nat? g)
+               (? nat? q) (? nat/f? j) (? bytes/f? seed) (? nat/f? pgen)
+               (? nat? y))
+         (-make-pub-dhx p g q j (bcopy seed) pgen y)]
         [(list 'dh 'public (? nat? p) (? nat? g) (? nat? y))
          (-make-pub-dh p g y)]
         [(list 'ec 'public (? oid? curve-oid) (? bytes? qB))
@@ -474,6 +482,10 @@
          (-make-priv-rsa n e d p q dp dq qInv)]
         [(list 'dsa 'private (? nat? p) (? nat? q) (? nat? g) (? nat/f? y) (? nat? x))
          (-make-priv-dsa p q g y x)]
+        [(list 'dh 'private (? nat? p) (? nat? g)
+               (? nat? q) (? nat/f? j) (? bytes/f? seed) (? nat/f? pgen)
+               (? nat/f? y) (? nat? x))
+         (-make-priv-dhx p g q j (bcopy seed) pgen y x)]
         [(list 'dh 'private (? nat? p) (? nat? g) (? nat/f? y) (? nat? x))
          (-make-priv-dh p g y x)]
         [(list 'ec 'private (? oid? curve-oid) (? bytes/f? qB) (? nat? x))
@@ -553,6 +565,34 @@
     (define/public (-make-priv-dh p g y x)
       (send-to-impl 'dh make-private-key p g y x))
 
+    (define/public (-decode-pub-dhx params y)
+      (define-values (p g q j seed pgen) (get-dhx-fields params))
+      (-make-pub-dhx p g q j seed pgen y))
+
+    (define/public (-decode-priv-dhx params y x)
+      (define-values (p g q j seed pgen) (get-dhx-fields params))
+      (-make-priv-dhx p g q j seed pgen y x))
+
+    ;; override to use extra parameter components
+    (define/public (-make-pub-dhx p g q j seed pgen y)
+      (-make-pub-dh p g y))
+    (define/public (-make-priv-dhx p g q j seed pgen y x)
+      (-make-priv-dh p g y x))
+
+    (define/private (get-dhx-fields params)
+      (define p (hash-ref params 'p))
+      (define g (hash-ref params 'g))
+      (define q (hash-ref params 'q))
+      (define j (hash-ref params 'j #f))
+      (define vp (hash-ref params 'validationParms #f))
+      (define seed (and vp (hash-ref vp 'seed)))
+      (define pgen (and vp (hash-ref vp 'pgenCounter)))
+      (cond [(and (bit-string? seed) (zero? (bit-string-unused seed)))
+             (values p g q j (bit-string-bytes seed) pgen)]
+            [else
+             ;; If seed is not octet-aligned, just drop it.
+             (values p g q j #f #f)]))
+
     ;; ---- EC ----
 
     (define/public (-decode-pub-ec params subjectPublicKey)
@@ -609,6 +649,8 @@
            [(hash-table ['algorithm alg-oid] ['parameters parameters])
             (cond [(equal? alg-oid id-dsa)
                    (read-params parameters 'Dss-Parms)] ;; Dss-Parms
+                  [(equal? alg-oid dhpublicnumber)
+                   (read-params parameters 'DomainParameters)]
                   [(equal? alg-oid dhKeyAgreement)
                    (read-params parameters 'DHParameter)] ;; DHParameter
                   [(equal? alg-oid id-ecPublicKey)
@@ -625,7 +667,14 @@
            [(hash-table ['p p] ['q q] ['g g])
             (-make-params-dsa p q g)]
            [_ #f])]
-        [(DHParameter) ;; PKCS#3 ... not DomainParameters!
+        [(DomainParameters) ;; ANSI X9.42
+         (-check-bytes fmt buf)
+         (define params (bytes->asn1/DER DomainParameters buf))
+         (cond [params
+                (define-values (p g q j seed pgen) (get-dhx-fields params))
+                (-make-params-dhx p g q j seed pgen)]
+               [else #f])]
+        [(DHParameter) ;; PKCS#3
          (-check-bytes fmt buf)
          (match (bytes->asn1/DER DHParameter buf)
            [(hash-table ['prime prime] ['base base])
@@ -642,10 +691,15 @@
 
     (define/private (read-rkt-params p)
       (define nat? exact-nonnegative-integer?)
+      (define (nat/f? x) (or (nat? x) (eq? x #f)))
+      (define (bytes/f? x) (or (bytes? x) (eq? x #f)))
       (define (oid? x) (and (list? x) (andmap nat? x)))
       (match p
         [(list 'dsa 'params (? nat? p) (? nat? q) (? nat? g))
          (-make-params-dsa p q g)]
+        [(list 'dh 'params (? nat? p) (? nat? g)
+               (? nat? q) (? nat/f? j) (? bytes/f? seed) (? nat/f? pgen))
+         (-make-params-dhx p g q j (bcopy seed) pgen)]
         [(list 'dh 'params (? nat? p) (? nat? g))
          (-make-params-dh p g)]
         [(list 'ec 'params (? oid? curve-oid))
@@ -666,6 +720,10 @@
       (send-to-impl 'eddsa make-params curve))
     (define/public (-make-params-ecx curve)
       (send-to-impl 'ecx make-params curve))
+
+    ;; override to use extra components
+    (define/public (-make-params-dhx p g q j seed pgen)
+      (-make-params-dh p g))
 
     ;; ----------------------------------------
 
@@ -697,6 +755,12 @@
       (encode-pub-dh fmt p g y))
     (define/override (-make-priv-dh p g y x)
       (encode-priv-dh fmt p g y x))
+    (define/override (-make-params-dhx p g q j seed pgen)
+      (encode-params-dhx fmt p g q j seed pgen))
+    (define/override (-make-pub-dhx p g q j seed pgen y)
+      (encode-pub-dhx fmt p g q j seed pgen y))
+    (define/override (-make-priv-dhx p g q j seed pgen y x)
+      (encode-priv-dhx fmt p g q j seed pgen y x))
     (define/override (-make-params-ec curve-oid)
       (encode-params-ec fmt curve-oid))
     (define/override (-make-pub-ec curve-oid qB)
@@ -724,38 +788,6 @@
 ;; translate-params : Datum ParamsFormat ParamsFormat -> (U Datum #f)
 (define (translate-params params-datum from-fmt to-fmt)
   (send (new translate-key% (fmt to-fmt)) read-params params-datum from-fmt))
-
-;; merge-rkt-private-key : Datum Datum -> Datum
-;; Try to fill missing fields in priv with pub.
-(define (merge-rkt-private-key priv pub)
-  (or (match priv
-        [(list 'dsa 'private p q g #f x)
-         (match pub
-           [(list 'dsa 'public _ _ _ y)
-            (list 'dsa 'private p q g y x)]
-           [_ #f])]
-        [(list 'dh 'private p g #f x)
-         (match pub
-           [(list 'dh 'public _ _ y)
-            (list 'dh 'private p g y x)]
-           [_ #f])]
-        [(list 'ec 'private curve-oid #f d)
-         (match pub
-           [(list 'ec 'public _ qB)
-            (list 'ec 'private curve-oid qB d)]
-           [_ #f])]
-        [(list 'eddsa 'private curve #f dB)
-         (match pub
-           [(list 'eddsa 'public _ qB)
-            (list 'eddsa 'private curve qB dB)]
-           [_ #f])]
-        [(list 'ecx 'private curve #f dB)
-         (match pub
-           [(list 'ecx 'public _ qB)
-            (list 'ecx 'private curve qB dB)]
-           [_ #f])]
-        [_ #f])
-      priv))
 
 ;; bcopy : (U Bytes #f) -> (U Bytes #f)
 ;; Makes a fresh copy when given bytes.
@@ -939,6 +971,53 @@
               'privateKey x)
       y)]
     [(rkt-private) (list 'dh 'private p g y x)]
+    [else (encode-pub-dh fmt p g y)]))
+
+(define (make-dhx-params p g q j seed pgen)
+  (let* ([p (hasheq 'p p 'g g 'q q)]
+         [p (if j (hash-set p 'j j) p)])
+    (if (and seed pgen)
+        (hash-set p 'validationParms
+                  (hasheq 'seed (bit-string seed 0)
+                          'pgenCounter pgen))
+        p)))
+
+(define (encode-params-dhx fmt p g q j seed pgen)
+  (case fmt
+    [(AlgorithmIdentifier)
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY
+       (hasheq 'algorithm dhpublicnumber
+               'parameters (make-dhx-params p g q j seed pgen)))]
+    [(DomainParameters)
+     (asn1->bytes/DER DomainParameters (make-dhx-params p g q j seed pgen))]
+    [(DHParameter)
+     (asn1->bytes/DER DHParameter (hasheq 'prime p 'base g))]
+    [(rkt-params) (list 'dh 'params p g q j seed pgen)]
+    [else #f]))
+
+(define (encode-pub-dhx fmt p g q j seed pgen y)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (asn1->bytes/DER
+      SubjectPublicKeyInfo
+      (hasheq 'algorithm
+              (hasheq 'algorithm dhpublicnumber
+                      'parameters (make-dhx-params p g q j seed pgen))
+              'subjectPublicKey y))]
+    [(rkt-public) (list 'dh 'public p g q j seed pgen y)]
+    [else #f]))
+
+(define (encode-priv-dhx fmt p g q j seed pgen y x)
+  (case fmt
+    [(PrivateKeyInfo OneAsymmetricKey)
+     (private-key->der
+      fmt
+      (hasheq 'privateKeyAlgorithm
+              (hasheq 'algorithm dhpublicnumber
+                      'parameters (make-dhx-params p g q j seed pgen))
+              'privateKey x)
+      y)]
+    [(rkt-private) (list 'dh 'private p g q j seed pgen y x)]
     [else (encode-pub-dh fmt p g y)]))
 
 ;; ---- EC ----
@@ -1169,7 +1248,7 @@
 (define (rkt-params-security-bits params)
   (match params
     [(list 'dsa p q g) (dsa/dh-security-bits (add1 (log p 2)) (add1 (log q 2)))]
-    [(list 'dh 'params p g) (dsa/dh-security-bits (add1 (log p 2)))]
+    [(list* 'dh 'params p _) (dsa/dh-security-bits (add1 (log p 2)))]
     [(list 'ec 'params curve-oid)
      (curve-security-bits (curve-oid->name curve-oid))]
     [(list 'eddsa 'params curve) (curve-security-bits curve)]
