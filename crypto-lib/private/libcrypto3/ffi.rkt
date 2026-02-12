@@ -279,6 +279,59 @@
   p)
 
 ;; ----------------------------------------
+;; Bignums
+
+(define-cpointer-type _BIGNUM)
+
+(define-crypto BN_free
+  (_fun [bn : _BIGNUM] -> _void))
+
+(define-crypto BN_num_bits
+  (_fun [bn : #;const _BIGNUM] -> _int))
+
+(define (BN_num_bytes bn)
+  (quotient (+ (BN_num_bits bn) 7) 8))
+
+(define-crypto BN_is_negative
+  (_fun [bn : #;const _BIGNUM] -> _bool))
+
+(define-crypto BN_set_negative
+  (_fun [bn : _BIGNUM] [neg? : _bool] -> _int))
+
+(define-crypto BN_bn2bin
+  (_fun [bn : #;const _BIGNUM]
+        [out : _pointer = (make-bytes (BN_num_bytes bn))]
+        -> [r : _int] -> (and (ok-result? r) out)))
+
+(define-crypto BN_bin2bn
+  (_fun [s : #;const _pointer]
+        [len : _int]
+        [reuse : _BIGNUM/null = #f]
+        -> _BIGNUM/null)
+  #:wrap (allocator BN_free))
+
+(define (integer->BIGNUM n)
+  (define bn (BN_bin2bn (unsigned->base256 (abs n))))
+  (when (and bn (negative? n)) (BN_set_negative bn #t))
+  bn)
+
+(define (BIGNUM->integer bn)
+  (define n (base256->unsigned (BN_bn2bin bn)))
+  (if (BN_is_negative bn) (- n) n))
+
+;; ----------------------------------------
+;; EC Curves
+
+(define-cstruct _EC_builtin_curve
+  ([nid _int] [comment _pointer]))
+
+(define-crypto EC_get_builtin_curves
+  (_fun [out : _pointer] [nitems : _size] -> _size))
+
+(define-crypto OBJ_nid2sn
+  (_fun [nid : _int] -> #;const _string))
+
+;; ----------------------------------------
 ;; Misc
 
 (define-crypto CRYPTO_zalloc
@@ -649,6 +702,67 @@
   (_fun [a : #;const _EVP_PKEY]
         [b : #;const _EVP_PKEY]
         -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_PKEY_get_int_param
+  (_fun [pkey : #;const _EVP_PKEY]
+        [key_name : #;const _bytes]
+        [out : (_ptr o _int)]
+        -> [r : _int] -> (and (ok-result? r) out)))
+
+(define-crypto EVP_PKEY_get_size_t_param
+  (_fun [pkey : #;const _EVP_PKEY]
+        [key_name : #;const _bytes]
+        [out : (_ptr o _size)]
+        -> [r : _int] -> (and (ok-result? r) out)))
+
+(define-crypto EVP_PKEY_get_bn_param
+  (_fun [pkey : #;const _EVP_PKEY]
+        [key_name : #;const _bytes]
+        [out : (_ptr io _BIGNUM/null) = #f]
+        -> [r : _int] -> (and (ok-result? r) out))
+  #:wrap (allocator BN_free))
+
+(define-crypto EVP_PKEY_get_bn_param/value
+  (_fun [pkey : #;const _EVP_PKEY]
+        [key_name : #;const _bytes]
+        [out : (_ptr io _BIGNUM/null) = #f]
+        -> [r : _int]
+        -> (and (ok-result? r)
+                (begin0 (BIGNUM->integer out)
+                  (BN_free out))))
+  #:c-id EVP_PKEY_get_bn_param)
+
+(define-crypto EVP_PKEY_get_utf8_string_param
+  (_fun [pkey : #;const _EVP_PKEY]
+        [key_name : #;const _bytes]
+        [out : _pointer]
+        [maxlen : _size]
+        [outlen : (_ptr o _size)]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+
+(define-crypto EVP_PKEY_get_octet_string_param
+  (_fun [pkey : #;const _EVP_PKEY]
+        [key_name : #;const _bytes]
+        [out : _pointer]
+        [maxlen : _size]
+        [outlen : (_ptr o _size)]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+
+(define (EVP_PKEY_get_utf8_string_param/value evp key_name)
+  (cond [(EVP_PKEY_get_utf8_string_param evp key_name #f 0)
+         => (lambda (len)
+              (define buf (make-bytes (add1 len) 0))
+              (define len2 (EVP_PKEY_get_utf8_string_param evp key_name buf (add1 len)))
+              (bytes->string/utf-8 buf #f 0 len2))]
+        [else #f]))
+
+(define (EVP_PKEY_get_octet_string_param/value evp key_name)
+  (cond [(EVP_PKEY_get_octet_string_param evp key_name #f 0)
+         => (lambda (len)
+              (define buf (make-bytes len 0))
+              (EVP_PKEY_get_octet_string_param evp key_name buf len)
+              buf)]
+        [else #f]))
 
 ;; ----------------------------------------
 ;; PKEY_CTX
