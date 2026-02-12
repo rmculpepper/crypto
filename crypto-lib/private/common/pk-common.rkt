@@ -36,7 +36,8 @@
              (send p generate-key '())]
             [else (err/no-impl this)]))
     (define/public (generate-params config)
-      (crypto-error "parameters not supported\n  algorithm: ~a" (about)))
+      (cond [(has-params?) (err/no-impl this)]
+            [else (crypto-error "key parameters not supported\n  algorithm: ~a" (about))]))
 
     ;; can-encrypt? : Padding -> Boolean; pad=#f means "at all?"
     (define/public (can-encrypt? pad) #f)
@@ -115,7 +116,7 @@
     (define/public (get-params)
       (if (send impl has-params?)
           (err/no-impl this)
-          (crypto-error "key parameters not supported")))
+          (crypto-error "key parameters not supported\n  key: ~a" (about))))
 
     (define/public (write-key fmt)
       (or (-write-key fmt)
