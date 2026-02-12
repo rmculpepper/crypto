@@ -232,11 +232,12 @@
                 OPENSSL_INFO_CPU_SETTINGS))]
         ;; Standard info
         [(all-ec-curves)
-         (and (get-pk 'ec) (sort (hash-keys curve-name=>lcname) symbol<?))]
+         (sort (hash-keys curve-name=>lcname) string-ci<?
+               #:key symbol->string #:cache-keys? #t)]
         [(all-eddsa-curves)
-         (and (get-pk 'eddsa) '(ed25519 ed448))]
+         '(ed25519 ed448)]
         [(all-ecx-curves)
-         (and (get-pk 'ecx) '(x25519 x448))]
+         '(x25519 x448)]
         [else (super info key)]))
 
     (define/override (print-lib-info)
