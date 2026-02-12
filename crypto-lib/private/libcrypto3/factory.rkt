@@ -166,6 +166,87 @@
          (define dname (check/get-digest-name di))
          (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
         [_ (super -get-kdf spec)]))
+
+    ;; ----------------------------------------
+
+    (define/override (info key)
+      (case key
+        ;; OpenSSL_info keys
+        [(OPENSSL_INFO_CONFIG_DIR)
+         (OPENSSL_info OPENSSL_INFO_CONFIG_DIR)]
+        [(OPENSSL_INFO_ENGINES_DIR)
+         (OPENSSL_info OPENSSL_INFO_ENGINES_DIR)]
+        [(OPENSSL_INFO_MODULES_DIR)
+         (OPENSSL_info OPENSSL_INFO_MODULES_DIR)]
+        [(OPENSSL_INFO_DSO_EXTENSION)
+         (OPENSSL_info OPENSSL_INFO_DSO_EXTENSION)]
+        [(OPENSSL_INFO_DIR_FILENAME_SEPARATOR)
+         (OPENSSL_info OPENSSL_INFO_DIR_FILENAME_SEPARATOR)]
+        [(OPENSSL_INFO_LIST_SEPARATOR)
+         (OPENSSL_info OPENSSL_INFO_LIST_SEPARATOR)]
+        [(OPENSSL_INFO_SEED_SOURCE)
+         (OPENSSL_info OPENSSL_INFO_SEED_SOURCE)]
+        [(OPENSSL_INFO_CPU_SETTINGS)
+         (OPENSSL_info OPENSSL_INFO_CPU_SETTINGS)]
+        ;; OpenSSL_version keys
+        [(OPENSSL_VERSION)
+         (OpenSSL_version OPENSSL_VERSION)]
+        [(OPENSSL_CFLAGS)
+         (OpenSSL_version OPENSSL_CFLAGS)]
+        [(OPENSSL_BUILT_ON)
+         (OpenSSL_version OPENSSL_BUILT_ON)]
+        [(OPENSSL_PLATFORM)
+         (OpenSSL_version OPENSSL_PLATFORM)]
+        [(OPENSSL_DIR)
+         (OpenSSL_version OPENSSL_DIR)]
+        [(OPENSSL_ENGINES_DIR)
+         (OpenSSL_version OPENSSL_ENGINES_DIR)]
+        [(OPENSSL_VERSION_STRING)
+         (OpenSSL_version OPENSSL_VERSION_STRING)]
+        [(OPENSSL_FULL_VERSION_STRING)
+         (OpenSSL_version OPENSSL_FULL_VERSION_STRING)]
+        [(OPENSSL_MODULES_DIR)
+         (OpenSSL_version OPENSSL_MODULES_DIR)]
+        [(OPENSSL_CPU_INFO)
+         (OpenSSL_version OPENSSL_CPU_INFO)]
+        ;; OpenSSL all
+        [(openssl-info)
+         (map (lambda (sym) (list sym (info sym)))
+              '(OPENSSL_VERSION
+                OPENSSL_CFLAGS
+                OPENSSL_BUILT_ON
+                OPENSSL_PLATFORM
+                ;OPENSSL_DIR
+                ;OPENSSL_ENGINES_DIR
+                OPENSSL_VERSION_STRING
+                OPENSSL_FULL_VERSION_STRING
+                ;OPENSSL_MODULES_DIR
+                OPENSSL_CPU_INFO
+                OPENSSL_INFO_CONFIG_DIR
+                OPENSSL_INFO_ENGINES_DIR
+                OPENSSL_INFO_MODULES_DIR
+                OPENSSL_INFO_DSO_EXTENSION
+                OPENSSL_INFO_DIR_FILENAME_SEPARATOR
+                OPENSSL_INFO_LIST_SEPARATOR
+                OPENSSL_INFO_SEED_SOURCE
+                OPENSSL_INFO_CPU_SETTINGS))]
+        ;; Standard info
+        [(all-ec-curves)
+         (and (get-pk 'ec) (sort (hash-keys curve-name=>lcname) symbol<?))]
+        [(all-eddsa-curves)
+         (and (get-pk 'eddsa) '(ed25519 ed448))]
+        [(all-ecx-curves)
+         (and (get-pk 'ecx) '(x25519 x448))]
+        [else (super info key)]))
+
+    (define/override (print-lib-info)
+      (super print-lib-info)
+      (when (and libcrypto (> (OpenSSL_version_num) 0))
+        (printf " OpenSSL_version_num: #x~x\n" (OpenSSL_version_num)))
+      (when libcrypto3-ok?
+        (printf " OPENSSL_VERSION_TEXT: ~s\n" (OpenSSL_version OPENSSL_VERSION)))
+      (when (and libcrypto (not libcrypto3-ok?))
+        (printf " status: library version not supported!\n")))
     ))
 
 (define libcrypto-factory (new libcrypto3-factory%))

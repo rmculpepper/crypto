@@ -15,7 +15,8 @@
          "../common/ffi.rkt"
          "../common/base256.rkt"
          "../common/error.rkt")
-(provide (protect-out (all-defined-out)))
+(provide (protect-out (all-defined-out))
+         libcrypto)
 
 (define-ffi-definer define-crypto libcrypto
   #:default-make-fail make-not-available)
@@ -32,19 +33,19 @@
 (define-crypto OPENSSL_version_pre_release (_fun -> _string))
 (define-crypto OPENSSL_version_build_metadata (_fun -> _string))
 
-;; (define-crypto OpenSSL_version (_fun [t : _int] -> _string))
-;; (define OPENSSL_VERSION                0)
-;; (define OPENSSL_CFLAGS                 1)
-;; (define OPENSSL_BUILT_ON               2)
-;; (define OPENSSL_PLATFORM               3)
-;; (define OPENSSL_DIR                    4)
-;; (define OPENSSL_ENGINES_DIR            5)
-;; (define OPENSSL_VERSION_STRING         6)
-;; (define OPENSSL_FULL_VERSION_STRING    7)
-;; (define OPENSSL_MODULES_DIR            8)
-;; (define OPENSSL_CPU_INFO               9)
+(define-crypto OpenSSL_version (_fun [t : _int] -> #;const _string))
+(define OPENSSL_VERSION                0)
+(define OPENSSL_CFLAGS                 1)
+(define OPENSSL_BUILT_ON               2)
+(define OPENSSL_PLATFORM               3)
+(define OPENSSL_DIR                    4)
+(define OPENSSL_ENGINES_DIR            5)
+(define OPENSSL_VERSION_STRING         6)
+(define OPENSSL_FULL_VERSION_STRING    7)
+(define OPENSSL_MODULES_DIR            8)
+(define OPENSSL_CPU_INFO               9)
 
-(define-crypto OPENSSL_info (_fun [t : _int] -> _string))
+(define-crypto OPENSSL_info (_fun [t : _int] -> #;const _string))
 (define OPENSSL_INFO_CONFIG_DIR                1001)
 (define OPENSSL_INFO_ENGINES_DIR               1002)
 (define OPENSSL_INFO_MODULES_DIR               1003)
