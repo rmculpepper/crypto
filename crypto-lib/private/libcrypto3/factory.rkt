@@ -80,6 +80,11 @@
       (define name-string (hash-ref libcrypto-digests spec #f))
       (and name-string (EVP_MD_fetch libctx name-string #f)))
 
+    (define/public (get-digest-lcname dspec)
+      ;; Does not guarantee that digest is available from libctx.
+      (define name (hash-ref libcrypto-digests dspec #f))
+      (and (string? name) name))
+
     (define/override (-get-cipher info)
       (define evp/s (-get-cipher-evp (send info get-cipher-name) (send info get-mode)))
       (make-cipher info evp/s))
