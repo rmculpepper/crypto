@@ -12,7 +12,7 @@
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"
-         #;"pkey.rkt"
+         "pkey.rkt"
          "kdf.rkt")
 (provide libcrypto-factory)
 
@@ -116,6 +116,19 @@
             [evp/s
              (new libcrypto3-cipher-impl% (info info) (factory this) (cipher evp/s))]
             [else #f]))
+
+    (define/override (-get-pk spec)
+      (case spec
+        [(rsa) (new libcrypto3-rsa-impl% (factory this))]
+        [(dsa) (new libcrypto3-dsa-impl% (factory this))]
+        [(dh)  (new libcrypto3-dh-impl%  (factory this))]
+        [(ec)  (new libcrypto3-ec-impl%  (factory this))]
+        [(eddsa) (new libcrypto3-eddsa-impl% (factory this))]
+        [(ecx) (new libcrypto3-ecx-impl% (factory this))]
+        [else #f]))
+
+    (define/override (-get-pk-reader)
+      (new libcrypto3-read-key% (factory this)))
 
     (define/override (-get-kdf spec)
       (define (fetch kdf-name)
