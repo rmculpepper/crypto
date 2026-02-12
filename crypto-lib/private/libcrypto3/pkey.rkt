@@ -622,6 +622,19 @@
     (inherit-field impl evp private?)
     (super-new)
 
+    (define/override (-write-public-key fmt)
+      (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
+      (define curve-oid (and curve-lcname (curve-lcname->oid curve-lcname)))
+      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"encoded-pub-key")))
+      (and curve-oid pub (encode-pub-ec fmt curve-oid pub)))
+
+    (define/override (-write-private-key fmt)
+      (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
+      (define curve-oid (and curve-lcname (curve-lcname->oid curve-lcname)))
+      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"encoded-pub-key")))
+      (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+      (and curve-oid pub priv (encode-priv-ec fmt curve-oid pub priv)))
+
     (define/override (-get-sign/verify-params sign? pad dspec)
       (unless (eq? pad #f) (err/bad-signature-pad this pad))
       (case dspec
