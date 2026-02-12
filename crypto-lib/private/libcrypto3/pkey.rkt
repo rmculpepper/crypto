@@ -655,11 +655,23 @@
     (super-new)
 
     (define/override (get-params)
-      (cond [(EVP_PKEY_is_a evp "ED25519")
-             (send impl make-params 'ed25519)]
-            [(EVP_PKEY_is_a evp "ED448")
-             (send impl make-params 'ed448)]
-            [else (super get-params)]))
+      (send impl make-params (get-curve)))
+
+    (define/public (get-curve)
+      (cond [(EVP_PKEY_is_a evp "ED25519") 'ed25519]
+            [(EVP_PKEY_is_a evp "ED448") 'ed448]
+            [else (internal-error "unknown EdDSA curve")]))
+
+    (define/override (-write-public-key fmt)
+      (define curve (get-curve))
+      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
+      (and pub (encode-pub-eddsa fmt curve pub)))
+
+    (define/override (-write-private-key fmt)
+      (define curve (get-curve))
+      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
+      (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
+      (and pub priv (encode-priv-eddsa fmt curve pub priv)))
     ))
 
 ;; ----------------------------------------
@@ -670,11 +682,23 @@
     (super-new)
 
     (define/override (get-params)
-      (cond [(EVP_PKEY_is_a evp "X25519")
-             (send impl make-params 'x25519)]
-            [(EVP_PKEY_is_a evp "X448")
-             (send impl make-params 'x448)]
-            [else (super get-params)]))
+      (send impl make-params (get-curve)))
+
+    (define/public (get-curve)
+      (cond [(EVP_PKEY_is_a evp "X25519") 'x25519]
+            [(EVP_PKEY_is_a evp "X448") 'x448]
+            [else (internal-error "unknown ECX curve")]))
+
+    (define/override (-write-public-key fmt)
+      (define curve (get-curve))
+      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
+      (and pub (encode-pub-ecx fmt curve pub)))
+
+    (define/override (-write-private-key fmt)
+      (define curve (get-curve))
+      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
+      (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
+      (and pub priv (encode-priv-ecx fmt curve pub priv)))
     ))
 
 ;; ============================================================
