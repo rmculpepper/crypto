@@ -251,3 +251,99 @@
        (memcpy dpointer data-bs (bytes-length data-bs))])
     (ptr-add! dpointer (data-size type data)))
   buf)
+
+;; ============================================================
+;; Algorithms
+
+;; ----------------------------------------
+;; Digest
+
+(define-cpointer-type _EVP_MD)
+(define-cpointer-type _EVP_MD_CTX)
+
+(define-crypto EVP_MD_free
+  (_fun [md : _EVP_MD] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_MD_fetch
+  (_fun [ctx : _OSSL_LIB_CTX/null]
+        [algorithm : #;const _string]
+        [properties : #;const _string]
+        -> _EVP_MD/null)
+  #:wrap (allocator EVP_MD_free))
+
+;; EVP_Q_Digest just calls fetch then EVP_Digest
+(define-crypto EVP_Digest
+  (_fun [data : #;const _pointer]
+        [datalen : _size]
+        [out : _pointer]
+        [outlen : (_ptr o _size)]
+        [md : #;const _EVP_MD]
+        [engine : _pointer = #f]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+
+;; MD_CTX states: uninit | after-update | after-final
+
+(define-crypto EVP_MD_CTX_free
+  (_fun [ctx : _EVP_MD_CTX] -> _void)
+  #:wrap (deallocator))
+(define-crypto EVP_MD_CTX_new
+  (_fun -> _EVP_MD_CTX) ;; POST: uninit
+  #:wrap (allocator EVP_MD_CTX_free))
+
+(define EVP_MD_CTX_dup  ;; added in v3.1
+  (cond [(get-ffi-obj 'EVP_MD_CTX_dup libcrypto _fpointer (lambda () #f))
+         (define-crypto EVP_MD_CTX_dup
+           (_fun [ctx : #;const _EVP_MD_CTX]
+                 -> _EVP_MD_CTX/null)
+           #:wrap (allocator EVP_MD_CTX_free))
+         EVP_MD_CTX_dup]
+        [else
+         (define-crypto EVP_MD_CTX_copy
+           (_fun [out : _EVP_MD_CTX]
+                 [in : #;const _EVP_MD_CTX]
+                 -> [r : _int] -> (ok-result? r)))
+         (define (EVP_MD_CTX_dup ctx)
+           (define ctx2 (EVP_MD_CTX_new))
+           (and ctx2 (EVP_MD_CTX_copy ctx2 ctx) ctx2))
+         EVP_MD_CTX_dup]))
+
+(define-crypto EVP_DigestInit_ex2
+  (_fun [ctx : _EVP_MD_CTX] ;; if uninit, type must not be NULL; POST: after-update
+        [type : #;const _EVP_MD/null]
+        [params : _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_DigestUpdate
+  (_fun [ctx : _EVP_MD_CTX] ;; PRE: after-update; POST: after-update
+        [data : #;const _pointer]
+        [count : _size]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_DigestFinal_ex
+  (_fun [ctx : _EVP_MD_CTX] ;; PRE: after-update; POST: after-final
+        [md : _pointer]
+        [mdlen : (_ptr o _uint)]
+        -> [r : _int] -> (and (ok-result? r) mdlen)))
+
+(define-crypto EVP_DigestFinalXOF
+  (_fun [ctx : _EVP_MD_CTX] ;; PRE: after-update; POST: after-final
+        [md : _pointer]
+        [len : _size]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_MD_get0_name
+  (_fun [md : #;const _EVP_MD] -> _string))
+(define-crypto EVP_MD_get0_description
+  (_fun [md : #;const _EVP_MD] -> _string))
+
+(define-crypto EVP_MD_get_size
+  (_fun [md : #;const _EVP_MD] -> _int))
+(define-crypto EVP_MD_get_block_size
+  (_fun [md : #;const _EVP_MD] -> _int))
+
+(define-crypto EVP_MD_do_all_provided
+  (_fun [libctx : _OSSL_LIB_CTX]
+        [fn : (_fun [md : _EVP_MD] [arg : _pointer] -> _void)]
+        [arg : _pointer]
+        -> _void))
