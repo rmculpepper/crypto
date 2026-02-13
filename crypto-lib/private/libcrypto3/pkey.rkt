@@ -589,8 +589,24 @@
 
 (define libcrypto3-dsa-key%
   (class libcrypto3-pk-key%
+    (inherit get-params)
     (inherit-field impl evp private?)
     (super-new)
+
+    (define/override (-write-public-key fmt)
+      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
+      (match (send (get-params) -write-params 'rkt-params)
+        [(list 'dsa 'params p q g)
+         (encode-pub-dsa fmt p q g pub)]
+        [#f #f]))
+
+    (define/override (-write-private-key fmt)
+      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
+      (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+      (match (send (get-params) -write-params 'rkt-params)
+        [(list 'dsa 'params p q g)
+         (encode-priv-dsa fmt p q g pub priv)]
+        [#f #f]))
 
     (define/override (-get-sign/verify-params sign? pad dspec)
       (unless (eq? pad #f) (err/bad-signature-pad this pad))
@@ -608,8 +624,28 @@
 
 (define libcrypto3-dh-key%
   (class libcrypto3-pk-key%
+    (inherit get-params)
     (inherit-field impl evp private?)
     (super-new)
+
+    (define/override (-write-public-key fmt)
+      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
+      (match (send (get-params) -write-params 'rkt-params)
+        [(list 'dh 'params p g q j seed pgen)
+         (encode-pub-dhx fmt p g q j seed pgen pub)]
+        [(list 'dh 'params p g)
+         (encode-pub-dh fmt p g pub)]
+        [#f #f]))
+
+    (define/override (-write-private-key fmt)
+      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
+      (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+      (match (send (get-params) -write-params 'rkt-params)
+        [(list 'dh 'params p g q j seed pgen)
+         (encode-priv-dhx fmt p g q j seed pgen pub priv)]
+        [(list 'dh 'params p g)
+         (encode-priv-dh fmt p g pub priv)]
+        [#f #f]))
 
     (define/override (-get-keyexch-params)
       `((#"pad" uint 1)))
