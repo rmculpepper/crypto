@@ -347,3 +347,85 @@
         [fn : (_fun [md : _EVP_MD] [arg : _pointer] -> _void)]
         [arg : _pointer]
         -> _void))
+
+;; ----------------------------------------
+;; MAC
+
+(define-cpointer-type _EVP_MAC)
+(define-cpointer-type _EVP_MAC_CTX)
+
+(define-crypto EVP_MAC_free
+  (_fun [mac : _EVP_MAC] -> _void)
+  #:wrap (deallocator))
+
+(define-crypto EVP_MAC_fetch
+  (_fun [libctx : _OSSL_LIB_CTX/null]
+        [algorithm : #;const _string]
+        [properties : #;const _string]
+        -> _EVP_MAC/null)
+  #:wrap (allocator EVP_MAC_free))
+
+(define-crypto EVP_MAC_get0_name
+  (_fun [mac : _EVP_MAC] -> _string))
+(define-crypto EVP_MAC_get0_description
+  (_fun [mac : #;const _EVP_MAC] -> _string))
+
+(define-crypto EVP_Q_mac
+  (_fun [libctx : _OSSL_LIB_CTX]
+        [name : #;const _string]
+        [propq : #;const _string]
+        [subalg : #;const _string] ;; "digest" or "cipher" param
+        [params : #;const _OSSL_PARAM-array]
+        [key : #;const _pointer]
+        [keylen : _size]
+        [data : #;const _pointer]
+        [datalen : _size]
+        [out : _pointer]
+        [outsize : _size]
+        [outlen : (_ptr o _size)]
+        -> [r : _pointer] -> (and r outlen)))
+
+(define-crypto EVP_MAC_CTX_free
+  (_fun [ctx : _EVP_MAC_CTX] -> _void)
+  #:wrap (deallocator))
+(define-crypto EVP_MAC_CTX_new
+  (_fun [mac : _EVP_MAC] -> _EVP_MAC_CTX/null)
+  #:wrap (allocator EVP_MAC_CTX_free))
+
+(define-crypto EVP_MAC_CTX_dup
+  (_fun [src : #;const _EVP_MAC_CTX]
+        -> _EVP_MAC_CTX/null))
+
+(define-crypto EVP_MAC_CTX_get_mac_size
+  (_fun [ctx : _EVP_MAC_CTX] -> _size))
+(define-crypto EVP_MAC_CTX_get_block_size
+  (_fun [ctx : _EVP_MAC_CTX] -> _size))
+
+(define-crypto EVP_MAC_init
+  (_fun [ctx : _EVP_MAC_CTX]
+        [key : _bytes]
+        [keylen : _size = (bytes-length key)]
+        [params : #;const _OSSL_PARAM-array]
+        -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_MAC_update
+  (_fun [ctx : _EVP_MAC_CTX]
+        [data : _pointer]
+        [datalen : _size]
+        -> [r : _int] -> (ok-result? r)))
+(define-crypto EVP_MAC_final
+  (_fun [ctx : _EVP_MAC_CTX]
+        [out : _pointer]
+        [outlen : (_ptr o _size)]
+        [outsize : _size]
+        -> [r : _int] -> (and (ok-result? r) outlen)))
+(define-crypto EVP_MAC_finalXOF
+  (_fun [ctx : _EVP_MAC_CTX]
+        [out : _pointer]
+        [outsize : _size]
+        -> [r : _int] -> (ok-result? r)))
+
+(define-crypto EVP_MAC_do_all_provided
+  (_fun [libctx : _OSSL_LIB_CTX]
+        [fn : (_fun [mac : _EVP_MAC] [arg : _pointer] -> _void)]
+        [arg : _pointer]
+        -> _void))
