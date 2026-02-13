@@ -13,6 +13,7 @@
                   libcrypto
                   libcrypto-load-fail-reason)
          "../common/ffi.rkt"
+         "../common/base256.rkt"
          "../common/error.rkt")
 (provide (protect-out (all-defined-out)))
 
@@ -202,7 +203,11 @@
       [(or 'int 'uint) (compiler-sizeof 'int)]
       [(or 'long 'ulong) (compiler-sizeof 'long)]
       ['octet-string (ceiling-align (bytes-length data))]
-      ['utf8-string (ceiling-align (add1 (string-utf-8-length data)))]))
+      ['utf8-string (ceiling-align (add1 (string-utf-8-length data)))]
+      ['ubignum
+       (define bits-length (add1 (integer-length data))) ;; +1 for unsigned
+       (define bytes-length (quotient (+ bits-length 7) 8))
+       (ceiling-align bytes-length)]))
   (define (row-size row)
     (match row
       [(list* key type data _)
@@ -242,6 +247,11 @@
        (set-ossl_param_st-type! param OSSL_PARAM_UNSIGNED_INTEGER)
        (set-ossl_param_st-data_size! param (ctype-sizeof _long))
        (ptr-set! dpointer _ulong data)]
+      ['ubignum
+       (define bn (unsigned->base256 data (system-big-endian?)))
+       (set-ossl_param_st-type! param OSSL_PARAM_UNSIGNED_INTEGER)
+       (set-ossl_param_st-data_size! param (bytes-length bn))
+       (memcpy dpointer bn (bytes-length bn))]
       ['octet-string
        (set-ossl_param_st-type! param OSSL_PARAM_OCTET_STRING)
        (set-ossl_param_st-data_size! param (bytes-length data))
