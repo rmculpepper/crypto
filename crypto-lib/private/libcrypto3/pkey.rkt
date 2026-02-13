@@ -164,7 +164,7 @@
 
 (define libcrypto3-dsa-impl%
   (class libcrypto3-pk-impl%
-    (inherit evp->params evp->public-key evp->private-key fromdata)
+    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'dsa))
 
     (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
@@ -189,11 +189,26 @@
         (#"g" ubignum ,g)
         (#"pub" ubignum ,y #:?)
         (#"priv" ubignum ,x #:?)))
+
+    (define/override (generate-params config)
+      (define-values (nbits qbits)
+        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA paramgen"))
+      (define dsa-ptr (nonmoving #"DSA"))
+      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dsa-ptr #f)))
+      (HANDLEp (EVP_PKEY_paramgen_init ctx))
+      (HANDLEp (EVP_PKEY_CTX_set_params ctx
+                                        (make-param-array
+                                         `((#"pbits" uint ,nbits #:?)
+                                           (#"qbits" uint ,qbits #:?)))))
+      (define pevp (HANDLEp (EVP_PKEY_generate ctx)))
+      (void/reference-sink dsa-ptr)
+      (unless pevp (crypto-error "parameter generation failed"))
+      (evp->params pevp))
     ))
 
 (define libcrypto3-dh-impl%
   (class libcrypto3-pk-impl%
-    (inherit evp->params evp->public-key evp->private-key fromdata)
+    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'dh))
 
     (define/override (can-key-agree?) #t)
@@ -228,6 +243,30 @@
         (#"pcounter" uint ,(and seed pgen pgen) #:?)
         (#"pub" ubignum ,y #:?)
         (#"priv" ubignum ,x #:?)))
+
+    (define/override (generate-params config)
+      (define-values (nbits generator)
+        (check/ref-config '(nbits generator) config config:dh-paramgen "DH paramgen"))
+      (define dh-ptr (nonmoving #"DH"))
+      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dh-ptr #f)))
+      (HANDLEp (EVP_PKEY_paramgen_init ctx))
+      (HANDLEp (EVP_PKEY_CTX_set_params ctx
+                                        (make-param-array
+                                         `((#"pbits" uint ,nbits #:?)
+                                           #;(#"qbits" uint ,qbits #:?)
+                                           (#"g" uint ,generator #:?)))))
+      (define pevp (HANDLEp (EVP_PKEY_generate ctx)))
+      (void/reference-sink dh-ptr)
+      (unless pevp (crypto-error "parameter generation failed"))
+      (evp->params pevp))
+
+    (define/public (libcrypto-named-params group)
+      ;; Group is one of:
+      ;; - 'ffdhe2048 'ffdhe3072 'ffdhe4096 'ffdhe6144 'ffdhe8192
+      ;; - 'modp_2048 'modp_3072 'modp_4096 'modp_6144 'modp_8192
+      ;; - 'modp_1536 'dh_1024_160 'dh_2048_224 'dh_2048_256
+      (evp->params (fromdata #"DHX" 'params
+                             `((#"group" utf8-string ,(symbol->string group))))))
     ))
 
 (define libcrypto3-ec-impl%
