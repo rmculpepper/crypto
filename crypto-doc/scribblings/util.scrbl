@@ -10,6 +10,7 @@
                      crypto
                      crypto/pem
                      crypto/util/age
+                     crypto/util/asn1
                      crypto/util/bech32))
 
 @(module racket-links racket/base
@@ -18,9 +19,8 @@
    (provide racket:crypto-random-bytes-id))
 @(require (submod "." racket-links))
 
-@(define-runtime-path log-file "eval-logs/util.rktd")
-@(define the-eval (make-log-based-eval log-file 'replay))
-@(the-eval '(require crypto crypto/util/bech32))
+@(define the-eval (make-base-eval))
+@(the-eval '(require crypto crypto/util/asn1 crypto/util/bech32))
 
 @title[#:tag "util"]{Miscellaneous Utilities}
 
@@ -242,6 +242,53 @@ Decrypts @racket[enc-data] using one of the identities listed in
 
 If decryption fails, an exception is raised.
 }
+
+@; ------------------------------------------------------------
+@section[#:tag "asn1"]{ASN.1 Identifiers}
+
+@defmodule[crypto/util/asn1]
+
+@history[#:added "1.10"]
+
+@defproc[(curve-name->oid [name (or/c string? symbol?)])
+         (or/c #f (listof exact-nonnegative-integer?))]{
+
+Returns the OID of the elliptic curve identified by @racket[name]. Aliases
+according to @racket[curve-aliases] are also supported. If the curve is not
+known to this library, @racket[#f] is returned. Note: only @racket['ec] curves
+are supported, not @racket['eddsa] or @racket['ecx] curves.
+
+@examples[#:eval the-eval
+(curve-name->oid 'secp256r1)
+(code:line (curve-name->oid "NIST P-256") (code:comment "alias for 'secp256r1"))
+(curve-name->oid 'x25519)
+]}
+
+@defproc[(curve-oid->name [oid (listof exact-nonnegative-integer?)])
+         (or/c #f symbol?)]{
+
+Returns this library's preferred name of the curve identified by
+@racket[oid]. If the @racket[oid] is not known to this library, or if it does
+not identify an @racket['ec] curve, @racket[#f] is returned.
+
+@examples[#:eval the-eval
+(curve-oid->name '(1 2 840 10045 3 1 7))
+(code:line (curve-oid->name '(1 3 101 110)) (code:comment "id-X25519"))
+]}
+
+@defproc[(curve-aliases [name (or/c string? symbol?)])
+         (non-empty-listof symbol?)]{
+
+Returns a list of curve names that this library treats as equivalent to
+@racket[name]. This library's preferred name is listed first. Individual
+providers may support curve names that are not known to this library's catalog,
+so if @racket[name] is unknown, @racket[(list name)] is returned.
+
+@examples[#:eval the-eval
+(curve-aliases "NIST P-256")
+(curve-aliases "secp256r1")
+(curve-aliases 'unknowncurve)
+]}
 
 @; ------------------------------------------------------------
 @(close-eval the-eval)
