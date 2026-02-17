@@ -600,6 +600,24 @@
     (inherit-field impl evp private?)
     (super-new)
 
+    (define/override (-write-public-key fmt)
+      (define n (HANDLEp (EVP_PKEY_get_bn_param/value evp #"n")))
+      (define e (HANDLEp (EVP_PKEY_get_bn_param/value evp #"e")))
+      (encode-pub-rsa fmt n e))
+
+    (define/override (-write-private-key fmt)
+      (define n (HANDLEp (EVP_PKEY_get_bn_param/value evp #"n")))
+      (define e (HANDLEp (EVP_PKEY_get_bn_param/value evp #"e")))
+      (define d (HANDLEp (EVP_PKEY_get_bn_param/value evp #"d")))
+      (define p (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor1")))
+      (define q (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor2")))
+      (define dp (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent1")))
+      (define dq (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent2")))
+      (define qInv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-coefficient1")))
+      ;; Writing keys with >2 prime factors is not supported.
+      (cond [(NOERR (EVP_PKEY_get_bn_param/value evp #"rsa-factor3")) #f]
+            [else (encode-priv-rsa fmt n e d p q dp dq qInv)]))
+
     (define/override (-get-encrypt/decrypt-params enc? pad)
       (case pad
         [(oaep #f) `((#"pad-mode" utf8-string "oaep"))]
