@@ -118,7 +118,7 @@
        (check-false (pk-has-parameters? impl))
        (test-rt-equal (generate-private-key impl '((nbits 512))))]
       [(dsa)
-       (case factory-name
+       (case (send factory get-name)
          [(gcrypt)  ;; params not implemented
           (void)]
          [else
