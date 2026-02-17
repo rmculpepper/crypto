@@ -134,6 +134,7 @@
                                   (make-fromdata-params n e d p q dp dq qInv))))
 
     (define/private (make-fromdata-params n e d p q dp dq qInv)
+      (define derive? (and n e d p q (not (and dp dq qInv))))
       `((#"n" ubignum ,n)
         (#"e" ubignum ,e)
         (#"d" ubignum ,d #:?)
@@ -141,7 +142,8 @@
         (#"rsa-factor2" ubignum ,q #:?)
         (#"rsa-exponent1" ubignum ,dp #:?)
         (#"rsa-exponent2" ubignum ,dq #:?)
-        (#"rsa-coefficient1" ubignum ,qInv #:?)))
+        (#"rsa-coefficient1" ubignum ,qInv #:?)
+        (#"rsa-derive-from-pq" uint ,(and derive? 1) #:?)))
 
     (define/override (generate-key config)
       (define-values (nbits e)
