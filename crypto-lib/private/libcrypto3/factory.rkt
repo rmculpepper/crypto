@@ -33,23 +33,23 @@
           [sha3-256  . "sha3-256"]
           [sha3-384  . "sha3-384"]
           [sha3-512  . "sha3-512"]
-          [blake2b-512 . "blake2b-512"]
-          [blake2s-256 . "blake2s-256"]
+          [blake2b-512 . ("blake2b-512" "blake2bmac" #f)]
+          [blake2s-256 . ("blake2s-256" "blake2smac" #f)]
           ))
 
 ;; Support for blake2b "size" param added in v3.2
 (define digests-3.2
   (hash-set* digests-3.0
-             'blake2b-384 '("blake2b-512" 48)
-             'blake2b-256 '("blake2b-512" 32)
-             'blake2b-160 '("blake2b-512" 20)))
+             'blake2b-384 '("blake2b-512" "blake2bmac" 48)
+             'blake2b-256 '("blake2b-512" "blake2bmac" 32)
+             'blake2b-160 '("blake2b-512" "blake2bmac" 20)))
 
 ;; Support for blake2s "size" param added in v3.3
 (define digests-3.3
   (hash-set* digests-3.2
-             'blake2s-224 '("blake2s-256" 28)
-             'blake2s-160 '("blake2s-256" 20)
-             'blake2s-128 '("blake2s-256" 16)))
+             'blake2s-224 '("blake2s-256" "blake2smac" 28)
+             'blake2s-160 '("blake2s-256" "blake2smac" 20)
+             'blake2s-128 '("blake2s-256" "blake2smac" 16)))
 
 (define libcrypto-ciphers
   '(;; [CipherName Modes KeySizes String]
@@ -99,16 +99,19 @@
         [(? string? name-string)
          (define evp (EVP_MD_fetch libctx name-string #f))
          (and evp (new libcrypto3-digest-impl% (info info) (factory this) (md evp)))]
-        [(list name-string size)
-         (define md (EVP_MD_fetch libctx name-string #f))
+        [(list dname macname size)
+         (define md (EVP_MD_fetch libctx dname #f))
+         (define mac (and macname (EVP_MAC_fetch libctx macname #f)))
          (and md (new libcrypto3-digest-impl% (info info) (factory this)
-                      (md md) (size size)))]
+                      (md md) (mac mac) (size size)))]
         [#f #f]))
 
     (define/public (get-digest-lcname dspec)
       ;; Does not guarantee that digest is available from libctx.
-      (define name (hash-ref (get-digest-table) dspec #f))
-      (and (string? name) name))
+      (match (hash-ref (get-digest-table) dspec #f)
+        [(? string? name-string) name-string]
+        [(list dname macname #f) dname]
+        [_ #f]))
 
     (define/override (-get-cipher info)
       (define evp/s (-get-cipher-evp (send info get-cipher-name) (send info get-mode)))
