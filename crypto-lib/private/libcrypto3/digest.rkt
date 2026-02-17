@@ -21,6 +21,11 @@
 
     (sanity-check #:size (get-size) #:block-size (get-block-size))
 
+    (define/override (-digest-buffer src start end)
+      (define dbuf (make-bytes (get-size)))
+      (EVP_Digest (ptr-add src start) (- end start) dbuf md)
+      dbuf)
+
     (define/override (-new-ctx key)
       (define ctx (HANDLEp (EVP_MD_CTX_new)))
       (HANDLEp (EVP_DigestInit_ex2 ctx md #f))
