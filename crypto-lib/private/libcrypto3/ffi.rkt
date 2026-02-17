@@ -706,26 +706,26 @@
 
 (define-crypto EVP_PKEY_get_int_param
   (_fun [pkey : #;const _EVP_PKEY]
-        [key_name : #;const _bytes]
+        [key_name : #;const _bytes/nul-terminated]
         [out : (_ptr o _int)]
         -> [r : _int] -> (and (ok-result? r) out)))
 
 (define-crypto EVP_PKEY_get_size_t_param
   (_fun [pkey : #;const _EVP_PKEY]
-        [key_name : #;const _bytes]
+        [key_name : #;const _bytes/nul-terminated]
         [out : (_ptr o _size)]
         -> [r : _int] -> (and (ok-result? r) out)))
 
 (define-crypto EVP_PKEY_get_bn_param
   (_fun [pkey : #;const _EVP_PKEY]
-        [key_name : #;const _bytes]
+        [key_name : #;const _bytes/nul-terminated]
         [out : (_ptr io _BIGNUM/null) = #f]
         -> [r : _int] -> (and (ok-result? r) out))
   #:wrap (allocator BN_free))
 
 (define-crypto EVP_PKEY_get_bn_param/value
   (_fun [pkey : #;const _EVP_PKEY]
-        [key_name : #;const _bytes]
+        [key_name : #;const _bytes/nul-terminated]
         [out : (_ptr io _BIGNUM/null) = #f]
         -> [r : _int]
         -> (and (ok-result? r)
@@ -735,7 +735,7 @@
 
 (define-crypto EVP_PKEY_get_utf8_string_param
   (_fun [pkey : #;const _EVP_PKEY]
-        [key_name : #;const _bytes]
+        [key_name : #;const _bytes/nul-terminated]
         [out : _pointer]
         [maxlen : _size]
         [outlen : (_ptr o _size)]
@@ -743,7 +743,7 @@
 
 (define-crypto EVP_PKEY_get_octet_string_param
   (_fun [pkey : #;const _EVP_PKEY]
-        [key_name : #;const _bytes]
+        [key_name : #;const _bytes/nul-terminated]
         [out : _pointer]
         [maxlen : _size]
         [outlen : (_ptr o _size)]
