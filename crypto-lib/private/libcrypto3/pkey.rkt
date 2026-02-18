@@ -186,11 +186,12 @@
                                   (make-fromdata-params p q g y x))))
 
     (define/private (make-fromdata-params p q g y x)
-      `((#"p" ubignum ,p)
-        (#"q" ubignum ,q)
-        (#"g" ubignum ,g)
-        (#"pub" ubignum ,y #:?)
-        (#"priv" ubignum ,x #:?)))
+      (let ([y (or y (and p q g x (mod-expt g x p)))])
+        `((#"p" ubignum ,p)
+          (#"q" ubignum ,q)
+          (#"g" ubignum ,g)
+          (#"pub" ubignum ,y #:?)
+          (#"priv" ubignum ,x #:?))))
 
     (define/override (generate-params config)
       (define-values (nbits qbits)
@@ -237,14 +238,15 @@
                                   (make-fromdata-params p g q j seed pgen y x))))
 
     (define/private (make-fromdata-params p g q j seed pgen y x)
-      `((#"p" ubignum ,p)
-        (#"g" ubignum ,g)
-        (#"q" ubignum ,q #:?)
-        (#"j" ubignum ,j #:?)
-        (#"seed" octet-string ,(and seed pgen seed) #:?)
-        (#"pcounter" uint ,(and seed pgen pgen) #:?)
-        (#"pub" ubignum ,y #:?)
-        (#"priv" ubignum ,x #:?)))
+      (let ([y (or y (and p g x (mod-expt g x p)))])
+        `((#"p" ubignum ,p)
+          (#"g" ubignum ,g)
+          (#"q" ubignum ,q #:?)
+          (#"j" ubignum ,j #:?)
+          (#"seed" octet-string ,(and seed pgen seed) #:?)
+          (#"pcounter" uint ,(and seed pgen pgen) #:?)
+          (#"pub" ubignum ,y #:?)
+          (#"priv" ubignum ,x #:?))))
 
     (define/override (generate-params config)
       (define-values (nbits generator)
@@ -839,3 +841,11 @@
       (define name (alias->curve-name libcrypto-name))
       (values (hash-set n=>lc name libcrypto-name)
               (hash-set lc=>n libcrypto-name name)))))
+
+(define (mod-expt n e p)
+  ;; compute (N^E) mod P
+  (define (modp n) (modulo n p))
+  (let loop ([n n] [e e])
+    (cond [(zero? e) 1]
+          [(even? e) (loop (modp (* n n)) (quotient e 2))]
+          [else (modp (* n (loop n (sub1 e))))])))
