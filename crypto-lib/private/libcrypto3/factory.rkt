@@ -161,9 +161,9 @@
     (define/override (-get-kdf spec)
       (define (fetch kdf-name)
         (EVP_KDF_fetch libctx kdf-name #f))
-      (define (make-impl evp params0)
-        (new libcrypto3-kdf-impl% (factory this) (spec spec)
-             (evp evp) (params0 params0)))
+      (define (make-impl evp params0 [salt? #t])
+        (new libcrypto3-kdf-impl% (factory this) (spec spec) (evp evp)
+             (salt? salt?) (params0 params0)))
       (define (check/get-digest-name dspec)
         (define di (get-digest dspec))
         (and (is-a? di libcrypto3-digest-impl%) ;; can't use mac-as-digest
@@ -192,7 +192,7 @@
         [(list 'ans-x9.63 di)
          (define evp (fetch "X963KDF"))
          (define dname (check/get-digest-name di))
-         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)) #f))]
         [_ (super -get-kdf spec)]))
 
     ;; ----------------------------------------

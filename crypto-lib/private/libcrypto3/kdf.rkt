@@ -6,12 +6,14 @@
          racket/match
          "../common/common.rkt"
          "../common/kdf.rkt"
+         "../common/error.rkt"
          "ffi.rkt")
 (provide libcrypto3-kdf-impl%)
 
 (define libcrypto3-kdf-impl%
   (class kdf-impl-base%
-    (init-field evp params0)
+    (inherit about)
+    (init-field evp salt? params0)
     (inherit-field spec)
     (super-new)
 
@@ -64,7 +66,6 @@
            ;; X963KDF; params0 contains "digest"
            (define-values (info key-size)
              (check/ref-config '(info key-size) config config:info-kdf "X963KDF"))
-           ;; FIXME: assert salt = #f
            (values key-size
                    `((#"key" octet-string ,pass)
                      (#"info" octet-string ,info #:?)))]
@@ -85,4 +86,12 @@
 
     (define/override (pwhash-verify pass cred)
       (kdf-pwhash-verify this pass cred))
+
+    (define/override (salt-allowed?) salt?)
+    (define/override (check-salt salt)
+      (when (and salt? (not salt))
+        (crypto-error "salt required for KDF\n  KDF: ~a" (about)))
+      (when (and (not salt?) salt)
+        (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)))
+      salt)
     ))
