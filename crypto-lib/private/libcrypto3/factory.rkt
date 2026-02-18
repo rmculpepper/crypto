@@ -165,9 +165,8 @@
         (new libcrypto3-kdf-impl% (factory this) (spec spec) (evp evp)
              (salt? salt?) (params0 params0)))
       (define (check/get-digest-name dspec)
-        (define di (get-digest dspec))
-        (and (is-a? di libcrypto3-digest-impl%) ;; can't use mac-as-digest
-             (EVP_MD_get0_name (get-field md di))))
+        (define di (get-digest dspec)) ;; check availability
+        (and di (get-digest-lcname dspec)))
       (match spec
         ['scrypt
          (define evp (fetch "scrypt"))
