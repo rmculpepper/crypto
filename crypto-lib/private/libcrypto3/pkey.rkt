@@ -748,6 +748,7 @@
 
 (define libcrypto3-eddsa-key%
   (class libcrypto3-pk-key%
+    (inherit get-libctx)
     (inherit-field impl evp private?)
     (super-new)
 
@@ -769,6 +770,22 @@
       (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
       (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
       (and pub priv (encode-priv-eddsa fmt curve pub priv)))
+
+    (define/override (-sign msg _dspec _pad)
+      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
+      (define params (make-param-array '()))
+      (HANDLEp (EVP_DigestSignInit_ex mdctx #f (get-libctx) #f evp params))
+      (define msglen (bytes-length msg))
+      (define siglen (HANDLEp (EVP_DigestSign mdctx #f 0 msg msglen)))
+      (define sigbuf (make-bytes siglen))
+      (define siglen2 (HANDLEp (EVP_DigestSign mdctx sigbuf siglen msg msglen)))
+      (subbytes sigbuf 0 siglen2))
+
+    (define/override (-verify msg _dspec _pad sig)
+      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
+      (define params (make-param-array '()))
+      (HANDLEp (EVP_DigestVerifyInit_ex mdctx #f (get-libctx) #f evp params))
+      (EVP_DigestVerify mdctx sig (bytes-length sig) msg (bytes-length msg)))
     ))
 
 ;; ----------------------------------------
