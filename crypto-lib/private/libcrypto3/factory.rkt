@@ -74,10 +74,10 @@
     (super-new [ok? libcrypto3-ok?]
                [load-error #f])
 
-    (field [libctx (and libcrypto3-ok? (OSSL_LIB_CTX_new))])
+    (field [libctx (and libcrypto3-ok? (HANDLEp (OSSL_LIB_CTX_new)))])
     (when libctx
-      (OSSL_PROVIDER_load libctx "default")
-      (OSSL_PROVIDER_load libctx "legacy"))
+      (HANDLEp (OSSL_PROVIDER_load libctx "default"))
+      (NOERR (OSSL_PROVIDER_load libctx "legacy")))
 
     (define/public (get-libctx) libctx)
 
@@ -97,11 +97,11 @@
       (define spec (send info get-spec))
       (match (hash-ref (get-digest-table) spec #f)
         [(? string? name-string)
-         (define evp (EVP_MD_fetch libctx name-string #f))
+         (define evp (NOERR (EVP_MD_fetch libctx name-string #f)))
          (and evp (new libcrypto3-digest-impl% (info info) (factory this) (md evp)))]
         [(list dname macname size)
-         (define md (EVP_MD_fetch libctx dname #f))
-         (define mac (and macname (EVP_MAC_fetch libctx macname #f)))
+         (define md (NOERR (EVP_MD_fetch libctx dname #f)))
+         (define mac (and macname (NOERR (EVP_MAC_fetch libctx macname #f))))
          (and md (new libcrypto3-digest-impl% (info info) (factory this)
                       (md md) (mac mac) (size size)))]
         [#f #f]))
@@ -122,7 +122,7 @@
         [(stream)
          (match (assq cipher-name libcrypto-ciphers)
            [(list _ '(stream) #f name-string)
-            (EVP_CIPHER_fetch libctx name-string #f)]
+            (NOERR (EVP_CIPHER_fetch libctx name-string #f))]
            [_ #f])]
         [else
          (match (assq cipher-name libcrypto-ciphers)
@@ -131,10 +131,10 @@
                  (cond [keys
                         (for/list ([key (in-list keys)])
                           (define s (format "~a-~a-~a" name-string key mode))
-                          (cons (quotient key 8) (EVP_CIPHER_fetch libctx s #f)))]
+                          (cons (quotient key 8) (NOERR (EVP_CIPHER_fetch libctx s #f))))]
                        [else
                         (define s (format "~a-~a" name-string mode))
-                        (EVP_CIPHER_fetch libctx s #f)]))]
+                        (NOERR (EVP_CIPHER_fetch libctx s #f))]))]
            [_ #f])]))
 
     (define/private (make-cipher info evp/s)
@@ -160,7 +160,7 @@
 
     (define/override (-get-kdf spec)
       (define (fetch kdf-name)
-        (EVP_KDF_fetch libctx kdf-name #f))
+        (NOERR (EVP_KDF_fetch libctx kdf-name #f)))
       (define (make-impl evp params0 [salt? #t])
         (new libcrypto3-kdf-impl% (factory this) (spec spec) (evp evp)
              (salt? salt?) (params0 params0)))
