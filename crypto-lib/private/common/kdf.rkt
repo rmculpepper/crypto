@@ -166,12 +166,12 @@
 ;; ----------------------------------------
 
 (define (kdf-pwhash-argon2 ki config pass)
-  (define-values (m t p)
-    (check/ref-config '(m t p) config config:argon2-base "argon2"))
+  (define-values (m t p v)
+    (check/ref-config '(m t p v) config config:argon2-base "argon2"))
   (define alg (send ki get-spec))
   (define salt (crypto-random-bytes 16))
-  (define pwh (send ki kdf `((m ,m) (t ,t) (p ,p) (key-size 32)) pass salt))
-  (encode-pwhash (hash '$id alg 'm m 't t 'p p 'salt salt 'pwhash pwh)))
+  (define pwh (send ki kdf `((m ,m) (t ,t) (p ,p) (v ,v) (key-size 32)) pass salt))
+  (encode-pwhash (hash '$id alg 'v v 'm m 't t 'p p 'salt salt 'pwhash pwh)))
 
 (define (kdf-pwhash-scrypt ki config pass)
   (define-values (ln p r)
@@ -205,8 +205,8 @@
   (define env (parse-pwhash cred))
   (define config
     (match env
-      [(hash-table ['$id (or 'argon2i 'argon2d 'argon2id)] ['m m] ['t t] ['p p])
-       `((m ,m) (t ,t) (p ,p) (key-size 32))]
+      [(hash-table ['$id (or 'argon2i 'argon2d 'argon2id)] ['v v] ['m m] ['t t] ['p p])
+       `((v ,v) (m ,m) (t ,t) (p ,p) (key-size 32))]
       [(hash-table ['$id (or 'pbkdf2 'pbkdf2-sha256 'pbkdf2-sha512)] ['rounds rounds])
        `((iterations ,rounds) (key-size 32))]
       [(hash-table ['$id 'scrypt] ['ln ln] ['r r] ['p p])
@@ -256,7 +256,8 @@
 (define config:argon2-base
   `((t ,exact-positive-integer? #f #:req)
     (m ,exact-positive-integer? #f #:req)
-    (p ,exact-positive-integer? #f #:opt 1)))
+    (p ,exact-positive-integer? #f #:opt 1)
+    (v ,(lambda (v) (member v '(16 19))) "(or/c 16 19)" #:opt 19)))
 
 (define config:argon2-kdf
   `(,@config:kdf-key-size
@@ -282,7 +283,7 @@
         [2^32-1 (sub1 (expt 2 32))])
     (case id
       [(argon2i argon2d argon2id)
-       (CS ($Maybe (P (V 'v Raw)))
+       (CS ($Maybe (P (V 'v Nat)))
            (P (V 'm ($Nat 1 2^32-1)) (V 't ($Nat 1 2^32-1)) (V 'p ($Nat 1 255)))
            (V 'salt B64)
            (V 'pwhash B64))]

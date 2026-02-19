@@ -15,20 +15,23 @@
 
 (define argon2-kdf-impl%
   (class kdf-impl-base%
+    (inherit about)
     (inherit-field spec)
     (super-new)
 
     (define/override (kdf config pass salt)
-      (define-values (t m p key-size)
-        (check/ref-config '(t m p key-size) config config:argon2-kdf "argon2"))
+      (define-values (t m p v key-size)
+        (check/ref-config '(t m p v key-size) config config:argon2-kdf "argon2"))
+      (check-version v)
       (case spec
         [(argon2d)  (argon2d_hash_raw  t m p pass salt key-size)]
         [(argon2i)  (argon2i_hash_raw  t m p pass salt key-size)]
         [(argon2id) (argon2id_hash_raw t m p pass salt key-size)]))
 
     (define/override (pwhash config pass)
-      (define-values (t m p)
-        (check/ref-config '(t m p) config config:argon2-base "argon2"))
+      (define-values (t m p v)
+        (check/ref-config '(t m p v) config config:argon2-base "argon2"))
+      (check-version v)
       (define key-size 32)
       (define salt (crypto-random-bytes 16))
       (define cred
@@ -38,6 +41,11 @@
           [(argon2id) (argon2id_hash_encoded t m p pass salt key-size)]))
       (cond [(string? cred) cred]
             [else (crypto-error "failed")]))
+
+    (define/private (check-version v)
+      (unless (eqv? v 19)
+        (crypto-error "argon2 version unsupported\n  version: ~e\n  impl: ~a"
+                      v (about))))
 
     (define/override (pwhash-verify pass cred)
       (check-pwhash/kdf-spec cred spec)
