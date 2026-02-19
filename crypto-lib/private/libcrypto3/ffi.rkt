@@ -99,45 +99,73 @@
   ;; Unconditionally check error state.
   (syntax-rules ()
     [(HANDLE expr)
-     (HANDLE expr (try-car 'expr))]
-    [(HANDLE expr op)
+     (HANDLE expr #:op (try-car 'expr))]
+    [(HANDLE expr #:op op-expr)
      (let ()
        (start-uninterruptible)
        (begin0 expr
          (cond [(zero? (ERR_peek_error))
                 (end-uninterruptible)]
                [else
-                (end-uninterruptible/handle-error op)])))]))
+                (end-uninterruptible/handle op-expr #f)])))]))
 
 (define-syntax HANDLEp
   ;; Only check for error if pointer result is #f (NULL).
   ;; (Also used for other X-or-false return values, where #f means error.)
   (syntax-rules ()
     [(HANDLEp expr)
-     (HANDLEp expr (try-car 'expr))]
-    [(HANDLEp expr op)
+     (HANDLEp expr #:op (try-car 'expr))]
+    [(HANDLEp expr #:or handler)
+     (HANDLEp expr #:op (try-car 'expr) #:or handler)]
+    [(HANDLEp expr #:op op-expr)
+     (HANDLEp expr #:op op-expr #:or! #f)]
+    [(HANDLEp expr #:op op-expr #:or handler)
+     (HANDLEp expr #:op op-expr #:or! (lambda () handler))]
+    [(HANDLEp expr #:op op-expr #:or! get-handler)
      (let ()
        (start-uninterruptible)
        (let ([r expr])
          (cond [r (begin (end-uninterruptible) r)]
-               [else (begin (end-uninterruptible/handle-error op) #f)])))]))
+               [else (end-uninterruptible/handle op-expr get-handler)])))]))
 
 (define (ok-result? n) (> n 0))
 
 (define (try-car v) (if (pair? v) (car v) #f))
 
-(define (end-uninterruptible/handle-error op)
-  (define-values (errcode message) (ERR_get_error_all))
+(define (end-uninterruptible/handle op get-handler)
+  (define-values (errcode detail) (ERR_get_error_all))
   (clear-error-queue)
   (end-uninterruptible)
-  (unless (zero? errcode) (raise-error op errcode message)))
+  (cond [(and (zero? errcode) (eq? get-handler #f)) #f]
+        [else (call-handler get-handler op errcode detail)]))
 
-(define (raise-error op errcode message)
-  (define lib (ERR_lib_error_string errcode))
-  (define reason (ERR_reason_error_string errcode))
-  (define message-line (if message (format ";\n ~a" message) ""))
-  (define op-line (if op (format "\n  operation: ~a" op) ""))
-  (crypto-error "~a: ~a~a~a" lib reason message-line op-line))
+(define (call-handler get-handler op errcode detail)
+  (define handler
+    (cond [(procedure? get-handler) (get-handler)]
+          [(string? get-handler) get-handler]
+          [(eq? get-handler #f) default-handler]))
+  (cond [(string? handler)
+         (raise-error op errcode detail #:message handler)]
+        [else (handler op errcode (if (zero? errcode) #f detail))]))
+
+(define (default-handler op errcode detail)
+  (if (zero? errcode) #f (raise-error op errcode detail)))
+
+(define (raise-error op errcode detail #:message [message #f])
+  (crypto-error "~a~a"
+                (or message "operation failed")
+                (get-error-lines op errcode detail)))
+
+(define (get-error-lines op errcode detail)
+  (cond [(zero? errcode) ""]
+        [else (string-append
+               (if op (format "\n  operation: ~a" op) "")
+               (format "\n  lib error code: ~s" errcode)
+               (let ([lib (ERR_lib_error_string errcode)])
+                 (if lib (format "\n  lib source: ~s" lib) ""))
+               (let ([reason (ERR_reason_error_string errcode)])
+                 (if reason (format "\n  lib reason: ~s" reason) ""))
+               (if detail (format "\n  lib detail: ~s" detail) ""))]))
 
 (define (clear-error-queue)
   (unless (zero? (ERR_get_error)) (clear-error-queue)))
