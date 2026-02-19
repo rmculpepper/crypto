@@ -11,14 +11,13 @@
 
 (define libcrypto3-digest-impl%
   (class digest-impl%
-    (init-field md [size #f])
+    (init-field md [size #f] [mac #f])
     (super-new)
     (inherit about sanity-check)
     (inherit-field factory)
 
     (define/override (get-size) (or size (EVP_MD_get_size md)))
     (define/override (get-block-size) (EVP_MD_get_block_size md))
-    (define/override (key-size-ok? keysize) #f)
 
     (sanity-check #:size (get-size) #:block-size (get-block-size))
 
@@ -29,12 +28,19 @@
                     dbuf)]))
 
     (define/override (-new-ctx key)
-      (when key
-        (crypto-error "implementation does not support keys\n  impl: ~a" (about)))
-      (define ctx (HANDLEp (EVP_MD_CTX_new)))
-      (define params (make-param-array `((#"size" uint ,size #:?))))
-      (HANDLEp (EVP_DigestInit_ex2 ctx md params))
-      (new libcrypto3-digest-ctx% (impl this) (ctx ctx)))
+      (cond [(and key mac)
+             (define ctx (HANDLEp (EVP_MAC_CTX_new mac)))
+             (define params (make-param-array `((#"size" uint ,size #:?))))
+             (HANDLEp (EVP_MAC_init ctx (or key #"") params))
+             (new libcrypto3-mac-ctx% (impl this) (ctx ctx))]
+            [key
+             ;; should be impossible
+             (internal-error "keys not supported" #:for this)]
+            [else
+             (define ctx (HANDLEp (EVP_MD_CTX_new)))
+             (define params (make-param-array `((#"size" uint ,size #:?))))
+             (HANDLEp (EVP_DigestInit_ex2 ctx md params))
+             (new libcrypto3-digest-ctx% (impl this) (ctx ctx))]))
 
     (define/override (new-hmac-ctx key)
       (cond [size
