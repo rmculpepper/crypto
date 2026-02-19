@@ -16,7 +16,7 @@
          "kdf.rkt")
 (provide libcrypto-factory)
 
-(define libcrypto-digests
+(define digests-3.0
   #hasheq(;; DigestSpec => String
           [md4       . "md4"]
           [md5       . "md5"]
@@ -33,7 +33,23 @@
           [sha3-256  . "sha3-256"]
           [sha3-384  . "sha3-384"]
           [sha3-512  . "sha3-512"]
+          [blake2b-512 . "blake2b-512"]
+          [blake2s-256 . "blake2s-256"]
           ))
+
+;; Support for blake2b "size" param added in v3.2
+(define digests-3.2
+  (hash-set* digests-3.0
+             'blake2b-384 '("blake2b-512" 48)
+             'blake2b-256 '("blake2b-512" 32)
+             'blake2b-160 '("blake2b-512" 20)))
+
+;; Support for blake2s "size" param added in v3.3
+(define digests-3.3
+  (hash-set* digests-3.2
+             'blake2s-224 '("blake2s-256" 28)
+             'blake2s-160 '("blake2s-256" 20)
+             'blake2s-128 '("blake2s-256" 16)))
 
 (define libcrypto-ciphers
   '(;; [CipherName Modes KeySizes String]
@@ -72,17 +88,26 @@
                  (OPENSSL_version_minor)
                  (OPENSSL_version_patch))))
 
-    (define/override (-get-digest info)
-      (define evp (-get-digest-evp (send info get-spec)))
-      (and evp (new libcrypto3-digest-impl% (info info) (factory this) (md evp))))
+    (define (get-digest-table)
+      (cond [(version>=? (get-version) '(3 3)) digests-3.3]
+            [(version>=? (get-version) '(3 2)) digests-3.2]
+            [else digests-3.0]))
 
-    (define/public (-get-digest-evp spec)
-      (define name-string (hash-ref libcrypto-digests spec #f))
-      (and name-string (EVP_MD_fetch libctx name-string #f)))
+    (define/override (-get-digest info)
+      (define spec (send info get-spec))
+      (match (hash-ref (get-digest-table) spec #f)
+        [(? string? name-string)
+         (define evp (EVP_MD_fetch libctx name-string #f))
+         (and evp (new libcrypto3-digest-impl% (info info) (factory this) (md evp)))]
+        [(list name-string size)
+         (define md (EVP_MD_fetch libctx name-string #f))
+         (and md (new libcrypto3-digest-impl% (info info) (factory this)
+                      (md md) (size size)))]
+        [#f #f]))
 
     (define/public (get-digest-lcname dspec)
       ;; Does not guarantee that digest is available from libctx.
-      (define name (hash-ref libcrypto-digests dspec #f))
+      (define name (hash-ref (get-digest-table) dspec #f))
       (and (string? name) name))
 
     (define/override (-get-cipher info)
