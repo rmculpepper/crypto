@@ -12,13 +12,16 @@
 ;; Reference: NIST 800-57 Part 1 Section 5.6
 ;; SecurityStrength = (U #f Nat), #f is unknown, 0 if known insecure.
 
+;; Conventions:
+;; - "size" is number of bytes
+
 ;; ============================================================
 ;; Digests
 
 (define digest-info<%>
   (interface ()
     get-spec        ;; -> DigestSpec
-    get-size        ;; -> Nat
+    get-size        ;; -> (U Nat #f) -- #f for XOF
     get-block-size  ;; -> Nat
     get-security-strength ;; Boolean -> (U #f Nat)
     ))
@@ -142,7 +145,7 @@
     get-type        ;; -> (U 'block 'stream)
     aead?           ;; -> Boolean
     get-block-size  ;; -> Nat  -- 1 for stream cipher
-    get-chunk-size  ;; -> Nat
+    get-chunk-size  ;; -> Nat  -- natural processing unit (eg, underlying block size)
     get-key-size    ;; -> Nat
     get-key-sizes   ;; -> SizeSet
     key-size-ok?    ;; Nat -> Boolean
