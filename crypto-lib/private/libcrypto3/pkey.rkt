@@ -46,10 +46,10 @@
         (and spec (send factory get-pk spec)))
       (case fmt
         [(SubjectPublicKeyInfo)
-         (make-key (d2i_PUBKEY_ex sk (bytes-length sk) (get-libctx) #f))]
+         (make-key (HANDLEp (d2i_PUBKEY_ex sk (bytes-length sk) (get-libctx) #f)))]
         [(PrivateKeyInfo)
-         (define p (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk)))
-         (make-key (EVP_PKCS82PKEY_ex p (get-libctx) #f) #t)]
+         (define p (HANDLEp (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk))))
+         (make-key (HANDLEp (EVP_PKCS82PKEY_ex p (get-libctx) #f)) #t)]
         [else #f]))
 
     (define/override (-make-params-dhx p g q j seed pgen)
@@ -90,8 +90,8 @@
           [(public)  EVP_PKEY_PUBLIC_KEY]
           [(private) EVP_PKEY_KEYPAIR]))
       (define keytype-ptr (nonmoving keytype))
-      (define ctx (EVP_PKEY_CTX_new_from_name (get-libctx) keytype-ptr #f))
-      (EVP_PKEY_fromdata_init ctx)
+      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) keytype-ptr #f)))
+      (HANDLEp (EVP_PKEY_fromdata_init ctx))
       (define paramsarray (make-param-array params))
       (define evp (HANDLEp (EVP_PKEY_fromdata ctx selection paramsarray)))
       (void/reference-sink keytype-ptr)
@@ -199,13 +199,13 @@
       (define dsa-ptr (nonmoving #"DSA"))
       (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dsa-ptr #f)))
       (HANDLEp (EVP_PKEY_paramgen_init ctx))
-      (HANDLEp (EVP_PKEY_CTX_set_params ctx
-                                        (make-param-array
-                                         `((#"pbits" uint ,nbits #:?)
-                                           (#"qbits" uint ,qbits #:?)))))
-      (define pevp (HANDLEp (EVP_PKEY_generate ctx)))
+      (define params (make-param-array
+                      `((#"pbits" uint ,nbits #:?)
+                        (#"qbits" uint ,qbits #:?))))
+      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
+      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
+                            #:or-fail-with "parameter generation failed"))
       (void/reference-sink dsa-ptr)
-      (unless pevp (crypto-error "parameter generation failed"))
       (evp->params pevp))
     ))
 
@@ -254,14 +254,14 @@
       (define dh-ptr (nonmoving #"DH"))
       (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dh-ptr #f)))
       (HANDLEp (EVP_PKEY_paramgen_init ctx))
-      (HANDLEp (EVP_PKEY_CTX_set_params ctx
-                                        (make-param-array
-                                         `((#"pbits" uint ,nbits #:?)
-                                           #;(#"qbits" uint ,qbits #:?)
-                                           (#"g" uint ,generator #:?)))))
-      (define pevp (HANDLEp (EVP_PKEY_generate ctx)))
+      (define params (make-param-array
+                      `((#"pbits" uint ,nbits #:?)
+                        #;(#"qbits" uint ,qbits #:?)
+                        (#"g" uint ,generator #:?))))
+      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
+      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
+                            #:or-fail-with "parameter generation failed"))
       (void/reference-sink dh-ptr)
-      (unless pevp (crypto-error "parameter generation failed"))
       (evp->params pevp))
 
     (define/public (libcrypto-named-params group)
@@ -322,7 +322,8 @@
       (define curve (check/ref-config '(curve) config config:ec-paramgen "EC keygen"))
       (define curve-name (curve-name->lcname curve))
       (and curve-name
-           (evp->private-key (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-name)))))
+           (evp->private-key (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-name)
+                                      #:or-fail-with "key generation failed"))))
     ))
 
 (define libcrypto3-eddsa-impl%
@@ -481,7 +482,8 @@
       (EVP_PKEY_get_security_bits pevp))
 
     (define/override (get-curve)
-      (define curve-lcname (EVP_PKEY_get_utf8_string_param/value pevp #"group"))
+      (define curve-lcname
+        (NOERR (EVP_PKEY_get_utf8_string_param/value pevp #"group")))
       (cond [curve-lcname (curve-lcname->name curve-lcname)]
             [else (internal-error "unable to fetch curve name")]))
     ))
@@ -503,8 +505,8 @@
 
     (define/override (get-public-key)
       ;; FIXME: check this doesn't lose information (eg, DHX vs DH)
-      (define pub (i2d_PUBKEY evp))
-      (define pub-evp (d2i_PUBKEY_ex pub (bytes-length pub) (get-libctx) #f))
+      (define pub (HANDLEp (i2d_PUBKEY evp)))
+      (define pub-evp (HANDLEp (d2i_PUBKEY_ex pub (bytes-length pub) (get-libctx) #f)))
       (send impl evp->public-key pub-evp))
 
     (define/override (get-params)
@@ -516,14 +518,15 @@
     (define/public (libcrypto-write-key fmt)
       (case fmt
         [(SubjectPublicKeyInfo)
-         (i2d_PUBKEY evp)]
+         (HANDLEp (i2d_PUBKEY evp))]
         [(PrivateKeyInfo)
-         (and private? (i2d_PKCS8_PRIV_KEY_INFO (EVP_PKEY2PKCS8 evp)))]
+         (and private?
+              (HANDLEp (i2d_PKCS8_PRIV_KEY_INFO (HANDLEp (EVP_PKEY2PKCS8 evp)))))]
         [else #f]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other libcrypto3-pk-key%)
-           (EVP_PKEY_eq evp (get-field evp other))))
+           (NOERR (EVP_PKEY_eq evp (get-field evp other)))))
 
     ;; ----------------------------------------
     ;; Encrypt
@@ -564,11 +567,10 @@
       (subbytes sigbuf 0 siglen2))
 
     (define/override (-verify digest dspec pad sig)
-      (define digestlen (bytes-length digest))
       (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)))
       (define params (make-param-array (-get-sign/verify-params #f pad dspec)))
       (HANDLEp (EVP_PKEY_verify_init_ex ctx params))
-      (EVP_PKEY_verify ctx sig (bytes-length sig) digest digestlen))
+      (NOERR (EVP_PKEY_verify ctx sig (bytes-length sig) digest (bytes-length digest))))
 
     (define/public (-get-sign/verify-params sign? pad dspec)
       ;; Default: require pad=#f, ignore digest
@@ -594,7 +596,7 @@
 
     (define/override (-compatible-for-key-agree? peer-pubkey)
       ;; PRE: peer-pubkey is libcrypto-pk-key% with same impl
-      (EVP_PKEY_parameters_eq evp (get-field evp peer-pubkey)))
+      (NOERR (EVP_PKEY_parameters_eq evp (get-field evp peer-pubkey))))
     ))
 
 ;; ----------------------------------------
@@ -785,7 +787,7 @@
       (define mdctx (HANDLEp (EVP_MD_CTX_new)))
       (define params (make-param-array '()))
       (HANDLEp (EVP_DigestVerifyInit_ex mdctx #f (get-libctx) #f evp params))
-      (EVP_DigestVerify mdctx sig (bytes-length sig) msg (bytes-length msg)))
+      (NOERR (EVP_DigestVerify mdctx sig (bytes-length sig) msg (bytes-length msg))))
     ))
 
 ;; ----------------------------------------
