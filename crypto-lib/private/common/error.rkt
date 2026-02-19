@@ -41,35 +41,46 @@
     (continuation-mark-set->list (current-continuation-marks) crypto-entry-point))
   (if (pair? entry-points) (last entry-points) 'crypto))
 
-(define (crypto-error fmt . args)
-  (apply error (crypto-who) fmt args))
+(define (crypto-error #:for [forvalue #f] #:in [impl #f] fmt . args)
+  (crypto-error* fmt args #:for forvalue #:in impl))
 
-(define (internal-error fmt . args)
-  (apply error (crypto-who) (string-append "internal error: " fmt) args))
+(define (internal-error #:in [in #f] fmt . args)
+  (crypto-error* fmt args #:prefix "internal error: " #:in in))
 
-(define (impl-limit-error fmt . args)
-  (apply error (crypto-who) (string-append "implementation limitation: " fmt) args))
+(define (impl-limit-error #:in [in #f] fmt . args)
+  (crypto-error* fmt args #:prefix "implementation limitation: " #:in in))
+
+(define (crypto-error* fmt args
+                       #:prefix [prefix ""]
+                       #:for [forvalue #f]
+                       #:in [invalue #f])
+  (define (line label val)
+    (cond [(and (object? val) (object-method-arity-includes? val 'about 0))
+           (format "\n  ~a: ~a" label (send val about))]
+          [val (format "\n  ~a: ~a" label val)]
+          [else ""]))
+  (error (crypto-who) "~a~a~a~a"
+         prefix
+         (apply format fmt args)
+         (line "for" forvalue)
+         (line "in" invalue)))
 
 ;; ----
 
 (define (check-bytes-length what wantlen buf [obj #f] #:fmt [fmt ""] #:args [args null])
   (unless (= (bytes-length buf) wantlen)
-    (crypto-error "wrong size for ~a\n  expected: ~s bytes\n  given: ~s bytes~a~a"
+    (crypto-error "wrong size for ~a\n  expected: ~s bytes\n  given: ~s bytes~a"
                   what wantlen (bytes-length buf)
                   (apply format fmt (if (list? args) args (list args)))
-                  (if obj (format "\n  for: ~a" (send obj about)) ""))))
+                  #:for obj)))
 
 (define (err/no-impl [obj #f])
-  (internal-error "unimplemented~a" (if obj (format "\n  in: ~a" (send obj about)) "")))
+  (internal-error "unimplemented" #:in obj))
 
-(define (err/bad-*-pad kind impl pad)
-  (define factory (send impl get-factory))
-  (crypto-error "~a padding not supported\n  padding: ~e\n  key: ~a key"
-                kind pad (send impl -about)))
 (define (err/bad-signature-pad impl pad)
-  (err/bad-*-pad "signature" impl pad))
+  (crypto-error "signature padding not supported\n  padding: ~e" pad #:in impl))
 (define (err/bad-encrypt-pad impl pad)
-  (err/bad-*-pad "encryption" impl pad))
+  (crypto-error "encryption padding not supported\n  padding: ~e" pad #:in impl))
 
 (define (err/missing-digest spec)
   (crypto-error "could not get digest implementation\n  digest: ~e" spec))
@@ -83,9 +94,7 @@
   (err/crypt-failed #f #t))
 
 (define (err/no-curve curve [obj #f])
-  (crypto-error "given named curve not supported\n  curve: ~e~a"
-                curve
-                (if obj (format "\n  for: ~a" (send obj about)) "")))
+  (crypto-error "given named curve not supported\n  curve: ~e~a" curve #:for obj))
 
 (define (err/off-curve what)
   (crypto-error "invalid ~a (point not on curve)" what))
