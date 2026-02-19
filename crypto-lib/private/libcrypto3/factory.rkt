@@ -167,32 +167,33 @@
       (define (check/get-digest-name dspec)
         (define di (get-digest dspec)) ;; check availability
         (and di (get-digest-lcname dspec)))
-      (match spec
-        ['scrypt
-         (define evp (fetch "scrypt"))
-         (and evp (make-impl evp null))]
-        [(list 'pbkdf2 'hmac di)
-         (define evp (fetch "pbkdf2"))
-         (define dname (check/get-digest-name di))
-         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
-        [(list 'hkdf di)
-         (define evp (fetch "hkdf"))
-         (define dname (check/get-digest-name di))
-         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
-        [(list 'concat di)
-         (define evp (fetch "ssdf"))
-         (define dname (check/get-digest-name di))
-         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
-        [(list 'concat 'hmac di)
-         (define evp (fetch "ssdf"))
-         (define dname (check/get-digest-name di))
-         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)
-                                         (#"mac" utf8-string "hmac"))))]
-        [(list 'ans-x9.63 di)
-         (define evp (fetch "X963KDF"))
-         (define dname (check/get-digest-name di))
-         (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)) #f))]
-        [_ (super -get-kdf spec)]))
+      (or (match spec
+            ['scrypt
+             (define evp (fetch "scrypt"))
+             (and evp (make-impl evp null))]
+            [(list 'pbkdf2 'hmac di)
+             (define evp (fetch "pbkdf2"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+            [(list 'hkdf di)
+             (define evp (fetch "hkdf"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+            [(list 'concat di)
+             (define evp (fetch "ssdf"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+            [(list 'concat 'hmac di)
+             (define evp (fetch "ssdf"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)
+                                             (#"mac" utf8-string "hmac"))))]
+            [(list 'ans-x9.63 di)
+             (define evp (fetch "X963KDF"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)) #f))]
+            [_ #f])
+          (super -get-kdf spec)))
 
     ;; ----------------------------------------
 
