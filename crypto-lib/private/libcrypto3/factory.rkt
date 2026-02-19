@@ -168,6 +168,9 @@
         (define di (get-digest dspec)) ;; check availability
         (and di (get-digest-lcname dspec)))
       (or (match spec
+            [(or 'argon2d 'argon2i 'argon2id) ;; added in v3.2
+             (define evp (fetch (symbol->string spec)))
+             (and evp (make-impl evp null))]
             ['scrypt
              (define evp (fetch "scrypt"))
              (and evp (make-impl evp null))]

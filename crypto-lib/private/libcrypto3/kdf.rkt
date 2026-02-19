@@ -20,6 +20,17 @@
     (define/override (kdf config pass salt)
       (define-values (key-size params1)
         (match spec
+          [(or 'argon2d 'argon2i 'argon2id)
+           ;; params0 is empty
+           (define-values (t m p v key-size)
+             (check/ref-config '(t m p v key-size) config config:argon2-kdf "Argon2"))
+           (values key-size
+                   `((#"pass" octet-string ,pass)
+                     (#"salt" octet-string ,salt)
+                     (#"iter" uint ,t)
+                     (#"memcost" uint ,m)
+                     (#"lanes" uint ,p)
+                     (#"version" uint ,v)))]
           [(list 'pbkdf2 'hmac _)
            ;; params0 contains "digest"
            (define-values (iters key-size)
@@ -82,6 +93,8 @@
          (kdf-pwhash-scrypt this config pass)]
         [(list 'pbkdf2 'hmac _)
          (kdf-pwhash-pbkdf2 this spec config pass)]
+        [(or 'argon2d 'argon2i 'argon2id)
+         (kdf-pwhash-argon2 this config pass)]
         [_ (super pwhash config pass)]))
 
     (define/override (pwhash-verify pass cred)
