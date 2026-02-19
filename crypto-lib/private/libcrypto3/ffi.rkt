@@ -107,48 +107,52 @@
          (cond [(zero? (ERR_peek_error))
                 (end-uninterruptible)]
                [else
-                (end-uninterruptible/handle op-expr #f)])))]))
+                (end-uninterruptible/handle op-expr 'check)])))]))
 
 (define-syntax HANDLEp
   ;; Only check for error if pointer result is #f (NULL).
   ;; (Also used for other X-or-false return values, where #f means error.)
+  (syntax-rules (quote)
+    [(HANDLEp expr #:op op-expr arg ...)
+     (HANDLEp* expr #:op op-expr arg ...)]
+    [(HANDLEp expr arg ...)
+     (HANDLEp* expr #:op (try-car 'expr) arg ...)]))
+
+(define-syntax HANDLEp*
   (syntax-rules ()
-    [(HANDLEp expr)
-     (HANDLEp expr #:op (try-car 'expr))]
-    [(HANDLEp expr #:or handler)
-     (HANDLEp expr #:op (try-car 'expr) #:or handler)]
-    [(HANDLEp expr #:op op-expr)
-     (HANDLEp expr #:op op-expr #:or! #f)]
-    [(HANDLEp expr #:op op-expr #:or handler)
-     (HANDLEp expr #:op op-expr #:or! (lambda () handler))]
-    [(HANDLEp expr #:op op-expr #:or! get-handler)
+    [(HANDLEp* expr #:op op-expr)
+     (HANDLEp* expr #:op op-expr #:or '(err . #f))]
+    [(HANDLEp* expr #:op op-expr #:or-fail)
+     (HANDLEp* expr #:op op-expr #:or '(err . #f))]
+    [(HANDLEp* expr #:op op-expr #:or-check)
+     (HANDLEp* expr #:op op-expr #:or 'check)]
+    [(HANDLEp* expr #:op op-expr #:or-fail-with message-expr)
+     (HANDLEp* expr #:op op-expr #:or `(err . ,message-expr))]
+    [(HANDLEp* expr #:op op-expr #:or handler)
      (let ()
        (start-uninterruptible)
        (let ([r expr])
          (cond [r (begin (end-uninterruptible) r)]
-               [else (end-uninterruptible/handle op-expr get-handler)])))]))
+               [else (end-uninterruptible/handle op-expr handler)])))]))
 
 (define (ok-result? n) (> n 0))
 
 (define (try-car v) (if (pair? v) (car v) #f))
 
-(define (end-uninterruptible/handle op get-handler)
+(define (end-uninterruptible/handle op handler)
   (define-values (errcode detail) (ERR_get_error_all))
   (clear-error-queue)
   (end-uninterruptible)
-  (cond [(and (zero? errcode) (eq? get-handler #f)) #f]
-        [else (call-handler get-handler op errcode detail)]))
+  (cond [(and (zero? errcode) (eq? handler 'check)) #f]
+        [else (call-handler handler op errcode detail)]))
 
-(define (call-handler get-handler op errcode detail)
-  (define handler
-    (cond [(procedure? get-handler) (get-handler)]
-          [(string? get-handler) get-handler]
-          [(eq? get-handler #f) default-handler]))
-  (cond [(string? handler)
-         (raise-error op errcode detail #:message handler)]
-        [else (handler op errcode (if (zero? errcode) #f detail))]))
+(define (call-handler handler op errcode detail)
+  (match handler
+    ['check (check-handler op errcode detail)]
+    [(cons 'err message) (raise-error op errcode detail #:message message)]
+    [(? procedure?) (handler op errcode (if (zero? errcode) #f detail))]))
 
-(define (default-handler op errcode detail)
+(define (check-handler op errcode detail)
   (if (zero? errcode) #f (raise-error op errcode detail)))
 
 (define (raise-error op errcode detail #:message [message #f])
@@ -157,15 +161,15 @@
                 (get-error-lines op errcode detail)))
 
 (define (get-error-lines op errcode detail)
-  (cond [(zero? errcode) ""]
-        [else (string-append
-               (if op (format "\n  operation: ~a" op) "")
-               (format "\n  lib error code: ~s" errcode)
-               (let ([lib (ERR_lib_error_string errcode)])
-                 (if lib (format "\n  lib source: ~s" lib) ""))
-               (let ([reason (ERR_reason_error_string errcode)])
-                 (if reason (format "\n  lib reason: ~s" reason) ""))
-               (if detail (format "\n  lib detail: ~s" detail) ""))]))
+  (define err? (not (zero? errcode)))
+  (string-append
+   (if op (format "\n  operation: ~a" op) "")
+   (if err? (format "\n  lib error code: ~s" errcode) "")
+   (let ([lib (and err? (ERR_lib_error_string errcode))])
+     (if lib (format "\n  lib source: ~s" lib) ""))
+   (let ([reason (and err? (ERR_reason_error_string errcode))])
+     (if reason (format "\n  lib reason: ~s" reason) ""))
+   (if (and err? detail) (format "\n  lib detail: ~s" detail) "")))
 
 (define (clear-error-queue)
   (unless (zero? (ERR_get_error)) (clear-error-queue)))
