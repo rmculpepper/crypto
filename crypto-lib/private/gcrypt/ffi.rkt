@@ -11,6 +11,7 @@
          racket/runtime-path
          "../common/error.rkt"
          "../common/common.rkt"
+         "../common/base256.rkt"
          "../common/ffi.rkt")
 
 (provide (protect-out (all-defined-out)))
@@ -376,52 +377,10 @@
         (result  : (_ptr o _gcry_sexp))
         (buf     : _bytes)
         (buflen  : _size = (bytes-length buf))
-        (autofmt : _int = 0)
+        (autofmt : _int = 1)
         -> (status : _gcry_error)
         -> (values status result))
   #:wrap (compose (allocator gcry_sexp_release) check2))
-
-(define-gcrypt gcry_sexp_build
-  (_fun (fmt . args) ::
-        (result : (_ptr o _gcry_sexp/null))
-        (erroff : (_ptr o _size))
-        (fmt    : _string/utf-8)
-        (arg0 : _pointer = (get-sexp-build-arg args 0))
-        (arg1 : _pointer = (get-sexp-build-arg args 1))
-        (arg2 : _pointer = (get-sexp-build-arg args 2))
-        (arg3 : _pointer = (get-sexp-build-arg args 3))
-        (arg4 : _pointer = (get-sexp-build-arg args 4))
-        (arg5 : _pointer = (get-sexp-build-arg args 5))
-        -> (status : _gcry_error)
-        -> (values status result))
-  #:c-id gcry_sexp_build
-  #:wrap (compose (allocator gcry_sexp_release) check2))
-
-(define-gcrypt gcry_sexp_build/%b
-  (_fun (fmt arg) ::
-        (result : (_ptr o _gcry_sexp/null))
-        (erroff : (_ptr o _size))
-        (fmt : _string/utf-8)
-        (len : _int = (bytes-length arg))
-        (arg : _bytes)
-        -> (status : _gcry_error)
-        -> (values status result))
-  #:c-id gcry_sexp_build
-  #:wrap (compose (allocator gcry_sexp_release) check2))
-
-(define-gcrypt gcry_sexp_build/%u
-  (_fun (fmt arg) ::
-        (result : (_ptr o _gcry_sexp/null))
-        (erroff : (_ptr o _size))
-        (fmt : _string/utf-8)
-        (arg : _uint)
-        -> (status : _gcry_error)
-        -> (values status result))
-  #:c-id gcry_sexp_build
-  #:wrap (compose (allocator gcry_sexp_release) check2))
-
-(define (get-sexp-build-arg args n)
-  (and (> (length args) n) (list-ref args n)))
 
 (define-gcrypt gcry_sexp_find_token
   (_fun (sexp : _gcry_sexp)
@@ -472,6 +431,33 @@
          [buf (make-bytes n)])
     (gcry_sexp_sprint s buf GCRYSEXP_FMT_ADVANCED)
     (bytes->string/utf-8 buf #f 0 (sub1 n))))
+
+;; Reference: RFC 9804 (https://www.rfc-editor.org/rfc/rfc9804.pdf)
+(define (make-sexp v)
+  (define out (open-output-bytes))
+  (define NEED-SEP? #f) ;; not needed if all octet strings have length prefix
+  (let loop ([v v])
+    (cond [(list? v)
+           (write-char #\( out)
+           (for ([e (in-list v)])
+             (loop e)
+             (when NEED-SEP? (write-char #\space out)))
+           (write-char #\) out)]
+          [(symbol? v)
+           (loop (symbol->string v))]
+          [(string? v)
+           (loop (string->bytes/utf-8 v))]
+          [(bytes? v)
+           (write (bytes-length v) out)
+           (write-char #\: out)
+           (write-bytes v out)]
+          [(exact-integer? v) ;; %d, %u; converted to decimal string
+           (loop (number->string v))]
+          [(gcry_mpi? v) ;; %M (all nonnegative); base256 (big-endian)
+           (loop (mpi->base256 v))]
+          [else (error 'make-sexp "bad value: ~e" v)]))
+  (define buf (get-output-bytes out))
+  (gcry_sexp_new buf))
 
 ;; ----
 

@@ -121,9 +121,7 @@
             [e (or e 0)])
         (define-values (pub priv)
           (-generate-keypair
-           (gcry_sexp_build "(genkey (rsa %S %S))"
-                            (gcry_sexp_build/%u "(nbits %u)" nbits)
-                            (gcry_sexp_build/%u "(rsa-use-e %u)" e))))
+           (make-sexp `(genkey (rsa (nbits ,nbits) (rsa-use-e ,e))))))
         (new gcrypt-rsa-key% (impl this) (pub pub) (priv priv))))
 
     ;; ----
@@ -133,9 +131,8 @@
       (new gcrypt-rsa-key% (impl this) (pub pub) (priv #f)))
 
     (define/private (make-rsa-public-key n e)
-      (gcry_sexp_build "(public-key (rsa %S %S))"
-                       (gcry_sexp_build "(n %M)" (int->mpi n))
-                       (gcry_sexp_build "(e %M)" (int->mpi e))))
+      (make-sexp `(public-key (rsa (n ,(unsigned->base256 n))
+                                   (e ,(unsigned->base256 e))))))
 
     (define/override (make-private-key n e d p q dp dq qInv)
       ;; Note: gcrypt requires q < p (swap if needed)
@@ -153,13 +150,12 @@
 
     (define/private (make-rsa-private-key n e d p q u)
       (define priv
-        (gcry_sexp_build "(private-key (rsa %S %S %S %S %S %S))"
-                         (gcry_sexp_build "(n %M)" (int->mpi n))
-                         (gcry_sexp_build "(e %M)" (int->mpi e))
-                         (gcry_sexp_build "(d %M)" (int->mpi d))
-                         (gcry_sexp_build "(p %M)" (int->mpi p))
-                         (gcry_sexp_build "(q %M)" (int->mpi q))
-                         (gcry_sexp_build "(u %M)" (int->mpi u))))
+        (make-sexp `(private-key (rsa (n ,(unsigned->base256 n))
+                                      (e ,(unsigned->base256 e))
+                                      (d ,(unsigned->base256 d))
+                                      (p ,(unsigned->base256 p))
+                                      (q ,(unsigned->base256 q))
+                                      (u ,(unsigned->base256 u))))))
       (gcry_pk_testkey priv)
       priv)
     ))
@@ -203,17 +199,12 @@
       (define padding (check-sig-pad pad))
       (case pad
         [(pss)
-         (gcry_sexp_build "(data (flags pss) (salt-length %d) (hash %s %b))"
-                          (cast (digest-spec-size digest-spec) _uintptr _pointer)
-                          (string->bytes/utf-8 (symbol->string digest-spec))
-                          (cast (bytes-length digest) _uintptr _pointer)
-                          digest)]
+         (make-sexp `(data (flags pss)
+                           (salt-length ,(digest-spec-size digest-spec))
+                           (hash ,digest-spec ,digest)))]
         [else
-         (gcry_sexp_build "(data (flags %s) (hash %s %b))"
-                          padding
-                          (string->bytes/utf-8 (symbol->string digest-spec))
-                          (cast (bytes-length digest) _uintptr _pointer)
-                          digest)]))
+         (make-sexp `(data (flags ,padding)
+                           (hash ,digest-spec ,digest)))]))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
       (define sig-part (gcry_sexp_find_token sig-sexp "rsa"))
@@ -230,17 +221,11 @@
         [else (err/bad-signature-pad impl pad)]))
 
     (define/override (verify-make-sig-sexp sig)
-      (gcry_sexp_build "(sig-val (rsa (s %b)))"
-                       (cast (bytes-length sig) _uintptr _pointer)
-                       sig))
+      (make-sexp `(sig-val (rsa (s ,sig)))))
 
     (define/override (-encrypt data pad)
       (define padding (check-enc-padding pad))
-      (define data-sexp
-        (gcry_sexp_build "(data (flags %s) (value %b))"
-                         padding
-                         (cast (bytes-length data) _uintptr _pointer) ;; bleh, hack
-                         data))
+      (define data-sexp (make-sexp `(data (flags ,padding) (value ,data))))
       (define enc-sexp (gcry_pk_encrypt data-sexp pub))
       (define enc-part (gcry_sexp_find_token enc-sexp "rsa"))
       (define enc-a-part (gcry_sexp_find_token enc-part "a"))
@@ -255,10 +240,7 @@
 
     (define/override (-decrypt data pad)
       (define padding (check-enc-padding pad))
-      (define enc-sexp
-        (gcry_sexp_build "(enc-val (flags %s) (rsa (a %M)))"
-                         padding
-                         (int->mpi (base256->unsigned data))))
+      (define enc-sexp (make-sexp `(enc-val (flags ,padding) (rsa (a ,data)))))
       (define dec-sexp
         (or (gcry_pk_decrypt enc-sexp priv)
             (crypto-error "decryption failed")))
@@ -293,9 +275,7 @@
       (let ([qbits (or qbits 256)])
         (define-values (pub priv)
           (-generate-keypair
-           (gcry_sexp_build "(genkey (dsa %S %S))"
-                            (gcry_sexp_build/%u "(nbits %u)" nbits)
-                            (gcry_sexp_build/%u "(qbits %u)" qbits))))
+           (make-sexp `(genkey (dsa (nbits ,nbits) (qbits ,qbits))))))
         (new gcrypt-dsa-key% (impl this) (pub pub) (priv priv))))
 
     ;; ----
@@ -305,11 +285,10 @@
       (new gcrypt-dsa-key% (impl this) (pub pub) (priv #f)))
 
     (define/private (make-dsa-public-key p q g y)
-      (gcry_sexp_build "(public-key (dsa %S %S %S %S))"
-                       (gcry_sexp_build "(p %M)" (int->mpi p))
-                       (gcry_sexp_build "(q %M)" (int->mpi q))
-                       (gcry_sexp_build "(g %M)" (int->mpi g))
-                       (gcry_sexp_build "(y %M)" (int->mpi y))))
+      (make-sexp `(public-key (dsa (p ,(unsigned->base256 p))
+                                   (q ,(unsigned->base256 q))
+                                   (g ,(unsigned->base256 g))
+                                   (y ,(unsigned->base256 y))))))
 
     (define/override (make-private-key p q g y0 x)
       (define y  ;; g^x mod p
@@ -324,12 +303,11 @@
 
     (define/private (make-dsa-private-key p q g y x)
       (define priv
-        (gcry_sexp_build "(private-key (dsa %S %S %S %S %S))"
-                         (gcry_sexp_build "(p %M)" (int->mpi p))
-                         (gcry_sexp_build "(q %M)" (int->mpi q))
-                         (gcry_sexp_build "(g %M)" (int->mpi g))
-                         (gcry_sexp_build "(y %M)" (int->mpi y))
-                         (gcry_sexp_build "(x %M)" (int->mpi x))))
+        (make-sexp `(private-key (dsa (p ,(unsigned->base256 p))
+                                      (q ,(unsigned->base256 q))
+                                      (g ,(unsigned->base256 g))
+                                      (y ,(unsigned->base256 y))
+                                      (x ,(unsigned->base256 x))))))
       (gcry_pk_testkey priv)
       priv)
     ))
@@ -352,8 +330,7 @@
       (apply encode-pub-dsa fmt (map get-int '("p" "q" "g" "y"))))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
-      (gcry_sexp_build "(data (flags raw) (value %M))"
-                       (base256->mpi digest)))
+      (make-sexp `(data (flags raw) (value ,digest))))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
       (unpack-sig-sexp sig-sexp "dsa"))
@@ -367,7 +344,8 @@
                (bytes->asn1/DER DSA-Sig-Val sig-der))
         [(hash-table ['r (? exact-nonnegative-integer? r)]
                      ['s (? exact-nonnegative-integer? s)])
-         (gcry_sexp_build "(sig-val (dsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
+         (make-sexp `(sig-val (dsa (r ,(unsigned->base256 r))
+                                   (s ,(unsigned->base256 s)))))]
         [_ #f]))
     ))
 
@@ -411,9 +389,7 @@
       (define curve (send params get-curve))
       (define-values (pub priv)
         (-generate-keypair
-         (gcry_sexp_build "(genkey (ecc (curve %s)))"
-                          (let ([curve (if (symbol? curve) (symbol->string curve) curve)])
-                            (string->bytes/utf-8 curve)))))
+         (make-sexp `(genkey (ecc (curve ,curve))))))
       (new gcrypt-ec-key% (impl this) (pub pub) (priv priv)))
 
     ;; ----
@@ -430,9 +406,7 @@
             [else #f]))
 
     (define/private (make-ec-public-key curve qB)
-      (gcry_sexp_build "(public-key (ecc %S %S))"
-                       (gcry_sexp_build/%b "(curve %b)" curve)
-                       (gcry_sexp_build/%b "(q %b)" qB)))
+      (make-sexp `(public-key (ecc (curve ,curve) (q ,qB)))))
 
     (define/override (make-private-key curve-oid qB d)
       (cond [(curve-oid->name-string curve-oid)
@@ -446,10 +420,9 @@
 
     (define/private (make-ec-private-key curve qB d)
       (define priv
-        (gcry_sexp_build "(private-key (ecc %S %S %S))"
-                         (gcry_sexp_build/%b "(curve %b)" curve)
-                         (gcry_sexp_build/%b "(q %b)" qB)
-                         (gcry_sexp_build    "(d %M)" (int->mpi d))))
+        (make-sexp `(private-key (ecc (curve ,curve)
+                                      (q ,qB)
+                                      (d ,(unsigned->base256 d))))))
       (gcry_pk_testkey priv)
       priv)
 
@@ -525,7 +498,7 @@
       (define digest* (if (> (* 8 (bytes-length digest)) qbits)
                           (subbytes digest 0 (quotient (+ qbits 7) 8))
                           digest))
-      (gcry_sexp_build "(data (flags raw) (value %M))" (base256->mpi digest*)))
+      (make-sexp `(data (flags raw) (value ,digest*))))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
       (unpack-sig-sexp sig-sexp "ecdsa"))
@@ -539,14 +512,15 @@
                (bytes->asn1/DER DSA-Sig-Val sig-der))
         [(hash-table ['r (? exact-nonnegative-integer? r)]
                      ['s (? exact-nonnegative-integer? s)])
-         (gcry_sexp_build "(sig-val (ecdsa (r %M) (s %M)))" (int->mpi r) (int->mpi s))]
+         (make-sexp `(sig-val (ecdsa (r ,(unsigned->base256 r))
+                                     (s ,(unsigned->base256 s)))))]
         [_ #f]))
 
     ;; ECDH support is not documented, but described in comments in
     ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
     (define/override (-compute-secret peer-pubkey)
       (define peer (sexp-get-data (get-field pub peer-pubkey) "ecc" "q"))
-      (define dh-sexp (gcry_sexp_build/%b "(enc-val (ecdh (e %b)))" peer))
+      (define dh-sexp (make-sexp `(enc-val (ecdh (e ,peer)))))
       (define sh (gcry_pk_decrypt dh-sexp priv))
       (define shb (gcry_sexp_nth_data sh 1))
       ;; shb is an EC point; decode and extract the x-coordinate
@@ -588,7 +562,7 @@
           [else (err/no-curve curve this)]))
       (define-values (pub priv)
         (-generate-keypair
-         (gcry_sexp_build "(genkey (ecc (curve %s) (flags eddsa)))" curve-name)))
+         (make-sexp `(genkey (ecc (curve ,curve-name) (flags eddsa))))))
       (new gcrypt-ed25519-key% (impl this) (pub pub) (priv priv)))
 
     ;; ----
@@ -606,8 +580,7 @@
         [else #f]))
 
     (define/private (make-ed25519-public-key qB)
-      (gcry_sexp_build "(public-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
-                       (gcry_sexp_build/%b "(q %b)" qB)))
+      (make-sexp `(public-key (ecc (curve Ed25519) (flags eddsa) (q ,qB)))))
 
     (define/override (make-private-key curve qB dB)
       ;; It doesn't seem to be possible to recover qB if it is missing,
@@ -623,9 +596,10 @@
 
     (define/private (make-ed25519-private-key qB dB)
       (define priv
-        (gcry_sexp_build "(private-key (ecc (curve Ed25519) (flags eddsa) %S %S))"
-                         (gcry_sexp_build/%b "(q %b)" qB)
-                         (gcry_sexp_build/%b "(d %b)" dB)))
+        (make-sexp `(private-key (ecc (curve Ed25519)
+                                      (flags eddsa)
+                                      (q ,qB)
+                                      (d ,dB)))))
       (gcry_pk_testkey priv)
       priv)
     ))
@@ -649,8 +623,7 @@
         (encode-pub-eddsa fmt 'ed25519 qB)))
 
     (define/override (sign-make-data-sexp msg _dspec pad)
-      (gcry_sexp_build "(data (flags eddsa) (hash-algo sha512) (value %M))"
-                       (base256->mpi msg)))
+      (make-sexp `(data (flags eddsa) (hash-algo sha512) (value ,msg))))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
       (define sig-part (gcry_sexp_find_token sig-sexp "eddsa"))
@@ -672,9 +645,8 @@
 
     (define/override (verify-make-sig-sexp sig-bytes)
       (and (= (bytes-length sig-bytes) 64)
-           (gcry_sexp_build "(sig-val (eddsa (r %M) (s %M)))"
-                            (base256->mpi (subbytes sig-bytes 0 32))
-                            (base256->mpi (subbytes sig-bytes 32 64)))))
+           (make-sexp `(sig-val (eddsa (r ,(subbytes sig-bytes 0 32))
+                                       (s ,(subbytes sig-bytes 32 64)))))))
     ))
 
 ;; ============================================================
@@ -703,7 +675,7 @@
          (define-values (pub priv)
            (-generate-keypair
             ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
-            (gcry_sexp_build "(genkey (ecdh (flags no-keytest) (curve Curve25519)))")))
+            (make-sexp '(genkey (ecdh (flags no-keytest) (curve Curve25519))))))
          (new gcrypt-x25519-key% (impl this) (pub pub) (priv priv))]))
 
     ;; ----
@@ -721,8 +693,7 @@
         [else #f]))
 
     (define/private (make-x25519-public-key qB)
-      (gcry_sexp_build "(public-key (ecc (curve Curve25519) %S))"
-                       (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))))
+      (make-sexp `(public-key (ecc (curve Curve25519) (q ,(raw->ec-point qB))))))
 
     (define/override (make-private-key curve qB dB)
       ;; FIXME: recover q if publicKey field not present
@@ -736,9 +707,9 @@
 
     (define/private (make-x25519-private-key qB dB)
       (define priv
-        (gcry_sexp_build "(private-key (ecc (curve Curve25519) %S %S))"
-                         (gcry_sexp_build/%b "(q %b)" (raw->ec-point qB))
-                         (gcry_sexp_build/%b "(d %b)" dB)))
+        (make-sexp `(private-key (ecc (curve Curve25519)
+                                      (q ,(raw->ec-point qB))
+                                      (d ,dB)))))
       (gcry_pk_testkey priv)
       priv)
     ))
@@ -765,7 +736,7 @@
     ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
     (define/override (-compute-secret peer-pubkey)
       (define peer (sexp-get-data (get-field pub peer-pubkey) "ecc" "q"))
-      (define dh-sexp (gcry_sexp_build/%b "(enc-val (ecdh (e %b)))" peer))
+      (define dh-sexp (make-sexp `(enc-val (ecdh (e ,peer)))))
       (define sh (gcry_pk_decrypt dh-sexp priv))
       (define shb (gcry_sexp_nth_data sh 1))
       ;; shb is (bytes #x40) + shared-secret; #x40 indicates Montgomery
