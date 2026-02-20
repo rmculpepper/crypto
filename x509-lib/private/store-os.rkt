@@ -22,8 +22,11 @@
   (require racket/list
            ffi/unsafe
            ffi/unsafe/define
-           crypto/private/libcrypto/ffi)
+           openssl/libcrypto)
   (provide openssl-trust-sources)
+
+  (define-ffi-definer define-crypto libcrypto
+    #:default-make-fail make-not-available)
 
   ;; References:
   ;; - https://bugzilla.redhat.com/show_bug.cgi?id=1053882
