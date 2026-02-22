@@ -485,15 +485,9 @@
       (curve-alias->oid (get-curve sexp)))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
-      ;; When the digest is larger than the bits of the EC field, gcrypt is
-      ;; *supposed* to truncate it, but it doesn't seem to work. The gcrypt
-      ;; source code seems to want to do the right thing (_gcry_ecc_ecdsa_sign
-      ;; calls _gcry_dsa_normalize_hash), but it just doesn't work (that is, it
-      ;; works when gcrypt both signs and verifies, but it doesn't interoperate
-      ;; with libcrypto or nettle). I've tried
-      ;;  - using %b to insert the data
-      ;;  - using %M with an mpi created using gcry_mpi_set_opaque_copy
-      ;; and neither worked. So let's try pre-truncating long data.
+      ;; When the digest is larger than the bits of the EC field, it must be
+      ;; truncated, but gcrypt cannot truncate externally-created digest.
+      ;; (See comment before _gcry_dsa_normalize_hash in libgcrypt source.)
       (define qbits (gcry_pk_get_nbits pub))
       (define digest* (if (> (* 8 (bytes-length digest)) qbits)
                           (subbytes digest 0 (quotient (+ qbits 7) 8))
@@ -551,52 +545,48 @@
       (curve->params (config-ref config 'curve)))
 
     (define/public (curve->params curve)
-      (case curve
-        [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
-        [else (err/no-curve curve this)]))
+      (unless (check-curve curve) (err/no-curve curve this))
+      (new pk-eddsa-params% (impl this) (curve curve)))
 
     (define/public (generate-key-from-params curve)
-      (define curve-name
-        (case curve
-          [(ed25519) #"Ed25519"]
-          [else (err/no-curve curve this)]))
+      (define curve-name (or (check-curve curve) (err/no-curve curve this)))
       (define-values (pub priv)
         (-generate-keypair
          (make-sexp `(genkey (ecc (curve ,curve-name) (flags eddsa))))))
-      (new gcrypt-ed25519-key% (impl this) (pub pub) (priv priv)))
+      (new gcrypt-eddsa-key% (impl this) (curve curve) (pub pub) (priv priv)))
+
+    (define/private (check-curve curve)
+      (case curve
+        [(ed25519) (and ed25519-ok? "Ed25519")]
+        [(ed448) (and ed448-ok? "Ed448")]
+        [else #f]))
 
     ;; ----
 
     (define/override (make-params curve)
-      (case curve
-        [(ed25519) (curve->params curve)]
-        [else #f]))
+      (and (check-curve curve) (curve->params curve)))
 
     (define/override (make-public-key curve qB)
-      (case curve
-        [(ed25519)
-         (define pub (make-ed25519-public-key qB))
-         (new gcrypt-ed25519-key% (impl this) (pub pub) (priv #f))]
-        [else #f]))
+      (define (make-key pub)
+        (new gcrypt-eddsa-key% (impl this) (curve curve) (pub pub) (priv #f)))
+      (define curve-name (check-curve curve))
+      (and curve-name (make-key (make-public-sexp curve-name qB))))
 
-    (define/private (make-ed25519-public-key qB)
-      (make-sexp `(public-key (ecc (curve Ed25519) (flags eddsa) (q ,qB)))))
+    (define/private (make-public-sexp curve-name qB)
+      (make-sexp `(public-key (ecc (curve ,curve-name) (flags eddsa) (q ,qB)))))
 
     (define/override (make-private-key curve qB dB)
-      ;; It doesn't seem to be possible to recover qB if it is missing,
-      ;; so just fail.
-      (case curve
-        [(ed25519)
-         (cond [qB
-                (define pub (make-ed25519-public-key qB))
-                (define priv (make-ed25519-private-key qB dB))
-                (new gcrypt-ed25519-key% (impl this) (pub pub) (priv priv))]
-               [else #f])]
-        [else #f]))
+      (define (make-key pub priv)
+        (new gcrypt-eddsa-key% (impl this) (curve curve) (pub pub) (priv priv)))
+      (define curve-name (check-curve curve))
+      ;; It doesn't seem to be possible to recover qB if missing, so just fail.
+      (and curve-name qB
+           (make-key (make-public-sexp curve-name qB)
+                     (make-private-sexp curve-name qB dB))))
 
-    (define/private (make-ed25519-private-key qB dB)
+    (define/private (make-private-sexp curve-name qB dB)
       (define priv
-        (make-sexp `(private-key (ecc (curve Ed25519)
+        (make-sexp `(private-key (ecc (curve ,curve-name)
                                       (flags eddsa)
                                       (q ,qB)
                                       (d ,dB)))))
@@ -604,28 +594,34 @@
       priv)
     ))
 
-(define gcrypt-ed25519-key%
+(define gcrypt-eddsa-key%
   (class gcrypt-pk-key%
+    (init-field curve)
     (inherit-field pub priv impl)
     (inherit is-private?)
     (super-new)
 
     (define/override (get-params)
-      (send impl curve->params 'ed25519))
+      (send impl curve->params curve))
+
+    (define/override (get-public-key)
+      (if priv (new this% (impl impl) (curve curve) (pub pub) (priv #f)) this))
 
     (define/override (-write-private-key fmt)
       (let ([qB (sexp-get-data priv "ecc" "q")]
             [dB (sexp-get-data priv "ecc" "d")])
-        (encode-priv-eddsa fmt 'ed25519 qB dB)))
+        (encode-priv-eddsa fmt curve qB dB)))
 
     (define/override (-write-public-key fmt)
       (let ([qB (sexp-get-data pub "ecc" "q")])
-        (encode-pub-eddsa fmt 'ed25519 qB)))
+        (encode-pub-eddsa fmt curve qB)))
 
     (define/override (sign-make-data-sexp msg _dspec pad)
-      (make-sexp `(data (flags eddsa) (hash-algo sha512) (value ,msg))))
+      ;; No (hash-algo sha512); wrong for Ed448, unnecessary for Ed25519 (tested 1.9.4).
+      (make-sexp `(data (flags eddsa) (value ,msg))))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
+      (define PARTLEN (case curve [(ed25519) 32] [(ed448) 57]))
       (define sig-part (gcry_sexp_find_token sig-sexp "eddsa"))
       (define sig-r-part (gcry_sexp_find_token sig-part "r"))
       (define sig-r-data (gcry_sexp_nth_data sig-r-part 1))
@@ -634,19 +630,21 @@
       (gcry_sexp_release sig-r-part)
       (gcry_sexp_release sig-s-part)
       (gcry_sexp_release sig-part)
-      (bytes-append sig-r-data
-                    (make-bytes (- 32 (bytes-length sig-r-data)) 0)
-                    sig-s-data
-                    (make-bytes (- 32 (bytes-length sig-s-data)) 0)))
+      (bytes-append (make-bytes (- PARTLEN (bytes-length sig-r-data)) 0)
+                    sig-r-data
+                    (make-bytes (- PARTLEN (bytes-length sig-s-data)) 0)
+                    sig-s-data))
 
     (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
         (err/bad-signature-pad impl pad)))
 
     (define/override (verify-make-sig-sexp sig-bytes)
-      (and (= (bytes-length sig-bytes) 64)
-           (make-sexp `(sig-val (eddsa (r ,(subbytes sig-bytes 0 32))
-                                       (s ,(subbytes sig-bytes 32 64)))))))
+      (define PARTLEN (case curve [(ed25519) 32] [(ed448) 57]))
+      (define SIGLEN (* 2 PARTLEN))
+      (and (= (bytes-length sig-bytes) SIGLEN)
+           (make-sexp `(sig-val (eddsa (r ,(subbytes sig-bytes 0 PARTLEN))
+                                       (s ,(subbytes sig-bytes PARTLEN SIGLEN)))))))
     ))
 
 ;; ============================================================
