@@ -663,72 +663,78 @@
       (curve->params (config-ref config 'curve)))
 
     (define/public (curve->params curve)
-      (case curve
-        [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
-        [else (err/no-curve curve this)]))
+      (unless (check-curve curve) (err/no-curve curve this))
+      (new pk-ecx-params% (impl this) (curve curve)))
 
     (define/public (generate-key-from-params curve)
+      (define curve-name (or (check-curve curve) (err/no-curve curve this)))
+      (define-values (pub priv)
+        (-generate-keypair (make-sexp `(genkey (ecdh (curve ,curve-name))))))
+      (new gcrypt-ecx-key% (impl this) (curve curve) (pub pub) (priv priv)))
+
+    (define/private (check-curve curve)
       (case curve
-        [(x25519)
-         (define-values (pub priv)
-           (-generate-keypair
-            ;; without no-keytest flag, gcrypt segfaults in test_ecdh_only_keys
-            (make-sexp '(genkey (ecdh (flags no-keytest) (curve Curve25519))))))
-         (new gcrypt-x25519-key% (impl this) (pub pub) (priv priv))]))
+        [(x25519) (and ed25519-ok? "Curve25519")]
+        [(x448) (and ed448-ok? "X448")]
+        [else #f]))
 
     ;; ----
 
     (define/override (make-params curve)
-      (case curve
-        [(x25519) (curve->params curve)]
-        [else #f]))
+      (and (check-curve curve) (curve->params curve)))
 
     (define/override (make-public-key curve qB)
-      (case curve
-        [(x25519)
-         (define pub (make-x25519-public-key qB))
-         (new gcrypt-x25519-key% (impl this) (pub pub) (priv #f))]
-        [else #f]))
+      (define (make-key pub)
+        (new gcrypt-ecx-key% (impl this) (curve curve) (pub pub) (priv #f)))
+      (define curve-name (check-curve curve))
+      (and curve-name (make-key (make-public-sexp curve-name (import-q curve qB)))))
 
-    (define/private (make-x25519-public-key qB)
-      (make-sexp `(public-key (ecc (curve Curve25519) (q ,(raw->ec-point qB))))))
+    (define/private (make-public-sexp curve-name qB)
+      (make-sexp `(public-key (ecc (curve ,curve-name) (q ,qB)))))
+
+    (define/private (import-q curve qB)
+      (case curve [(x25519) (raw->ec-point qB)] [(x448) qB]))
 
     (define/override (make-private-key curve qB dB)
+      (define (make-key pub priv)
+        (new gcrypt-ecx-key% (impl this) (curve curve) (pub pub) (priv priv)))
+      (define curve-name (check-curve curve))
       ;; FIXME: recover q if publicKey field not present
-      (and qB
-           (case curve
-             [(x25519)
-              (define pub (make-x25519-public-key qB))
-              (define priv (make-x25519-private-key qB dB))
-              (new gcrypt-x25519-key% (impl this) (pub pub) (priv priv))]
-             [else #f])))
+      (and curve-name qB
+           (let ([qB (import-q curve qB)])
+             (make-key (make-public-sexp curve-name qB)
+                       (make-private-sexp curve-name qB dB)))))
 
-    (define/private (make-x25519-private-key qB dB)
-      (define priv
-        (make-sexp `(private-key (ecc (curve Curve25519)
-                                      (q ,(raw->ec-point qB))
-                                      (d ,dB)))))
+    (define/private (make-private-sexp curve-name qB dB)
+      (define priv (make-sexp `(private-key (ecc (curve ,curve-name) (q ,qB) (d ,dB)))))
       (gcry_pk_testkey priv)
       priv)
     ))
 
-(define gcrypt-x25519-key%
+(define gcrypt-ecx-key%
   (class gcrypt-pk-key%
+    (init-field curve)
     (inherit-field pub priv impl)
     (inherit is-private?)
     (super-new)
 
     (define/override (get-params)
-      (send impl curve->params 'x25519))
+      (send impl curve->params curve))
+
+    (define/override (get-public-key)
+      (if priv (new this% (impl impl) (curve curve) (pub pub) (priv #f)) this))
 
     (define/override (-write-private-key fmt)
       (let ([qB (sexp-get-data priv "ecc" "q")]
             [dB (sexp-get-data priv "ecc" "d")])
-        (encode-priv-ecx fmt 'x25519 (ec-point->raw qB) dB)))
+        (encode-priv-ecx fmt curve (export-q qB) dB)))
 
     (define/override (-write-public-key fmt)
       (let ([qB (sexp-get-data pub "ecc" "q")])
-        (encode-pub-ecx fmt 'x25519 (ec-point->raw qB))))
+        (encode-pub-ecx fmt curve (export-q qB))))
+
+    (define/private (export-q qB)
+      (case curve [(x25519) (ec-point->raw qB)] [(x448) qB]))
 
     ;; ECDH support is not documented, but described in comments in
     ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
@@ -737,17 +743,23 @@
       (define dh-sexp (make-sexp `(enc-val (ecdh (e ,peer)))))
       (define sh (gcry_pk_decrypt dh-sexp priv))
       (define shb (gcry_sexp_nth_data sh 1))
-      ;; shb is (bytes #x40) + shared-secret; #x40 indicates Montgomery
-      ;; point (x-coord only), cf _gcry_ecc_mont_decodepoint
-      (unless (and (= (bytes-length shb) 33) (= (bytes-ref shb 0) #x40))
-        (crypto-error "failed; implementation returned ill-formed result"))
-      (subbytes shb 1))
+      (case curve
+        [(x25519)
+         ;; shb is (bytes #x40) + shared-secret; #x40 indicates Montgomery
+         ;; point (x-coord only), cf _gcry_ecc_mont_decodepoint
+         (unless (and (= (bytes-length shb) 33) (= (bytes-ref shb 0) #x40))
+           (crypto-error "failed; implementation returned ill-formed result"))
+         (subbytes shb 1)]
+        [(x448)
+         (unless (= (bytes-length shb) 56)
+           (crypto-error "failed; implementation returned ill-formed result"))
+         shb]))
 
     (define/override (-compatible-for-key-agree? peer-pubkey)
       #t)
 
     (define/override (-convert-for-key-agree bs)
-      (send impl make-public-key 'x25519 bs))
+      (send impl make-public-key curve bs))
 
     (define/override (sign-make-data-sexp) #f)
     (define/override (sign-unpack-sig-sexp) #f)
