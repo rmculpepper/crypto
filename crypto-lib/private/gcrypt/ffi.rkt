@@ -550,6 +550,9 @@
 (define ed25519-ok? (gcry-curve-ok? 'Ed25519))
 (define x25519-ok?  (gcry-curve-ok? 'Curve25519))
 
+(define ed448-ok? (gcry-curve-ok? 'Ed448))
+(define x448-ok?  (gcry-curve-ok? 'X448))
+
 ;; ----------------------------------------
 
 (define-cpointer-type _gcry_ctx)
