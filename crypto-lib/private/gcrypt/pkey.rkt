@@ -630,10 +630,10 @@
       (gcry_sexp_release sig-r-part)
       (gcry_sexp_release sig-s-part)
       (gcry_sexp_release sig-part)
-      (bytes-append (make-bytes (- PARTLEN (bytes-length sig-r-data)) 0)
-                    sig-r-data
-                    (make-bytes (- PARTLEN (bytes-length sig-s-data)) 0)
-                    sig-s-data))
+      (unless (and (= PARTLEN (bytes-length sig-r-data))
+                   (= PARTLEN (bytes-length sig-s-data)))
+        (crypto-error "failed; implementation returned ill-formed result"))
+      (bytes-append sig-r-data sig-s-data))
 
     (define/override (check-sig-pad pad)
       (unless (member pad '(#f))
