@@ -77,7 +77,8 @@
 (define gcry-version (gcry_check_version #f))
 (define v1.8/later? (version>=? (version->list gcry-version) '(1 8))) ;; see pkey.rkt
 
-;; ----
+;; ----------------------------------------
+;; Digests
 
 (define-cpointer-type _gcry_md_hd)
 
@@ -113,12 +114,17 @@
 (define GCRY_MD_BLAKE2S_224    323)
 (define GCRY_MD_BLAKE2S_160    324)
 (define GCRY_MD_BLAKE2S_128    325)
+(define GCRY_MD_SHA512_256     327) ;; since 1.9
+(define GCRY_MD_SHA512_224     328) ;; since 1.9
+(define GCRY_MD_CSHAKE128      329) ;; since 1.11
+(define GCRY_MD_CSHAKE256      330) ;; since 1.11
 
 (define GCRY_MD_FLAG_SECURE    1) ;; Allocate all buffers in "secure" memory.
 (define GCRY_MD_FLAG_HMAC      2) ;; Make an HMAC out of this algorithm.
 
 (define GCRYCTL_TEST_ALGO      8)
 (define GCRYCTL_FINALIZE       5)
+(define GCRYCTL_MD_CUSTOMIZE   88) ;; since 1.11
 
 (define-gcrypt gcry_md_close
   (_fun _gcry_md_hd -> _void)
@@ -170,8 +176,21 @@
       (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f))
       #f))
 
-(define GCRY_KDF_PBKDF2 34) ;; really PBKDF2-HMAC-<digest>
-(define GCRY_KDF_SCRYPT 48) ;; since v1.6
+;; ----------------------------------------
+;; KDFs
+
+(define GCRY_KDF_PBKDF2          34) ;; really PBKDF2-HMAC-<digest>
+(define GCRY_KDF_SCRYPT          48) ;; since v1.6
+(define GCRY_KDF_ARGON2          64) ;; since 1.10
+(define GCRY_KDF_ONESTEP_KDF     96) ;; since 1.11, aka "Concatenation KDF"
+(define GCRY_KDF_ONESTEP_KDF_MAC 97)
+(define GCRY_KDF_HKDF            98) ;; since 1.11
+(define GCRY_KDF_X963_KDF       101) ;; since 1.11
+
+;; KDF sub-algorithms
+(define GCRY_KDF_ARGON2D  0)
+(define GCRY_KDF_ARGON2I  1)
+(define GCRY_KDF_ARGON2ID 2)
 
 (define-gcrypt gcry_kdf_derive
   (_fun (input algo subalgo salt iters outlen) ::
@@ -188,7 +207,14 @@
         -> (values status out))
   #:wrap check2)
 
-;; ----
+;; Added in 1.10
+;; gcry_kdf_open
+;; gcry_kdf_compute
+;; gcry_kdf_final
+;; gcry_kdf_close
+
+;; ----------------------------------------
+;; Ciphers
 
 (define-cpointer-type _gcry_cipher_hd)
 
@@ -219,7 +245,10 @@
 (define GCRY_CIPHER_CAMELLIA256  312)
 (define GCRY_CIPHER_SALSA20      313)
 (define GCRY_CIPHER_SALSA20R12   314) ;; added v1.6.0
-(define GCRY_CIPHER_CHACHA20     316) ;; added ??
+(define GCRY_CIPHER_CHACHA20     316) ;; added 1.7
+(define GCRY_CIPHER_ARIA128      319) ;; added 1.11
+(define GCRY_CIPHER_ARIA192      320)
+(define GCRY_CIPHER_ARIA256      321)
 
 (define GCRY_CIPHER_MODE_NONE    0) ;; Not yet specified.
 (define GCRY_CIPHER_MODE_ECB     1) ;; Electronic codebook.
@@ -235,6 +264,9 @@
 (define GCRY_CIPHER_MODE_OCB     11)
 (define GCRY_CIPHER_MODE_CFB8    12)
 (define GCRY_CIPHER_MODE_XTS     13)
+(define GCRY_CIPHER_MODE_EAX     14) ;; added 1.9
+(define GCRY_CIPHER_MODE_SIV     15) ;; added 1.10
+(define GCRY_CIPHER_MODE_GCM_SIV 16) ;; added 1.10
 
 (define-gcrypt gcry_cipher_close
   (_fun _gcry_cipher_hd -> _void)
@@ -294,7 +326,8 @@
   #:c-id gcry_cipher_ctl
   #:fail (lambda () void))
 
-;; ----
+;; ----------------------------------------
+;; Random numbers
 
 (define GCRY_WEAK_RANDOM        0)
 (define GCRY_STRONG_RANDOM      1)
@@ -306,7 +339,8 @@
 (define-gcrypt gcry_create_nonce
   (_fun _pointer _size -> _void))
 
-;; ----
+;; ----------------------------------------
+;; Bignums (MPI)
 
 (define-cpointer-type _gcry_mpi)
 
@@ -364,7 +398,8 @@
   (define len2 (gcry_mpi_print GCRYMPI_FMT_USG mpi buf))
   (subbytes buf 0 len2))
 
-;; ----
+;; ----------------------------------------
+;; S-expressions
 
 (define-cpointer-type _gcry_sexp)
 
@@ -459,7 +494,8 @@
   (define buf (get-output-bytes out))
   (gcry_sexp_new buf))
 
-;; ----
+;; ----------------------------------------
+;; PK
 
 (define-gcrypt gcry_pk_testkey
   (_fun _gcry_sexp -> _gcry_error)
