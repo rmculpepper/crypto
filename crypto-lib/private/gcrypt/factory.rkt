@@ -26,6 +26,8 @@
     (sha256     ,GCRY_MD_SHA256     64)
     (sha384     ,GCRY_MD_SHA384     128)
     (sha512     ,GCRY_MD_SHA512     128)
+    (sha512/256 ,GCRY_MD_SHA512_256 128)
+    (sha512/224 ,GCRY_MD_SHA512_224 128)
     (md4        ,GCRY_MD_MD4        64)
     (whirlpool  ,GCRY_MD_WHIRLPOOL  64)
     (sha3-224   ,GCRY_MD_SHA3_224   144)
@@ -68,6 +70,9 @@
     [camellia ([128 ,GCRY_CIPHER_CAMELLIA128]
                [192 ,GCRY_CIPHER_CAMELLIA192]
                [256 ,GCRY_CIPHER_CAMELLIA256])]
+    [aria     ([128 ,GCRY_CIPHER_ARIA128]
+               [192 ,GCRY_CIPHER_ARIA192]
+               [256 ,GCRY_CIPHER_ARIA256])]
     [des      ([64  ,GCRY_CIPHER_DES])] ;; takes key as 64 bits, high bits ignored
     [des-ede3 ([192 ,GCRY_CIPHER_3DES])] ;; takes key as 192 bits, high bits ignored
     [idea     ([128 ,GCRY_CIPHER_IDEA])]
@@ -92,6 +97,9 @@
     [gcm    ,GCRY_CIPHER_MODE_GCM]
     [ocb    ,GCRY_CIPHER_MODE_OCB]
     ;; [xts ,GCRY_CIPHER_MODE_XTS]
+    [eax    ,GCRY_CIPHER_MODE_EAX]
+    ;; [siv    ,GCRY_CIPHER_MODE_SIV]
+    ;; [gcm-siv ,GCRY_CIPHER_MODE_GCM_SIV]
     ))
 
 ;; GCrypt does not seem to have a function to test whether a cipher
@@ -110,7 +118,7 @@
          [(ocb) ocb-ok?]
          [else #t])
        (case mode
-         [(ccm gcm ocb xts) (memq cipher '(aes twofish serpent camellia))]
+         [(ccm gcm ocb xts eax) (memq cipher '(aes twofish serpent camellia))]
          [else #t])))
 
 ;; ----------------------------------------
