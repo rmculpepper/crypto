@@ -1,0 +1,2861 @@
+;; # CAVS 14.0
+;; # GCM Decrypt with keysize 128 test information
+;; # Generated on Fri Aug 31 11:28:04 2012
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "cf063a34d4a9a76c2c86787d3f96db71")
+ (IV "113b9785971864c83b01c787")
+ (CT "")
+ (AAD "")
+ (Tag "72ac8493e3a5228b5d130a69d2510e42")
+ (PT ""))
+
+((Count 1)
+ (Key "a49a5e26a2f8cb63d05546c2a62f5343")
+ (IV "907763b19b9b4ab6bd4f0281")
+ (CT "")
+ (AAD "")
+ (Tag "a2be08210d8c470a8df6e8fbd79ec5cf")
+ FAIL)
+
+((Count 2)
+ (Key "2ad0bf5aeb47a0c1a98da3dfdab4fded")
+ (IV "25f1b6091ee7040fea4ba854")
+ (CT "")
+ (AAD "")
+ (Tag "d7963d240317653e01cf5abe5d0966ae")
+ (PT ""))
+
+((Count 3)
+ (Key "d8cd400a0a73d114cd3ecf36537cab3d")
+ (IV "3c162c9f16a49b8fe6c92a81")
+ (CT "")
+ (AAD "")
+ (Tag "4203aec165f9d397cf9009770a088c16")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "d1f6af919cde85661208bdce0c27cb22")
+ (IV "898c6929b435017bf031c3c5")
+ (CT "")
+ (AAD "7c5faa40e636bbc91107e68010c92b9f")
+ (Tag "ae45f11777540a2caeb128be8092468a")
+ FAIL)
+
+((Count 1)
+ (Key "2370e320d4344208e0ff5683f243b213")
+ (IV "04dbb82f044d30831c441228")
+ (CT "")
+ (AAD "d43a8e5089eea0d026c03a85178b27da")
+ (Tag "2a049c049d25aa95969b451d93c31c6e")
+ (PT ""))
+
+((Count 2)
+ (Key "bc3ab28150fd4cb731d5f48ed2784173")
+ (IV "40408445c203c647312b8f01")
+ (CT "")
+ (AAD "53d2fc19963fc99a36a524e39cb68aa8")
+ (Tag "3f04dbd2f49909f73044175041fd9eff")
+ (PT ""))
+
+((Count 3)
+ (Key "34537f1a0ba093aefedefe8b4b6b34e7")
+ (IV "9c5fc88eb388ef6776aa2182")
+ (CT "")
+ (AAD "4dd377d089c617dda1ecd42341d1878b")
+ (Tag "c0fccde30ba354e23c05b5371c40d088")
+ (PT ""))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "b1089cecac8e1a56441353857246773c")
+ (IV "1af1e6f40b1b21fcb38f65a5")
+ (CT "")
+ (AAD "ed825cbf40e8f8f198ce1afd1141a3cf391cee73")
+ (Tag "0edb6756481560956d506a8cdb082db0")
+ FAIL)
+
+((Count 1)
+ (Key "e6a76441748e6903a8b7ef114f631dd8")
+ (IV "79706e2030f9938576d8d9ae")
+ (CT "")
+ (AAD "d2e6fc9e97ed37a0530f2744ca58ed81f0ddd99f")
+ (Tag "102bb898d4ca9780a69aa159e8c92228")
+ FAIL)
+
+((Count 2)
+ (Key "5211242698bed4774a090620a6ca56f3")
+ (IV "b1e1349120b6e832ef976f5d")
+ (CT "")
+ (AAD "b6d729aab8e6416d7002b9faa794c410d8d2f193")
+ (Tag "0f247e7f9c2505de374006738018493b")
+ (PT ""))
+
+((Count 3)
+ (Key "0335807df98f4728dc982efef77686bb")
+ (IV "5cceb5114b6701989957c926")
+ (CT "")
+ (AAD "5bc191e74d849733fea6b8212d01a19ac274bdac")
+ (Tag "3f5e29ded16cb63f9ba8c103fe753595")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "748146a0b1d5e9b6facdd95e8a3295be")
+ (IV "99e8394910c21207541ca90c")
+ (CT "")
+ (AAD "5ce0d8dbac8a82fa8dd7aec334b81301b31ab49f3b40a1857cc540a1d992f27f80945dfcb4730dc81ddfd32dee1825d6")
+ (Tag "847292904038c42168adf62011dc790e")
+ FAIL)
+
+((Count 1)
+ (Key "762da58bb000f5d499818bc859989a30")
+ (IV "584c291ff1aa388a5112521e")
+ (CT "")
+ (AAD "91f92e8bbda7b5ec967ade766f4f26e9189eaafad416f37b4891d3e37d70cb9a267aa843dd202858ade020261223dfce")
+ (Tag "9ac7eb2d762facae06086c957959880e")
+ (PT ""))
+
+((Count 2)
+ (Key "4ae615ef5f3e1ac590d4e5b8623173ba")
+ (IV "3a998fbdf1131c8992e95bf1")
+ (CT "")
+ (AAD "81edcccd1ace673b96fa3b74a2f99fc63bca822f6b9c6b99477b479d5d13b8dca5f6ef726718346ba22c9f492b30d6ba")
+ (Tag "93cfa8f4dc1da3429eb9dca26ed45024")
+ FAIL)
+
+((Count 3)
+ (Key "2dd1a4bc80d9ae6773fe3284e7f7e734")
+ (IV "404c5b85d1429e48348ee225")
+ (CT "")
+ (AAD "861f17b5e33b17369021b8b2054131715bea7cebaaf732066da9a172341eae3b47a0d49923b25463caabcac6ffb7b5ea")
+ (Tag "e0fadad353d1d29ec6503dd2e049d6a9")
+ (PT ""))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "c1e007d318d0e5c87d28fd890dfb04ba")
+ (IV "d7bc58d494491ff57639b60b")
+ (CT "")
+ (AAD "10c68681c6d700ffc72ea9a790cdc9ddc1904c7e886e23ca166dbfa364a4c5f95205bdd1f22eeebefbbb9375f1a416ec7faed6cfdf706085f8fd2632c7a261a78875811f17fba19baf905f0aa623e67175f2158cda313a5047e3")
+ (Tag "2f1ede16f025bc8c5421854b5f0109d1")
+ FAIL)
+
+((Count 1)
+ (Key "8dc7a59a71cd76499de67feac53c786a")
+ (IV "beb45b75ea5b7750e69a409d")
+ (CT "")
+ (AAD "8bade18807ac5fe59cfd34d7eed8ae33dfeeb960d2a15693837f22dd98f68715079d358a49a04a7b231d486ae45f4cd6c0fe3cde6c0d967ce8d84bbf2e4be2db793afb72ea83c7b21a73f65742c214768f7e6133e3814059efb6")
+ (Tag "46e8457d8d409f2a0690e6502f8b7a87")
+ (PT ""))
+
+((Count 2)
+ (Key "30b0bda9871e1732051ab0facb819848")
+ (IV "a071b9e1f103bdedf419872d")
+ (CT "")
+ (AAD "f2295256508b41b6849a3a08b3a4586abfa5a2b35f9b30d0cc59755314b32d6a890973c568a14d4c313f79c47c83c1f0d2b76a006224926fec7ab9b208c34a6e8f8d6ef4b4a75c9952ca35cb81071314b70e65faaf9854f8c32d")
+ (Tag "6f51e06b3aa3c7869e00e3fb07f512d8")
+ FAIL)
+
+((Count 3)
+ (Key "2a032eb1893c4ad9e78c5ed4fcae3c74")
+ (IV "36839f2a8b1d6df1f9f0ec38")
+ (CT "")
+ (AAD "9228a9d72656b32e0342bc4ebdcfdafc2a4b11214ac8caa4c772a95809dea77e49ce4e052b748a662bc1ff7bf57ed9b784d75a349769e23018f406aebf6eae30a5e9364795b58620248ef6cd42db55ee7e49f472c602a3445140")
+ (Tag "610fdb18669a32e7fe24348ebc77ae15")
+ (PT ""))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "e98b72a9881a84ca6b76e0f43e68647a")
+ (IV "8b23299fde174053f3d652ba")
+ (CT "5a3c1cf1985dbb8bed818036fdd5ab42")
+ (AAD "")
+ (Tag "23c7ab0f952b7091cd324835043b5eb5")
+ (PT "28286a321293253c3e0aa2704a278032"))
+
+((Count 1)
+ (Key "33240636cd3236165f1a553b773e728e")
+ (IV "17c4d61493ecdc8f31700b12")
+ (CT "47bb7e23f7bdfe05a8091ac90e4f8b2e")
+ (AAD "")
+ (Tag "b723c70e931d9785f40fd4ab1d612dc9")
+ (PT "95695a5b12f2870b9cc5fdc8f218a97d"))
+
+((Count 2)
+ (Key "5164df856f1e9cac04a79b808dc5be39")
+ (IV "e76925d5355e0584ce871b2b")
+ (CT "0216c899c88d6e32c958c7e553daa5bc")
+ (AAD "")
+ (Tag "a145319896329c96df291f64efbe0e3a")
+ FAIL)
+
+((Count 3)
+ (Key "b1191a672cc55496b3c728d6a67de0ae")
+ (IV "d0b4fa7c7f107f98f66b0195")
+ (CT "ab957acc04c1034d8acc617c0b20f78d")
+ (AAD "")
+ (Tag "a93cc22f6086e816016606b9ad0ba697")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "816e39070410cf2184904da03ea5075a")
+ (IV "32c367a3362613b27fc3e67e")
+ (CT "552ebe012e7bcf90fcef712f8344e8f1")
+ (AAD "f2a30728ed874ee02983c294435d3c16")
+ (Tag "ecaae9fc68276a45ab0ca3cb9dd9539f")
+ (PT "ecafe96c67a1646744f1c891f5e69427"))
+
+((Count 1)
+ (Key "867fc5d5476d5008f0703d81e3622255")
+ (IV "22945529dff947c3c9264df7")
+ (CT "1c785025e5a2678e4b29b29276e395bb")
+ (AAD "261a9efd4f32bc3d07c115b4edcf8adf")
+ (Tag "87fdf1261846164a950c37a3f2eea17d")
+ FAIL)
+
+((Count 2)
+ (Key "3d17f97bf1dae4268b6610dc90c70b28")
+ (IV "ebcd88fc18d4c99d28524d41")
+ (CT "0128a239bb43c12885f9591386ecac0f")
+ (AAD "681a4feac147ee2d25e9191aaa4c8830")
+ (Tag "144def0210af9348f07afe27e65bdc7e")
+ (PT "ec18a057c22d12373b5efe4d177eb068"))
+
+((Count 3)
+ (Key "5c32091e288d4780fcaff52a69c1234e")
+ (IV "bedb360b22847fc2ff60ab78")
+ (CT "60c883306c91a0e6e98f8d7bf7ee9fd9")
+ (AAD "dc7c3a89a00b688af2bd372530bfed0b")
+ (Tag "ffb93af9106e95e9a65ef147765970da")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "4cf56dd7eb109452d7445e79bcad4f86")
+ (IV "5f3724b27c345ed5d1757e9e")
+ (CT "2d0581c040f4e2bb74423682113b818c")
+ (AAD "20fe2aa2641db7318aa5e339b1e303f952b05dc8")
+ (Tag "f090c0cba2151af2e78ef407720233db")
+ FAIL)
+
+((Count 1)
+ (Key "d9529840200e1c17725ab52c9c927637")
+ (IV "6e9a639d4aecc25530a8ad75")
+ (CT "6c779895e78179783c51ade1926436b9")
+ (AAD "472a6f4e7771ca391e42065030db3ff418f3b636")
+ (Tag "4522bfdef4a635a38db5784b27d43661")
+ (PT "8ae823895ee4e7f08bc8bad04d63c220"))
+
+((Count 2)
+ (Key "43ebcf37e131a9b954bf003136e72ce2")
+ (IV "643e6d21bda599d486f2bb1c")
+ (CT "6d23fa3b74d3b61f7305fc87e051408b")
+ (AAD "87c99e3b4292e047ae80947fc5d46c4600d9f5ed")
+ (Tag "9c036852b5e3c0aff0bb8933796182ee")
+ (PT "d5add8d52c941aeb874cb17d52960210"))
+
+((Count 3)
+ (Key "23b0b223c477ac83757300dc0c16684a")
+ (IV "907c5c2d91d33ae435b51be4")
+ (CT "5943b9c9229301ce25b12e798d2f16a5")
+ (AAD "dcaff8fa814e9302f872b89e8656ee1c7c87c0f3")
+ (Tag "31fe5884756cc3225c42a82489115fa1")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "527da7a4f81d6d4f6f395b623aedac3d")
+ (IV "2acf3f0c64f5ab9282a6f4a9")
+ (CT "ef47b52ebc6d4cc0dfaf09d22a587c73")
+ (AAD "e5492270c1df154e594c689fc505575c6bf5d7dbde0d1ded5ed32ec65e3e8289072bb10c35e385f499c0600a58f721b2")
+ (Tag "0530cfe49d93d78bfa9d54ffa6d148ae")
+ FAIL)
+
+((Count 1)
+ (Key "a10785641ff210336a96a42001824462")
+ (IV "906bcc9dcd0fb4caf3c5b691")
+ (CT "19f30bcdb9f3a4c110e5797c64561c88")
+ (AAD "96d9404d0a24052efec37c8998726fee2db69d755ac87dae6f9d6b505fdc09799de79757f90053bf503f23283fba3084")
+ (Tag "beeec6ae10e9d7f11188c59c46789e45")
+ FAIL)
+
+((Count 2)
+ (Key "abbc49ee0bbe3d81afc2b6b84f70b748")
+ (IV "f11db9f7b99a59ed59ade66f")
+ (CT "ce2d76f834942c022044eebc91b461c0")
+ (AAD "d533cf7644a48da46fcdec47ae5c77b9b52db775d6c886896e4f4e00c51affd59499a0e572f324989df511c4ea5f93cd")
+ (Tag "62df4b04f219554cd3e69d3c870032d2")
+ (PT "5135ba1354cbb80478ecaf3db38a443f"))
+
+((Count 3)
+ (Key "bc34611aea26c47b028eda43936fbd1f")
+ (IV "68628129aa2fb6ba7fa46b83")
+ (CT "738d5b0edbbdea4085174c168c11e955")
+ (AAD "6982a727ab5e75c089467b0c9d909d6da2dddaceb3b042aa9b12c1f8d7be7fab63af0e1f457fde6cfea04f4a6df6936f")
+ (Tag "bc0464a8f0f146546b16318dbad4a4ad")
+ (PT "b358a0151f05ba85d65ac3698e674d28"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "99a9bddbb68be243759bc01c882c4ce7")
+ (IV "6d78e303d165a42082abf5a2")
+ (CT "1e3a3fdb540717afe12651d3a51b4340")
+ (AAD "80a8d9fdefb4b114f12208b0a79299ab5e2c8524d2991617f29b23b31cedef24226fadc72b3475c0f201ea0648aa4936ffff9c80f08a329e042cc23728e0b1569357bfd08e9af1b77369bce491b995f7393903c3eceb3fe0c0e4")
+ (Tag "66dbb3bd4b766df31d37a0282876276c")
+ FAIL)
+
+((Count 1)
+ (Key "300b8ffab4368cc90f6d4063e4279f2a")
+ (IV "8e69fa64e871d0e98a183a49")
+ (CT "2d2292da61c280aff86767d25b75e814")
+ (AAD "5166309e153447b27c67051453abf441de3f4a7f6b633ec6122ff82dc132cfb422d36c5ec6e7cc90a9ad55caa1ccdcb82dc5022a20062a9c6e9238f34d085b1f554b5eac05eff25b5a5cb6e18e7827d70175dc0662d77033d118")
+ (Tag "633ee657a8981a7682f87505594c95ad")
+ (PT "4953b54859870631e818da71fc69c981"))
+
+((Count 2)
+ (Key "5061b1c9af824d400a4097353c8b324d")
+ (IV "f9c6575be814e22ec28bc6db")
+ (CT "b1d0976677a3e53777223dae0e65fc7e")
+ (AAD "325408a19d85c17ab70b827a72259f13e45ca7173c392fbc985ed5d30a20fc19d231e1992e1db2c0608db234b7ae87922028226ae66e8fa467f2c2a8e9118139178855bbab89fd6b36c6a1d2e4ef87c65e2d5d80877ae2e31190")
+ (Tag "ca672705ab5a9c257eb79129efa9b3cd")
+ FAIL)
+
+((Count 3)
+ (Key "d27f5053e12dde30561119ad2b9b13be")
+ (IV "5437231a59ac76b2948c48ff")
+ (CT "055835c290211a17f56e019c00082a06")
+ (AAD "da5aad950ec6c7ea6711202256c45590290d0ac427a5121d5cea6e0500dd88098d40b8616bb63a1afb9d3e8e327066b5dbd2ca59c349ba8ebb7bcfe658dcf87e2f74141a786785c41eb1a54118a422e9b9f43a65939f53f6fced")
+ (Tag "fe5e67e5433c57eb12773f473e1e2a0a")
+ (PT "07a4b1a3c359dcbb38aa8b81cad572b8"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "387218b246c1a8257748b56980e50c94")
+ (IV "dd7e014198672be39f95b69d")
+ (CT "cdba9e73eaf3d38eceb2b04a8d")
+ (AAD "")
+ (Tag "ecf90f4a47c9c626d6fb2c765d201556")
+ (PT "48f5b426baca03064554cc2b30"))
+
+((Count 1)
+ (Key "294de463721e359863887c820524b3d4")
+ (IV "3338b35c9d57a5d28190e8c9")
+ (CT "2f46634e74b8e4c89812ac83b9")
+ (AAD "")
+ (Tag "dabd506764e68b82a7e720aa18da0abe")
+ (PT "46a2e55c8e264df211bd112685"))
+
+((Count 2)
+ (Key "28ead7fd2179e0d12aa6d5d88c58c2dc")
+ (IV "5055347f18b4d5add0ae5c41")
+ (CT "142d8210c3fb84774cdbd0447a")
+ (AAD "")
+ (Tag "5fd321d9cdb01952dc85f034736c2a7d")
+ (PT "3b95b981086ee73cc4d0cc1422"))
+
+((Count 3)
+ (Key "7d7b6c988137b8d470c57bf674a09c87")
+ (IV "9edf2aa970d016ac962e1fd8")
+ (CT "a85b66c3cb5eab91d5bdc8bc0e")
+ (AAD "")
+ (Tag "dc054efc01f3afd21d9c2484819f569a")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "660eb76f3d8b6ec54e01b8a36263124b")
+ (IV "3d8cf16e262880ddfe0c86eb")
+ (CT "b1ee05f1415a61d7637e97c5f3")
+ (AAD "8560b10c011a1d4190eb46a3692daa17")
+ (Tag "761cb84a963e1db1a4ab2c5f904c09db")
+ (PT "2efbaedfec3cfe4ac32f201fa5"))
+
+((Count 1)
+ (Key "2aa3dfcef68c333d0f03cbbb60a2dac8")
+ (IV "667a61d732780f5694128daf")
+ (CT "9fade7c433cb44d5ebec14095d")
+ (AAD "227f0dddc71aa2cc20c901fcb8db0e15")
+ (Tag "85f30c02962900f8891a9b6987172256")
+ FAIL)
+
+((Count 2)
+ (Key "e8f077635e558cc41a435d5d364e61c7")
+ (IV "98c0d229fe5e8b2ddee347f9")
+ (CT "435a85887ef52372259cd7235d")
+ (AAD "473a81d1517f963c9d207b92a37ceecd")
+ (Tag "74c7f8c7075a334c01c6c2084289f6de")
+ (PT "4dc63e19811baff628f24c1627"))
+
+((Count 3)
+ (Key "295eecd883ba179e13336c75b0da31cc")
+ (IV "0491d91c05bb855ae8218b31")
+ (CT "2c6e3497d217fcb9854e8db4a0")
+ (AAD "fef3a54930a41bd68178515f447e6cbd")
+ (Tag "f58b48f4578dcd69caae8ecb60743d05")
+ (PT "a506ed7636902fc2c74a5ea53a"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "c62dc36b9230e739179f3c58e7270ff9")
+ (IV "196a0572d8ff2fbd3522b6a5")
+ (CT "958062b331f05b3acaa1836fc2")
+ (AAD "4d10536cbdbd6f1d38b2bd10ab8c1c29ae68138e")
+ (Tag "dc65a20d9a9aec2e7699eaead47afb42")
+ (PT "6d8abcee45667e7a9443896cbf"))
+
+((Count 1)
+ (Key "0c966ae197bd94cdabcab5f9c4da02cb")
+ (IV "c5bcc7e7044169fa01519ab7")
+ (CT "49c9a9b0c3980e443cd5195a16")
+ (AAD "5feaf91a64887463a0b3299da6c87cf2874ebf0b")
+ (Tag "9843f2181d3db30d1c7694c511a85440")
+ FAIL)
+
+((Count 2)
+ (Key "913d0833618d0cac6cf1aa7879ff71df")
+ (IV "64082c05f8f3661d0909c5b0")
+ (CT "b4f1efce82f907c0fcc1ba0777")
+ (AAD "429e3b1b13f9772e9c77a1a4af3d42e8e0e4d86a")
+ (Tag "452b7b777968c18128ade293fd7ca3cd")
+ (PT "8c4c5d3af3ec87bdf8021bf01b"))
+
+((Count 3)
+ (Key "32c251cf7948c7da54a89c109cd10efc")
+ (IV "a12c50265a0f59f0d796185f")
+ (CT "66f5786452f19af24a80ce87dc")
+ (AAD "28d5ece6295b14a98f3d67fa3b7153791f4e34bf")
+ (Tag "cb176553e01e5991d5dcb6796c33336c")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "ef1da9dd794219ebf8f717d5a98ab0af")
+ (IV "3f3983dc63986e33d1b6bffc")
+ (CT "95ea05701481e915c72446c876")
+ (AAD "5abd0c1c52b687e9a1673b69137895e5025c2bd18cbeacdb9472e918fe1587da558c492cc708d270fd10572eea83d2de")
+ (Tag "5c866992662005ca8886810e278c8ab4")
+ (PT "5511872905436c7de38e9501e7"))
+
+((Count 1)
+ (Key "2e3968148b973cb79f275676367cd799")
+ (IV "b055618bdaf94170080346ae")
+ (CT "0117a142931082ff569aa58ea1")
+ (AAD "72c50abc8c10b7a83b755ac26b7a86afb37d2310e832a8982c70ea8950f8c1a0c0b01fee79644753f87a553868dcc719")
+ (Tag "db9143f6cdb3aa57c2aab1bab89e6c26")
+ FAIL)
+
+((Count 2)
+ (Key "7dabba053c8c682b65c8ac9059d20793")
+ (IV "109c8ff05626ed7329a7d68f")
+ (CT "158b708fdbf206999c6d5dba50")
+ (AAD "041c26f5c77092c475ae6fd6f9c8c3c8c42d40f8bffa4c28c2f40146c1dfaed0313f109b0d918f7d72fb87fd20d7fe96")
+ (Tag "0b4680a9f3b9f745bb87c3620ecdd956")
+ FAIL)
+
+((Count 3)
+ (Key "e03c73bfd5dd3aadba727bb3f99e6237")
+ (IV "150fbaae76a2da0b84e42959")
+ (CT "b6b4ab1cea7044abf6f6f7dbfc")
+ (AAD "80d1ce195cf77fc3143a37b8546d2d415241d17ffc1d35fa0613f407f7c7cf4f9fe219fd32eb2a95442f5417bf0f7277")
+ (Tag "03ac1333e300e1845c12f150568ed37f")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "3eeaa3b5aa99f6902d1d58421b53ddb1")
+ (IV "71240c996af69d590ccc8e8d")
+ (CT "9a50a33a9438f485e7c89caba7")
+ (AAD "b1176b9e28794cb627c5cb3743846e6d11339ce6d0ce69789833b9f344e92e5360a0eb61b173687f74eae3184ef641f1c42c5b180014ca7e6b0edb00fbc35f2efa7aac7111dd8ec70e851a3ef2e2436ee07e4fba213425b1a8e4")
+ (Tag "e2865b861f8d5e0af25757905dd0653d")
+ FAIL)
+
+((Count 1)
+ (Key "9dbb962de535a9e77108cd049dea0481")
+ (IV "72d607c6dbc4fbbfeacb042a")
+ (CT "3c8ebab6a3c4ecdb1ed807c962")
+ (AAD "9127cb0deed0e5b43ea153b1c17b484225a49c13a5f5995f86ef28a65f9f82397dffb34d4191c3db60492473d5df839e234a537b5a1cce9dcba1b1d205c92c4b4daea01186737cef6d42829ef07f0b6b2920baf998f6ad0d384c")
+ (Tag "9f8dc7e66cea95d7915281301913d3d5")
+ FAIL)
+
+((Count 2)
+ (Key "77b55a5b37690c9b1b01a05820838e3e")
+ (IV "7a8e0d881f023a9954941037")
+ (CT "e0eb3359e443e1108ed4068969")
+ (AAD "0bb1ad1d294b927c24ee097d0a9afbaa6a62c8923627b50bd96e5ba852509a2e76f7a10ee3987e37a55b92d08531897e6cd76462403b39fb31508cc9fc7684ab5ec2ccc73e8a7f4104a277319bf207fcf263eceed13a76ca177f")
+ (Tag "ea6383077d15d7d0a97220848a7616a9")
+ (PT "d164aeccec7dbcadee4f41b6a9"))
+
+((Count 3)
+ (Key "d5cc39db2b34cee01345dc52be7d5103")
+ (IV "f662499e42f14bea6977174a")
+ (CT "9a84bdd3ac1724216772349f59")
+ (AAD "32d9b18f80e4502ce6fe80fcb58cfa233dbc03d342277a5f381b075a386553895a722392c50ae74bcef5266bbbdecc838048924af36418fcb61d94094c86f702677e454c972affab146d629aabde3680bd7d2a669dd4d9e630fc")
+ (Tag "c15dd85c92bf94b4b901a771629f4600")
+ (PT "ea48032834d9969e6c9f040957"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "bfd414a6212958a607a0f5d3ab48471d")
+ (IV "86d8ea0ab8e40dcc481cd0e2")
+ (CT "62171db33193292d930bf6647347652c1ef33316d7feca99d54f1db4fcf513f8")
+ (AAD "")
+ (Tag "c28280aa5c6c7a8bd366f28c1cfd1f6e")
+ (PT "a6b76a066e63392c9443e60272ceaeb9d25c991b0f2e55e2804e168c05ea591a"))
+
+((Count 1)
+ (Key "c3aa0400ea3f5107fbe8aa011e1391b3")
+ (IV "9c22008475e7a907f7abc966")
+ (CT "96a06e1fdb0082ebc6441312dd9cd6ed6f7fac745facc368b5ab2a3951bd75a6")
+ (AAD "")
+ (Tag "6e84d66448068f67889404263a047a88")
+ FAIL)
+
+((Count 2)
+ (Key "0ab76460d1870b6c989383b615f3876a")
+ (IV "32f38776d99843e9d79d6b28")
+ (CT "fb4d7d8e0958ea76d9489f2c6b5308d75cf96c8e1bc6a08a978a65f0c0f510af")
+ (AAD "")
+ (Tag "b49a4c6af3403dfb57cf1f4bc25b17a8")
+ FAIL)
+
+((Count 3)
+ (Key "f02f0436322783d369d552f0d6385474")
+ (IV "e029e6acddaf62ea81f7f39f")
+ (CT "14b4e53213de80bd995468df293a6bbf2452846c375a3706738db45e7c5d5ba6")
+ (AAD "")
+ (Tag "8a8a3c4693256f8b50160554824856e6")
+ (PT "45ee8a0f38f91785bf8cac4bd05284249a8035eaec0e6e1946e0ea83a0ac3271"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "3308bf978dca6bd7f5fe4ccd6d0e7c24")
+ (IV "85996c785a83493cc7165c11")
+ (CT "4c8f0c7ad73fc469b4b385f80741f3014ec236e29ca9068b8e55ed6fb2fc9b9b")
+ (AAD "b0ebb26b9e27c44c26543e257b7c7eb4")
+ (Tag "8b5528d6ef87eb0be9b6708fab7d654c")
+ FAIL)
+
+((Count 1)
+ (Key "e60b37678b00cea55f72c593ac38067b")
+ (IV "845de274d5ea7d6e0ce794ba")
+ (CT "dbc9fb93ffb1698e5a1c062d391f63884c8d8fd862e07ba51d664bffd22b9faf")
+ (AAD "59c8ef4352877ee249cd11439b445733")
+ (Tag "08d213989f884aface743fb88f778395")
+ FAIL)
+
+((Count 2)
+ (Key "95bcde70c094f04e3dd8259cafd88ce8")
+ (IV "12cf097ad22380432ff40a5c")
+ (CT "8a023ba477f5b809bddcda8f55e09064d6d88aaec99c1e141212ea5b08503660")
+ (AAD "c783a0cca10a8d9fb8d27d69659463f2")
+ (Tag "562f500dae635d60a769b466e15acd1e")
+ (PT "32f51e837a9748838925066d69e87180f34a6437e6b396e5643b34cb2ee4f7b1"))
+
+((Count 3)
+ (Key "dd2f191758cdeb480feee0beee689fb7")
+ (IV "8a1c6f696968d1a77a44ba45")
+ (CT "b43afe82184d077319a9366c1162c5ca4882da0df82207ccdc038125bb338c9b")
+ (AAD "ef910ed8c787999640c2bd172e5e686d")
+ (Tag "88521a088f92a1d3ff7ce5364bdc7859")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "f3e60720c7eff3af96a0e7b2a359c322")
+ (IV "8c9cb6af794f8c0fc4c8c06e")
+ (CT "73e308d968ead96cefc9337dea6952ac3afbe39d7d14d063b9f59ab89c3f6acc")
+ (AAD "5d15b60acc008f9308731ea0a3098644866fa862")
+ (Tag "658e311f9c9816dbf2567f811e905ab8")
+ (PT "7e299a25404311ee29eee9349f1e7f876dca42ba81f44295bb9b3a152a27a2af"))
+
+((Count 1)
+ (Key "4ea997187ee51b478f5e1ba48b57f0f8")
+ (IV "bb6fed9776ed61ca321ecdad")
+ (CT "d4d67723dc367cb453c5b8ede795ad2b7affcf9f42650c0ea1df91e23175a7cd")
+ (AAD "abeeb5850efb796979bb55a1d255350d9faae4d8")
+ (Tag "def8ab2eda15fe03abee6b2dc9f6e805")
+ (PT "87e9f743a7bdf04a2d97c4a6c5d243666bfb2bc80c9610bdb079792a3f724e04"))
+
+((Count 2)
+ (Key "aa6d3c010d93c6ce4d574b5f4017b8b3")
+ (IV "9480e879335e1c2f2f0b1201")
+ (CT "752ffdd7014ef7dbb269b9e43d241ca94b578c1ee2052b26225450ba2dcdd114")
+ (AAD "5c03cbcbb53d7b44a47e247c0c8b77e5603552c7")
+ (Tag "63d1a0a5faf1cfa9f72bcec227169fbc")
+ FAIL)
+
+((Count 3)
+ (Key "b77cc41840f9fbff1eae0b9b2fe914c2")
+ (IV "81fd55366b7903e5c21e96c0")
+ (CT "fe6cd8c592c40acd607fab35272044cf93bf1b64a34ab001564f474990ea851a")
+ (AAD "8c8ec50ddcc4c6526336caa0fd43d4dc6f0b71aa")
+ (Tag "f6117a62541d37d32d84e7ea15a709eb")
+ (PT "65453a0933555d1f85d6f7faf9216b4bb5428885b995a27f30dfb2620748fc41"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "8453cf505f22445634b18680c1f6b0f3")
+ (IV "fab8e5ce90102286182ef690")
+ (CT "5475442af3ba2bd865ae082bc5e92ad7f42cd84b8c64daadcf18f0d4863b6172")
+ (AAD "ff76d2210f2caec37490a19352c3945be1c5facb89cb3e9947754cade47ec932d95c88d7d2299a8b6db76b5144ab9516")
+ (Tag "972a7e85787ba26c626db1a1e7c13acb")
+ (PT "e4abb4773f5cc51c9df6322612d75f70696c17733ce41e22427250ae61fd90d3"))
+
+((Count 1)
+ (Key "87a0af6da98b86e82098c9a7564554d7")
+ (IV "1991750a529395fe5b802332")
+ (CT "9a1e0fb7ec85f1c4d82111c7ad73085cb75f8478f362102cb4c1c27bc38cf4da")
+ (AAD "6253a0d0d54234476bda68f2a4db8fac5c21206f1bb41de2e3c0a06b9d068c4d8cc99de08d0c6720d5f06ee4f981c23e")
+ (Tag "9cd38b99c212342c816263c802656655")
+ (PT "1734cb85a5df60143786fdba7165f286d44ea0442eee802a36aa241c72725e4c"))
+
+((Count 2)
+ (Key "ab124c19896f9a725cd84bc65c0b769d")
+ (IV "8be6b8884adb0acb19776719")
+ (CT "a77bc17b558e829efdf4508c62761520a44920840c4d8e8cad0564931ffb6f0f")
+ (AAD "f3f8c4d2edf80986c33940a9dfce5c64ac314d9969bad730bb719a4a39551eda6b771b6941ba301a4bcf2c7e69c8a000")
+ (Tag "890106f841f36315a7fed2ffb57f2dbb")
+ FAIL)
+
+((Count 3)
+ (Key "2c691107ac3eeac8507f7275d35daa6f")
+ (IV "b1c7fc99d810d00bef25163a")
+ (CT "dbb74c34d430d8bbc1a859418f0435c18deab7bca9d2c7ed3e9a1647de0e5f62")
+ (AAD "78e36ff5b2be643c948c1bec4153b2e9eaf0bb4a4a92079bab1fc42f3f66f25d075ec82998993c95fb8474b8091f4968")
+ (Tag "b6bfa61751a82d581436ea837de8c483")
+ (PT "42f707406147678db6f51122e58bcbd4b9a8fd25bfad242aef6fa516663fd0d7"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "07a6be880a58f572dbc2ad74a56db8b6")
+ (IV "95fc6654e6dc3a8adf5e7a69")
+ (CT "095635c7e0eac0fc1059e67e1a936b6f72671121f96699fed520e5f8aff777f0")
+ (AAD "de4269feea1a439d6e8990fd6f9f9d5bc67935294425255ea89b6f6772d680fd656b06581a5d8bc5c017ab532b4a9b83a55fde58cdfb3d2a8fef3aa426bc59d3e32f09d3cc20b1ceb9a9e349d1068a0aa3d39617fae0582ccef0")
+ (Tag "b2235f6d4bdd7b9c0901711048859d47")
+ (PT "7680b48b5d28f38cdeab2d5851769394a3e141b990ec4bdf79a33e5315ac0338"))
+
+((Count 1)
+ (Key "46bffe71ac52d4cc327b612469ccfb10")
+ (IV "78496f5e653ea0111b0ef4c9")
+ (CT "8c620a9245557459d7631f0df5935a9c4f05ac7f842e31c270264451090c21d3")
+ (AAD "954dc3942300fbd61bbb7e1c6a00836ec3875e6c12656df3affa4605200e4adf429731f6e7386bf43744cc252db523a322312702af68018853aa39a61ff88ce785ed727e0916057a97fa0c3e6daafba1aa79bf597ccddc4b5b97")
+ (Tag "20fe30dec5f3a5a8b8117afe65b81ca3")
+ (PT "59ba37f99a3be7b216f2a70dbc132f4b5839a5a57b51049daf9392afc02d9355"))
+
+((Count 2)
+ (Key "e306843ece9d0e98edf07aa3d1e3b6ed")
+ (IV "9cc69f1c75cf0ee74f3a4ef5")
+ (CT "ef59d545d7e921dcfefbaab0eea561e1c8cb12d27cfae589ddbf9c5271d41453")
+ (AAD "76f1e842634fc3a22be7b899d5616d125d393432c897f7994012f8c29934ff33ea4fd3495a52a1e3ea587a9116342c3ee304345d5e29102560df81a492799ec689e530dcd3e52711eebb43c66f645e5595abe5eaf8d462049d38")
+ (Tag "c34930f3143b4746e574e653dfcc524d")
+ (PT "0bfe265de63d70091b4f0537ff4153bb1e07502c55486f089873fdf38a9319db"))
+
+((Count 3)
+ (Key "d0edd41ab297cb5d5df6b90a3cf1768d")
+ (IV "da4ef7e726e3a39d243c8444")
+ (CT "d1c00496494bbcfefb04c5214657e9aa5270cd55e631ea914540312aa58ccd81")
+ (AAD "7a11df8fdef5aae36cfedd41565bad36fffbd6e6d9668135273e226dd83bd3ce84923a158747ddefefb12d156160d1abf3f35e1e689c40c2c0214ebb436c87528b3699e75817192894b54b47e3f508095230744b1b12f699cee1")
+ (Tag "7b9c7f4e5f471036ebc16c825f7e8e7f")
+ (PT "b9077e1f9787facc6fa5903b03d90af119454f8190f87391cb356e277cd3f06c"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "f3c4c058c7f0965a0328f0f011a128e0")
+ (IV "e96098c39d9aa83522119355")
+ (CT "b42c25155820564b41c525c6aa8ff4363c7c511917772b9bcd574b0be1f6b4ca2153869ddf0c4f76dfad3aef0a76ce056582f9")
+ (AAD "")
+ (Tag "44331e39b8a66a81591ed155d7d32372")
+ FAIL)
+
+((Count 1)
+ (Key "93ae114052b7985d409a39a40df8c7ee")
+ (IV "8ad733a4a9b8330690238c42")
+ (CT "bbb5b672a479afca2b11adb0a4c762b698dd565908fee1d101f6a01d63332c91b85d7f03ac48a477897d512b4572f9042cb7ea")
+ (AAD "")
+ (Tag "4d78bdcb1366fcba02fdccee57e1ff44")
+ (PT "3f3bb0644eac878b97d990d257f5b36e1793490dbc13fea4efe9822cebba7444cce4dee5a7f5dfdf285f96785792812200c279"))
+
+((Count 2)
+ (Key "2e6705fc4862967af3aea0785f6da759")
+ (IV "7d9280f59dc2b98f0195098d")
+ (CT "30980d2634138ead42c3347b9b3af32f78ffec0d7686b9247f8ef7258b72859276d9d33eb670eafb3ea900c32db9befccfc1d6")
+ (AAD "")
+ (Tag "cbca49ce70d3ddb752dc3b438f2845ba")
+ (PT "fd1b20d58e51fe93d177db518416e632212dd1effb6b5fcf51bd94234ab96a455d8e3c84ca03b26d58c8867b6a1cc390828ffb"))
+
+((Count 3)
+ (Key "c36bfc62ae2b4969dbe23b7332eccfe4")
+ (IV "f9651d42ebf8468eb6e45829")
+ (CT "f9296beed3d3b573f72cbde4ad832e34e8ef6cf7178e8d2783fff5ec8359daf67df8a70d8f86d2c339f9e1ec59d234e4f61938")
+ (AAD "")
+ (Tag "46ac46b455e9f483a8eedf6ef4b61be1")
+ (PT "de42199c477b69de2857100395aefb2735c8328331109d647eae535c54200869e7a8bc82f461fc6c474748297c341bd22126fe"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "bc22f3f05cc40db9311e4192966fee92")
+ (IV "134988e662343c06d3ab83db")
+ (CT "4c0168ab95d3a10ef25e5924108389365c67d97778995892d9fd46897384af61fc559212b3267e90fe4df7bfd1fbed46f4b9ee")
+ (AAD "10087e6ed81049b509c31d12fee88c64")
+ (Tag "771357958a316f166bd0dacc98ea801a")
+ (PT "337c1bc992386cf0f957617fe4d5ec1218ae1cc40369305518eb177e9b15c1646b142ff71237efaa58790080cd82e8848b295c"))
+
+((Count 1)
+ (Key "4384629e9b1686927e8508243be1d01a")
+ (IV "84ff7f4feddde7d89d370e7d")
+ (CT "8f385490e9622a6c1009900052385c23442890d2af667b210d012781e62d0de311f2149cc377a490afcc686cd92e7c35dc7e5c")
+ (AAD "a51cebf08d0f293e3a83bea5a9f1cc6d")
+ (Tag "00097982ccc985671477cb1f1a250bd4")
+ FAIL)
+
+((Count 2)
+ (Key "aa1b3a94882b9b9dde8c8099a7af1830")
+ (IV "d56abb827acd6388f48f7096")
+ (CT "d145a79b9a97ecf2907ab0372c6eed310cf32e7a269374fba920c99eded54bc03c873fc0acdb895078bb8bb336fcd2662e071f")
+ (AAD "503eb74ed7b0ed14f221d55638fa4fca")
+ (Tag "e0861f6a706b56da1b1fa8f04a14eebb")
+ (PT "8b9700bbfec195f96f28093002217703970126e4b209e585719c066e5c7eb8c48e7e8e6b3329cf5980eeca49f80bf121de253f"))
+
+((Count 3)
+ (Key "5a85c2df1f3c0baeba09b8f532cfc8bc")
+ (IV "9e8dfe8d34ef979508c00cda")
+ (CT "9887db619566da9fbfa073a667168a85fcb94700ab267d30e3ddac0f8d1ac0f6f7d63ac02d2c28668f933ba080da521032ebd8")
+ (AAD "27eafefcad6eb8a410235ec3969ed11d")
+ (Tag "c84326d0247aa00ff3ba886da1f2c966")
+ (PT "63ef1aebf25de0e7e35a602e6d86c95dc9ff46ee0223b09b5332cb28a9b0d94486394cd442c93cd854ac54208fe1e1c64257b0"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "af57f42c60c0fc5a09adb81ab86ca1c3")
+ (IV "a2dc01871f37025dc0fc9a79")
+ (CT "b9a535864f48ea7b6b1367914978f9bfa087d854bb0e269bed8d279d2eea1210e48947338b22f9bad09093276a331e9c79c7f4")
+ (AAD "41dc38988945fcb44faf2ef72d0061289ef8efd8")
+ (Tag "4f71e72bde0018f555c5adcce062e005")
+ (PT "3803a0727eeb0ade441e0ec107161ded2d425ec0d102f21f51bf2cf9947c7ec4aa72795b2f69b041596e8817d0a3c16f8fadeb"))
+
+((Count 1)
+ (Key "ebc753e5422b377d3cb64b58ffa41b61")
+ (IV "2e1821efaced9acf1f241c9b")
+ (CT "069567190554e9ab2b50a4e1fbf9c147340a5025fdbd201929834eaf6532325899ccb9f401823e04b05817243d2142a3589878")
+ (AAD "b9673412fd4f88ba0e920f46dd6438ff791d8eef")
+ (Tag "534d9234d2351cf30e565de47baece0b")
+ (PT "39077edb35e9c5a4b1e4c2a6b9bb1fce77f00f5023af40333d6d699014c2bcf4209c18353a18017f5b36bfc00b1f6dcb7ed485"))
+
+((Count 2)
+ (Key "52bdbbf9cf477f187ec010589cb39d58")
+ (IV "d3be36d3393134951d324b31")
+ (CT "700188da144fa692cf46e4a8499510a53d90903c967f7f13e8a1bd8151a74adc4fe63e32b992760b3a5f99e9a47838867000a9")
+ (AAD "93c4fc6a4135f54d640b0c976bf755a06a292c33")
+ (Tag "8ca4e38aa3dfa6b1d0297021ccf3ea5f")
+ FAIL)
+
+((Count 3)
+ (Key "231025c304c626f119964a708328d25a")
+ (IV "9f60d5a70a0a1452c50d756f")
+ (CT "0dfe5a02709ec9fc6515501f16df29c512832f4f3da7491a8c1f1e149d131bd5ca05b803c8ad15bca743cb2c6308281857b8bf")
+ (AAD "7e2b3efd33751fb7df561fee3f5f141433ed3b19")
+ (Tag "42ef3d08f38e9825b8800e56f1194ee9")
+ FAIL)
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "e7c650a8f64a900857eaf8d95c49a807")
+ (IV "961a0b83a36b79acc1494da5")
+ (CT "70954661360ee1dcc5ea22918fa89bbcf56aa6ded04b22fccff799d773833617c9aa7ddb0ab9c170d6a44769bce9f7fe287c68")
+ (AAD "da9ff7c1529f9cb75c88cd890c9a1af493db5fe8148c4687984c070442c5d501434bbaab1dae06cec6de0606d59da3d0")
+ (Tag "a0962c9259e7d4a9a21e9328e93c754c")
+ FAIL)
+
+((Count 1)
+ (Key "f0305c7b513960533519473976f02beb")
+ (IV "1a7f6ea0e6c9aa5cf8b78b09")
+ (CT "30043bcbe2177ab25e4b00a92ee1cd80e9daaea0bc0a827fc5fcb84e7b07be6395582a5a14e768dde80a20dae0a8b1d8d1d29b")
+ (AAD "7e2071cc1c70719143981de543cd28dbceb92de0d6021bda4417e7b6417938b126632ecff6e00766e5d0aad3d6f06811")
+ (Tag "796c41624f6c3cab762380d21ab6130b")
+ (PT "e5fc990c0739e05bd4655871c7401128117737a11d520372239ab723f7fde78dc4212ac565ee5ee100a014dbb71ea13cdb08eb"))
+
+((Count 2)
+ (Key "adbe83a792ac133ff5088b49dc8fc54c")
+ (IV "d9ff7ed76c6c34d956917a8e")
+ (CT "e12d324af2e723722fb5ace9da7c3dc0e673d2ee294e414b5abbbdd2dd4fc688e5dd6d2e961533e9083b6ae8e712b7b23339a4")
+ (AAD "a81f2b8c138d3e629b6e06a9563e75ac5bf024fc53556dbb9e008d9fa551835566d72b15b39f1ea0d9d6a53ddbd488c8")
+ (Tag "6fe3139f1f75228545db7fee6965fb17")
+ (PT "e76f356343be3e1fc9e2bd0f9dd770c876122ddf1d6270128a74ca8394ba47531e82e13b0c9f028fae18110f2ac673de832085"))
+
+((Count 3)
+ (Key "32406fc5ecd36e327c45c9e783870b54")
+ (IV "22e95c98f482982ea0f189c8")
+ (CT "e8396f91e757cc47385e2d45a0dd8a3fa34350a9d1e0cabadbe73ea2b17b866c7cce8df163a802a7e207e80fe6f11d15f2e483")
+ (AAD "635ba2c5301e218182da81805de97b2aab5f163397d319c4548dee5ca7fb4a6c601f667da3c542347890e267f94d613e")
+ (Tag "630431ebd61f8f2e01639d2e6cf3acc8")
+ (PT "3d49646a76dafcb7ff78aca9415207b107afe751b2cebc1757cfc74402f15f89c36ebad397fa033d21c26ece33533c4d80897b"))
+
+;; [Keylen = 128]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "da2bb7d581493d692380c77105590201")
+ (IV "44aa3e7856ca279d2eb020c6")
+ (CT "9290d430c9e89c37f0446dbd620c9a6b34b1274aeb6f911f75867efcf95b6feda69f1af4ee16c761b3c9aeac3da03aa9889c88")
+ (AAD "4cd171b23bddb3a53cdf959d5c1710b481eb3785a90eb20a2345ee00d0bb7868c367ab12e6f4dd1dee72af4eee1d197777d1d6499cc541f34edbf45cda6ef90b3c024f9272d72ec1909fb8fba7db88a4d6f7d3d925980f9f9f72")
+ (Tag "9e3ac938d3eb0cadd6f5c9e35d22ba38")
+ (PT "9bbf4c1a2742f6ac80cb4e8a052e4a8f4f07c43602361355b717381edf9fabd4cb7e3ad65dbd1378b196ac270588dd0621f642"))
+
+((Count 1)
+ (Key "d74e4958717a9d5c0e235b76a926cae8")
+ (IV "0b7471141e0c70b1995fd7b1")
+ (CT "e701c57d2330bf066f9ff8cf3ca4343cafe4894651cd199bdaaa681ba486b4a65c5a22b0f1420be29ea547d42c713bc6af66aa")
+ (AAD "4a42b7aae8c245c6f1598a395316e4b8484dbd6e64648d5e302021b1d3fa0a38f46e22bd9c8080b863dc0016482538a8562a4bd0ba84edbe2697c76fd039527ac179ec5506cf34a6039312774cedebf4961f3978b14a26509f96")
+ (Tag "e192c23cb036f0b31592989119eed55d")
+ (PT "840d9fb95e32559fb3602e48590280a172ca36d9b49ab69510f5bd552bfab7a306f85ff0a34bc305b88b804c60b90add594a17"))
+
+((Count 2)
+ (Key "1986310c725ac94ecfe6422e75fc3ee7")
+ (IV "93ec4214fa8e6dc4e3afc775")
+ (CT "b178ec72f85a311ac4168f42a4b2c23113fbea4b85f4b9dabb74e143eb1b8b0a361e0243edfd365b90d5b325950df0ada058f9")
+ (AAD "e80b88e62c49c958b5e0b8b54f532d9ff6aa84c8a40132e93e55b59fc24e8decf28463139f155d1e8ce4ee76aaeefcd245baa0fc519f83a5fb9ad9aa40c4b21126013f576c4272c2cb136c8fd091cc4539877a5d1e72d607f960")
+ (Tag "8b347853f11d75e81e8a95010be81f17")
+ FAIL)
+
+((Count 3)
+ (Key "e765831739df79cad4271c8b97012b87")
+ (IV "e02b84f657f30fcef55db39c")
+ (CT "c22a920729745e6033fb0a139fb84549125701d90ac568dfb1117461380959be61949a2ff8ab5044c448c5fe081253e639528e")
+ (AAD "3b6a16b461a8aa599ea02a63ac7e57ef9acfed69dc75ec7886e902d4b8dc39913f5ef645e1c46251b144b5d6024c6a1a3c330aa7f57b8a1c55bcd918661583d970c33733ddde3ef1c5ea7ac8eeb67021ba47a904d11308824832")
+ (Tag "aa49deb346952540a11b5af0d8ae2bd4")
+ FAIL)
+
+;; # CAVS 14.0
+;; # GCM Decrypt with keysize 192 test information
+;; # Generated on Fri Aug 31 11:29:44 2012
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "0e5d6e68f82f32bea3f0b69498c1a31ef6d955cd3d27a2a8")
+ (IV "caf72ee1e62e1001e8cfbc63")
+ (CT "")
+ (AAD "")
+ (Tag "db1a74ffb5f7de26f5742e0942b1b9cb")
+ (PT ""))
+
+((Count 1)
+ (Key "f780e4089a6224b9db576b368149fc4f58e6c8f7061814e2")
+ (IV "ae84a7ac9f89a70c92d566ec")
+ (CT "")
+ (AAD "")
+ (Tag "cd65b48665146066b92b34b38ec3415e")
+ FAIL)
+
+((Count 2)
+ (Key "0ed9f074d53b9b71bb87d123c16d269728ad819d89bba91c")
+ (IV "8b4e5be3cef24b12640bd781")
+ (CT "")
+ (AAD "")
+ (Tag "258e9d80875b4a6f4b7216da0db35e47")
+ (PT ""))
+
+((Count 3)
+ (Key "c7fcc5876350e4d735af85acedab38e8d6f1e9732fb690c9")
+ (IV "a11221922be40e8100bb3205")
+ (CT "")
+ (AAD "")
+ (Tag "49fffb4b2718827f70c8567274928429")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "aa921cb5a243ab08911f3289266b39dab133f5c420a6c5cd")
+ (IV "8f73db68daeeed2d155fb1a0")
+ (CT "")
+ (AAD "487443c7c14ce474cb3d291f257070a2")
+ (Tag "b12674fbeac6889a24948f2792e30a50")
+ (PT ""))
+
+((Count 1)
+ (Key "0778c653b8318c16cbe96af79e6fb57a628bb0a5eb65addc")
+ (IV "d901bc5babba7958af15c8b8")
+ (CT "")
+ (AAD "303a3c3f74104252abcf89282521cb65")
+ (Tag "d599c2b12f4afa1aeebbdee4c9e3ccf8")
+ FAIL)
+
+((Count 2)
+ (Key "409e7a1f2dc87b887da6cd51fa66b3c439d6bb64eed4f58b")
+ (IV "2c3eac60c57a4db5343c9fe5")
+ (CT "")
+ (AAD "7ca7f102db61be6777cfb3142c81df38")
+ (Tag "c4d72c983924fcd886b6e076525b7104")
+ (PT ""))
+
+((Count 3)
+ (Key "05990af84fb9f3ad9ad517154911f22f779b4eaf1853a8a2")
+ (IV "e789109f30c7cbb8bbd8e149")
+ (CT "")
+ (AAD "56e56b8955ee67cb25057fa4c22ab9c0")
+ (Tag "5178ff2cd4f6800954414928cad9676a")
+ (PT ""))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "fa69f5e73774198ad6a117816e8b75b2b7bd5f6fe718fc83")
+ (IV "7f217874ce652ed376768c89")
+ (CT "")
+ (AAD "8f150ee2cdcc618d48b37e9927ed264c10e7affa")
+ (Tag "ba7049448b6118ac599ea352a8c436ae")
+ (PT ""))
+
+((Count 1)
+ (Key "b69be8e54667051867d3f5495db79c33501213206f57b5e1")
+ (IV "3a5e532bda2d6a64b3c452b9")
+ (CT "")
+ (AAD "b70f1c562d903a33529417d1438b6f87570e132a")
+ (Tag "ee388ef0432ed5c5ad578b9c1e0bf74b")
+ FAIL)
+
+((Count 2)
+ (Key "cf3994f7b2f2cd1fcf13dc7cd7244e96783ea80303989b95")
+ (IV "09ab2c03cbe368cefa6824a2")
+ (CT "")
+ (AAD "ecc4593da8b8f0e7adc6dac3be105562488ec2ec")
+ (Tag "70bfb84ae411be0c6bdf24790f256513")
+ FAIL)
+
+((Count 3)
+ (Key "d2a502e4c5da623f3e1c03166c03a8557fa9814a774363ce")
+ (IV "d21ebae091d2177c7447b812")
+ (CT "")
+ (AAD "c6b405b91b7211fc61d349c3a239fccc480389a3")
+ (Tag "8780b2466c0f13730f301f9fc77b8936")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "e6734e0fec2f7547014b733ed34af2dd00b7f83b48cf7edf")
+ (IV "a913bb13906266d2169ab85d")
+ (CT "")
+ (AAD "c2a2bed98dd5d72f57464d8c85eb79b9eb24061b44909ed99f3f1462b17d76b7a52443216cf05e68c62fa960a2f0b0a2")
+ (Tag "3c3afa4073b3ea1081ade19e9d019cbc")
+ FAIL)
+
+((Count 1)
+ (Key "211dd7172bcdd53d73194458847a8efa07ad79b869bd5598")
+ (IV "16e5884bbc89415d72c0a167")
+ (CT "")
+ (AAD "87db1f5e988f74e553be8ffb7760cc16d9d728fb7a4c114492b280ab6128da039e735b1f7534adf86980a839ea5ef00e")
+ (Tag "fc8c985680e4c993c6f6f5fde10936b4")
+ FAIL)
+
+((Count 2)
+ (Key "1cd0f4217b4b055b096cd4c357036e164940ff813e8bfc62")
+ (IV "154bbb9e3918d3706b1b1175")
+ (CT "")
+ (AAD "a70b1f9078c0effd59b45b776b90a10d8b35aa47655e6c45b0eb2f53ec4497e88839f5360e63be874561a122fc256e98")
+ (Tag "75d97307731e64f73281362b4e784114")
+ (PT ""))
+
+((Count 3)
+ (Key "32ec914884d7568e281933c9953e6c78756af3d2f7759bdc")
+ (IV "eb7a09816e75a750ae0108ca")
+ (CT "")
+ (AAD "da556f73d8804e49395bc18b225fdb7247984c36c086e69c9ddc39689e310a7bc5ae4add1ecaab8b63b1c90bc328b397")
+ (Tag "08a69427ec6012aaf927604b0b1e4a42")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "0e08f05f4486ccd670514f4307d410ff313e250dc93ffca9")
+ (IV "a990d1ea4d789072c1881ef9")
+ (CT "")
+ (AAD "66beb7044f4b32827834630d879a8a8d4e9d7b80bec3e93d937ec42a0f5ffc1a9801eb86e3db4852e09616b2312c5afc7eb1e39bcd92dce37e27c50b0d80e6ab7311e984acad89fd376e828062c018b82e7eb0c804b198d869ce")
+ (Tag "caec2a7ab51dd049b08a024b92e28d76")
+ FAIL)
+
+((Count 1)
+ (Key "25e97433491df9c8381eea524daab5a092db259edc34e4f9")
+ (IV "95ce1179ed9bd916acb7f7e9")
+ (CT "")
+ (AAD "411d77aec39759114b2adb69d2aacfcd639b321b74e99e47d0e3bb0565167ec44cbd5f7b86444174cb0a2231698e5089105698c9e2dfa3954f73a9db1e6831ff31f0edb43a621e59597d1407e19e0f4315fcbb3870b87a9729c4")
+ (Tag "83d0a4c8dcf476d294d3de882f09ff5c")
+ FAIL)
+
+((Count 2)
+ (Key "fe651b0fe36e18185bdeb476713a2fbd4adc8921d5842b6c")
+ (IV "63318cb043bb9bd5c5465703")
+ (CT "")
+ (AAD "75c59db8a5527deb26e5ddfe66c576d58967e41385e09f69a7faff9ed6055f31fa7032671445029d006712389a832625028e5f97578367f9c692b98c550ee7ed22c70b9f4395a36e86e6912bdb4652486405f0017d48ca48711b")
+ (Tag "acf73062914ab70996f04982544c3ea1")
+ FAIL)
+
+((Count 3)
+ (Key "01ba68d6a92327baf24b31790535688a149213947719f34c")
+ (IV "f83d69d0ac882bce0ad75633")
+ (CT "")
+ (AAD "f9db7ab8581390c4e94dead341415206fb773797fcf3b6286566e6eef7f56ef5e3943e07cf5dd29112cf15106bed20a25965cceca715243bc723813c02111c6a1bb5581e1f7de8e878711eb3b8918ca7bd3b32c968bfc9cde4d7")
+ (Tag "46c9964ef61e93a879f8cb0d62b09e0f")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "7a7c5b6a8a9ab5acae34a9f6e41f19a971f9c330023c0f0c")
+ (IV "aa4c38bf587f94f99fee77d5")
+ (CT "132ae95bd359c44aaefa6348632cafbd")
+ (AAD "")
+ (Tag "19d7c7d5809ad6648110f22f272e7d72")
+ (PT "99ae6f479b3004354ff18cd86c0b6efb"))
+
+((Count 1)
+ (Key "2797751ef6dd828c794429543f8d690e9fe618139ac1510f")
+ (IV "d960f74be927580a2e9f57ef")
+ (CT "6e3720e76b6b4bf567ce9ae57f4aac9f")
+ (AAD "")
+ (Tag "f277556fc0a94b4ea786465ca5146aa4")
+ (PT "7d81b948515c975308086fa960f7cc9a"))
+
+((Count 2)
+ (Key "843ae0ef237636df82b0307fb9064ee12fdab5a98e838bd6")
+ (IV "1df141ca68757aef80e414ec")
+ (CT "2f3c56eeeb62b393c571d126177865e9")
+ (AAD "")
+ (Tag "0fa560a3474eb37895bebb990d5ebf14")
+ (PT "28aa46393e1b8b8784b035f35d1ea9fa"))
+
+((Count 3)
+ (Key "8a624a0db0df20a778211019353eca84329c2429d178db06")
+ (IV "4ac450ff1663da78e596fe6b")
+ (CT "921e7aa89ef39db6e9270721fb910a10")
+ (AAD "")
+ (Tag "698212c321075ebaab4c1bd2719ba5bb")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "f3167d3ea919d15bb5254717cc8b2a18da1e35950a872089")
+ (IV "5583ee965e59308a902a0703")
+ (CT "ad475445f3eecb217387be44895254e1")
+ (AAD "cc67a35257f75e8816d0de5b83d321f0")
+ (Tag "f7e9cef0e7296bdb0b4305b0a8edf9ac")
+ FAIL)
+
+((Count 1)
+ (Key "1a4c7488415dd3ba950be4a3bcd1ca00cd004afa28c2e1ce")
+ (IV "c9de7004ac7f9ab4ece85998")
+ (CT "1d8a02f16a49117c4358380db3d6518d")
+ (AAD "fa0f64cb4ea0ce865aa4144e03ee0fd1")
+ (Tag "c6bd80d982cc9db923b06e18bc557401")
+ FAIL)
+
+((Count 2)
+ (Key "85e0788c66431fd78ea4dbc188a380a74f2568252623e293")
+ (IV "b067415cca095c907c4e7473")
+ (CT "8ce3218d510f2f73621935a9dea64d1e")
+ (AAD "c1cc58d09b4a1e354275478ee87673e9")
+ (Tag "d0bea06cf298f9e60a148715e587acb5")
+ FAIL)
+
+((Count 3)
+ (Key "0c44d6c928ee112ce665fe547ebd387298a954b462f695d8")
+ (IV "18b8f320fef4ae8ccbe8f952")
+ (CT "a664078133405eb9094d36f7e070191f")
+ (AAD "7341d43f98cf388221180941970376e8")
+ (Tag "e8f9c317847ce3f3c23994a402f06581")
+ (PT "96ad07f9b628b652cf86cb7317886f51"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "f4a35894f2aa76fb6d240dd93d3dfe99cea32cfac897c4c5")
+ (IV "5c2b8b3213dbfd79224086a0")
+ (CT "edb662fbaebbea0381f60084b98585ee")
+ (AAD "6cf6ff50fbd7dfd2a0d9893bbd5baec626d185e5")
+ (Tag "84fd782b6e4de54badbecc1332d17465")
+ FAIL)
+
+((Count 1)
+ (Key "7af6699f566e8e9892b349f2c72a32a5c94653348b25d3f4")
+ (IV "b682ea9dc20528fdb9985a72")
+ (CT "7542cbb76464a9f3a1338e8ecf4b6ee8")
+ (AAD "4f3c752a024d47416a5213815bdc3449deb82a74")
+ (Tag "ae837b07ddb51085bf99463d3faa5d20")
+ FAIL)
+
+((Count 2)
+ (Key "7933f0034849cf651f34d6ddab65ab1f5ceb9325c92d7efe")
+ (IV "5f2a1dddbe7c0a6d1f6c62d9")
+ (CT "9a0f00babe69a7f07acc724e0a0f0b1e")
+ (AAD "9b6ef71c57a4dd94ad4d5047b2f1c3fd3a00a7c4")
+ (Tag "a9d047cd09e7506d4a70ba9670fc38f5")
+ FAIL)
+
+((Count 3)
+ (Key "48a67f942305b2cb104c5764a0f1657bd223961b2f117b32")
+ (IV "2b0c587a86f9283efe66359f")
+ (CT "2237e94b9b78b70359864bae60ecece2")
+ (AAD "776488814300e9627987d9c5d3274298709ac81c")
+ (Tag "d1cea1b00693074f541da9bdf6278430")
+ (PT "090bd2109185855ae1f5eed7c1f03747"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "bfe309e0320a41611c467b53329e76f84c29f0705d56a67d")
+ (IV "23a1dc0578a64baffcf11644")
+ (CT "58090a0dd4294fb6b26f69408eaa096b")
+ (AAD "f6b211038467e21d5d95033ce5319fcaca534750a8a64b1f7c906b1ae575a0051b76736284d4cf75a05da800efedfb85")
+ (Tag "0e17957260425f98b1afe79c86e775b2")
+ FAIL)
+
+((Count 1)
+ (Key "ad86772dbe0a33f0906fc44394fd2038e2ba5886f8ad8835")
+ (IV "4d0c0513a25b6cca84bbe33b")
+ (CT "bf4ee632025af85535f1470cdff09311")
+ (AAD "a3506d2625054c2c7b0deb834a21c6d5bb27731e2879a5cc135c7ec6259d73483b35f7a3088ce0d9cef83d7a68cd9c4f")
+ (Tag "68354254b4d2d43748f9ec760384dff3")
+ (PT "5f31e8049fd771f924d408fb57da3acd"))
+
+((Count 2)
+ (Key "733fb7cb3e569d885b0afe569accaad8b3cc9457b53d591c")
+ (IV "f7c339822e8ea918fc3a2a68")
+ (CT "3bdf9cd52ef901efb46f44445610e44e")
+ (AAD "0f20931a51b3e50aa5618841cab67674b2447a386d85d6ea47e33517827eb1b2a2d61d9dc07bde53270b26a434281c0b")
+ (Tag "03091f9fccdfaeab21197be4caf425e6")
+ (PT "f8533f4c9e4e9dee740deb90b6f6be3d"))
+
+((Count 3)
+ (Key "4c5d722b40c1750cc281dde6cffeb04302bbb131af888553")
+ (IV "f731c82f2a12b0e4fc8089e8")
+ (CT "fecef1a3bb5dc001ffc2c3bf5a107278")
+ (AAD "2501650f1087f2d3902e83ed06a39c9ece668d22a38892790bbd626d93270684a7dc0a67ccdc3ce4a94bc4e8c7e67f85")
+ (Tag "057f355eaa687b5f2fc33ee78f00048b")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "88590daa5944737c264ec051c8854b254948f7b8a9826258")
+ (IV "f577a641415aed320fa101a9")
+ (CT "df4b9ed4d9a13b3cf0fd8e8889b1f94e")
+ (AAD "b839cbc00c793ff1c6299223d677b6fc1805e2f4bcfe4be03ce668f1ec1244ed24e530d85fa97a449ad234d196a014baddc52468a96f3d74b7debb04bed315455e54e5a9efaf89b39aab0162bd530998a2aad6dc48e0b4757eb3")
+ (Tag "ac8cc5b74801b9e357112e9a0c0af11f")
+ FAIL)
+
+((Count 1)
+ (Key "0118ab16cc7a2acd41e0d5e4815a8ab43035540e8dbe9cbb")
+ (IV "d4ca6058575df8acb8c9c823")
+ (CT "9653befa62b69e5ca060c612695634cc")
+ (AAD "609c26a9dffe687773b65497e022c43e93b23061d35a909dada4d994955c8d1906d40e8c4505fe18ec0f08db8a2ec76e119d21f99eaa455308c19d53a3124177800405d1c63137b4097101ad2e018850c28f17fb2b549d45e4ed")
+ (Tag "420111b354041356b1e794ffa1dfedaf")
+ FAIL)
+
+((Count 2)
+ (Key "692762d9f7ae4c12e2a0dcad04a80a6259c4610ee4ae5b3e")
+ (IV "ae6a496e8806409960d7ec2e")
+ (CT "f48db3c767966d92a2a31073bda8ab0f")
+ (AAD "19b0eeaaef01a6e566d49dc9817c364386fedb733085928b6956bec2b02fe596d7274e3252936905b3ead4359822997e8f9fac76bcc0824af556741ca0e5cbfbd320e6d38a1e2050c1ecd12ca959aec5c7f45aaafb91f1c582f6")
+ (Tag "3e5e38376c688288849756ad02bf7c24")
+ (PT "fc32d579dde840aabddf406f768b37b7"))
+
+((Count 3)
+ (Key "ad5eb61db8c1731ff0a4f81d93d5adff4a876c8ea092458a")
+ (IV "d22bce11eed1db36aef5870d")
+ (CT "8a8588eb1ed0571c5c932510d369287e")
+ (AAD "b1322125c147b2738096a2ebcdc7faf4baae445e7f844fc5b412c552796422627c4a50ce67b72bf6d6433bdef7e5bf6824577c4e28765223d7dc48c52283488e4dfd2d8aa834af960264f0af9b46189806462b0cf047cb65f770")
+ (Tag "ec992bb6f77b761d51caee148ed5dcf5")
+ (PT "88ed7fae729b37859df4792590e7bc09"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "692dd36f933612bf3cc489d67a23e124d9b653278e2ff1c7")
+ (IV "f09cb5f7d3ba81bb3bdc006b")
+ (CT "f136f262e800c7ef2ddc33efbb")
+ (AAD "")
+ (Tag "4c1a4602965578460d6bc61e5ee81925")
+ (PT "7bac3bcf984a9f556f8d7e9fd9"))
+
+((Count 1)
+ (Key "8749302dfde89262edb67d36e7f5779e2d4eb4731ed48f33")
+ (IV "822c65d171b4ccfa00f86c62")
+ (CT "2e068703421318120945be4645")
+ (AAD "")
+ (Tag "fd805bfefea01ae3713bb4b53449fecb")
+ FAIL)
+
+((Count 2)
+ (Key "b7a3b0fabd4e7b580296b7c8839a413a1f54418dd4dc6fe0")
+ (IV "2f5f9e4d066c693d2e4f6316")
+ (CT "aa80e3c44e1f5e5cee53a467fa")
+ (AAD "")
+ (Tag "5a6e1db5b43bf38200d79a649af73116")
+ (PT "962ff93576e2dcdff944e71d91"))
+
+((Count 3)
+ (Key "21145cd6c55c38f647e8356e3d1dd152128acd6755290b65")
+ (IV "d148ca03c3924797e3ba52b1")
+ (CT "d4b93f94107faa9c88dd98ac21")
+ (AAD "")
+ (Tag "d9b743fa7821f1a509f4617bd0f3e82e")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "f0e42efd343101a94dc6d9abbb2941dca7a73c9df4b297e3")
+ (IV "1bf20564149bae7cdfc92f45")
+ (CT "5c4e3332ded5c0d25f616f9d73")
+ (AAD "26948e6626799b0e86d11b7f0819adfd")
+ (Tag "40876307c546a85f5ff2958fa2ac8c33")
+ FAIL)
+
+((Count 1)
+ (Key "f0712c43e34820164f5df806430d8f122d4d7a08405d0cc3")
+ (IV "e49ec380667617dd47b88203")
+ (CT "8a827ddeba7d1fc2f0066e9666")
+ (AAD "dc559a7974d90556237050c6adc66265")
+ (Tag "70a83c55b811d416ba1389bb756318be")
+ FAIL)
+
+((Count 2)
+ (Key "f3f7b4799ab3f9a9d2f0b71e0fac937f498a8337501252a0")
+ (IV "35f42e9427e6fa54fbcf61e1")
+ (CT "8a9185e18a253b1b78a97e062d")
+ (AAD "326f33b9f1be12a28635cfe17dcc3eb5")
+ (Tag "2b4b92ff5b196cdf3e3745af7c48962c")
+ (PT "cf93194c3fe6d354755422b9cb"))
+
+((Count 3)
+ (Key "ab8e58284848115fcbad3c7188fa007e5476cfdfb6679d9c")
+ (IV "523a09f218e04c193ca0e02e")
+ (CT "d4cc495846090fb1189bdb20e9")
+ (AAD "a55515738a76f6c19f31c123f697001c")
+ (Tag "f143eb9b93c069b8d5b050246c3fdcfa")
+ (PT "ebf70bc5ac7e86b42925b45936"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "79d613f6dc73d7669b33700f55c09aa646c59a6fd7e5e044")
+ (IV "0d5562e98405fa7aa2b2018c")
+ (CT "2dfa1dca85e72de6dd62a851b0")
+ (AAD "60b9780c0c2fdc01977c59b766047136eb2c36a8")
+ (Tag "11cb155e8df2fa6b63e0c5f4caa863a4")
+ FAIL)
+
+((Count 1)
+ (Key "c54d85d379c19b49cdced0cf2a8437c4e56975d073277615")
+ (IV "4ae75ee8657173799e8b9715")
+ (CT "d1f018675e4b4e284b1e70527f")
+ (AAD "7812848a96437490eef68d888c4efc8fb7a81096")
+ (Tag "5c2951e7d09d09c6fb8e86828b5b2659")
+ (PT "721471271a33fa9ee40e377774"))
+
+((Count 2)
+ (Key "1cec196034dfe6eb97bab91cca326eb62a456066bb19ad26")
+ (IV "c9e7f10b0095a4deedee7153")
+ (CT "f508bde1619ecf1f4701275bf1")
+ (AAD "62bf5198f9d34f53e46136047467777ee3ae3465")
+ (Tag "53c3c82013bc0b30b46992d6baa4734f")
+ (PT "ad8d29af90b7a1f9eecea827ec"))
+
+((Count 3)
+ (Key "09bf9e2f7e551c0b814f3462cb6dc0d9eb995e17d0c19ae9")
+ (IV "b96385f338f9efce5d172dec")
+ (CT "c846fd0cdc5c37a72769632768")
+ (AAD "6ae6629efca2f92ddb3356ffdb77bc497bcae6b6")
+ (Tag "8ffc2f5e4a817e02291b31906a3cce0f")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "5be93b5b97ffdb2862154832d310c80ac3eaa2766558e5eb")
+ (IV "63a0fb350e3f8190f3d4ebda")
+ (CT "63129d50d0e2959182db946e3f")
+ (AAD "7363d62828adbfb1c95c51e71f6852bcf77cccccc187e88b5c4845dd641890bbdd3e3af1d1f5b983132d5de7d46767f8")
+ (Tag "c640a5f6722b11d7d68027f8dc09f357")
+ (PT "8c2176d4f7611667a6eb1f82f1"))
+
+((Count 1)
+ (Key "99d935c54cfdf362bc3a867d2d7d4b2f1748b236d2f6d33d")
+ (IV "020c18c73b1f9968de5ae6bd")
+ (CT "ea4a7da2bf38e79bb4a337a5a6")
+ (AAD "ea1b20a743461b065ff9b86533de85b1925070103b45458e14011c00160607cf2d1fc8e83e7c820deab9358b5c58bb71")
+ (Tag "0f0d59a148a8efb635bbeb754fd65781")
+ (PT "9abbea77beea9d70701b9099d1"))
+
+((Count 2)
+ (Key "2962d8746033261baa0a9d8858a213f2d6781e7c233e9046")
+ (IV "ba8657df9dc548d8f5dae759")
+ (CT "6a4311c41c64fd652c98e601f3")
+ (AAD "2090c63b837f5739829280be3f551b23082f82d3947af0acae514f9ae5a9b8c6b6b95af0f62b47e30a665f204855736c")
+ (Tag "e1ec5d30f0dab9313f0fe505612a621a")
+ (PT "29ac59880f7a67e6284d308c26"))
+
+((Count 3)
+ (Key "fa098d235534886e870b2427dc19ddb592c85640d369e1f6")
+ (IV "2870d2e873d4a63c86b55bae")
+ (CT "a81d59ca87e776f45e63e8f7b3")
+ (AAD "bbbf8fb3cdd1649eaa64df4f79c11275c46e66ea2def664275061633c51ad1537bc103a85f0b58b27d0a6e6e8b3265f5")
+ (Tag "38c2b4e95e1f40575647783bba51a481")
+ (PT "b3eb7a7bdd0540e3b32c31c200"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "519ddbcfb3411c7539df0b61ff2b3e3d2b6ad8f030cddcc2")
+ (IV "78ec3873bd8846ac42ff3a9b")
+ (CT "f1fb8df28f5a8649d930b477e6")
+ (AAD "7b4d412302f3319653cced7dc6d7d845cf1071d3802cf09bcd2bf3077609a1dae1bf64e78820f368862b2c0daa17ff9b33d1a7e4f627507c5a916a800e6d349f72a45f8f76b01e63dfcb44f00a225741d172371eb96f964987eb")
+ (Tag "f71b0198aee970e0cb9f835b4ee9f433")
+ (PT "16eaadec26204a644e2f24b1ee"))
+
+((Count 1)
+ (Key "93d02ef0f9360e965fb711e728cfcc7c323918df291f625c")
+ (IV "1652153b54951b0180af5863")
+ (CT "37b428d03edbed106587742f19")
+ (AAD "03d2918d0f23ded3cd793b9c00184fe1cf4c4546c0f6c83d1ec025c83777f93250b632d06cc5e96ec7d7c36240f7e3055bf1cddd0608d92a437be72738bf3e9c4958fe70a8672669fddddc5028181aaa04984509e1bb7bec2869")
+ (Tag "2055377cc020f111e49a7a3076331072")
+ (PT "f52f71dcae794100222cc14278"))
+
+((Count 2)
+ (Key "081298d33fbfc8b7b87041ec2935c5acf50b49f84609e702")
+ (IV "e2ea4c031463f1b78a80b4ec")
+ (CT "57b32f656d9fe5fd008f6490e5")
+ (AAD "680c1c661a1794394107b77dcb283f044437502f1d6bb937b984e02b6ee9623e0b73bc8fdfdeeba2a32d9b39e959b94fcfa99d07a777179ab0d442671e541102e5162ff2adf374b4ce62db8abfdef3bac72d13e8d9fe5a3cd0ef")
+ (Tag "502f48aebb0f661973bc31585fa95047")
+ (PT "6d5567732d93d8eba09f14257e"))
+
+((Count 3)
+ (Key "cc5a7bf10a47ad743f51a2b3fc5766b23f2a941732231161")
+ (IV "057e1caf87c04e510e4ffa43")
+ (CT "90fb9a49302e37dea4703f032a")
+ (AAD "05dee6858c4aabd18563152736bb822b20e911e936aff9233b849ebdc2099f6682403cd56fa4941c6f59caa81ac07d0fbf01461e6074422a41d31b2617dd4fd60ef66ee944f6e313a7b1254da1b648b967ef0d11f9a203e2c159")
+ (Tag "414549d245a856619b43916cd6d3c2ed")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "7f26f776131fb77afdebfc26901e3eec4f0b833307418bab")
+ (IV "f3d10eca824f3f8a8e087dcf")
+ (CT "273c783248c91ea1064745fb5c23a95ff6371dfe00095b4e6b69715da7c73909")
+ (AAD "")
+ (Tag "214b87526eb7be93ddc2ae1d6307b7f7")
+ FAIL)
+
+((Count 1)
+ (Key "ca1a67af4651361f6c980fbdd220fdf8f62ebc3b2a55cf01")
+ (IV "df5d2f648517fdc8aa0117a7")
+ (CT "97654a1698c7c61df1a0ba97000ce5e30315d5f11495e3199646f32aa4467175")
+ (AAD "")
+ (Tag "327cbdd73cc308d9f03a4fea62f3b3a8")
+ FAIL)
+
+((Count 2)
+ (Key "fc2847478f9cd2e9a1a0ddf1bf893c71748ee76b8b5f173b")
+ (IV "eaeff2c00efffde665660854")
+ (CT "a64e17e48647a2ec0bd5ea66d21ce1ebba26db6b6b901618bc8511dd386bbfe1")
+ (AAD "")
+ (Tag "04679df31cb17be9d071df6ea6f4447b")
+ FAIL)
+
+((Count 3)
+ (Key "1b92332c3505ac7fdc03b6464f6bc53c7678f46d1438223f")
+ (IV "30ecbf5bb51718c0e300c6d4")
+ (CT "9ec7956f4d991564a1e88c4714e8058ff995fbecf9d34e148ee40df0fcb1966e")
+ (AAD "")
+ (Tag "73ecd10fe12082ee7146ef8ecb9cb35e")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "5d2984315fb3556e2e121d397c32ae7081788b2a6594f75c")
+ (IV "485bd8b4909834f222c763c6")
+ (CT "c4d7b38d450dd472d453fc74e00764be591971e4905b77633c362ff3b29f1107")
+ (AAD "86c51d28aa80a636a8de56e938cae595")
+ (Tag "a840ae1a7975647e85df1cf885a792c8")
+ FAIL)
+
+((Count 1)
+ (Key "b8f4cbb60ab699bda8ef91cd49bb4b704ac2972e678ae85b")
+ (IV "bb447e893222389e9f6e890b")
+ (CT "d37249337cfed4e8a9306c4a205d0bdd0000132a8af6836dea9dbe408b8e44d3")
+ (AAD "5a3c7ff9f5a0758c60a9e5535fde58b7")
+ (Tag "d5c9bdd1b37d107cc122da2a8184136f")
+ (PT "d6088d6091eab3bfb7dd6912ebd1fc623caa257601b6c2d731df0b90debdb545"))
+
+((Count 2)
+ (Key "68fb578b82e31ed693162ecb26cbd9cf8f70ec096985212c")
+ (IV "6b36ff6bc72448f3ae09c485")
+ (CT "a7bf2851a84441e9c149abb5c914c9d959af7eeb8362a6e9e1c3b36863d88f69")
+ (AAD "7faca8b658dfa809b758b021509fc008")
+ (Tag "2874c730d0dfb66a953af685db2a0ab8")
+ (PT "3dd1dc8a45476dbb5dc67fa961f382528c6bccd60641f274a34a3b7b5e7cff18"))
+
+((Count 3)
+ (Key "0caf9ddbb106e8d5d21d54179e82abde0edadacb53b3c871")
+ (IV "dc1f9a7d9f8f07a14642c41c")
+ (CT "881872ee5956dbff3ce14f2aaa0304aea929b2419b976792c91d03be45223276")
+ (AAD "28ff184bec5abb2dc199e5ef93223179")
+ (Tag "6df458d472502978e2778007d01d4d7c")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "f78b20a748d3dd00b78df86efda81e495b42a1750b98b7f3")
+ (IV "ea8dd7b69521b27b2e4ba9b6")
+ (CT "12062587ecd5b89d72030cfbddf8e13ede8c02c178885df2a41392e62014b9a4")
+ (AAD "bc2de46f29deb1ad59260b7ba90f0c8ddbcaff0d")
+ (Tag "5fa0c38d6deee5ad5e8e3e88a26b1be7")
+ FAIL)
+
+((Count 1)
+ (Key "147a68d29beba153067c66fa805ebda184d153db72cc1495")
+ (IV "0beb22c66583920822023fe3")
+ (CT "52a5da707ed72f194b82a22e502844820cdd3da737454842ed37bc1aed1493c8")
+ (AAD "aa6e807af408f349918868afd9af9a16c6ecad5c")
+ (Tag "c689653218b24320e5a3db5e591099f5")
+ FAIL)
+
+((Count 2)
+ (Key "52ca826631557758ef4ca0fb216ac8f78070cb7db8659f38")
+ (IV "53a93ce510fcbfbc310597ba")
+ (CT "b9e752cd499bd24be4c456b0099b3cbea87382440c904ca8196df2dc025a402f")
+ (AAD "3ac53b47f767934bc564a8935dbb0e3869d52377")
+ (Tag "7be3e8c919f7e4904e4e93613558bfb7")
+ (PT "be483267183cf64abc92e3ffa9742c632900e851f5567a4e46b4bd5dfe5966b1"))
+
+((Count 3)
+ (Key "6ea4408d9ec7e5942e34a44ae8a0e1bd5ba1bd9bcd83c9b5")
+ (IV "5efd46eb9a5c602cd6a5fa25")
+ (CT "c71c537831e536a3111d2e475c7a8d1f9bf6358b6a3d04e38c3fddec7fef719a")
+ (AAD "df5abe0681aeac1a0b964fde10c98543b7e2ea0c")
+ (Tag "1315001b13b40d2690a1bd8376f94449")
+ (PT "2319823d652e4313ef5ddcb4bfd518970223c22a2a94b343ed1a8c6562ce9263"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "3551a567669ab9341d8bfad5b77beae8dad3a5f71311ff5d")
+ (IV "8ceffd9d39394ab3e2191982")
+ (CT "b8714ae7cacfe60526d6a796b0c57054d1f4a60328547b03d9418b525cb2b723")
+ (AAD "be844adc271675e416926763902a49e3620e9bdde762265d4aa8556451e43928d140bf5caf940eb1c289626b421bc0d9")
+ (Tag "7239bbee7f54f4d4479044d318dec676")
+ FAIL)
+
+((Count 1)
+ (Key "343a71aed99840ad87d49509cbbd7893af0271ebe3cf82f6")
+ (IV "bdbed72d75d3dfc0abe860db")
+ (CT "19cdff886bba8b2874d6718bb85eebb580cda5b2d6e341ddccdfd6e051cf5950")
+ (AAD "0ff4b4da3f4e3bc032b3dba523c8c6d57f139d2c02b6a51de79255d0909df538dd31bfa86750da6c84a1d32bcd7a8811")
+ (Tag "ac136e9aa9ad13edaf1f7e3d132b7a46")
+ FAIL)
+
+((Count 2)
+ (Key "3fef8840cdb88380ce349d553a063168779d4848acc9a8d2")
+ (IV "bfac14d27cfaa345024ee175")
+ (CT "c50c9b25b18bb085f4af92eef45f258bc635029723c43aa383f33625d2366080")
+ (AAD "ea32926d4ae61321cbb7a28fcdb147c6fa0142b5ea941cf7b13912154c42460594716fa8798efc12d2cc6b88620b772b")
+ (Tag "99d9b332b4163727bc73a593e8eec8c8")
+ FAIL)
+
+((Count 3)
+ (Key "7555b97c9982d672232877288e46fa56d19cd4d2e7adfa08")
+ (IV "3143af888ab5ef1a9d69176e")
+ (CT "ceb7a262f379e81018c19f2927994744aa32f89ff4ea8c125c2f38a28e1eb533")
+ (AAD "cb1229f4d7af864dfaffa15172e0a91d8e5d5fbd960ddf6d8627e5943fa515551687dae9ed49e25559620ac2fe9dfd02")
+ (Tag "a68362e785ec52e65afa8b3be6534847")
+ (PT "e139a09df1624066b8772b8ae09d1357bcddab401c7621b876df604cc9be95bd"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "c18207b4af83d947ea4996df8751d8692c4e2f38cd999c51")
+ (IV "a9926cf581a5a3731576a5d6")
+ (CT "cb298b58d7fa425512f9ef68a28b51406ebaab3edd5d5f33c11c8b69a7b96cf1")
+ (AAD "575958b01913b89dd65a127f6fcbf5058437c5f721873be5b01a8e7312f6bcbd8fb585ccaccd3175a36601cdbfd74ac2e2047c84658db76141fefc7202aeb07f20a32b4eaf167978e5ca6188907600292d12a1e823f485ca0c1a")
+ (Tag "b6a7caf2d109b0417ac1e415ae6e76d0")
+ (PT "fbf64f9358bf0208bf8147e037efaff6a3315e00964d8b80bab0cf7bfeb870d3"))
+
+((Count 1)
+ (Key "9d9e07c6646e567ad79dc0ecb1294bcd96d10195e7543154")
+ (IV "2656d36539f84345f8e4dc72")
+ (CT "5a547ffdedbe2d36e79e28331e6667186692e0c7285b1dbf29466c545421e6bf")
+ (AAD "0c3e209a6999070f73ff1955afa94ce45a0e331cd8013c53cbe36a7e96908dab68dbd18e9ef9220ae356e4e0f775b1d0004a55dfd940aac0a018d5e50e0ca10dca7498e5ed9471b481dc0469c22f750f5c2a6b3914cb93e9e8f8")
+ (Tag "cff4bc291a95307f03481381f032d692")
+ FAIL)
+
+((Count 2)
+ (Key "23f6f7b9bdae9337fb63af480e6673dc694999c0d01f9490")
+ (IV "5ebec2c409c0e15ced8377f3")
+ (CT "c889830059593c235169607489562708da70ceeb376147700ceaa5c9167ee0aa")
+ (AAD "cfd1fb3b5bb1ff834fffec2be48c15a35e4dcde532a753696c169cd9718668d35828c6a152ad347225ebd469e9c485327663f85ebdc2c3a696069064746ad4a2f1f89fde932456fc1c57f0e1ef28545377c5bf2c490aa072c79a")
+ (Tag "c17e78d3c25e16bd6471d56534d09fad")
+ (PT "13e93515e7a95505fe3606ad733bf7afce5544e472d88082e2bef5adc2fe3b56"))
+
+((Count 3)
+ (Key "6d3be23c288bc0fbef121b981c7ef216eca0dbce7de1afa1")
+ (IV "24cedf7c96d2928b3278a12f")
+ (CT "c0f1c10c4fa1ded470a6d4387eb32609bb44b5f14a6a734ce42320364c01e0f4")
+ (AAD "8d9a0f8b93726d83e9a070e56f68bef5ce9048e457622d9faf511c8e66bacc04d8fd67a3a5d9f53d9a01157cb445dd85dc8f3388f9e07d3b5f9c599a2fd7fe74084887e2f05be13701050e00a5ad58aaf8cdfdf40439ddf3d37b")
+ (Tag "1f860ecd636477accdb47cdeec1ec3e3")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "117c607e01badcb6be05340ca91ba8031f30d7df206c70df")
+ (IV "17817f2823679496258868e2")
+ (CT "75ee0bd6fbc735d7a5c60fe2796ca9f14471955cdc260b61536ba475359dae522a3dff8095cb0ad61928ab91613bc1042457b4")
+ (AAD "")
+ (Tag "1d2509a73b0f3477a6e3730bcc3e5325")
+ FAIL)
+
+((Count 1)
+ (Key "de0d93038d219e7f97fc0b288984bfcfe4878acf59f2f599")
+ (IV "483751b037c6dca1ff6d4ff8")
+ (CT "af691f13f645a14d42de6273d160ca44fb8a3bed24ff87257e463446e04f31432cc36c0603412adab063283c14e4ee78ab309b")
+ (AAD "")
+ (Tag "fbfedfa8d93e1594457723bd50bcf63e")
+ (PT "c7e167999d65346207016351ea0d862110d0609606db9d90fca8bf228059b7cf589378a5dbdb07310d7d09cb13816df00444bf"))
+
+((Count 2)
+ (Key "c17c7f50bddcf6707ea503fd78a828f56d637b2501f51065")
+ (IV "275fff2114d1bd65b8640603")
+ (CT "d276693838cb22105b84a9826f3c7543198fabed0e73d21a69dfc9f7f958714e766118df5825c1c7958df29c71a2bf050a2292")
+ (AAD "")
+ (Tag "baa22bb0b1a4f325b694b44b0ff1c894")
+ (PT "d0ee718dabe1785934914c6c07b84d10b18f7da89ee322a3b5be02e0ae0d92efa18d908adbfb7dee2e7be2ca36d1851573cd98"))
+
+((Count 3)
+ (Key "231778544192876b5e19ada79f9c06fb76ad41f6e40d9172")
+ (IV "2d532b2b9835d1d540675663")
+ (CT "5996a73b6dce10bbb5cfc089630f636c90fba9aaae3b5acac0525ed928164bf614e79b85aa082c5e32ea38b0d4c0f02efefa8c")
+ (AAD "")
+ (Tag "4bd511c14fa48dca90bed880db465a37")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "497ac0078bdfa10c7db2d49f978b1ac0610bb40aa60b5b29")
+ (IV "e1608bae5ad218ae76633f9a")
+ (CT "225cddca92cf6438e69a4afcd8079a03cab65ae81f2631d14035a9656c6c68c699725fc374b909fab2709aab06037447e04cdb")
+ (AAD "fe71426fcb2cab1579a8adaee34fc790")
+ (Tag "a328f90905a4eb69d2c7be7942e7e24a")
+ (PT "7e3a29d47de8668a74c249ed96f8f0d2a2d5e05359c116cbdcad74b8c5ddf72c503ee12824b4039b9bf8f2b6aea9b7105f351e"))
+
+((Count 1)
+ (Key "2beea33d278aede6625e72f3f317fc32cb0ff91e28dc5089")
+ (IV "6ce7b7299320d20840740d2f")
+ (CT "2cc688e3904e8d455ba2a84ae7045eb279d1f45217a7d48524bdab31737d29265b7b6cd13ef18545c6113242e26646ae9e5990")
+ (AAD "5c92c6ac0534aae8d9e07dc0d3e3190a")
+ (Tag "53288151993b4deb0e3fcbd11365177d")
+ (PT "4c02c937fd0b8219e1638e62ef0af00d7019ed6109562b70cfd93169587429916125be869e632ce13f18b5ad98e3eaf4219613"))
+
+((Count 2)
+ (Key "4901b7a84037411205dc58a78674dbcb7fdf6aec055f46bd")
+ (IV "01ae7393b1b2dcc0b5473997")
+ (CT "070062907affbfa14380b01623a6aa7544c743a1322122bef7f2910e4e19404056b3f26f24d7abdb14c75096c19dee46dd232f")
+ (AAD "7a258a8d395d9445d008826e64d297f9")
+ (Tag "43a7dbef5d976989f9334c32f45fb534")
+ FAIL)
+
+((Count 3)
+ (Key "a53b5c80307313e27b355ba5b53674b711be59646d1c20ff")
+ (IV "10f77bea9a9a11e3ea4e2da6")
+ (CT "d199131b0b0fe2c54043bc474a97558e9b376f6f4fd016e62b507b5f2ecd2b38ec5b70d67f657e5a6e27fd065b41c5e8107572")
+ (AAD "f9bb578da4e102dabf8f71cd74200bc3")
+ (Tag "42bae2efbcb0d696829e0e30933f15fd")
+ (PT "d0c1477e41d49284f8704af505f4b3a1a04cf9bacfa04906cde778fd3230cbb2c434589c8d67de9d4010a6e723cf119ac87133"))
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "39ee8afdc515cd2fed1e016df1d08c48d01b5ce7c799b32a")
+ (IV "72c9f8b19dca43db33a46cba")
+ (CT "faa0f2639391ae8de58b74d1c4ecb85d8c3a254ac11795101b5a888db5f203e6551675a75d958b995c585694cb5fbd548ed142")
+ (AAD "e3158d92ef610031a9eae01742345dd890cdb65d")
+ (Tag "6f2351bfc1f2a16f54481a01eb9d37ba")
+ FAIL)
+
+((Count 1)
+ (Key "2bc3f9ea448746cbc0391134c74c63b64bbe1554f64b8d75")
+ (IV "16ec82b8af65909e153b31c3")
+ (CT "11f185cf0139979babc49c5a1ec47100ae65a42a90c99cff5fcaf955b28b28bd14418891198db13b7ed67207ecfb2e0934c330")
+ (AAD "d8ee212cff7c9c36282bb3bff601b8f965cc12ba")
+ (Tag "f994af12fb6676446e974462552edf22")
+ FAIL)
+
+((Count 2)
+ (Key "beb5a7901bbce4d5b9a9c7f19d31138a00b0c121d31faace")
+ (IV "bb6c4ebe43472f592aad175e")
+ (CT "696b6ddcdb6c294caa50e1ae7d40aaef76faa36a93a8203ee9286f7922283bd5640142cb269e84f1239fd26ed0d573a1cd4470")
+ (AAD "fa66b0e1198022e461984e292f35ea347ad7cabc")
+ (Tag "6c221a469347c2ff03ab6281c10af6b2")
+ (PT "de8ca2991cff1f55111b135b817ef9f8b04a00db2776edbf8e414219c2cbfe21dd45d77759c50f1991e6ef27b9076f57e0e515"))
+
+((Count 3)
+ (Key "bd16d78975352a8796f0cc79608b4bb0ffae5e48dbc65d85")
+ (IV "62b6dc907b53e5d89fd79486")
+ (CT "e5796bc1d8a14cbcc855d4d502aa2980baf98e9e5f416970ef6334d58e64d63aa5508c14a4e64229cc3d53a94a450c8304acd8")
+ (AAD "348a83c60a9994798c15a9bd942851cb933fa255")
+ (Tag "330e926c2ca12cef515dfddd278aa917")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "667e71336bc9795166ccb0d904ebd87a900e22669906788f")
+ (IV "f44b8d1410c8ba7a375500d2")
+ (CT "a7d1f743d55bb024340457e3db53b9ca800ad186ee6647ac982b44c3967b090ea4d1684a58db998cacb4c297181e401ccd5115")
+ (AAD "523e7503c824f406aab8c308692f9310e02b1e8a02b5aef0d487ef89cdba12fc9d7918bbd58a3699e00c438068fd0bba")
+ (Tag "6f7e564123955d0019c565ac82859b44")
+ FAIL)
+
+((Count 1)
+ (Key "9b37bf6b0aa8ff75f304eda7a9512dba7c9f80d61e295e85")
+ (IV "2e8ef33d265d4819b63cfdfc")
+ (CT "66d3e6066c51f374c8def91dddd776ebc3bd9c9619ebc6813c63d69aac51b9775a47196e4883ce5e32332ce009e027ec622ae3")
+ (AAD "f216c7def55c8ff325933540963562efe96ae3f4b54e6ec95b251942646711d17e4e39f20ffb35d0334c9c03830d00c3")
+ (Tag "ccef027c0ae19087e18b13ab5e1c89a6")
+ (PT "448e59ef958867d699faf74aa046281db51c44bd7aacb05221cf3c7f1efd4704f9b47967b705168b5ed25238644829b754dc75"))
+
+((Count 2)
+ (Key "4183514f996e8c2e63f7c686224f711e0a8eaeb702787fbc")
+ (IV "7cf151dfe4a99e621ce46e9a")
+ (CT "07144e861a0622d45f66164339c81e3d0cc0e78fedbcedfd81bcf7866b409a9e4f41d4b9dab2abd8237e9aa916b5302b220044")
+ (AAD "20457d95ef7c003f325da50c87bfa42456ec2953cf6df5ae965178b8e94da378fdd7e0eca9999ce7ca9a280fcc0e3472")
+ (Tag "a6c75be8dd629bf06e7984d88e042cba")
+ FAIL)
+
+((Count 3)
+ (Key "432df08525e83960d0b766f3101b58943ecf411b5d9325c6")
+ (IV "9696145bb2f1b33f9a09f3d4")
+ (CT "4b8c4ca681a19384ab9286f6728d4d06a9b84947944ca7b88998f11c1a4c86897330049809f9b000c803c21ed14e42de2ec294")
+ (AAD "fd53df65aeb610dc8905629f7b57521a69c8b0f0be3c03992430a8f9f509afa0ade5622820a983845eaea924d5220b6c")
+ (Tag "b180f1c181deb3bbe3d0273107cbdb3f")
+ FAIL)
+
+;; [Keylen = 192]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "58b4c1ceb6e22434d86ff3ade5a654196318734612bb9bd7")
+ (IV "8928e4bb85f50941fec31453")
+ (CT "1d5ee768d791921000ebe0b9c3c85f1070fcc2c473c5ddf58a3e86aa2bff382f9d47d7f4023aa1017218e6fdd7dd6bb0a2ba79")
+ (AAD "f99039c812d3522f81f8ec09ed79fa0dbdafeccaf0814cb8cea346d5928c245735285890b65c32e1591b811eae8cd261608da6cc8c3a0d1eb1b261f748fc0881f05dcc6b40f38711cbb084c0c30f7cb4ad4dbefe574b414b3454")
+ (Tag "36e0bacc9ec6f6ea386f1fe997011347")
+ (PT "b0597cba878e78d7372b4938b25716a3c98fdc11ed12accd393d80a35a6be1d6efe40622217b384e15b57f006c9c47e0d31a4c"))
+
+((Count 1)
+ (Key "620eeff77dfb66e3160171115d86d140b4f463004983fd02")
+ (IV "bae5528715e7d6023752d98f")
+ (CT "a36515b7d4afa95e8d391f54556f6d0ab6e02f220eaf755d77de1d9f89f8f69728b0b85d28b9d948bee66aad9c526fdd6f461f")
+ (AAD "df501e0630e27ad1dd8fa6288fd3109d8a416274f8cc31e4b9d3d58e14fe214b954c1e9aab1110e47cb2948a5ce958ebda33f405a425922c5b857af53beaaddd2cf0c0de29770536b6321e9bf59335583a88804749edc34eeaaf")
+ (Tag "394cacf0863f98234e90b887cff9e4dc")
+ (PT "fde943daba34d2951ea9a73af6f213c46285b32c038b23420536a13280a237df0e6b67e5a7a62e282b4d6cc2df23a7fc7238d7"))
+
+((Count 2)
+ (Key "bc8df0d3d35c078446ad079368a735f90a500454fe45f4f1")
+ (IV "321c8322bc60e29b03ca49fd")
+ (CT "3a5928125f004ebfc9aa7aae93b5e4fbc85f9d55ef89271351262f4a9e151b4649e2999f13833fb22be0e05b6a9744e1615177")
+ (AAD "5e2d8ab06482a8b1c273501d6310495f7cecf6cb512158f0b73da1601f17a42da3b53a745428ed0dde052be6aba7fb3d08d89bcbbdadf7f56626b9c92c0ee894187c1b295e54323aeadb02fb0f9753032a50dc5525462c9c2edb")
+ (Tag "5504de49e0db6411f8eabec70ea6920b")
+ FAIL)
+
+((Count 3)
+ (Key "5b1ee18ebb89a6b4c71207bfd24f4c228f6ee7e8297dd2c5")
+ (IV "7504e36487956f91042b0a03")
+ (CT "d5a8434f7735b0e5efaaba9170ba514aa1b8a4c5e951ac7f932a43195aaaf2185b14a6507fbe69304dcf220640dcdd2bf3eb9f")
+ (AAD "36e9bc1519f2176fef569017f15f00b60aec79d67b5f0de453a44fa9b4d9cb404821e2c62585ab259339072cc200141703d05e59689e7c38b4cab83ad17884a388e5acb71ec015fa212fa2fe14a7977f48ab3ac49dd30b2f4791")
+ (Tag "cbdb61c6a79ad4021932ba390c4b4864")
+ (PT "a7b1ffd83057520bfec3a5f8f29397b206fd8ce409e809a8bd8175b43355ebdcd1fb0f4a07d44366288c8602afc655be648477"))
+
+;; # CAVS 14.0
+;; # GCM Decrypt with keysize 256 test information
+;; # Generated on Fri Aug 31 11:31:25 2012
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "f5a2b27c74355872eb3ef6c5feafaa740e6ae990d9d48c3bd9bb8235e589f010")
+ (IV "58d2240f580a31c1d24948e9")
+ (CT "")
+ (AAD "")
+ (Tag "15e051a5e4a5f5da6cea92e2ebee5bac")
+ (PT ""))
+
+((Count 1)
+ (Key "e5a8123f2e2e007d4e379ba114a2fb66e6613f57c72d4e4f024964053028a831")
+ (IV "51e43385bf533e168427e1ad")
+ (CT "")
+ (AAD "")
+ (Tag "38fe845c66e66bdd884c2aecafd280e6")
+ FAIL)
+
+((Count 2)
+ (Key "c5ba3bf9ada560fb0301cd4e0b8b8a46a2aff2400395a72ed5804b3c755c4e59")
+ (IV "de2b956e704063c000f28bbb")
+ (CT "")
+ (AAD "")
+ (Tag "04eb9b20fd4548dc71594f20073a45a2")
+ FAIL)
+
+((Count 3)
+ (Key "c1d6162b585e2bac14d554d5675c6ddaa6b93be2eb07f8df86c9bb30f93ae688")
+ (IV "f04dfce5c8e7713c71a70cc9")
+ (CT "")
+ (AAD "")
+ (Tag "37fb4f33c82f6fce0c562896b3e10fc2")
+ (PT ""))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "6dfdafd6703c285c01f14fd10a6012862b2af950d4733abb403b2e745b26945d")
+ (IV "3749d0b3d5bacb71be06ade6")
+ (CT "")
+ (AAD "c0d249871992e70302ae008193d1e89f")
+ (Tag "4aa4cc69f84ee6ac16d9bfb4e05de500")
+ (PT ""))
+
+((Count 1)
+ (Key "033360a08d0b2963ce4dcf807b772ac86ae3e8b8fabb9cd3a636f8ec54365646")
+ (IV "8dcaa63d13a2425395609914")
+ (CT "")
+ (AAD "f9d15fc34984b8f4a7caa29a82b24c52")
+ (Tag "42bc9cc93a1c8592bd29c9ef9f907780")
+ (PT ""))
+
+((Count 2)
+ (Key "4f1a5fc8e4689c493ef8e23a653e86e4d4c8972a2338653375b0f36a4feb91d7")
+ (IV "9b8221a631404088218fe487")
+ (CT "")
+ (AAD "f09b0fc4e4ccb5e28dfcc0792a6800f3")
+ (Tag "31073f1a0050462a03c7ad0bbefaf93b")
+ (PT ""))
+
+((Count 3)
+ (Key "e70e4f6919b521dab68f0dff6b4aa57e443db4f8301186819d8611969af33b28")
+ (IV "63d5ff1ba0d5e69f5dc1c92f")
+ (CT "")
+ (AAD "c29abcf1f61063c6765747da8980fde4")
+ (Tag "3d78ec2d237dfd57b8b125ff0912653a")
+ (PT ""))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "c0b46dc989a7bd45c15553e86a0bf206bf85a5222df1d5a7c8620ec8fa94cb95")
+ (IV "c140cffdba21d9226eca8284")
+ (CT "")
+ (AAD "410a4afa61dd30c2d687ba9cba18fe8a0cd37d58")
+ (Tag "54ba2bc9b8621d84e936c839c0de7118")
+ FAIL)
+
+((Count 1)
+ (Key "d33c33b003bda4bc2ae47b4f5e477e90607a6342967a73d8a88151ee99394b1a")
+ (IV "cfc54a48b843763db1cdbaf6")
+ (CT "")
+ (AAD "840befba8ef6ad83a74934919195a70f2d891dc0")
+ (Tag "9dde8b668c585f513f3048b8a2cd1b06")
+ (PT ""))
+
+((Count 2)
+ (Key "5f285362a1a07e35194421cd52c282d1034e5231c31851ca2d0ac97e6d74a882")
+ (IV "258da68095aa0b716bad90ff")
+ (CT "")
+ (AAD "6dc59701788d0ae2b5d467272cc3aca585757501")
+ (Tag "4cc8a8e31ba0c3314d415f00ffc95f53")
+ (PT ""))
+
+((Count 3)
+ (Key "ef785e34ea523c87619d8591239de3423fd1c7a9ee203fc74477aa48ed7e3c67")
+ (IV "de7f230450a033556951adfc")
+ (CT "")
+ (AAD "ab00dd4c8f1cc65ccd5121233aecbaed9a30bb38")
+ (Tag "00846778ff579c8986f3a37055c15208")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "8a7425bf862b2ea030c3c365a04a2d5bb537f317f091766743effc628d81bbf5")
+ (IV "d48dbe98ce2548c0e7bcd1e5")
+ (CT "")
+ (AAD "bb8c00e42e217118c9b86deb3663943cad0b256a40f74dfb3af36ea040b4ccaaadb507604dfd0e214419b9b394802d9b")
+ (Tag "9f83a8fd4146dc53909ddc4c09f50ba8")
+ FAIL)
+
+((Count 1)
+ (Key "752a9b3cc5f29bba64e773460c7396c13f911fe77de054097da5b682ea525d79")
+ (IV "f93e50fe23883216de85d3b4")
+ (CT "")
+ (AAD "346dd8f25abaf85221fcbbccf794fe3c6794c0f16557e2ba14f9c03bffc99ee5539b9142d1952e66af35df91250e690b")
+ (Tag "f02936676e36e7598258c37210b4470f")
+ (PT ""))
+
+((Count 2)
+ (Key "a3e281375d77e084d1a521d6e8e8f2faf5c031600f866e6ebe9dd4c9ebd17fc3")
+ (IV "caf225c791a55dbe3bd6c60c")
+ (CT "")
+ (AAD "19611e0cfbace7fbe85f71b605210a7d3d0f4f7fef8688566b938d2a96bdb364a72f5619ea3b98c242e038d4daa46cc7")
+ (Tag "fd35935bd08cb175606bdde09de97adc")
+ (PT ""))
+
+((Count 3)
+ (Key "632ccca3a22e540b71ddfd3ba2c39b60f56fce3945394bf037469877603aca9f")
+ (IV "20a4046fb4521c1573f073fd")
+ (CT "")
+ (AAD "aa2458cadd44c38fc0c02110293c5e9a6ffa0583b3084569d6a15c34a86eb1e104a6459a745df777fa3816a7d8165331")
+ (Tag "d9989edbc147734f37f8716102246edf")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 0]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "a4851117328a93bf528382f22f35ac94688259fd2f517e4fd27ee9cf9b8c8a2c")
+ (IV "44395ca4943aca24875a281a")
+ (CT "")
+ (AAD "b9a63c85bd7cb93c9d2543572099ac0a0b1ab4dddbea4c75bacfab9755ae763cb1062a594dda9ca860134c74776752ad357cfda32d1c20e896370dac5808c147061ed1545a2a6ff26fe2e0e2e38ec887c1e210cecad4a8c9a86d")
+ (Tag "1b13e6132415fd70d9092e32ff2759be")
+ (PT ""))
+
+((Count 1)
+ (Key "eb49e7065fd7f9b49d198b43d40653a20656fc44b304a716f4c5f9fb586ef073")
+ (IV "1301a9d18481ba7841d9ccce")
+ (CT "")
+ (AAD "71693a9e655ea0dc084a7bc9ae91a98743adcd77fa9185bd0adcb4c18e67ff752b6a476e8100bded46c7ac2327cf3e804cda520e535bc62ffe19f5f46b866d70cf99e8ce3dbbfd9f40c755859b48bdf2d967a501a58f1c739974")
+ (Tag "5be6d5030b8afb923e3f8ef2767f4e93")
+ FAIL)
+
+((Count 2)
+ (Key "b8701a1a533bb4661a6d3832bccddcc36f4427e47277ee100c7729d86bc31504")
+ (IV "4496ce30d8e90d6329653af0")
+ (CT "")
+ (AAD "f084a86502961d86dedba76d2d914782aaf3ec553818cb7d9f2ff28bb81696082ed2afe7cd7fa9aec5974790f493fddabf4ff44fac7b9230a5e02e326eb6c9bea8d2b71e2fa279388ca59d764af9e3afc87e569a0a774bc9ac13")
+ (Tag "6d444a0eaa3ab455b52160cd4071ef94")
+ (PT ""))
+
+((Count 3)
+ (Key "2d946814f74da31cdbc544199df4535336ec74b833489959e1741e6acf30f076")
+ (IV "81d72ae1e54a98e7c7ec025f")
+ (CT "")
+ (AAD "03fd965a60c5a843722c719d59877535b8be9c62cc0434b92c87b5fc4c28fb8a786c183b94b05e44c9e85585bce965a3a4776ce60502835489bb6677bfdbabd97bd12676f5e456ac18e687903ee5d01733164f7e271b7b207bca")
+ (Tag "c6a24eb48b1ad0e829f5926208aabb62")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "4c8ebfe1444ec1b2d503c6986659af2c94fafe945f72c1e8486a5acfedb8a0f8")
+ (IV "473360e0ad24889959858995")
+ (CT "d2c78110ac7e8f107c0df0570bd7c90c")
+ (AAD "")
+ (Tag "c26a379b6d98ef2852ead8ce83a833a7")
+ (PT "7789b41cb3ee548814ca0b388c10b343"))
+
+((Count 1)
+ (Key "3934f363fd9f771352c4c7a060682ed03c2864223a1573b3af997e2ababd60ab")
+ (IV "efe2656d878c586e41c539c4")
+ (CT "e0de64302ac2d04048d65a87d2ad09fe")
+ (AAD "")
+ (Tag "33cbd8d2fb8a3a03e30c1eb1b53c1d99")
+ (PT "697aff2d6b77e5ed6232770e400c1ead"))
+
+((Count 2)
+ (Key "c997768e2d14e3d38259667a6649079de77beb4543589771e5068e6cd7cd0b14")
+ (IV "835090aed9552dbdd45277e2")
+ (CT "9f6607d68e22ccf21928db0986be126e")
+ (AAD "")
+ (Tag "f32617f67c574fd9f44ef76ff880ab9f")
+ FAIL)
+
+((Count 3)
+ (Key "f05871fa6fced6d88fb68b0f2cd8b3ff6298901c38799be6be33e7d6193a18e6")
+ (IV "1424ef6d15967c05509e50f2")
+ (CT "8492fe9e53510d96d9c2aa00e4967112")
+ (AAD "")
+ (Tag "33656dd6b89763313b4fd0105f506310")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "54e352ea1d84bfe64a1011096111fbe7668ad2203d902a01458c3bbd85bfce14")
+ (IV "df7c3bca00396d0c018495d9")
+ (CT "426e0efc693b7be1f3018db7ddbb7e4d")
+ (AAD "7e968d71b50c1f11fd001f3fef49d045")
+ (Tag "ee8257795be6a1164d7e1d2d6cac77a7")
+ (PT "85fc3dfad9b5a8d3258e4fc44571bd3b"))
+
+((Count 1)
+ (Key "82f0d1ddc58123f805541f55a7eab43f56ddfefc06c73d57709df3d5a4aabfb3")
+ (IV "0c9d74af29ed4406c77a8e4b")
+ (CT "c61155d41495e9fc76060fe7f8c926a2")
+ (AAD "34325620a392739beeee6c370967d539")
+ (Tag "66d8c881d66370504d2bf00cdb06259e")
+ (PT "3fe7811a8224a1881da34a27e03da86a"))
+
+((Count 2)
+ (Key "9a0343f850a6427120f764789ffec6d237447b898fbf51d2182f065d3861497d")
+ (IV "3deef6f453dd70d92143adcd")
+ (CT "e93165935ac18e3a2845d15fe31a9286")
+ (AAD "dbb8226a624520863db6897017b2a4f8")
+ (Tag "f5fc50d18766bc3d9e16dd136d45816b")
+ FAIL)
+
+((Count 3)
+ (Key "562a865ddc042577284b34b6cd267aa3e9adedf6b8a9e2490d5519eaea3daccc")
+ (IV "f20e5db286f3ee11835a5103")
+ (CT "ae62b52018c253be2463ff235cd3ff1d")
+ (AAD "c638e57814cd44f8af9730208f5464d5")
+ (Tag "6e481954d30c503ce6d448fda4116578")
+ (PT "7e59320cc09d1ccfb49f7c90e81326dc"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "aef220035cbb9e47ce605698aa28e3b0ba50b4ffcd473bb8da2017889b38055f")
+ (IV "cde7af095360ea827778761d")
+ (CT "bb1cdf25717445e5a77444d488387aee")
+ (AAD "f269837306abbcee2da1722f28be35163e3d8567")
+ (Tag "e72340deabc1589125e9e4a2755512c7")
+ (PT "9775db638e5d964fc9c70b5fe456ec14"))
+
+((Count 1)
+ (Key "c4a274efbec1c6818e7e0ce44e4fe6ca4815cd2435995dd80ff0ac855eb612ac")
+ (IV "687305b573a5f56ce9d83a0a")
+ (CT "392bd3b883ac0705c5b33a43ebd911f2")
+ (AAD "9459fce3860b4823a1c20b98e7f4f46fcdc0fc1d")
+ (Tag "399ca7f1f6bb603c615378f9fe16e1e0")
+ (PT "87fe6e3efc6314bd99f56f84b11a01aa"))
+
+((Count 2)
+ (Key "91cd1fb99a58c1181a1b38689ea8241e79a1dce28d6956cd4ba65eb51975b293")
+ (IV "e78c0d929e83118dc1e5eee1")
+ (CT "1ff5f4f876ccc54759b6cbbe39cc075b")
+ (AAD "f7b00a973d54036a9a29c518664fb8fd9f71b0d3")
+ (Tag "7a290632d3f89ccd7d3083333e90a004")
+ (PT "9b493ec8baf529fe219ffb1b4461b397"))
+
+((Count 3)
+ (Key "ce521a256e1d7afdf363a03d3e99b96bed8cf039e6ee5f241a477f3a5b5f76a9")
+ (IV "d676cee000335b694fb9576f")
+ (CT "c3ae3e883886ed82fbc795eb3e892834")
+ (AAD "2ed50e7bdfdb8932caed2d5a9498171875d4d76d")
+ (Tag "a0236b9314f25fdd20a2dcce4dc14034")
+ (PT "ddf434bc6c7898c1750452015908f6b8"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "16ac8e71760c1fd4eba37422bcbcaaf67513fe6822d00a14e3ab62a6ca559931")
+ (IV "7021d16596de09585b50673a")
+ (CT "073988485ae13dddb025f7f07059ca70")
+ (AAD "ecdca487c04e574ff11acec743c66e052e80bbc7fe67273246e218e8c82de0e691dcf4945572a2195b57c2257d2c8f41")
+ (Tag "241a2bc57f4ee159a79bc57cf48e023c")
+ (PT "5ddecdab11e715d0b5996d46cb18715a"))
+
+((Count 1)
+ (Key "0fc8ae600fd3396716c3e88327545b5e4308eda1c25e076d1098fabb74a9f0a0")
+ (IV "c529787b4c756a2343f36280")
+ (CT "7dc464c2735f446f9a3f92873688e6c3")
+ (AAD "2c6ac22d787b70bf516f4bf72deb8f9514a588e5e53cb26980becd0d500bb23453d8ed874ec2514b813aa45d2dc36e6a")
+ (Tag "fd6d32ff9a090bb880371a678f37ecaa")
+ FAIL)
+
+((Count 2)
+ (Key "9ccfbc87ce44a34088b1b7eeac44cc4eb06e4061a798bff519006124304c4ec4")
+ (IV "8ec4296273fd7972758ccf0c")
+ (CT "c915899d35dbe8655bde5d3935fee604")
+ (AAD "f9cbe101a6112f6c098041cbb3db48a05e0f8f04d9feaf5eaba0383b53565d3e8762556636cf89860cf81f55a70b4b0e")
+ (Tag "d38201a24b30d444e8079a1535a75373")
+ FAIL)
+
+((Count 3)
+ (Key "58aaaf3caa814723bfe6f5b603928f5aabc907878139017d7027d2f4beaadb9f")
+ (IV "c9b5d859d21ef0cfa3fb4891")
+ (CT "01d81ef85d20fef3864eb9f78302d527")
+ (AAD "8aabcbc95d77e066982c90631840cc212ee2acf65e13ea5f5b891b65964bf49e652a48ff3f5eb21e1c27bb0496e06706")
+ (Tag "dec35f4d013b69182e2358b87dbb1dea")
+ (PT "59cc9c56280a5a59a7d9ef9026656b83"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 128]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "76a75e06f485ac3838993c635faf17bdc8f914a1d341e5bba014de44c37c2340")
+ (IV "acf54108e67dab53a4274a55")
+ (CT "b8c8429142a34305a463ba394c6c813c")
+ (AAD "863f751d65431b3aed0f09cef3bdaf81668e4790eed7de202c2edf35b09b57489c5c3184674718e9a06df5cb5d8ea5e24c5979081bac6a4ce78bada842633f2b06c12c54152be4db8d4925dfb5eb7c35b4c2e7065fe96fb23814")
+ (Tag "0267cff29f96e625dee8cb4ab29b6448")
+ FAIL)
+
+((Count 1)
+ (Key "fdbaa106c0607307eeb61791e9f957f2c1e20398a09c98f832cc84fc46d36d74")
+ (IV "e02905ccb9065756e474d47b")
+ (CT "dcb9a0cfddf6f8e29d2d197ab84064dc")
+ (AAD "3695e2ea80e44c8174fe1204897b6f868184d00edf9b4d928ec51ec538bf5b4e5f9ff580910efe2b7bb15f87bcb3d653de95688b976254c58edbf0a3e9644b679f02e2852d14c8e0f7718bd6403d3333367652d29d99f515e270")
+ (Tag "c0c6209d72ca8919c50bcda8b34aa8e2")
+ FAIL)
+
+((Count 2)
+ (Key "6d704dd097577fb901fd9e02c1e9a278c4b155d8d32ccac42de0dfeb860375b4")
+ (IV "b61a6b349e29948bf3bf8c83")
+ (CT "2013c24491e7136aa0e91cd2ccd87adc")
+ (AAD "02ad29d7f311f6749b2b2fd1e710593c4589535b6e08b95048b57c7a251583be5a92bd5dca8249beb9628497433bf57595ee5918d825bfab291334335cca5ade4d18d341db974d90e4fe3ee38bab81f0b02f863be4f431f20f23")
+ (Tag "464475f7d491183b46f62fd4dfbc5e58")
+ (PT "97bce743a5f5478d001bcefd6128f34f"))
+
+((Count 3)
+ (Key "1cda2feb60edffa0d35fa32ec40a23c50c3d12aa0bd0c22f412ea8eb0abda23b")
+ (IV "b1466164b688d45bb1c1f5a7")
+ (CT "9f48a81dffb845376e2c2db0e4542f00")
+ (AAD "5f047e678bef5a2f3b42d6bdb7be2479f78f776c0201a3cc9cd7ae7ebd2a80c646655c5dc2ccf2bf4058b32b1b09b1c984633ee2945ed737d76b8cc3a0a4e82774d6d796aa3cf67f690a217090d761820549c9e971aa98260016")
+ (Tag "a7a95ed1d692b2a91c9e8c5ed5752c52")
+ (PT "d31e8ea20bf3f9a9ccd52493152a47f7"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "8b37c4b8cf634704920059866ad96c49e9da502c63fca4a3a7a4dcec74cb0610")
+ (IV "cb59344d2b06c4ae57cd0ea4")
+ (CT "66ab935c93555e786b775637a3")
+ (AAD "")
+ (Tag "d8733acbb564d8afaa99d7ca2e2f92a9")
+ FAIL)
+
+((Count 1)
+ (Key "a71dac1377a3bf5d7fb1b5e36bee70d2e01de2a84a1c1009ba7448f7f26131dc")
+ (IV "c5b60dda3f333b1146e9da7c")
+ (CT "43af49ec1ae3738a20755034d6")
+ (AAD "")
+ (Tag "6f80b6ef2d8830a55eb63680a8dff9e0")
+ (PT "5b87141335f2becac1a559e05f"))
+
+((Count 2)
+ (Key "dc1f64681014be221b00793bbcf5a5bc675b968eb7a3a3d5aa5978ef4fa45ecc")
+ (IV "056ae9a1a69e38af603924fe")
+ (CT "33013a48d9ea0df2911d583271")
+ (AAD "")
+ (Tag "5b8f9cc22303e979cd1524187e9f70fe")
+ (PT "2a7e05612191c8bce2f529dca9"))
+
+((Count 3)
+ (Key "0d59185a349c144898a17b6f297921f00c8fb91a6b57a5cc9ae426ae856ae595")
+ (IV "a35e7741dd7650a91330cc51")
+ (CT "e80b6e94fd726de703166115aa")
+ (AAD "")
+ (Tag "8ea5c6f198c774543e7cd542869c2556")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "81e196b20b71adb6a239b580e51474137c8dc8d17764745fd02ceb456b6b5624")
+ (IV "65cc53fa7eac34c557e72e87")
+ (CT "5c70d88ac4e9404539e85623ab")
+ (AAD "f1c22cb0a2c33e7743ef355b6795830b")
+ (Tag "3ba8bf8228e4b2aca5adc8f3273a1b41")
+ FAIL)
+
+((Count 1)
+ (Key "2e54b0d8748141aa2348f47d548236ae1ce3d4cf33be8ec7c00a10999cd9a64b")
+ (IV "179d7a48bd6e32c099cb27b6")
+ (CT "32bd95c1e836ae5d388d758bdc")
+ (AAD "12fe663798231f384fe4ac1db3fc3f89")
+ (Tag "9b7c419faad417b90261f78f82bc73f1")
+ (PT "be6e65c851f5ca9b71a607255d"))
+
+((Count 2)
+ (Key "8de92b9100c5c54d18c5b3bc12bb3def7c7d9dcff6f5acfa11d05111b6c9efb9")
+ (IV "0225c91d75069fb6a1e6a4af")
+ (CT "2e91ce103b85afb3d8416f02b1")
+ (AAD "bde09216bf4d8b11059660b723405e91")
+ (Tag "a37abad8a79b3243aeffee604d9bc3d6")
+ FAIL)
+
+((Count 3)
+ (Key "e144876cb0815405c7a0469e80509a03d3a53dae707c71c2f74163171a1a602e")
+ (IV "9b11588744b463b96ba2d207")
+ (CT "8de210662ba99e7c29f3cf57d4")
+ (AAD "43de7ef68ec2ab6154d6e76bf9b22d7c")
+ (Tag "8091680c3111e296864d2c3ba04c88e1")
+ (PT "bee8e5e96e2a99e23aa91aada1"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "de1bb0d8acd23457c593c490e45858698d9acb887cf12c4a2931ea14a010a985")
+ (IV "a787cb34d6f88921f036b833")
+ (CT "ca0e93b01a47910918c18f1d7a")
+ (AAD "6ffa289ec67aa3c1f8b4068af8d9acadc434cfc2")
+ (Tag "ef745fdf7d78d283b39a4597ca82f8cb")
+ FAIL)
+
+((Count 1)
+ (Key "6b879203e1a23c90bc4b92e4ee42001f8466b0a168a3b09df9b644182d8242ab")
+ (IV "3e05199e1d56ca0b120694c8")
+ (CT "ef4cd1b06520043c369f832448")
+ (AAD "b21100419dc0a8ea58ef372e5f07e841b2ee5568")
+ (Tag "0ac846204a3a5299cef82d7a9b1748a8")
+ (PT "d167388250a59485b3dde40200"))
+
+((Count 2)
+ (Key "b9d24d044349247951c17467c11194f5904859aaf84c2792f18b04afd1e980ba")
+ (IV "7978ec09b6edbd7fc9388ef8")
+ (CT "c11b3755dc607b27ca5ddf110b")
+ (AAD "e9d23f1afc7eba50df7dd494df104bc5c82217d0")
+ (Tag "2994536b9ab38959ff81e1cca62e9299")
+ FAIL)
+
+((Count 3)
+ (Key "e5809db48278ff34824284f43fadb2443ef7aa6a000c862735316e94499d231f")
+ (IV "1a46aaf090be636f10e63ae6")
+ (CT "1bc2cca22732a23c2eaeaf1552")
+ (AAD "efb09a1459e65deacb146cb5e6ce52c9d064b5e7")
+ (Tag "eaa363c5570b900af2f4dbbf6311f043")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "aa25af7152f30885df7685ede610642a8c25fd87defc0fbfd89060c9cc29cd60")
+ (IV "1f5044e3f08376d84e760c7b")
+ (CT "00dfc2de0fa7ce4946b71ea300")
+ (AAD "dda57f316d0dd0a15a0fbbfed9b6c51cf11242964cf1676a73050b2b93b8afc1e190f44aa3eb7e577245f9aa4a7e13e2")
+ (Tag "633024dd5927cdb153a0772f4358303f")
+ (PT "f36ec2c4900d906047092d1655"))
+
+((Count 1)
+ (Key "29e640cb29c4ef616d646123d5bb5c1bd75e843587d64eba90d50f0295437ff7")
+ (IV "4aede7cf9d70fb80c4ae2941")
+ (CT "697eb024c2ec39bc6cf9dd0eff")
+ (AAD "91f9d7e7cf938990a458de56c4a1e9d288874dd6a546d6d41d9365c29ee9d45919b8f59b358d8e02ddb0120e24e60480")
+ (Tag "56ca5aae42fb30b3a22c8cd7e7edbb6c")
+ FAIL)
+
+((Count 2)
+ (Key "d5050ae71f4782d2be8214c7585dcfcfbb8a6df9dcbe65aebbf150715f8a736a")
+ (IV "b9d6a535834f868f0cf69704")
+ (CT "68ece8d2545d04bc8aea78f9e2")
+ (AAD "4a5b31dfda5d7fe4d2d06ef7ef12130682975aab20c8695f7d498352730f1b65e77034550683a4c31cd5cb343a404f25")
+ (Tag "9ced66ac5a4ae5e450bbd35da406f741")
+ (PT "5a4f4aad49358381cc5914d57d"))
+
+((Count 3)
+ (Key "c898646881333f19980f081bb173bc0f37e8604f2cfc96550e043c201e316f7f")
+ (IV "394ef8c1ab32194eb65d69c5")
+ (CT "2a81f555c012e4bf2d07574b2b")
+ (AAD "bf8e083cd74cb9c41b23e09bf69845bcc3f77679d42aca0b654717fb14869f0111a74a97eee0acaea234276d0cb2cc10")
+ (Tag "59800b36d81d7212166327c81e5642ee")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 104]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "886bff628eea3114ed1c62301414327d7d565fc1a39fd27cc92560ed42911144")
+ (IV "147bdedaff607fc47e2309cf")
+ (CT "736f72611e2d132e6e1e5223a9")
+ (AAD "217e54b1416c1f4ac698272ba5fb95bf2e28ddfa809a4f774629db920336bbfdd9b926ad37547056ff3d8c73f0f930e658dd483b6a2265c92c594e9fd0964fa0da6d0211601387ce5def855c032370562e6c2b385cf5b9ae3364")
+ (Tag "5ada94656899a456638dbe120d741da6")
+ (PT "86a560da8d85631c31f979d250"))
+
+((Count 1)
+ (Key "e7e85f27fbb7fb98b18827a475d9e436a232cb884448e6dc88fa91e7e62143d4")
+ (IV "53182059b753f2b8cd65d835")
+ (CT "63053970ac794cdcb541137bb0")
+ (AAD "cd5b88000f5fa6ee680eb1f5a58f4b9e29b2b4447473abaee46c0100bcf47a932edfe5b06af570856e22f0eecd03e564bfd9b0e76aa7a0af7ec06670904d3788bbfad522cb2942d56298c0920844c72a49c01a383337acddce38")
+ (Tag "d227696559f40986538278761db8e874")
+ FAIL)
+
+((Count 2)
+ (Key "51524a6d10174aea2bd2bc9cbf6923829b205e48367ab90d11ad17aa1db9e101")
+ (IV "f35d97f4c7036edef0ca7d08")
+ (CT "7e019d619e57f9c581760185c0")
+ (AAD "50d07b6e0cb0b061ef7c24db7d74739497b0fa817ac46911f6dcd3e1096987a6ef81947749d85bc5bb8f1cb16f2e70be940652adeabaec779003840dd962f3461fe25f1dae8336fffc3ca037d57b9989878558893ba32940ffd8")
+ (Tag "4b14790afbbf4a4d7aa04587922ba3ee")
+ FAIL)
+
+((Count 3)
+ (Key "3b2bd008c3cccf1d2f59d7ca92f640fa884e116c52ffdb13929471a4f75765e3")
+ (IV "4d7d2f9bf2bf70de10075022")
+ (CT "3267677c9bc150806bc3808fed")
+ (AAD "56f3d7dabafcd9722c23e902dc4f18476b993c440a342de69a8593a690985d7093fa4018fd73af38c6157e006a60e9fa079b416f4446bc07b9a3fe8c872a1b48fb139ba0ee2dcc057416efb850f69481339950cfd4aef863b4e8")
+ (Tag "db3390e6926455d83b4988f3237ae2f0")
+ (PT "4fe5a76f46396b6a177fbb1319"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "c3d99825f2181f4808acd2068eac7441a65bd428f14d2aab43fefc0129091139")
+ (IV "cafabd9672ca6c79a2fbdc22")
+ (CT "84e5f23f95648fa247cb28eef53abec947dbf05ac953734618111583840bd980")
+ (AAD "")
+ (Tag "79651c875f7941793d42bbd0af1cce7c")
+ (PT "25431587e9ecffc7c37f8d6d52a9bc3310651d46fb0e3bad2726c8f2db653749"))
+
+((Count 1)
+ (Key "5c3bd1986d3c807b0c3ace811e618dbae1693f07145f282d474daaae0b6a1774")
+ (IV "3c9e5a952b5009afd3dd1eac")
+ (CT "ebb8c233496a5bddf70821fb8914ec8aa9633c1fcbc067948fc2d82e8fbe2fbb")
+ (AAD "")
+ (Tag "55074766eba059eee2af2db30029cf53")
+ (PT "7adb5cc81adcc3b7561d00972c313bee74b9022c8c035de386f476c8efa15f62"))
+
+((Count 2)
+ (Key "c8d06e66763020b8b14e16163966c4e5cc2004e23c4200a79ba3838d5296af9c")
+ (IV "4cf3ac9e6dc4bb59ea9023c0")
+ (CT "8ab0fcb6580bfb60148dd0efa9d63763af0dd8e76bbd99f119f8aaaa00dd462a")
+ (AAD "")
+ (Tag "ff40d23eb197dd16cf0c4433f7109a87")
+ (PT "50942bf1c7168e50239bc98b8d89423be2bf042c2b10c3a26953dbdf787bb603"))
+
+((Count 3)
+ (Key "a6da42afcc5b86f989910f7d27f29362a4e4a07ab9b7090d5820cbf97faf0729")
+ (IV "fa099d57bdcec5b25ee2e20d")
+ (CT "c70900c56aaedf2af746e834d39af7eed53b86b1e832d9f72bcf35ecf8144282")
+ (AAD "")
+ (Tag "44d3f379ca0c4afa71b147bc84d49143")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "22ab50af434ac76377118aaa014c008d25e766b23e2d0488c1b2a3b720a9e89e")
+ (IV "123f018807b3f5368c38b1dd")
+ (CT "b05cca6533e1f81c9751b42cd32158ac37841afae09eafde4cf51458ed6d234f")
+ (AAD "1c56bf07fdbddc8eebcd0712ab2c16ad")
+ (Tag "f082c6743dca40f7b98ed44de872d46c")
+ FAIL)
+
+((Count 1)
+ (Key "f0eaf7b41b42f4500635bc05d9cede11a5363d59a6288870f527bcffeb4d6e04")
+ (IV "18f316781077a595c72d4c07")
+ (CT "7a1b61009dce6b7cd4d1ea0203b179f1219dd5ce7407e12ea0a4c56c71bb791b")
+ (AAD "42cade3a19204b7d4843628c425c2375")
+ (Tag "4419180b0b963b7289a4fa3f45c535a3")
+ (PT "400fb5ef32083b3abea957c4f068abad50c8d86bbf9351fa72e7da5171df38f9"))
+
+((Count 2)
+ (Key "046a2e5ef707f319e86aea115bc4c9ac4803ef17afb74ba13238e11213da981a")
+ (IV "c00967f52771b66a252ea978")
+ (CT "ecf55ee6ff85cac359767edebed91f61a3615a8058325ad08e8f8c4b6b08bddc")
+ (AAD "d4152360ddf17d836ff0c5ac6d5bcf62")
+ (Tag "bd55502939041b32224998318d39a2d5")
+ FAIL)
+
+((Count 3)
+ (Key "b8b524f0bf5770242b703f64be5d6a57ef0457f15900fc4bac061fe5b615fcea")
+ (IV "de5a425aeb0aa1f71bbddcea")
+ (CT "f25cfad9f871263a26bf3f518fdd17ff4a386f0beeea84b7ad02e8c9e93a86c6")
+ (AAD "061c9a235237d87e8f750b2239f23e67")
+ (Tag "9d198f6bd17d0bb87767107973342f1f")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "c70fcbba915478f66315a15ffc3b11d92c24cbf213cc858f8740713ed9493182")
+ (IV "5b413f5dbfccc6a7c65ff5c4")
+ (CT "2ab2d676861b2281d3f740f637c997e25569ec7352e1767ce4c4c9ed5a6ab15a")
+ (AAD "ee7b3521f1363c1fcbbb24c2c65f7ecee99d457c")
+ (Tag "9a4a3febec6413d461f26364b51237f3")
+ (PT "f135e924c57ca538f72c700fb0c9c103a70fc1935797cfe08024397f1c1a8277"))
+
+((Count 1)
+ (Key "c444d2bc6b0f14b306d7afbf9b0c84d9f2fcd2730df6d656402a184143a4eeb1")
+ (IV "89a840f9fede6fb08cce158e")
+ (CT "ff15d0cdaf9b5390018a881a759183ae5cf702b9550cac2de78ad2c6d0da5af1")
+ (AAD "aaade9efaed6435e3130b9c36d8a82d201cce2a8")
+ (Tag "8655bd8d3213f0873d530c326a2fc15c")
+ FAIL)
+
+((Count 2)
+ (Key "1de1594f27cffa3c697f0b209622beee4cffc198a793904a4485de5b9a18ddaf")
+ (IV "2ae2ceb5fc7941aec27080b6")
+ (CT "5c6eb90b8339e46c578d813bdcb1810fd7a4e7f567aa4ec3358794df72b99d05")
+ (AAD "4dc991d01695bc19283adcfbf5c9287151690461")
+ (Tag "8984578b386e9ff859cbbb9eb8546484")
+ (PT "cba54617ea270c15c2be8292a5b9c6f1108b86e71fa1631e6ed2e94dfade8cf2"))
+
+((Count 3)
+ (Key "1324563ccf7aa967cdf2d93a3d107119a07375cc6fcc8ac7633fcc96689dff52")
+ (IV "3a0af80499a0c0969596f79d")
+ (CT "1dd149a758a900df1f722cc41a6fd474eba6d7019b9a3c4eeb20153f6f774f7a")
+ (AAD "8166539e2a8d2cbc294c36187ce72bff8e6d9ba3")
+ (Tag "ec0d32fb759778519955cb1a6ab37be9")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "42f6c25159b8655380f052dd5dad180e76813b60eb813665c5015f26cf32e8f1")
+ (IV "7248a5ed48f4f1b4a9db3826")
+ (CT "26325c3463813a7d59d184a330ef80959637fa6db4f5db3062d3d2ec7e32d82a")
+ (AAD "8e3c74f127dbfe29ac4de0a7c3240ee8aa8d38a82f38ad6b480236c8cd4232057a5502e936bfe22225830fa195a8afce")
+ (Tag "4f39c63d4f215d5b39a58853d3842175")
+ (PT "9a329cb45b0093e9c00615137dd7dbd1f8b525999af3bfc222315f41817717a7"))
+
+((Count 1)
+ (Key "f47019c279c0b47fbb0d4560b6e1ed31dfb03d8b7edf4379671bedab5f202c39")
+ (IV "b6d68482a14e8198aa8ea042")
+ (CT "131b6cd9a394d8cce1d81c418373da9c38a780ff096d107b07ce71b46ee6f723")
+ (AAD "9e60c24dd79307e5a559ea75af607df73a17e0a1999c23d6eb6990d44fdbcb0671c994e60d8b51461979a4f912a57405")
+ (Tag "1fa23efee6a70776c86a6059a7cdb6a2")
+ (PT "c622f9a9f80d076e34f0d50c686758d30aaf24969848e15b3a44936fb23edad4"))
+
+((Count 2)
+ (Key "fff8747f38466904e99409f9dd8ed202f0e1a3e9e4768fe7f3a0b39c523bbbef")
+ (IV "bd4ea7d286dfc0948145e37d")
+ (CT "e8b7aed2ece9207ec158dc6d9b6fbf941197964820a9b0e5d8d30969c89b3e77")
+ (AAD "d95546e9a05a8363f848419ce4d96f148a2d722f2bc15e5b6599b7eef1fb8ac52b3a2cf97cd6fecc67fa0bde6367b575")
+ (Tag "2379d116e1152171fbc184bc8b760845")
+ FAIL)
+
+((Count 3)
+ (Key "a74c8c852c5b82945f8bd7dff9ac04956d45627486ef1fa3585c13c85150cff9")
+ (IV "b32dde8ee819b2387ce24e8e")
+ (CT "228c6cf2b689bf9e912142232eaa8f2b3f2ad0cf65b0d264829422071c46016d")
+ (AAD "99f9951951b1529e7ad1e2f8ec93380e12c81e5daea6b9b50c7e6d4c9b315df032d3d89e06ff1304be607025c6e5c361")
+ (Tag "8b24d79ab2b134964a153b65ca25d30e")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 256]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "a0d27f0c13e847ba806f8a001262c9855d1d5bdbb39aaa630ad1d674bbb2e66f")
+ (IV "949d89f59dc0b03d5550fe59")
+ (CT "ff3d7ce48bf2a297ed4b14c50639995fc7c049bc5b7462e29473f01798575af0")
+ (AAD "8ed3ca180df1c00a478fd51ed04b707111cf49637755d0ffd643a940e3852ef0c238a11a39024885aac6582620a0db871d4856272d6054a660705aaf05268d50a94758e59f106d5eb22f6e61b2d890e20af40566bf715c4a0e94")
+ (Tag "f30f13b7f89b1c6ede53a17e4caa5f15")
+ FAIL)
+
+((Count 1)
+ (Key "6fc9e26edc3989cd664d6b4d7310c45d94bb02f4442270a6ada600b81dd7ec7a")
+ (IV "121328cccef8e87a055e783d")
+ (CT "abf5e41d0426fc3918e335adbb1c470d0899cf7969eb16927b634825e5dcab99")
+ (AAD "f9dfbad723ae30288a45b03439fdcd649136a300a78e12608215c8be084fe33a4441b69efabceb65c6365472f920d881895e04c8f1b7050e50005496f578d9d1c3bc2203f306faf08543921b373b651dde26cd69f51768b9a55f")
+ (Tag "146794aad789988e9cca01affe0ef215")
+ (PT "9e7c2b81f5e3ea441ff6d797507c0dac1b89df6d7c6468584cfae4a031c32766"))
+
+((Count 2)
+ (Key "84c4165a3f28fa9fd562c5282d17d75b455479df78f4e86a58cbbe4a3fb71a91")
+ (IV "eb4a4e09088d0bf4942b73bd")
+ (CT "f48fbabe2193f1b344e43c974e02e13c12b507601bacd6653ae5649a742ac404")
+ (AAD "1671f89088313476b0f5a92daa424ec5d4260e3b29e0f8368c0bca3aaf64b2e6c443246fc15fc5a06082e3b5991994f9cc121452032cf84535cd416be9592186f28c3b0cf69563500365a8737a0315ff82c47e10be719304e865")
+ (Tag "5dae5a905a20925bc19cefa2a4d5d764")
+ FAIL)
+
+((Count 3)
+ (Key "9b01a1b4ecac41bfa3c46a9b6097e06a6f679a9d7df431e492710c0ecf6e9ccf")
+ (IV "20ca843da03ad2e9994a7f8f")
+ (CT "dcae8c12a8baca8a07ca000fbf8af970dfa4bb05327e9d09051f1bf194a0fd17")
+ (AAD "3a786743e1eb2364994d65f4284915b57ba7b98e7a3bd6520f347441e9434162108e38812efb902dc080e033a8465185fa953152958acaa913b4d50faef97591b2d67221c6f78dd86aded4fe0b42511fd13556df0e4b4c6c0b91")
+ (Tag "12c8acc107a202319be54faef8e3c2a1")
+ (PT "792264a42e74a51e10ce48dfaee0c5053d89db472363dce0a2e22daf6b89a39d"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 0]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "4433db5fe066960bdd4e1d4d418b641c14bfcef9d574e29dcd0995352850f1eb")
+ (IV "0e396446655582838f27f72f")
+ (CT "b0d254abe43bdb563ead669192c1e57e9a85c51dba0f1c8501d1ce92273f1ce7e140dcfac94757fabb128caad16912cead0607")
+ (AAD "")
+ (Tag "ffd0b02c92dbfcfbe9d58f7ff9e6f506")
+ (PT "d602c06b947abe06cf6aa2c5c1562e29062ad6220da9bc9c25d66a60bd85a80d4fbcc1fb4919b6566be35af9819aba836b8b47"))
+
+((Count 1)
+ (Key "28ae911ee685872d906de12d7696351df8ef2234a74a95efa4ea15b327338fe0")
+ (IV "2fe6a815d4865181fade5fac")
+ (CT "1168442ef64656ef6577fb42c1919c84aae856388e4db9945bb8c9b8412bbe6458bc400444d5d2bf2630f83468f66f9e46e790")
+ (AAD "")
+ (Tag "b75f616fd1a3d6563b62b899e5a7e522")
+ FAIL)
+
+((Count 2)
+ (Key "38432203538b50a061fc039042631fd9b010742546bd39934d9cc9c44c18c2c7")
+ (IV "518283fc944974a2553e6ddd")
+ (CT "c88cf482426976586b0f3edcc3ddaab2ec8cc9f40d19a7caa70de3b2f2cc7e095b79d1b917fd52b7697bad5dcc6d6689938c65")
+ (AAD "")
+ (Tag "5b3ebd1f318bbf8690d00a2233461a18")
+ FAIL)
+
+((Count 3)
+ (Key "f9b70fd065668b9fc4ee7e222f1c4ae27e0a6e37b551e7d5fb58eea40a59fba3")
+ (IV "a7f5ddb39b8c62b50b5a8c0c")
+ (CT "0d6dcdf0820f546d54f5476f49bbf1cfafae3b5c7cb0875c826757650864f99d74ee4073651eed0dbaf5789d211c1be5579843")
+ (AAD "")
+ (Tag "31efc69daae6f7f0067fd6e969bd9240")
+ (PT "6e9c24c172ae8e81e69e797a8bd9f8de4e5e43ccbdeec5a0d0ec1a7b3527384e06129290c5f61fa2f90ae8b03a9402aeb0b6ce"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 128]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "aeb3830cb9ce31cae7b1d47511bb2d3dcc2131714ace202b21b98820e7079792")
+ (IV "e7e87c45ec0a94c8e92353f1")
+ (CT "b20542b61b8fa6f847198334cb82fdbcb2311be855a6b2b3662bdb06ff0796238bea092a8ea21b585d38ace950378f41224269")
+ (AAD "07d9bb1fa3aea7ceeefbedae87dcd713")
+ (Tag "3bdd1d0cc2bbcefffe0ed2121aecbd00")
+ (PT "b4d0ecc410c430b61c11a1a42802858a0e9ee12f9a912f2f6b0570c99177f6de4bd79830cf9efb30759055e1f70d21e3f74957"))
+
+((Count 1)
+ (Key "bcbf4f8694cbc2f2560253dd12a89cf5eca6ec72203bae092652199565c27c2e")
+ (IV "9967fbab1a6498681c958e96")
+ (CT "7fbf44ef67832284da11f929ab5af428153c851cae56052133913d207d2c80ec9b2a84549420339e496d48c73b64bbf8c5964a")
+ (AAD "2145cea37ce88228bbc1812b58615b16")
+ (Tag "3a09823f4d09205929fe178690dfbf75")
+ FAIL)
+
+((Count 2)
+ (Key "ebfaf36f1420341b9d9fb1e0ee4126b68b05baae941e4849546d9117dfdcc759")
+ (IV "b25992492ed3b7f77a63ea39")
+ (CT "98dfdf1f03ab8328639ace17baa359c063ea270dab0de3933bdf80f9943d5804d334f686a5a84f3c315044bab35f2d73f9f738")
+ (AAD "c480ad32754acb225e5333c76422422e")
+ (Tag "47c129224708bf4da915d3f0809825b5")
+ (PT "354eb9dd5e84c5dfaab1c90bf4ba578aab9e8203fca78c04ad1403a226b2dd32286e7354274219f6ab3250a134d895c7ee8d7f"))
+
+((Count 3)
+ (Key "10cea06663b617ba33247e8e2a19e46dd79b4a625dd19a50dd80ce27c61ba7b8")
+ (IV "22dae25cc3be9ca3e5317480")
+ (CT "a4506a993392b95dc8634ecef25eaa8df90a0311620f9bef00d20edc36c8491f00f1174867261ba99cd7ab86198f47df056cef")
+ (AAD "e3c0272edcd56fee42d5287531425950")
+ (Tag "8ef46a4d520d08a566684ac708f1d9ea")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 160]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "e9d381a9c413bee66175d5586a189836e5c20f5583535ab4d3f3e612dc21700e")
+ (IV "23e81571da1c7821c681c7ca")
+ (CT "a25f3f580306cd5065d22a6b7e9660110af7204bb77d370f7f34bee547feeff7b32a596fce29c9040e68b1589aad48da881990")
+ (AAD "6f39c9ae7b8e8a58a95f0dd8ea6a9087cbccdfd6")
+ (Tag "5b6dcd70eefb0892fab1539298b92a4b")
+ FAIL)
+
+((Count 1)
+ (Key "e86f021b83fa35b6270199a7dbffff781f89fff2a2987252228c4646cb8b6c05")
+ (IV "3883a55b229eb92ed0f92444")
+ (CT "fd27f6eff4ad7b517b78d3a2597ab2e449239a8cef344c4097b8c2c3de639bc6d6d3c0e0e63305a58b6b2ac159bc2bb77c0918")
+ (AAD "0a4e0162ee28c077cbfb19b432743b420eae0610")
+ (Tag "f38e5252bf3ec65cadfc91edc0b1f778")
+ FAIL)
+
+((Count 2)
+ (Key "6450d4501b1e6cfbe172c4c8570363e96b496591b842661c28c2f6c908379cad")
+ (IV "7e4262035e0bf3d60e91668a")
+ (CT "5a99b336fd3cfd82f10fb08f7045012415f0d9a06bb92dcf59c6f0dbe62d433671aacb8a1c52ce7bbf6aea372bf51e2ba79406")
+ (AAD "f1c522f026e4c5d43851da516a1b78768ab18171")
+ (Tag "fe93b01636f7bb0458041f213e98de65")
+ (PT "17449e236ef5858f6d891412495ead4607bfae2a2d735182a2a0242f9d52fc5345ef912dbe16f3bb4576fe3bcafe336dee6085"))
+
+((Count 3)
+ (Key "90f2e71ccb1148979cb742efc8f921de95457d898c84ce28edeed701650d3a26")
+ (IV "aba58ad60047ba553f6e4c98")
+ (CT "3fc77a5fe9203d091c7916587c9763cf2e4d0d53ca20b078b851716f1dab4873fe342b7b301402f015d00263bf3f77c58a99d6")
+ (AAD "2abe465df6e5be47f05b92c9a93d76ae3611fac5")
+ (Tag "9cb3d04637048bc0bddef803ffbb56cf")
+ (PT "1d21639640e11638a2769e3fab78778f84be3f4a8ce28dfd99cb2e75171e05ea8e94e30aa78b54bb402b39d613616a8ed951dc"))
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 384]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "ae02edd322afbf5002a22f6d745f6b93c946d34089a9943fcf9114060b942b74")
+ (IV "f345788b7cf2a0f5e1e6fdcf")
+ (CT "403946a53b57fd644d2033e9feb5e70ee0d7760c2d4136033b26edf22d1eb430a22b5641fe11cbff9ea704630465eaede5fa5b")
+ (AAD "d08ecc2575a5cce9190815e0ac2874aae09c11c606963c365d8bde182b6a7ccdaa2489a1e1f82e8bd1bdc890f842ecd2")
+ (Tag "154a3811c02b635a0400577e82a486dd")
+ FAIL)
+
+((Count 1)
+ (Key "075217d7166c88d5247ecbf3d78f67755d4d39a4707310e44e11e6821a58ad4a")
+ (IV "b6fa6e0e41aa40ceb0b8cd08")
+ (CT "c56dfcb147716d407536336a865d231ac0e94cf49d6e2d997f7ae2056fc4c646b6d5b27e0220d8d6d8a4d7ab51cdcf406ce289")
+ (AAD "173abc7d928b779269add386911f254648b326715b2fd467dc7d7aab8809cea0f272f5ac1f9caface6653445a272c356")
+ (Tag "3dd38b731ece2943a62ac8e23955145a")
+ (PT "7737d48b507ac2bacaa42765c7104082cb6b95078159b53ed8290128c68c1c35bbe93358b7efda9fce36af8f96daffbf747b1d"))
+
+((Count 2)
+ (Key "edb5a885fa120b7b23c34f2d7487435be705d9fb4499d71a130769789fcf23c6")
+ (IV "d546bb1770472239ecedd700")
+ (CT "b3e0467c60da40f1c9395df9b95583cea55d28fe16f3627180c563ec197825a5ed7c0c3adc1ff2718e81c92d350792203f0bf8")
+ (AAD "bdf0603d956d1dff5a8ccb8254f0148af4cd1c90e369193d4cc205d72601a4b00624d53b88b8de0bb8d8ad4713d6eb1f")
+ (Tag "60fe4e167561e803c5112b5dec30290a")
+ (PT "0e9001b8cfe66e3873581b45b4813a99a03f22fcd1a02ab35d8a750ab397ed80817eb2747ce3ded9451db4fbe946a67c0d955b"))
+
+((Count 3)
+ (Key "6cadbe908e3d6be5d0aaa1aa34bad73b5b8799854de7842f992eb7dee6edd898")
+ (IV "49aa4c9c00b138d0a02f226c")
+ (CT "88d72131d76a46f18b9211ea1306638ad357bcf3a290b7b7956bf6ad6451df936e1b9f29120a9ad2845fb4873409ea45ece45f")
+ (AAD "de3d630dae61ea92403a86c0a44b903e54d1a163f86d8b1595a87063a1e97bb22ac5c0e5b61e210a7d6ae0d516c1939d")
+ (Tag "9e40263bcc4cd45ca5f169d19e8535be")
+ FAIL)
+
+;; [Keylen = 256]
+;; [IVlen = 96]
+;; [PTlen = 408]
+;; [AADlen = 720]
+;; [Taglen = 128]
+
+((Count 0)
+ (Key "e36aca93414b13f5313e76a7244588ee116551d1f34c32859166f2eb0ac1a9b7")
+ (IV "e9e701b1ccef6bddd03391d8")
+ (CT "5b059ac6733b6de0e8cf5b88b7301c02c993426f71bb12abf692e9deeacfac1ff1644c87d4df130028f515f0feda636309a24d")
+ (AAD "6a08fe6e55a08f283cec4c4b37676e770f402af6102f548ad473ec6236da764f7076ffd41bbd9611b439362d899682b7b0f839fc5a68d9df54afd1e2b3c4e7d072454ee27111d52193d28b9c4f925d2a8b451675af39191a2cba")
+ (Tag "43c7c9c93cc265fc8e192000e0417b5b")
+ FAIL)
+
+((Count 1)
+ (Key "8ce43539dc92ac0cae5333d1a672fdc15cff4e5b82c7571c9ae57d90b5f10bd3")
+ (IV "4db5773306c66e2be6c2e689")
+ (CT "83751e2ad6cc0c6ffb9cd5a09b2c4985cc8c29def9c51708d4b008b25719ee3db38ed8c775e0a58ec6611355520a55b6379ca8")
+ (AAD "944c4ac629c39e4ec21e497f46477cdcb092952cd9f7a86b499962a8aa1a246007a9f1d4cf7bdf9f477bccc226a2056b63785f397b74e8b816beb86fda7bf5a354c6caca4c97d606d463fb5cc486792069a625bdefa065b430e9")
+ (Tag "c1cffde06139c4b356ec35b563bfd7b7")
+ FAIL)
+
+((Count 2)
+ (Key "7cd478fe0593caf1db8b8b736f32d5080ee48747eb7c5138bffac40f61a6b1fd")
+ (IV "856eb97754b591d359753071")
+ (CT "c28d17928b8656b113f65bfdac281ab7c688c52275731dcfbce25263790b35085f3fc53acb9a05a3e4c753071e0386cdb899c2")
+ (AAD "a5830a643226668af3fd52f22a3d4d632da0f0dfdbfae486e596b219ee37c3ca395d835d540a4c2c348099da86cfaabfbccc354a268071e9de71f463dde369b5a53c4c516876be5accf76a33166859a1930e09dc4a9b24398647")
+ (Tag "23d52698869e154ab6c0ee57ac972504")
+ FAIL)
+
+((Count 3)
+ (Key "1701f609f5f861ae00281ac4ac61733f5d050135f325b11c69acabb50c893e8c")
+ (IV "2890d9da5eab43562c2cdb8a")
+ (CT "4f83bba77929bd2d4cbd2917515465d8ff7816b5a2fb4bbc96d469a37c4a4944499b579db4205c089f66e7ef67629c21b8ada3")
+ (AAD "4f95e7ec8350271443ae54c126ccf59a084cd047ea4c90b09ab20d2783857e03b26bea3226a9e9d80d2a1cfbc311a9824ed5f49820b2f8d688536d70a6919df44a5982ee1fd1410403c627ec6deb675dad4e4084ae292801b360")
+ (Tag "a8188b8e54d608fd19aacb3203b0d2f2")
+ FAIL)
