@@ -607,6 +607,31 @@
   #:fail (lambda () (lambda (pub priv randomctx cleartext ciphertext)
                       (nettle_rsa_decrypt priv cleartext ciphertext))))
 
+;; Added in Nettle 3.10
+;; (define-nettleHW nettle_rsa_oaep_sha256_encrypt
+;;   (_fun [pub : #;const _rsa_public_key]
+;;         [randomctx : _pointer]
+;;         [_fpointer = yarrow_random]
+;;         [labellen : _size]
+;;         [label : #;const _pointer]
+;;         [msglen : _size]
+;;         [msg : #;const _pointer]
+;;         [ciphertext : _pointer]
+;;         -> _bool) ;; #t = success, #f = failure
+;;   #:fail (lambda () #f))
+;; (define-nettleHW nettle_rsa_oaep_sha256_decrypt
+;;   (_fun [pub : _rsa_public_key]
+;;         [priv : _rsa_private_key]
+;;         [randomctx : _pointer]
+;;         [_fpointer = yarrow_random]
+;;         [labellen : _size]
+;;         [label : _pointer]
+;;         [msglen : (_ptr io _size)]
+;;         [msgbuf : _pointer]
+;;         [ciphertext : _pointer]
+;;         -> [r : _bool] -> (and r msglen))
+;;   #:fail (lambda () #f))
+
 ;; ----------------------------------------
 ;; DSA
 
@@ -853,3 +878,48 @@
   (_fun (key : _pointer) (priv : _pointer) (peer : _pointer) -> _void))
 
 (define x448-ok? (get-hw-ok? #"nettle_curve448_mul"))
+
+;; ----------------------------------------
+;; MACs (since 3.6)
+
+(define-cstruct _nettle_mac
+  ([name _string]
+   [context_size _uint]
+   [digest_size _uint]
+   [key_size _uint]
+   [set_key _fpointer #;nettle_set_key_func]
+   [update _fpointer #;nettle_hash_update_func]
+   [digest _fpointer #;nettle_hash_digest_func]))
+
+(define-nettle nettle_get_macs (_fun -> _pointer) #:fail (lambda () #f))
+
+(define (nettle-macs)
+  (define (get-regular-macs ptr)
+    (let loop ([i 0])
+      (define next (and ptr (ptr-ref ptr _nettle_mac-pointer/null i)))
+      (if next (cons (list (nettle_mac-name next) next) (loop (add1 i))) null)))
+  (get-regular-macs (nettle_get_macs)))
+
+;; Also added in 3.6
+;; - SIV-CMAC RFC5297
+;; - Shake256
+;; - Chacha20 96/32
+
+;; Added in 3.7.1
+;; - pbkdf2_hmac_sha384, pbkf2_hmac_sha512
+
+;; Added in 3.8
+;; - AES keywrap (RFC 3394)
+;; - SM3
+
+;; Added in 3.9
+;; - SM4
+;; - Balloon pwhash
+;; - SIV-GCM mode
+;; - OCB mode
+;; - {md5,sha1,sha256,sha512}_compress ??
+
+;; Added in 3.10
+;; - add sha512_224, sha512_256 to nettle_get_hashes()
+;; - RSA-OAEP
+;; - sha3_256_shake_output, sha3_128_init, ...
