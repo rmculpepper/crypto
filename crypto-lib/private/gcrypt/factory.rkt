@@ -18,33 +18,33 @@
 ;; ----------------------------------------
 
 (define digests
-  `(;;[Name     AlgId               BlockSize]
-    (sha1       ,GCRY_MD_SHA1       64)
-    (md2        ,GCRY_MD_MD2        16)
-    (md5        ,GCRY_MD_MD5        64)
-    (sha224     ,GCRY_MD_SHA224     64)
-    (sha256     ,GCRY_MD_SHA256     64)
-    (sha384     ,GCRY_MD_SHA384     128)
-    (sha512     ,GCRY_MD_SHA512     128)
-    (sha512/256 ,GCRY_MD_SHA512_256 128)
-    (sha512/224 ,GCRY_MD_SHA512_224 128)
-    (md4        ,GCRY_MD_MD4        64)
-    (whirlpool  ,GCRY_MD_WHIRLPOOL  64)
-    (sha3-224   ,GCRY_MD_SHA3_224   144)
-    (sha3-256   ,GCRY_MD_SHA3_256   136)
-    (sha3-384   ,GCRY_MD_SHA3_384   104)
-    (sha3-512   ,GCRY_MD_SHA3_512   72)
+  `(;;[Name     AlgId               BlockSize  HMAC-AlgId]
+    (sha1       ,GCRY_MD_SHA1       64    ,GCRY_MAC_HMAC_SHA1)
+    (md2        ,GCRY_MD_MD2        16    ,GCRY_MAC_HMAC_MD2)
+    (md5        ,GCRY_MD_MD5        64    ,GCRY_MAC_HMAC_MD5)
+    (sha224     ,GCRY_MD_SHA224     64    ,GCRY_MAC_HMAC_SHA224)
+    (sha256     ,GCRY_MD_SHA256     64    ,GCRY_MAC_HMAC_SHA256)
+    (sha384     ,GCRY_MD_SHA384     128   ,GCRY_MAC_HMAC_SHA384)
+    (sha512     ,GCRY_MD_SHA512     128   ,GCRY_MAC_HMAC_SHA512)
+    (sha512/256 ,GCRY_MD_SHA512_256 128   ,GCRY_MAC_HMAC_SHA512_256)
+    (sha512/224 ,GCRY_MD_SHA512_224 128   ,GCRY_MAC_HMAC_SHA512_224)
+    (md4        ,GCRY_MD_MD4        64    ,GCRY_MAC_HMAC_MD4)
+    (whirlpool  ,GCRY_MD_WHIRLPOOL  64    ,GCRY_MAC_HMAC_WHIRLPOOL)
+    (sha3-224   ,GCRY_MD_SHA3_224   144   ,GCRY_MAC_HMAC_SHA3_224)
+    (sha3-256   ,GCRY_MD_SHA3_256   136   ,GCRY_MAC_HMAC_SHA3_256)
+    (sha3-384   ,GCRY_MD_SHA3_384   104   ,GCRY_MAC_HMAC_SHA3_384)
+    (sha3-512   ,GCRY_MD_SHA3_512   72    ,GCRY_MAC_HMAC_SHA3_512)
     ;; Fail on gcry_md_hash_buffer; need ctx and gcry_md_extract
     ;; (shake128   ,GCRY_MD_SHAKE128   168)
     ;; (shake256   ,GCRY_MD_SHAKE256   136)
-    (blake2b-512 ,GCRY_MD_BLAKE2B_512 128)
-    (blake2b-384 ,GCRY_MD_BLAKE2B_384 128)
-    (blake2b-256 ,GCRY_MD_BLAKE2B_256 128)
-    (blake2b-160 ,GCRY_MD_BLAKE2B_160 128)
-    (blake2s-256 ,GCRY_MD_BLAKE2S_256 64)
-    (blake2s-224 ,GCRY_MD_BLAKE2S_224 64)
-    (blake2s-160 ,GCRY_MD_BLAKE2S_160 64)
-    (blake2s-128 ,GCRY_MD_BLAKE2S_128 64)
+    (blake2b-512 ,GCRY_MD_BLAKE2B_512 128 ,GCRY_MAC_HMAC_BLAKE2B_512)
+    (blake2b-384 ,GCRY_MD_BLAKE2B_384 128 ,GCRY_MAC_HMAC_BLAKE2B_384)
+    (blake2b-256 ,GCRY_MD_BLAKE2B_256 128 ,GCRY_MAC_HMAC_BLAKE2B_256)
+    (blake2b-160 ,GCRY_MD_BLAKE2B_160 128 ,GCRY_MAC_HMAC_BLAKE2B_160)
+    (blake2s-256 ,GCRY_MD_BLAKE2S_256 64  ,GCRY_MAC_HMAC_BLAKE2S_256)
+    (blake2s-224 ,GCRY_MD_BLAKE2S_224 64  ,GCRY_MAC_HMAC_BLAKE2S_224)
+    (blake2s-160 ,GCRY_MD_BLAKE2S_160 64  ,GCRY_MAC_HMAC_BLAKE2S_160)
+    (blake2s-128 ,GCRY_MD_BLAKE2S_128 64  ,GCRY_MAC_HMAC_BLAKE2S_128)
     #|
     (ripemd160  ,GCRY_MD_RMD160     64) ;; Doesn't seem to be available!
     (haval      ,GCRY_MD_HAVAL      128)
@@ -135,7 +135,7 @@
     (define/override (-get-digest info)
       (define spec (send info get-spec))
       (match (assq spec digests)
-        [(list _ algid blocksize)
+        [(list _ algid blocksize _)
          (and (gcry_md_test_algo algid)
               (new gcrypt-digest-impl%
                    (info info)
@@ -187,15 +187,27 @@
         [else #f]))
 
     (define/override (-get-kdf spec)
-      (match spec
-        [(list 'pbkdf2 'hmac di-spec)
-         (and (version>=? (get-version) '(1 5))
-              (let ([di (get-digest di-spec)])
-                (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di)))))]
-        ['scrypt
-         (and (version>=? (get-version) '(1 6))
-              (new gcrypt-scrypt-impl% (spec spec) (factory this)))]
-        [_ (super -get-kdf spec)]))
+      (or (match spec
+            [(list 'pbkdf2 'hmac di-spec)
+             #:when (version>=? (get-version) '(1 5))
+             (let ([di (get-digest di-spec)])
+               (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+            ['scrypt
+             #:when (version>=? (get-version) '(1 6))
+             (new gcrypt-scrypt-impl% (spec spec) (factory this))]
+            [(or 'argon2d 'argon2i 'argon2id)
+             #:when (version>=? (get-version) '(1 10))
+             (new gcrypt-argon2-impl% (spec spec) (factory this))]
+            [(list 'hkdf di-spec)
+             #:when (version>=? (get-version) '(1 10))
+             (match (assq di-spec digests)
+               [(list _ algid blocksize hmac-algid)
+                (and hmac-algid (gcry_md_test_algo algid)
+                     (new gcrypt-hkdf-impl% (spec spec) (factory this)
+                          (mac-algo hmac-algid)))]
+               [#f #f])]
+            [_ #f])
+          (super -get-kdf spec)))
 
     ;; ----
 
