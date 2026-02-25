@@ -176,6 +176,32 @@
       (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f))
       #f))
 
+(define GCRY_MAC_HMAC_SHA256        101)
+(define GCRY_MAC_HMAC_SHA224        102)
+(define GCRY_MAC_HMAC_SHA512        103)
+(define GCRY_MAC_HMAC_SHA384        104)
+(define GCRY_MAC_HMAC_SHA1          105)
+(define GCRY_MAC_HMAC_MD5           106)
+(define GCRY_MAC_HMAC_MD4           107)
+(define GCRY_MAC_HMAC_RMD160        108)
+(define GCRY_MAC_HMAC_TIGER1        109)
+(define GCRY_MAC_HMAC_WHIRLPOOL     110)
+(define GCRY_MAC_HMAC_MD2           114)
+(define GCRY_MAC_HMAC_SHA3_224      115)
+(define GCRY_MAC_HMAC_SHA3_256      116)
+(define GCRY_MAC_HMAC_SHA3_384      117)
+(define GCRY_MAC_HMAC_SHA3_512      118)
+(define GCRY_MAC_HMAC_BLAKE2B_512   120)
+(define GCRY_MAC_HMAC_BLAKE2B_384   121)
+(define GCRY_MAC_HMAC_BLAKE2B_256   122)
+(define GCRY_MAC_HMAC_BLAKE2B_160   123)
+(define GCRY_MAC_HMAC_BLAKE2S_256   124)
+(define GCRY_MAC_HMAC_BLAKE2S_224   125)
+(define GCRY_MAC_HMAC_BLAKE2S_160   126)
+(define GCRY_MAC_HMAC_BLAKE2S_128   127)
+(define GCRY_MAC_HMAC_SHA512_256    129)
+(define GCRY_MAC_HMAC_SHA512_224    130)
+
 ;; ----------------------------------------
 ;; KDFs
 
@@ -207,11 +233,44 @@
         -> (values status out))
   #:wrap check2)
 
-;; Added in 1.10
-;; gcry_kdf_open
-;; gcry_kdf_compute
-;; gcry_kdf_final
-;; gcry_kdf_close
+;; Added in 1.10:
+
+(define-cpointer-type _gcry_kdf_hd)
+
+(define-gcrypt gcry_kdf_close
+  (_fun [h : _gcry_kdf_hd] -> _void)
+  #:wrap (deallocator))
+
+(define-gcrypt gcry_kdf_open
+  (_fun [hd : (_ptr o _gcry_kdf_hd)]
+        [algo : _int]
+        [subalgo : _int]
+        [params : (_list i _ulong)]
+        [paramlen : _uint = (length params)]
+        [pass : _pointer]
+        [passlen : _size]
+        [salt : _pointer]
+        [saltlen : _size]
+        [key : _pointer]
+        [keylen : _size]
+        [ad : _pointer]
+        [adlen : _size]
+        -> [status : _gcry_error]
+        -> (values status hd))
+  #:wrap (compose (allocator gcry_kdf_close) check2))
+
+(define-gcrypt gcry_kdf_compute
+  (_fun [h : _gcry_kdf_hd]
+        [ops : _pointer = #f]
+        -> _gcry_error)
+  #:wrap check)
+
+(define-gcrypt gcry_kdf_final
+  (_fun [h : _gcry_kdf_hd]
+        [resultlen : _size]
+        [result : _pointer]
+        -> _gcry_error)
+  #:wrap check)
 
 ;; ----------------------------------------
 ;; Ciphers
