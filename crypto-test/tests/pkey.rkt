@@ -106,7 +106,11 @@
      (test-case "KAT ecdsa"
        (hprintf 4 "KAT ecdsa\n")
        (kat-for-each "ecdsa.rktd"
-                     (lambda (datum) (test-ecdsa-kat pk datum))))]
+                     (lambda (datum) (test-ecdsa-kat pk datum))))
+     (test-case "KAT ecdh"
+       (hprintf 4 "KAT ecdh\n")
+       (kat-for-each "ecdh.rktd"
+                     (lambda (datum) (test-ecdh-kat pk datum))))]
     [else (void)]))
 
 (define (test-rsa-sign-pkcs1-kat pk datum)
@@ -207,6 +211,26 @@
                           expect-verify?)
             (check-equal? (pk-verify pub (digest di Msg) sig #:digest dspec)
                           expect-verify?)])))]))
+
+(define (test-ecdh-kat pk datum)
+  (define factory (send pk get-factory))
+  (match datum
+    [`(ecdh ,curve ,@test-data)
+     (define curve-oid (curve-alias->oid curve))
+     (hprintf 5 "ecdh ~s\n" curve)
+     (for ([test-datum (in-list test-data)])
+       (match test-datum
+         [`((COUNT ,c)
+            (QCAVSx ,QPxH) (QCAVSy ,QPyH) (dIUT ,d) (QIUTx ,QxH) (QIUTy ,QyH)
+            (ZIUT ,ZH))
+          (define priv
+            (let ([Q (bytes-append (bytes #x04) (hex->bytes QxH) (hex->bytes QyH))])
+              (datum->pk-key `(ec private ,curve-oid ,Q ,d) 'rkt-private factory)))
+          (define pub
+            (let ([QP (bytes-append (bytes #x04) (hex->bytes QPxH) (hex->bytes QPyH))])
+              (datum->pk-key `(ec public ,curve-oid ,QP) 'rkt-public factory)))
+          (check-equal? (pk-derive-secret priv pub)
+                        (hex->bytes ZH))]))]))
 
 (define (dsa-r+s->bytes R S) ;; move to common
   (asn1->bytes/DER Dss-Sig-Value (hasheq 'r R 's S)))

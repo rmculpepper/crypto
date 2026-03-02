@@ -38,7 +38,38 @@
 
 ;; check-cipher-kat : CipherSpec CipherImpl -> Void
 (define (check-cipher-kat cspec ci)
-  (void))
+  (match cspec
+    ['(aes gcm)
+     (test-case "encrypt KAT"
+       (hprintf 4 "encrypt KAT\n")
+       (call-with-input-file (build-path kat-dir "cipher-aes-gcm-encrypt.rktd")
+         (lambda (kat-in)
+           (for ([datum (in-port read kat-in)])
+             (match datum
+               [`((Count ,c) (Key ,key) (IV ,iv) (PT ,pt) (AAD ,aad) (CT ,ct) (Tag ,tag))
+                (define-values (r-ct r-tag)
+                  (encrypt/auth ci (hex->bytes key) (hex->bytes iv) (hex->bytes pt)
+                                #:aad (hex->bytes aad)))
+                (check-equal? r-ct (hex->bytes ct))
+                (check-equal? r-tag (hex->bytes tag))])))))
+     (test-case "decrypt KAT"
+       (hprintf 4 "decrypt KAT\n")
+       (call-with-input-file (build-path kat-dir "cipher-aes-gcm-decrypt.rktd")
+         (lambda (kat-in)
+           (for ([datum (in-port read kat-in)])
+             (match datum
+               [`((Count ,c) (Key ,key) (IV ,iv) (CT ,ct) (AAD ,aad) (Tag ,tag) (PT ,pt))
+                (check-equal?
+                 (decrypt/auth ci (hex->bytes key) (hex->bytes iv) (hex->bytes ct)
+                               #:aad (hex->bytes aad) #:auth-tag (hex->bytes tag))
+                 (hex->bytes pt))]
+               [`((Count ,c) (Key ,key) (IV ,iv) (CT ,ct) (AAD ,aad) (Tag ,tag) FAIL)
+                (check-exn
+                 #rx"authenticated decryption failed"
+                 (lambda ()
+                   (decrypt/auth ci (hex->bytes key) (hex->bytes iv) (hex->bytes ct)
+                                 #:aad (hex->bytes aad) #:auth-tag (hex->bytes tag))))])))))]
+    [_ (void)]))
 
 ;; check-cipher-methods-agree : CipherSpec CipherImpl -> Void
 (define (check-cipher-methods-agree cspec ci)
