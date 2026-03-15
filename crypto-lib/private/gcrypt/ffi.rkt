@@ -124,6 +124,7 @@
 
 (define GCRYCTL_TEST_ALGO      8)
 (define GCRYCTL_FINALIZE       5)
+(define GCRYCTL_GET_ASNOID     10)
 (define GCRYCTL_MD_CUSTOMIZE   88) ;; since 1.11
 
 (define-gcrypt gcry_md_close
@@ -175,6 +176,16 @@
   (if gcrypt-ok?
       (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f))
       #f))
+
+(define-gcrypt gcry_md_get_asnoid
+  (_fun (md) ::
+        [md : _int]
+        [ctl : _int = GCRYCTL_GET_ASNOID]
+        [buf : _pointer = (make-bytes 100)]
+        [buflen : (_ptr io _size) = 100]
+        -> [r : _gcry_error]
+        -> (and (= r GPG_ERR_NO_ERROR) (subbytes buf 0 buflen)))
+  #:c-id gcry_md_algo_info)
 
 (define GCRY_MAC_HMAC_SHA256        101)
 (define GCRY_MAC_HMAC_SHA224        102)
@@ -468,7 +479,7 @@
 
 (define-gcrypt gcry_sexp_new
   (_fun (buf) ::
-        (result  : (_ptr o _gcry_sexp))
+        (result  : (_ptr o _gcry_sexp/null))
         (buf     : _bytes)
         (buflen  : _size = (bytes-length buf))
         (autofmt : _int = 1)
@@ -551,6 +562,8 @@
            (loop (mpi->base256 v))]
           [else (error 'make-sexp "bad value: ~e" v)]))
   (define buf (get-output-bytes out))
+  ;; gcrypt does not support sexps with empty octet strings; gcry_sexp_new
+  ;; will fail, but should catch error earlier, report better
   (gcry_sexp_new buf))
 
 ;; ----------------------------------------

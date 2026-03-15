@@ -53,9 +53,6 @@
         (or (gcry_sexp_find_token result "private-key")
             (crypto-error "failed to generate private key component")))
       (values pub priv))
-
-    (define/public (-known-digest? dspec)
-      (or (not dspec) (and (send factory get-digest dspec) #t)))
     ))
 
 (define gcrypt-pk-key%
@@ -104,7 +101,7 @@
 (define gcrypt-rsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? -generate-keypair)
+    (inherit -generate-keypair)
     (super-new (spec 'rsa))
 
     (define/override (can-encrypt? pad) (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
@@ -112,7 +109,12 @@
       ;; Before 1.8, can't set salt for PSS.
       (define ok-pads (if v1.8/later? '(#f pkcs1-v1.5 pss) '(#f pkcs1-v1.5)))
       (and (memq pad ok-pads) 'ignoredg))
-    (define/override (can-sign2? pad dspec) (-known-digest? dspec))
+    (define/override (can-sign2? pad dspec)
+      ;; Sign/verify fails on some digests (eg, blake2*, sha512/256), not clear
+      ;; how to pre-check (gcry_md_get_asnoid not helpful).
+      (and (memq dspec '(sha1 sha224 sha256 sha384 sha512 md5
+                              sha3-224 sha3-256 sha3-384 sha3-512))
+           (send factory get-digest dspec) #t))
 
     (define/override (generate-key config)
       (define-values (nbits e)
@@ -224,6 +226,10 @@
       (make-sexp `(sig-val (rsa (s ,sig)))))
 
     (define/override (-encrypt data pad)
+      (when (zero? (bytes-length data))
+        ;; gcrypt cannot encrypt the empty message, because
+        ;; it does notallow empty octet strings in sexps
+        (crypto-error "encryption failed (empty message)"))
       (define padding (check-enc-padding pad))
       (define data-sexp (make-sexp `(data (flags ,padding) (value ,data))))
       (define enc-sexp (gcry_pk_encrypt data-sexp pub))
@@ -264,7 +270,7 @@
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? -generate-keypair)
+    (inherit -generate-keypair)
     (super-new (spec 'dsa))
 
     (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
@@ -330,7 +336,13 @@
       (apply encode-pub-dsa fmt (map get-int '("p" "q" "g" "y"))))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
-      (make-sexp `(data (flags raw) (value ,digest))))
+      ;; When the digest is larger than qbits, it must be truncated,
+      ;; but gcrypt cannot truncate externally-created digest.
+      (define qbits (integer-length (sexp-get-int pub "dsa" "q")))
+      (define digest* (if (> (* 8 (bytes-length digest)) qbits)
+                          (subbytes digest 0 (quotient (+ qbits 7) 8))
+                          digest))
+      (make-sexp `(data (flags raw) (value ,digest*))))
 
     (define/override (sign-unpack-sig-sexp sig-sexp)
       (unpack-sig-sexp sig-sexp "dsa"))
@@ -367,7 +379,7 @@
 (define gcrypt-ec-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? -generate-keypair)
+    (inherit -generate-keypair)
     (super-new (spec 'ec))
 
     (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
@@ -534,7 +546,7 @@
 (define gcrypt-eddsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
-    (inherit -known-digest? -generate-keypair)
+    (inherit -generate-keypair)
     (super-new (spec 'eddsa))
 
     (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
