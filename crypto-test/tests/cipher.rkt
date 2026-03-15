@@ -169,3 +169,13 @@
         (semirandom-bytes 48)
         (semirandom-bytes 49)
         (semirandom-bytes 1000)))
+
+;; ============================================================
+
+(module+ main
+  (require racket/cmdline crypto/all)
+  (run-tests (lambda ()
+               (for ([factory (in-list all-factories)])
+                 (test #:name (format "~s" (send factory get-name))
+                   (test-factory-ciphers factory))))
+             #:progress? #t))
