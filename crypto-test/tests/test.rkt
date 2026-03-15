@@ -5,8 +5,7 @@
 (require racket/class
          crypto
          crypto/all
-         rackunit
-         rackunit/text-ui
+         checkers
          "digest.rkt"
          "cipher.rkt"
          "kdf.rkt"
@@ -15,28 +14,27 @@
 
 ;; test-all : (Listof Factory) (Listof Symbol) -> Void
 (define (test-all factories algos)
-  (run-tests (make-all-tests factories algos)))
+  (run-tests (lambda () (do-all-tests factories algos))
+             #:progress? #t))
 
-;; make-all-tests : (Listof Factory) (Listof Symbol) -> TestSuite
-(define (make-all-tests factories algos)
-  (test-suite "All tests"
-    (for/list ([factory (in-list factories)])
-      (make-factory-test factory algos))
-    (make-cross-test factories algos)))
+;; do-all-tests : (Listof Factory) (Listof Symbol) -> Void
+(define (do-all-tests factories algos)
+  (for ([factory (in-list factories)])
+    (do-factory-test factory algos))
+  (do-cross-test factories algos))
 
-;; make-factory-tests : Factory (Listof Symbol) -> TestSuite
-(define (make-factory-test factory algos)
+;; do-factory-tests : Factory (Listof Symbol) -> Void
+(define (do-factory-test factory algos)
   (define fnv (factory-name+version factory))
-  (test-suite (format "~s tests" fnv)
-    (hprintf 0 "Testing ~a\n" fnv)
-    (and (memq 'digest algos) (make-factory-digest-test factory))
-    (and (memq 'cipher algos) (make-factory-cipher-test factory))
-    (and (memq 'pkey algos) (make-factory-pkey-test factory))
-    (and (memq 'kdf algos) (make-factory-kdf-test factory))))
+  (test #:name (format "~s tests" fnv)
+    (when (memq 'digest algos) (test-factory-digests factory))
+    (when (memq 'cipher algos) (test-factory-ciphers factory))
+    (when (memq 'pkey algos) (test-factory-pkeys factory))
+    (when (memq 'kdf algos) (test-factory-kdfs factory))))
 
-;; make-cross-test : (Listof Factory) (Listof Symbol) -> TestSuite
-(define (make-cross-test factories algos)
-  (test-suite (format "Cross tests ~s" (map (lambda (f) (send f get-name)) factories))
+;; do-cross-test : (Listof Factory) (Listof Symbol) -> TestSuite
+(define (do-cross-test factories algos)
+  (test #:name (format "cross tests ~s" (map factory-name+version factories))
     ;; FIXME
     (void)))
 

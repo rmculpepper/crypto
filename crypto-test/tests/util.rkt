@@ -22,24 +22,3 @@
     (for ([i (in-range len)])
       (bytes-set! bs i (+ 65 (random 26))))
     bs))
-
-;; Used to print testing headers
-(define current-header-port (make-parameter (current-output-port)))
-
-;; hprintf : Integer FormatString Any ... -> Void
-(define (hprintf level fmt . args)
-  (define prefix
-    (cond [(zero? level) ">> "]
-          [(positive? level) (make-string (+ 1 (* 2 level)) #\space)]
-          [(negative? level) (string-append "-" (make-string (* -2 level) #\space))]))
-  (write-string prefix (current-header-port))
-  (apply fprintf (current-header-port) fmt args)
-  (flush-output (current-header-port)))
-
-;; hprintf examples:
-;; ">> HEADER"
-;; "   level 1"
-;; "     level 2"
-;; "       level3"
-;; "-      level 3 negative"
-;; "-    level 2 negative"

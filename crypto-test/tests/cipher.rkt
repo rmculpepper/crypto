@@ -8,129 +8,125 @@
          racket/runtime-path
          crypto
          crypto/private/common/catalog
-         rackunit
+         checkers
          "util.rkt")
-(provide make-factory-cipher-test)
+(provide test-factory-ciphers)
 
 (define-runtime-path kat-dir "data/")
 
-;; make-factory-cipher-test : Factory -> TestSuite
-(define (make-factory-cipher-test factory)
-  (test-suite "ciphers"
-    (hprintf 1 "Ciphers\n")
+;; test-factory-ciphers : Factory -> Void
+(define (test-factory-ciphers factory)
+  (test #:name "ciphers"
     (for ([cspec (in-list (list-known-ciphers))])
       (define ci (get-cipher cspec factory))
       (when ci
-        (test-case (format "~s" cspec)
-          (hprintf 2 "~s\n" cspec)
-          (check-pred cipher-impl? ci)
+        (test #:name (format "~s" cspec)
+          (check ci #:with cipher-impl?)
           ;; Check info methods
-          (void (cipher-block-size ci))
-          (void (cipher-default-key-size ci))
-          (void (cipher-key-sizes ci))
-          (void (cipher-iv-size ci))
-          (void (cipher-aead? ci))
-          (void (cipher-default-auth-size ci))
+          (check (cipher-block-size ci) #:no-error)
+          (check (cipher-default-key-size ci) #:no-error)
+          (check (cipher-key-sizes ci) #:no-error)
+          (check (cipher-iv-size ci) #:no-error)
+          (check (cipher-aead? ci) #:no-error)
+          (check (cipher-default-auth-size ci) #:no-error)
           ;; Check operation
-          (check-cipher-kat cspec ci)
-          (check-cipher-methods-agree cspec ci)))
+          (test-cipher-kat cspec ci)
+          (test-cipher-methods-agree cspec ci)))
       (void))))
 
-;; check-cipher-kat : CipherSpec CipherImpl -> Void
-(define (check-cipher-kat cspec ci)
+;; test-cipher-kat : CipherSpec CipherImpl -> Void
+(define (test-cipher-kat cspec ci)
   (match cspec
     ['(aes gcm)
-     (test-case "encrypt KAT"
-       (hprintf 4 "encrypt KAT\n")
+     (test #:name "encrypt KAT"
        (call-with-input-file (build-path kat-dir "cipher-aes-gcm-encrypt.rktd")
          (lambda (kat-in)
            (for ([datum (in-port read kat-in)])
              (match datum
-               [`((Count ,c) (Key ,key) (IV ,iv) (PT ,pt) (AAD ,aad) (CT ,ct) (Tag ,tag))
-                (define-values (r-ct r-tag)
-                  (encrypt/auth ci (hex->bytes key) (hex->bytes iv) (hex->bytes pt)
-                                #:aad (hex->bytes aad)))
-                (check-equal? r-ct (hex->bytes ct))
-                (check-equal? r-tag (hex->bytes tag))])))))
-     (test-case "decrypt KAT"
-       (hprintf 4 "decrypt KAT\n")
+               [`((Count ,c) (Key ,(app hex->bytes key)) (IV ,(app hex->bytes iv))
+                             (PT ,(app hex->bytes pt)) (AAD ,(app hex->bytes aad))
+                             (CT ,(app hex->bytes ct)) (Tag ,(app hex->bytes tag)))
+                (when (send ci key-size-ok? (bytes-length key))
+                  (check (encrypt/auth ci key iv pt #:aad aad)
+                         #:is (values ct tag)))])))))
+     (test #:name "decrypt KAT"
        (call-with-input-file (build-path kat-dir "cipher-aes-gcm-decrypt.rktd")
          (lambda (kat-in)
            (for ([datum (in-port read kat-in)])
              (match datum
-               [`((Count ,c) (Key ,key) (IV ,iv) (CT ,ct) (AAD ,aad) (Tag ,tag) (PT ,pt))
-                (check-equal?
-                 (decrypt/auth ci (hex->bytes key) (hex->bytes iv) (hex->bytes ct)
-                               #:aad (hex->bytes aad) #:auth-tag (hex->bytes tag))
-                 (hex->bytes pt))]
-               [`((Count ,c) (Key ,key) (IV ,iv) (CT ,ct) (AAD ,aad) (Tag ,tag) FAIL)
-                (check-exn
-                 #rx"authenticated decryption failed"
-                 (lambda ()
-                   (decrypt/auth ci (hex->bytes key) (hex->bytes iv) (hex->bytes ct)
-                                 #:aad (hex->bytes aad) #:auth-tag (hex->bytes tag))))])))))]
+               [`((Count ,c) (Key ,(app hex->bytes key)) (IV ,(app hex->bytes iv))
+                             (CT ,(app hex->bytes ct)) (AAD ,(app hex->bytes aad))
+                             (Tag ,(app hex->bytes tag)) ,result)
+                (when (send ci key-size-ok? (bytes-length key))
+                  (match result
+                    [`(PT ,(app hex->bytes pt))
+                     (check (decrypt/auth ci key iv ct #:aad aad #:auth-tag tag)
+                            #:is pt)]
+                    ['FAIL
+                     (check (decrypt/auth ci key iv ct #:aad aad #:auth-tag tag)
+                            #:error #rx"authenticated decryption failed")]))])))))]
     [_ (void)]))
 
-;; check-cipher-methods-agree : CipherSpec CipherImpl -> Void
-(define (check-cipher-methods-agree cspec ci)
-  (hprintf 4 "Method agreement tests\n")
-  (for ([key (in-list (cipher-make-keys ci))]
-        [key2 (in-list (cipher-make-keys ci))]
-        #:when #t
-        [msg (in-list messages)])
-    (define nopad-ok? (zero? (remainder (bytes-length msg) (cipher-block-size ci))))
-    (define iv (generate-cipher-iv ci))
-    (define iv2 (generate-cipher-iv ci))
-    (check-cipher-methods-agree1 ci key iv key2 iv2 msg #t)
-    (when nopad-ok? (check-cipher-methods-agree1 ci key iv key2 iv2 msg #f))
-    (when (cipher-aead? ci)
-      (define aad (semirandom-bytes 20))
-      (define aad2 (semirandom-bytes 20))
-      (check-cipher-methods-agree1 ci key iv key2 iv2 msg #t aad aad2))))
+;; test-cipher-methods-agree : CipherSpec CipherImpl -> Void
+(define (test-cipher-methods-agree cspec ci)
+  (test #:name "agree"
+    (for ([key (in-list (cipher-make-keys ci))]
+          [key2 (in-list (cipher-make-keys ci))]
+          #:when #t
+          [msg (in-list messages)])
+      (define nopad-ok? (zero? (remainder (bytes-length msg) (cipher-block-size ci))))
+      (define iv (generate-cipher-iv ci))
+      (define iv2 (generate-cipher-iv ci))
+      (check-cipher-methods-agree1 ci key iv key2 iv2 msg #t)
+      (when nopad-ok? (check-cipher-methods-agree1 ci key iv key2 iv2 msg #f))
+      (when (cipher-aead? ci)
+        (define aad (semirandom-bytes 20))
+        (define aad2 (semirandom-bytes 20))
+        (check-cipher-methods-agree1 ci key iv key2 iv2 msg #t aad aad2)))))
 
 (define (check-cipher-methods-agree1 ci key iv key2 iv2 msg pad? [aad null] [aad2 null])
   ;; One-shot, attached auth
   (define ctext (encrypt ci key iv msg #:aad aad #:pad pad?))
-  (check-equal? (decrypt ci key iv ctext #:aad aad #:pad pad?) msg)
+  (check (decrypt ci key iv ctext #:aad aad #:pad pad?) #:is msg)
   (unless (or (equal? msg #"") (equal? key key2)) ;; unlikely to be same
-    (define pt (with-handlers ([exn:fail? (lambda (e) #f)])
-                 (decrypt ci key2 iv ctext #:aad aad #:pad pad?)))
-    (check-not-equal? pt msg))
+    (check (with-handlers ([exn:fail? (lambda (e) #f)])
+             (decrypt ci key2 iv ctext #:aad aad #:pad pad?))
+           #:is-not msg))
   (unless (or (equal? msg #"") (equal? iv iv2)) ;; unlikely to be same
-    (define pt (with-handlers ([exn:fail? (lambda (e) #f)])
-                 (decrypt ci key iv2 ctext #:aad aad #:pad pad?)))
-    (check-not-equal? pt msg))
+    (check (with-handlers ([exn:fail? (lambda (e) #f)])
+             (decrypt ci key iv2 ctext #:aad aad #:pad pad?))
+           #:is-not msg))
   ;; One-shot, detached auth
   (define-values (ct auth) (encrypt/auth ci key iv msg #:aad aad #:pad pad?))
   (when #t
     ;; This check assumes encrypt attaches auth tag to end; true now, but
     ;; conflicts with CCM and RFC 5116.
-    (check-equal? (bytes-append ct auth) ctext))
-  (check-equal? (decrypt/auth ci key iv ct #:aad aad #:auth-tag auth #:pad pad?) msg)
+    (check (bytes-append ct auth) #:is ctext))
+  (check (decrypt/auth ci key iv ct #:aad aad #:auth-tag auth #:pad pad?) #:is msg)
   ;; Ctx encrypt/decrypt with one update, attached auth
   (let ([ctx (make-encrypt-ctx ci key iv #:pad pad?)])
     (when (cipher-aead? ci) (cipher-update-aad ctx aad))
     (define ct1 (cipher-update ctx msg))
     (define ct2 (cipher-final ctx))
-    (check-equal? (bytes-append ct1 ct2) ctext))
+    (check (bytes-append ct1 ct2) #:is ctext))
   (let ([ctx (make-decrypt-ctx ci key iv #:pad pad?)])
     (when (cipher-aead? ci) (cipher-update-aad ctx aad))
     (define pt1 (cipher-update ctx ctext))
     (define pt2 (cipher-final ctx))
-    (check-equal? (bytes-append pt1 pt2) msg))
+    (check (bytes-append pt1 pt2) #:is msg))
   ;; Ctx encrypt/decrypt with one update, detached auth
   (let ([ctx (make-encrypt-ctx ci key iv #:auth-attached? #f #:pad pad?)])
     (when (cipher-aead? ci) (cipher-update-aad ctx aad))
     (define ct1 (cipher-update ctx msg))
     (define ct2 (cipher-final ctx))
     (define tag (cipher-get-auth-tag ctx))
-    (check-equal? (bytes-append ct1 ct2) ct)
-    (check-equal? tag auth))
+    (check (bytes-append ct1 ct2) #:is ct)
+    (check tag #:is auth))
   (let ([ctx (make-decrypt-ctx ci key iv #:auth-attached? #f #:pad pad?)])
     (when (cipher-aead? ci) (cipher-update-aad ctx aad))
     (define pt1 (cipher-update ctx ct))
     (define pt2 (cipher-final ctx auth))
-    (check-equal? (bytes-append pt1 pt2) msg))
+    (check (bytes-append pt1 pt2) #:is msg))
   ;; Ctx encrypt/decrypt with random-sized updates, attached auth
   (let ([ctx (make-encrypt-ctx ci key iv #:pad pad?)])
     (define msglen (bytes-length msg))
@@ -142,7 +138,7 @@
              (loop end (bytes-append ct ct2))]
             [else
              (define ct2 (cipher-final ctx))
-             (check-equal? (bytes-append ct ct2) ctext)])))
+             (check (bytes-append ct ct2) #:is ctext)])))
   (let ([ctx (make-decrypt-ctx ci key iv #:pad pad?)])
     (define ctlen (bytes-length ctext))
     (when (cipher-aead? ci) (cipher-update-aad ctx aad))
@@ -153,7 +149,7 @@
              (loop end (bytes-append pt pt2))]
             [else
              (define pt2 (cipher-final ctx))
-             (check-equal? (bytes-append pt pt2) msg)]))))
+             (check (bytes-append pt pt2) #:is msg)]))))
 
 ;; cipher-make-keys : CipherImpl -> (Listof Bytes)
 (define (cipher-make-keys ci)

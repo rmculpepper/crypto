@@ -4,7 +4,7 @@
 #lang racket/base
 (require crypto
          crypto/libcrypto
-         rackunit)
+         checkers)
 
 ;; SETUP
 
@@ -14,17 +14,17 @@
 ;; ============================================================
 ;; Digests
 
-(check-exn #rx"could not get implementation"
-           (lambda () (digest 'tiger1 #"hello world")))
+(test #:name "digests"
+  (check (digest 'tiger1 #"hello world")
+         #:error #rx"could not get implementation")
 
-(check-exn #rx"bad key size\n  given: 3 bytes"
-           (lambda () (digest 'sha256 #"hello world" #:key #"abc")))
+  (check (digest 'sha256 #"hello world" #:key #"abc")
+         #:error #rx"bad key size\n  given: 3 bytes")
 
-(check-exn #rx"wrong state\n  state: closed"
-           (lambda ()
-             (define ctx (make-digest-ctx 'sha256))
-             (digest-final ctx)
-             (digest-update ctx #"hello")))
+  (check (let ([ctx (make-digest-ctx 'sha256)])
+           (digest-final ctx)
+           (digest-update ctx #"hello"))
+         #:error #rx"wrong state\n  state: closed"))
 
 ;; ============================================================
 ;; Ciphers
@@ -35,99 +35,97 @@
 (define iv16   (crypto-random-bytes 16))
 (define iv12   (crypto-random-bytes 12))
 
-(check-exn #rx"bad key size for cipher.*given: 5 bytes\n"
-           (lambda () (encrypt ctr #"short" iv16 #"the message")))
+(test #:name "ciphers"
+  (check (encrypt ctr #"short" iv16 #"the message")
+         #:error #rx"bad key size for cipher.*given: 5 bytes\n")
 
-(check-exn #rx"bad IV size for cipher.*given: 5 bytes\n"
-           (lambda () (encrypt ctr key16 #"short" #"the message")))
+  (check (encrypt ctr key16 #"short" #"the message")
+         #:error #rx"bad IV size for cipher.*given: 5 bytes\n")
 
-(check-exn #rx"bad authentication tag size.*given: 2 bytes"
-           (lambda () (encrypt gcm key16 iv12 #"the message" #:auth-size 2)))
+  (check (encrypt gcm key16 iv12 #"the message" #:auth-size 2)
+         #:error #rx"bad authentication tag size.*given: 2 bytes")
 
-(check-exn #rx"wrong state\n  state: closed"
-           (lambda ()
-             (define ctx (make-encrypt-ctx ctr key16 iv16))
-             (cipher-final ctx)
-             (cipher-update ctx #"hello")))
+  (check (let ([ctx (make-encrypt-ctx ctr key16 iv16)])
+           (cipher-final ctx)
+           (cipher-update ctx #"hello"))
+         #:error #rx"wrong state\n  state: closed")
 
-(check-exn #rx"wrong state\n  state: ready for input"
-           (lambda ()
-             (define ctx (make-encrypt-ctx gcm key16 iv12))
-             (cipher-update ctx #"hello")
-             (cipher-update-aad ctx #"world")))
+  (check (let ([ctx (make-encrypt-ctx gcm key16 iv12)])
+           (cipher-update ctx #"hello")
+           (cipher-update-aad ctx #"world"))
+         #:error #rx"wrong state\n  state: ready for input")
 
-(check-exn #rx"cannot set authentication tag for encryption context"
-           (lambda ()
-             (define ctx (make-encrypt-ctx gcm key16 iv12))
-             (cipher-final ctx (make-bytes 12))))
-(check-exn #rx"cannot set authentication tag for decryption context with attached tag"
-           (lambda ()
-             (define ctx (make-decrypt-ctx gcm key16 iv12))
-             (cipher-final ctx #"")))
-(check-exn #rx"wrong size for authentication tag.*given: 3 bytes"
-           (lambda ()
-             (define ctx (make-decrypt-ctx gcm key16 iv12 #:auth-attached? #f))
-             (cipher-final ctx #"abc")))
-(check-exn #rx"cannot get authentication tag for decryption context"
-           (lambda ()
-             (define cmsg (encrypt gcm key16 iv12 #"message"))
-             (define ctx (make-decrypt-ctx gcm key16 iv12))
-             (cipher-update ctx cmsg)
-             (cipher-final ctx)
-             (cipher-get-auth-tag ctx)))
+  (check (let ([ctx (make-encrypt-ctx gcm key16 iv12)])
+           (cipher-final ctx (make-bytes 12)))
+         #:error #rx"cannot set authentication tag for encryption context")
+  (check (let ([ctx (make-decrypt-ctx gcm key16 iv12)])
+           (cipher-final ctx #""))
+         #:error #rx"cannot set authentication tag for decryption context with attached tag")
+  (check (let ([ctx (make-decrypt-ctx gcm key16 iv12 #:auth-attached? #f)])
+           (cipher-final ctx #"abc"))
+         #:error #rx"wrong size for authentication tag.*given: 3 bytes")
+  (check (let ()
+           (define cmsg (encrypt gcm key16 iv12 #"message"))
+           (define ctx (make-decrypt-ctx gcm key16 iv12))
+           (cipher-update ctx cmsg)
+           (cipher-final ctx)
+           (cipher-get-auth-tag ctx))
+         #:error #rx"cannot get authentication tag for decryption context")
 
-(check-exn #rx"input size not a multiple of block size"
-           (lambda () (encrypt '(aes ecb) key16 #f #"short" #:pad #f)))
+  (check (encrypt '(aes ecb) key16 #f #"short" #:pad #f)
+         #:error #rx"input size not a multiple of block size")
 
-(check-exn #rx"input size not a multiple of block size"
-           (lambda () (decrypt '(aes ecb) key16 #f #"short" #:pad #f)))
+  (check (decrypt '(aes ecb) key16 #f #"short" #:pad #f)
+         #:error #rx"input size not a multiple of block size"))
 
 ;; ============================================================
 ;; KDF
 
-(check-exn #rx"unsupported option for PBKDF2\n  option: 'sparkles"
-           (lambda () (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '((sparkles 10)))))
+(test #:name "kdf"
+  (check (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '((sparkles 10)))
+         #:error #rx"unsupported option for PBKDF2\n  option: 'sparkles")
 
-(check-exn #rx"missing required option for PBKDF2\n  option: 'iterations"
-           (lambda () (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '())))
+  (check (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '())
+         #:error #rx"missing required option for PBKDF2\n  option: 'iterations")
 
-(when (get-kdf 'scrypt)
-  (check-exn #rx"conflicting options for scrypt\n  options: 'N and 'ln"
-             (lambda () (kdf 'scrypt #"pass" #"salt" `((N ,(expt 2 16)) (ln 16) (r 8) (p 1))))))
+  (when (get-kdf 'scrypt)
+    (check (kdf 'scrypt #"pass" #"salt" `((N ,(expt 2 16)) (ln 16) (r 8) (p 1)))
+           #:error #rx"conflicting options for scrypt\n  options: 'N and 'ln")))
 
 ;; ============================================================
 ;; PK
 
-(check-exn #rx"parameters not supported"
-           (lambda () (generate-pk-parameters 'rsa '())))
+(test #:name "pk"
+  (check (generate-pk-parameters 'rsa '())
+         #:error #rx"parameters not supported")
 
-(define rsapriv (generate-private-key 'rsa '((nbits 512))))
-(define rsapub (pk-key->public-only-key rsapriv))
+  (define rsapriv (generate-private-key 'rsa '((nbits 512))))
+  (define rsapub (pk-key->public-only-key rsapriv))
 
-(check-exn #rx"contract violation\n  expected: private-key[?]"
-           (lambda () (digest/sign rsapub 'sha1 #"hello world")))
+  (check (digest/sign rsapub 'sha1 #"hello world")
+         #:error #rx"contract violation\n  expected: private-key[?]")
 
-(check-exn #rx"key agreement not supported"
-           (lambda () (pk-derive-secret rsapriv rsapub)))
+  (check (pk-derive-secret rsapriv rsapub)
+         #:error #rx"key agreement not supported")
 
-(define ecpriv (generate-private-key 'ec '((curve secp256r1))))
-(define ecpub (pk-key->public-only-key ecpriv))
+  (define ecpriv (generate-private-key 'ec '((curve secp256r1))))
+  (define ecpub (pk-key->public-only-key ecpriv))
 
-(check-exn #rx"encrypt/decrypt not supported"
-           (lambda () (pk-encrypt ecpub #"secret")))
+  (check (pk-encrypt ecpub #"secret")
+         #:error #rx"encrypt/decrypt not supported")
 
-(define ecxpriv (generate-private-key 'ecx '((curve x25519))))
-(define ecxpub (pk-key->public-only-key ecxpriv))
+  (define ecxpriv (generate-private-key 'ecx '((curve x25519))))
+  (define ecxpub (pk-key->public-only-key ecxpriv))
 
-(check-exn #rx"encrypt/decrypt not supported"
-           (lambda () (pk-encrypt ecxpub #"secret")))
-(check-exn #rx"sign/verify not supported"
-           (lambda () (pk-sign ecxpriv #"message")))
+  (check (pk-encrypt ecxpub #"secret")
+         #:error #rx"encrypt/decrypt not supported")
+  (check (pk-sign ecxpriv #"message")
+         #:error #rx"sign/verify not supported")
 
-(check-exn #rx"sign/verify padding not supported\n  padding: 'pkcs1-v1.5"
-           (lambda () (digest/sign ecpriv 'sha1 #"hello world" #:pad 'pkcs1-v1.5)))
-(check-exn #rx"wrong size for digest\n  expected: 32 bytes\n  given: 20 bytes"
-           (lambda () (pk-sign-digest rsapriv 'sha256 (digest 'sha1 #"message"))))
+  (check (digest/sign ecpriv 'sha1 #"hello world" #:pad 'pkcs1-v1.5)
+         #:error #rx"sign/verify padding not supported\n  padding: 'pkcs1-v1.5")
+  (check (pk-sign-digest rsapriv 'sha256 (digest 'sha1 #"message"))
+         #:error #rx"wrong size for digest\n  expected: 32 bytes\n  given: 20 bytes")
 
-(check-exn #rx"peer key has different implementation.*\n  peer: "
-           (lambda () (pk-derive-secret ecxpriv ecpub)))
+  (check (pk-derive-secret ecxpriv ecpub)
+         #:error #rx"peer key has different implementation.*\n  peer: "))

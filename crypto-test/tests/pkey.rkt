@@ -11,25 +11,23 @@
          (only-in crypto/private/common/asn1 Dss-Sig-Value)
          (only-in crypto/private/common/pk-common curve-alias->oid)
          asn1
-         rackunit
+         checkers
          (only-in "digest.rkt" all-digest-specs messages)
          "util.rkt")
 (provide (all-defined-out))
 
 (define-runtime-path kat-dir "data/")
 
-;; make-factory-pkey-test : Factory -> TestSuite
-(define (make-factory-pkey-test factory)
-  (test-suite "pkey"
-    (hprintf 1 "PKey\n")
-    (for/list ([pkname (in-list '(rsa dsa dh ec eddsa ecx))])
+;; test-factory-pkeys : Factory -> Void
+(define (test-factory-pkeys factory)
+  (test #:name "pkey"
+    (for ([pkname (in-list '(rsa dsa dh ec eddsa ecx))])
       (define pk (get-pk pkname factory))
-      (and pk (make-pk-test pkname pk)))))
+      (and pk (test-pk pkname pk)))))
 
-;; make-pk-test : Symbol PKImpl -> TestSuite
-(define (make-pk-test pkname pk)
-  (test-suite (format "~s" pkname)
-    (hprintf 2 (format "~s\n" pkname))
+;; test-pk : Symbol PKImpl -> Void
+(define (test-pk pkname pk)
+  (test #:name (format "~s" pkname)
     (test-pk-kat pkname pk)
     (let ([privss (make-private-keyss pkname pk)])
       (when (pk-can-encrypt? pk) (test-pk-encrypt pkname pk privss))
@@ -41,16 +39,21 @@
   (define factory (send pk get-factory))
   (case pkname
     [(rsa)
-     (for/list ([nbits (in-list '(1024 2048 3072))])
+     ;; 1024-bit key is too small for PSS with SHA512
+     (for/list ([nbits (in-list '(#;1024 2048 3072))])
        (for/list ([i 2]) (generate-private-key pk `((nbits ,nbits)))))]
     [(dsa)
-     (for/list ([pkpd (in-list dsa-params)])
-       (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
-       (for/list ([i 2]) (generate-private-key pkp)))]
+     (if (send pk has-params?)
+         (for/list ([pkpd (in-list dsa-params)])
+           (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
+           (for/list ([i 2]) (generate-private-key pkp)))
+         null)]
     [(dh)
-     (for/list ([pkpd (in-list dh-params)])
-       (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
-       (for/list ([i 2]) (generate-private-key pkp)))]
+     (if (send pk has-params?)
+         (for/list ([pkpd (in-list dh-params)])
+           (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
+           (for/list ([i 2]) (generate-private-key pkp)))
+         null)]
     [(ec)
      (for/list ([curve (in-list (send factory info 'all-ec-curves))]
                 #:when (not (memq curve bad-ec-curves)))
@@ -71,47 +74,43 @@
 
 ;; ----------------------------------------
 
+;; test-pk-kat : PKSpec PKImpl -> Void
 (define (test-pk-kat pkname pk)
   (define (kat-for-each file proc)
     (call-with-input-file (build-path kat-dir file)
       (lambda (kat-in)
         (for ([datum (in-port read kat-in)])
           (proc datum)))))
-  (case pkname
-    [(rsa)
-     #;
-     (test-case "KAT signpkcs1"
-       (hprintf 4 "KAT sign pkcs1\n")
-       (kat-for-each "rsa-sign-pkcs1.rktd"
-                     (lambda (datum) (test-rsa-sign-pkcs1-kat pk datum))))
-     (test-case "KAT verify pkcs1 (pass/fail)"
-       (hprintf 4 "KAT verify pkcs1 (pass/fail)\n")
-       (kat-for-each "rsa-verify-pkcs1.rktd"
-                     (lambda (datum) (test-rsa-verify-pkcs1-kat pk datum))))
-     (test-case "KAT verify pss (pass/fail)"
-       (hprintf 4 "KAT verify pss (pass/fail)\n")
-       (kat-for-each "rsa-verify-pss.rktd"
-                     (lambda (datum) (test-rsa-verify-pss-kat pk datum))))]
-    [(dsa)
-     (test-case "KAT verify (all valid)"
-       (hprintf 4 "KAT verify (all valid)\n")
-       (kat-for-each "dsa1.rktd"
-                     (lambda (datum) (test-dsa1-kat pk datum))))
-     (test-case "KAT verify (pass/fail)"
-       (hprintf 4 "KAT verify (pass/fail)\n")
-       (kat-for-each "dsa.rktd"
-                     (lambda (datum) (test-dsa-kat pk datum))))]
-    [(ec)
-     (void)
-     (test-case "KAT ecdsa"
-       (hprintf 4 "KAT ecdsa\n")
-       (kat-for-each "ecdsa.rktd"
-                     (lambda (datum) (test-ecdsa-kat pk datum))))
-     (test-case "KAT ecdh"
-       (hprintf 4 "KAT ecdh\n")
-       (kat-for-each "ecdh.rktd"
-                     (lambda (datum) (test-ecdh-kat pk datum))))]
-    [else (void)]))
+  (test #:name "KAT"
+    (case pkname
+      [(rsa)
+       (when (send pk can-sign 'pkcs1-v1.5)
+         #;
+         (test #:name "signpkcs1"
+           (kat-for-each "rsa-sign-pkcs1.rktd"
+                         (lambda (datum) (test-rsa-sign-pkcs1-kat pk datum))))
+         (test #:name "verify pkcs1 (pass/fail)"
+           (kat-for-each "rsa-verify-pkcs1.rktd"
+                         (lambda (datum) (test-rsa-verify-pkcs1-kat pk datum)))))
+       (when (send pk can-sign 'pss*)
+         (test #:name "verify pss (pass/fail)"
+           (kat-for-each "rsa-verify-pss.rktd"
+                         (lambda (datum) (test-rsa-verify-pss-kat pk datum)))))]
+      [(dsa)
+       (test #:name "verify (all valid)"
+         (kat-for-each "dsa1.rktd"
+                       (lambda (datum) (test-dsa1-kat pk datum))))
+       (test #:name "verify (pass/fail)"
+         (kat-for-each "dsa.rktd"
+                       (lambda (datum) (test-dsa-kat pk datum))))]
+      [(ec)
+       (test #:name "ecdsa"
+         (kat-for-each "ecdsa.rktd"
+                       (lambda (datum) (test-ecdsa-kat pk datum))))
+       (test #:name "ecdh"
+         (kat-for-each "ecdh.rktd"
+                       (lambda (datum) (test-ecdh-kat pk datum))))]
+      [else (void)])))
 
 (define (test-rsa-sign-pkcs1-kat pk datum)
   (void))
@@ -128,11 +127,12 @@
           (define Msg (hex->bytes* MsgH))
           (define S (hex->bytes* SH))
           (define expect-verify? (regexp-match? #rx"^P" Result))
-          (check-equal? (digest/verify pub di Msg S #:pad 'pkcs1-v1.5)
-                        expect-verify?)
-          (check-equal? (let ([dgst (digest di Msg)])
-                          (pk-verify pub dgst S #:digest dspec #:pad 'pkcs1-v1.5))
-                        expect-verify?)]))]))
+          (when (send pk can-sign2? 'pkcs1-v1.5 dspec)
+            (check (digest/verify pub di Msg S #:pad 'pkcs1-v1.5)
+                   #:is expect-verify?)
+            (check (let ([dgst (digest di Msg)])
+                     (pk-verify pub dgst S #:digest dspec #:pad 'pkcs1-v1.5))
+                   #:is expect-verify?))]))]))
 
 (define (test-rsa-verify-pss-kat pk datum)
   (define factory (send pk get-factory))
@@ -145,16 +145,18 @@
          (define Msg (hex->bytes MsgH))
          (define S (hex->bytes SH))
          (define expect-verify? (regexp-match? #rx"^P" Result))
-         (check-equal? (digest/verify pub di Msg S #:pad 'pss*)
-                       expect-verify?)
-         (check-equal? (let ([dgst (digest di Msg)])
-                         (pk-verify pub dgst S #:digest dspec #:pad 'pss*))
-                       expect-verify?))
+         (check (digest/verify pub di Msg S #:pad 'pss*)
+                #:is expect-verify?)
+         (check (let ([dgst (digest di Msg)])
+                  (pk-verify pub dgst S #:digest dspec #:pad 'pss*))
+                #:is expect-verify?))
        (match test-datum
          [`(,dspec (e ,e) (d ,d) (Msg ,MsgH) (S ,SH) (SaltVal ,saltH) (Result ,Result))
-          (pss-test dspec e MsgH SH Result)]
+          (when (send pk can-sign2? 'pss* dspec)
+            (pss-test dspec e MsgH SH Result))]
          [`(,dspec (e ,e) (Msg ,MsgH) (S ,SH) (Result ,Result))
-          (pss-test dspec e MsgH SH Result)]))]))
+          (when (send pk can-sign2? 'pss* dspec)
+            (pss-test dspec e MsgH SH Result))]))]))
 
 (define (test-dsa1-kat pk datum)
   (define factory (send pk get-factory))
@@ -168,9 +170,10 @@
             (define Msg (hex->bytes MsgH))
             (define pub (datum->pk-key `(dsa public ,P ,Q ,G ,Y) 'rkt-public factory))
             (define sig (dsa-r+s->bytes R S))
-            (check-true (digest/verify pub di Msg sig))
-            (check-true (let ([dgst (digest di Msg)])
-                          (pk-verify pub (digest di Msg) sig #:digest dspec)))])))]))
+            (check (digest/verify pub di Msg sig) #:is #t)
+            (check (let ([dgst (digest di Msg)])
+                     (pk-verify pub dgst sig #:digest dspec))
+                   #:is #t)])))]))
 
 (define (test-dsa-kat pk datum)
   (define factory (send pk get-factory))
@@ -185,52 +188,50 @@
             (define pub (datum->pk-key `(dsa public ,P ,Q ,G ,Y) 'rkt-public factory))
             (define sig (dsa-r+s->bytes R S))
             (define expect-verify? (regexp-match? #rx"^P" Result))
-            (check-equal? (digest/verify pub di Msg sig)
-                          expect-verify?)
-            (check-equal? (let ([dgst (digest di Msg)])
-                            (pk-verify pub (digest di Msg) sig #:digest dspec))
-                          expect-verify?)])))]))
+            (check (digest/verify pub di Msg sig) #:is expect-verify?)
+            (check (let ([dgst (digest di Msg)])
+                     (pk-verify pub (digest di Msg) sig #:digest dspec))
+                   #:is expect-verify?)])))]))
 
 (define (test-ecdsa-kat pk datum)
   (define factory (send pk get-factory))
+  (define factory-curves (send factory info 'all-ec-curves))
   (match datum
     [`(ecdsa ,curve ,dspec ,@test-data)
      (define curve-oid (curve-alias->oid curve))
      (define di (get-digest dspec factory))
-     (when di
-       (hprintf 5 "ecdsa ~s ~s\n" curve dspec)
-       (for ([test-datum (in-list test-data)])
-         (match test-datum
-           [`((Msg ,MsgH) (Qx ,QxH) (Qy ,QyH) (R ,R) (S ,S) (Result ,Result))
-            (define Msg (hex->bytes* MsgH))
-            (define Y (bytes-append (bytes #x04) (hex->bytes* QxH) (hex->bytes* QyH)))
-            (define pub (datum->pk-key `(ec public ,curve-oid ,Y) 'rkt-public factory))
-            (define sig (dsa-r+s->bytes R S))
-            (define expect-verify? (regexp-match? #rx"^P" Result))
-            (check-equal? (digest/verify pub di Msg sig)
-                          expect-verify?)
-            (check-equal? (pk-verify pub (digest di Msg) sig #:digest dspec)
-                          expect-verify?)])))]))
+     (when (and di (memq (alias->curve-name curve) factory-curves))
+       (test #:name (format "ecdsa ~s ~s" curve dspec)
+         (for ([test-datum (in-list test-data)])
+           (match test-datum
+             [`((Msg ,MsgH) (Qx ,QxH) (Qy ,QyH) (R ,R) (S ,S) (Result ,Result))
+              (define Msg (hex->bytes* MsgH))
+              (define Y (bytes-append (bytes #x04) (hex->bytes* QxH) (hex->bytes* QyH)))
+              (define pub (datum->pk-key `(ec public ,curve-oid ,Y) 'rkt-public factory))
+              (define sig (dsa-r+s->bytes R S))
+              (define expect-verify? (regexp-match? #rx"^P" Result))
+              (check (digest/verify pub di Msg sig) #:is expect-verify?)
+              (check (pk-verify pub (digest di Msg) sig #:digest dspec)
+                     #:is expect-verify?)]))))]))
 
 (define (test-ecdh-kat pk datum)
   (define factory (send pk get-factory))
   (match datum
     [`(ecdh ,curve ,@test-data)
      (define curve-oid (curve-alias->oid curve))
-     (hprintf 5 "ecdh ~s\n" curve)
-     (for ([test-datum (in-list test-data)])
-       (match test-datum
-         [`((COUNT ,c)
-            (QCAVSx ,QPxH) (QCAVSy ,QPyH) (dIUT ,d) (QIUTx ,QxH) (QIUTy ,QyH)
-            (ZIUT ,ZH))
-          (define priv
-            (let ([Q (bytes-append (bytes #x04) (hex->bytes QxH) (hex->bytes QyH))])
-              (datum->pk-key `(ec private ,curve-oid ,Q ,d) 'rkt-private factory)))
-          (define pub
-            (let ([QP (bytes-append (bytes #x04) (hex->bytes QPxH) (hex->bytes QPyH))])
-              (datum->pk-key `(ec public ,curve-oid ,QP) 'rkt-public factory)))
-          (check-equal? (pk-derive-secret priv pub)
-                        (hex->bytes ZH))]))]))
+     (test #:name (format "ecdh ~s" curve)
+       (for ([test-datum (in-list test-data)])
+         (match test-datum
+           [`((COUNT ,c)
+              (QCAVSx ,QPxH) (QCAVSy ,QPyH) (dIUT ,d) (QIUTx ,QxH) (QIUTy ,QyH)
+              (ZIUT ,ZH))
+            (define priv
+              (let ([Q (bytes-append (bytes #x04) (hex->bytes QxH) (hex->bytes QyH))])
+                (datum->pk-key `(ec private ,curve-oid ,Q ,d) 'rkt-private factory)))
+            (define pub
+              (let ([QP (bytes-append (bytes #x04) (hex->bytes QPxH) (hex->bytes QPyH))])
+                (datum->pk-key `(ec public ,curve-oid ,QP) 'rkt-public factory)))
+            (check (pk-derive-secret priv pub) #:is (hex->bytes ZH))])))]))
 
 (define (dsa-r+s->bytes R S) ;; move to common
   (asn1->bytes/DER Dss-Sig-Value (hasheq 'r R 's S)))
@@ -248,20 +249,17 @@
      ;; pkcs1, pss both need digest
      (for ([pad (in-list '(pkcs1-v1.5 pss pss*))])
        (when (send pk can-sign pad)
-         (test-case (format "sign w/ pad=~e" pad)
-           (hprintf 4 "sign w/ pad=~e\n" pad)
+         (test #:name (format "sign w/ pad=~e" pad)
            (test-pk-sign/digest pk privss pad))))]
     [(dsa ec)
      ;; pad=#f, digest=#f, but apply digest
      (define pad #f)
-     (test-case (format "sign w/ pad=~e" pad)
-       (hprintf 4 "sign w/ pad=~e\n" pad)
+     (test #:name (format "sign w/ pad=~e" pad)
        (test-pk-sign/digest pk privss pad))]
     [(eddsa)
      ;; pad=#f, digest=#f, apply to entire message
      (define pad #f)
-     (test-case (format "sign w/ pad=~e" pad)
-       (hprintf 4 "sign w/ pad=~e\n" pad)
+     (test #:name (format "sign w/ pad=~e" pad)
        (test-pk-sign/nodigest pk privss))]))
 
 (define (test-pk-sign/digest pk privss pad)
@@ -269,8 +267,7 @@
   (for ([dspec (in-list all-digest-specs)]
         #:when (and (get-digest dspec factory)
                     (send pk can-sign2? pad dspec)))
-    (test-case (format "w/ digest=~e" dspec)
-      (hprintf 5 "w/ digest=~e\n" dspec)
+    (test #:name (format "w/ digest=~e" dspec)
       (define di (get-digest dspec factory))
       (for ([privs (in-list privss)])
         ;; Assume priv1 != priv2
@@ -290,25 +287,25 @@
     (define sig2* (pk-sign priv2 (digest di msg) #:pad pad #:digest dspec))
     ;; Signatures are usually nondeterministic; eg, cannot expect sig1* = sig1.
     ;; But expect signatures from different keys to be different.
-    (check-not-equal? sig1 sig2)
-    (check-not-equal? sig1* sig2*)
+    (check sig1 #:is-not sig2)
+    (check sig1* #:is-not sig2*)
     ;; Verify with digest/verify
-    (check-true (digest/verify pub1 di msg sig1 #:pad pad))
-    (check-true (digest/verify pub2 di msg sig2 #:pad pad))
-    (check-true (digest/verify pub1 di msg sig1* #:pad pad))
-    (check-true (digest/verify pub2 di msg sig2* #:pad pad))
+    (check (digest/verify pub1 di msg sig1 #:pad pad) #:is #t)
+    (check (digest/verify pub2 di msg sig2 #:pad pad) #:is #t)
+    (check (digest/verify pub1 di msg sig1* #:pad pad) #:is #t)
+    (check (digest/verify pub2 di msg sig2* #:pad pad) #:is #t)
     ;; Verify with pk-verify and digest
-    (check-true (pk-verify pub1 (digest di msg) sig1 #:pad pad #:digest dspec))
-    (check-true (pk-verify pub2 (digest di msg) sig2 #:pad pad #:digest dspec))
-    (check-true (pk-verify pub1 (digest di msg) sig1* #:pad pad #:digest dspec))
-    (check-true (pk-verify pub2 (digest di msg) sig2* #:pad pad #:digest dspec))
+    (check (pk-verify pub1 (digest di msg) sig1 #:pad pad #:digest dspec) #:is #t)
+    (check (pk-verify pub2 (digest di msg) sig2 #:pad pad #:digest dspec) #:is #t)
+    (check (pk-verify pub1 (digest di msg) sig1* #:pad pad #:digest dspec) #:is #t)
+    (check (pk-verify pub2 (digest di msg) sig2* #:pad pad #:digest dspec) #:is #t)
     ;; No verify mismatched sigs
-    (check-false (digest/verify pub1 di msg sig2 #:pad pad))
-    (check-false (digest/verify pub2 di msg sig1 #:pad pad))
+    (check (digest/verify pub1 di msg sig2 #:pad pad) #:is #f)
+    (check (digest/verify pub2 di msg sig1 #:pad pad) #:is #f)
     ;; No verify mismatched msgs
     (unless (equal? msg other-msg)
-      (check-false (digest/verify pub1 di other-msg sig1 #:pad pad))
-      (check-false (digest/verify pub2 di other-msg sig2 #:pad pad)))))
+      (check (digest/verify pub1 di other-msg sig1 #:pad pad) #:is #f)
+      (check (digest/verify pub2 di other-msg sig2 #:pad pad) #:is #f))))
 
 (define (test-pk-sign/nodigest pk privss)
   (for ([privs (in-list privss)])
@@ -316,43 +313,46 @@
     (test-pk-sign/nodigest1 pk priv1 priv2)))
 
 (define (test-pk-sign/nodigest1 pk priv1 priv2)
-  (for ([msg (in-list messages)])
+  (for ([msg (in-list messages)]
+        ;; gcrypt can't sign empty message
+        #:when (positive? (bytes-length msg)))
     (define other-msg (semirandom-bytes (bytes-length msg)))
     (define pub1 (pk-key->public-only-key priv1))
     (define pub2 (pk-key->public-only-key priv2))
     (define sig1 (pk-sign priv1 msg))
     (define sig2 (pk-sign priv2 msg))
-    (check-not-equal? sig1 sig2)
-    (check-true (pk-verify pub1 msg sig1))
-    (check-true (pk-verify pub2 msg sig2))
-    (check-false (pk-verify pub1 msg sig2))
-    (check-false (pk-verify pub2 msg sig1))
+    (check sig1 #:is-not sig2)
+    (check (pk-verify pub1 msg sig1) #:is #t)
+    (check (pk-verify pub2 msg sig2) #:is #t)
+    (check (pk-verify pub1 msg sig2) #:is #f)
+    (check (pk-verify pub2 msg sig1) #:is #f)
     (unless (equal? msg other-msg)
-      (check-false (pk-verify pub1 other-msg sig1))
-      (check-false (pk-verify pub2 other-msg sig2)))))
+      (check (pk-verify pub1 other-msg sig1) #:is #f)
+      (check (pk-verify pub2 other-msg sig2) #:is #f))))
 
 ;; ----------------------------------------
 
 (define (test-pk-encrypt pkspec pk privss)
   (for ([pad (case pkspec [(rsa) '(pkcs1-v1.5 oaep)] [else '(#f)])])
-    (test-case (format "encrypt w/ pad=~e" pad)
-      (hprintf 4 "encrypt w/ pad=~e\n" pad)
-      (for ([privs (in-list privss)])
-        ;; Assume priv1 != priv2
-        (match-define (list priv1 priv2) privs)
-        (test-pk-encrypt1 pkspec pk priv1 priv2 pad)))))
+    (when (send pk can-encrypt? pad)
+      (test #:name (format "encrypt w/ pad=~e" pad)
+        (for ([privs (in-list privss)])
+          ;; Assume priv1 != priv2
+          (match-define (list priv1 priv2) privs)
+          (test-pk-encrypt1 pkspec pk priv1 priv2 pad))))))
 
 (define (test-pk-encrypt1 pkspec pk priv1 priv2 pad)
   (define maxlen (pkey-max-encrypt-size priv1 pad))
-  (for ([enclen (in-list '(0 7 16 19 24 32 41 56 112 128))]
+  ;; gcrypt cannot encrypt empty message
+  (for ([enclen (in-list '(#;0 7 16 19 24 32 41 56 112 128))]
         #:when (< enclen maxlen))
     (define msg (semirandom-bytes enclen))
     (define ct (pk-encrypt priv1 msg #:pad pad))
     (define pt (pk-decrypt priv1 ct #:pad pad))
-    (check-equal? (pk-decrypt priv1 ct #:pad pad) msg)
-    (let ([pt (with-handlers ([exn:fail? (lambda (e) #f)])
-                (pk-decrypt priv2 ct #:pad pad))])
-      (check-not-equal? pt msg))))
+    (check (pk-decrypt priv1 ct #:pad pad) #:is msg)
+    (check (with-handlers ([exn:fail? (lambda (e) #f)])
+             (pk-decrypt priv2 ct #:pad pad))
+           #:is-not msg)))
 
 (define (pkey-max-encrypt-size pkey pad)
   ;; FIXME: add to pk-key interface?
@@ -362,8 +362,7 @@
 ;; ----------------------------------------
 
 (define (test-pk-key-agree pkspec pk privss)
-  (test-case "key agreement"
-    (hprintf 4 "key agreement\n")
+  (test #:name "key agreement"
     (for ([privs (in-list privss)])
       ;; Assume priv1 != priv2
       (match-define (list priv1 priv2) privs)
@@ -374,9 +373,9 @@
   (define pub2 (pk-key->public-only-key priv2))
   (define secret1 (pk-derive-secret priv1 pub2))
   (define secret2 (pk-derive-secret priv2 pub1))
-  (check-equal? secret1 secret2)
-  (check-not-equal? (pk-derive-secret priv1 pub1) secret1)
-  (check-not-equal? (pk-derive-secret priv2 pub2) secret2))
+  (check secret1 #:is secret2)
+  (check (pk-derive-secret priv1 pub1) #:is-not secret1)
+  (check (pk-derive-secret priv2 pub2) #:is-not secret2))
 
 ;; ----------------------------------------
 

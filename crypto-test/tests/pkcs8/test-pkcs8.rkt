@@ -10,7 +10,7 @@
          crypto/all
          crypto/pkcs8
          racket/runtime-path
-         rackunit)
+         checkers)
 
 (define-runtime-path here ".")
 
@@ -26,21 +26,20 @@
 
 (define-syntax-rule (test-if kdf cipher body ...)
   (cond [(and (get-kdf kdf) (get-cipher cipher))
-         (printf "   running ~s ~s tests\n" kdf cipher)
-         body ...]
-        [else (printf "-  skipping ~s ~s tests\n" kdf cipher)]))
+         (test #:name (format "~s ~s tests\n" kdf cipher)
+           body ...)]
+        [else
+         (when #f
+           (printf "skipping ~s ~s tests for ~s\n" kdf cipher (crypto-factories)))]))
 
 (define (test-p8-file p8-file)
-  ;; (printf "+  testing ~s\n" p8-file)
-  (check-equal?
-   (pkcs8-decrypt-bytes passwd (file->bytes (build-path here p8-file)))
-   key-der))
+  (check (pkcs8-decrypt-bytes passwd (file->bytes (build-path here p8-file)))
+         #:is key-der))
 
 (define (test-decrypt p8 #:openssl [openssl-rx #""])
-  ;; (printf "+  testing roundtrip\n")
-  (check-equal? (pkcs8-decrypt-bytes passwd p8) key-der)
+  (check (pkcs8-decrypt-bytes passwd p8) #:is key-der)
   (when (and openssl (regexp-match openssl-rx openssl-version))
-    (check-equal? (openssl-decrypt p8) key-pem)))
+    (check (openssl-decrypt p8) #:is key-pem)))
 
 (define (openssl-decrypt p8)
   (with-output-to-bytes
@@ -51,27 +50,26 @@
                  "-inform" "DER" "-outform" "PEM")))))
 
 (for ([factory all-factories])
-  (printf ">> testing ~a\n" (send factory get-name))
-  (parameterize ((crypto-factories factory))
-    (test-if '(pbkdf2 hmac sha1) '(des-ede3 cbc)
-             (test-p8-file "rsa.des3-sha1.p8")
-             (test-decrypt
-              (pkcs8-encrypt/pbkdf2-hmac
-               passwd key-der #:digest 'sha1 #:cipher '(des-ede3 cbc))))
-    (test-if '(pbkdf2 hmac sha1) '(aes cbc)
-             (test-p8-file "rsa.aes128-sha1.p8")
-             (test-decrypt
-              (pkcs8-encrypt/pbkdf2-hmac
-               passwd key-der #:digest 'sha1 #:cipher '(aes cbc) #:key-size 16)))
-    (test-if '(pbkdf2 hmac sha256) '(aes cbc)
-             (test-p8-file "rsa.aes128-sha256.p8")
-             (pkcs8-encrypt/pbkdf2-hmac
-              passwd key-der #:digest 'sha256 #:cipher '(aes cbc) #:key-size 16))
-    (test-if 'scrypt '(aes cbc)
-             (test-p8-file "rsa.aes128-scrypt.p8")
-             (test-decrypt
-              (pkcs8-encrypt/scrypt
-               passwd key-der #:cipher '(aes cbc) #:key-size 16)
-              #:openssl "^OpenSSL 1[.]1"))
-    ))
-
+  (test #:name (format "testing ~a\n" (send factory get-name))
+    (parameterize ((crypto-factories factory))
+      (test-if '(pbkdf2 hmac sha1) '(des-ede3 cbc)
+               (test-p8-file "rsa.des3-sha1.p8")
+               (test-decrypt
+                (pkcs8-encrypt/pbkdf2-hmac
+                 passwd key-der #:digest 'sha1 #:cipher '(des-ede3 cbc))))
+      (test-if '(pbkdf2 hmac sha1) '(aes cbc)
+               (test-p8-file "rsa.aes128-sha1.p8")
+               (test-decrypt
+                (pkcs8-encrypt/pbkdf2-hmac
+                 passwd key-der #:digest 'sha1 #:cipher '(aes cbc) #:key-size 16)))
+      (test-if '(pbkdf2 hmac sha256) '(aes cbc)
+               (test-p8-file "rsa.aes128-sha256.p8")
+               (pkcs8-encrypt/pbkdf2-hmac
+                passwd key-der #:digest 'sha256 #:cipher '(aes cbc) #:key-size 16))
+      (test-if 'scrypt '(aes cbc)
+               (test-p8-file "rsa.aes128-scrypt.p8")
+               (test-decrypt
+                (pkcs8-encrypt/scrypt
+                 passwd key-der #:cipher '(aes cbc) #:key-size 16)
+                #:openssl "^OpenSSL 1[.]1"))
+      )))
