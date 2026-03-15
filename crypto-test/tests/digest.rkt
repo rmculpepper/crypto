@@ -11,6 +11,7 @@
          checkers
          "util.rkt")
 (provide test-factory-digests
+         xtest-digests
          all-digest-specs
          messages)
 
@@ -135,6 +136,28 @@
           (for/list ([keylen '(16 32)] #:when (send di key-size-ok? keylen))
             (semirandom-bytes keylen))))
 
+;; ============================================================
+
+;; xtest-digests : (Listof Factory) -> Void
+(define (xtest-digests factories)
+  (test #:name "digests cross"
+    (for ([dspec (in-list all-digest-specs)])
+      (define (get-di factory) (get-digest dspec factory))
+      (define dis (filter values (map get-di factories)))
+      (when (> (length dis) 1)
+        (define di0 (car dis))
+        (test #:name (format "~s (~s)" dspec (length dis))
+          (for ([msg (in-list messages)])
+            (define dgst (check (digest di0 msg) #:values))
+            (for ([di (in-list dis)])
+              (check (digest di msg) #:is dgst))
+            (define key (generate-hmac-key di0))
+            (define tag (check (hmac di0 key msg) #:values))
+            (for ([di (in-list dis)])
+              (check (hmac di key msg) #:is tag))))))))
+
+;; ============================================================
+
 ;; messages : (Listof Bytes)
 (define messages
   (list #""
@@ -152,5 +175,6 @@
   (run-tests (lambda ()
                (for ([factory (in-list all-factories)])
                  (test #:name (format "~s" (send factory get-name))
-                   (test-factory-digests factory))))
+                   (test-factory-digests factory)))
+               (xtest-digests all-factories))
              #:progress? #t))

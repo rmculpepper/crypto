@@ -14,17 +14,17 @@
 
 ;; test-all : (Listof Factory) (Listof Symbol) -> Void
 (define (test-all factories algos)
-  (run-tests (lambda () (do-all-tests factories algos))
+  (run-tests (lambda () (test-all-factories factories algos))
              #:progress? #t))
 
-;; do-all-tests : (Listof Factory) (Listof Symbol) -> Void
-(define (do-all-tests factories algos)
+;; test-all-factories : (Listof Factory) (Listof Symbol) -> Void
+(define (test-all-factories factories algos)
   (for ([factory (in-list factories)])
-    (do-factory-test factory algos))
-  (do-cross-test factories algos))
+    (test-factory factory algos))
+  (xtest-factories factories algos))
 
-;; do-factory-tests : Factory (Listof Symbol) -> Void
-(define (do-factory-test factory algos)
+;; test-factory : Factory (Listof Symbol) -> Void
+(define (test-factory factory algos)
   (define fnv (factory-name+version factory))
   (test #:name (format "~s tests" fnv)
     (when (memq 'digest algos) (test-factory-digests factory))
@@ -32,10 +32,12 @@
     (when (memq 'pkey algos) (test-factory-pkeys factory))
     (when (memq 'kdf algos) (test-factory-kdfs factory))))
 
-;; do-cross-test : (Listof Factory) (Listof Symbol) -> TestSuite
-(define (do-cross-test factories algos)
-  (test #:name (format "cross tests ~s" (map factory-name+version factories))
-    ;; FIXME
+;; xtest-factories : (Listof Factory) (Listof Symbol) -> TestSuite
+(define (xtest-factories factories algos)
+  (test #:name "cross"
+    (when (memq 'digest algos) (xtest-digests factories))
+    (when (memq 'cipher algos) (xtest-ciphers factories))
+    #;(when (memq 'pkey algos) (xtest-pkeys factories))
     (void)))
 
 (define (factory-name+version factory)

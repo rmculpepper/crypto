@@ -10,7 +10,8 @@
          crypto/private/common/catalog
          checkers
          "util.rkt")
-(provide test-factory-ciphers)
+(provide test-factory-ciphers
+         xtest-ciphers)
 
 (define-runtime-path kat-dir "data/")
 
@@ -158,6 +159,30 @@
   (for/list ([keylen '(8 16 24 32 19 28)] #:when (send ci key-size-ok? keylen))
     (semirandom-bytes keylen)))
 
+;; ============================================================
+
+;; xtest-ciphers : (Listof Factory) -> Void
+(define (xtest-ciphers factories)
+  (test #:name "ciphers cross"
+    (for ([cspec (in-list (list-known-ciphers))])
+      (define (get-ci factory) (get-cipher cspec factory))
+      (define cis (filter values (map get-ci factories)))
+      (when (> (length cis) 1)
+        (test #:name (format "~s (~s)" cspec (length cis))
+          (define ci0 (car cis))
+          (for ([keylen (in-list '(16 24 32))]
+                #:when (send ci0 key-size-ok? keylen))
+            (define key (semirandom-bytes keylen))
+            (define iv (generate-cipher-iv ci0))
+            (for ([msg (in-list messages)])
+              (define ct (encrypt ci0 key iv msg))
+              (for ([ci (in-list cis)]
+                    #:when (send ci key-size-ok? keylen))
+                (check (encrypt ci key iv msg) #:is ct)
+                (check (decrypt ci key iv ct) #:is msg)))))))))
+
+;; ============================================================
+
 ;; messages : (Listof Bytes)
 (define messages
   (list #""
@@ -177,5 +202,6 @@
   (run-tests (lambda ()
                (for ([factory (in-list all-factories)])
                  (test #:name (format "~s" (send factory get-name))
-                   (test-factory-ciphers factory))))
+                   (test-factory-ciphers factory)))
+               (xtest-ciphers all-factories))
              #:progress? #t))
