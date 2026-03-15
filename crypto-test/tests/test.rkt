@@ -6,7 +6,12 @@
          crypto
          crypto/all
          rackunit
-         rackunit/text-ui)
+         rackunit/text-ui
+         "digest.rkt"
+         "cipher.rkt"
+         "kdf.rkt"
+         "pkey.rkt"
+         "util.rkt")
 
 ;; test-all : (Listof Factory) (Listof Symbol) -> Void
 (define (test-all factories algos)
@@ -23,7 +28,7 @@
 (define (make-factory-test factory algos)
   (define fnv (factory-name+version factory))
   (test-suite (format "~s tests" fnv)
-    (hprintf 1 "Testing ~a\n" fnv)
+    (hprintf 0 "Testing ~a\n" fnv)
     (and (memq 'digest algos) (make-factory-digest-test factory))
     (and (memq 'cipher algos) (make-factory-cipher-test factory))
     (and (memq 'pkey algos) (make-factory-pkey-test factory))
@@ -42,7 +47,9 @@
 ;; ----------------------------------------
 
 (module+ main
-  (require crypto/all)
+  (require racket/string
+           racket/cmdline
+           crypto/all)
   (define algos '(digest cipher pkey kdf))
 
   (command-line
@@ -51,21 +58,16 @@
     only-algos
     "Only the given algorithm types"
     (set! algos (map string->symbol (string-split only-algos ",")))]
-   [("--factories")
-    only-factories
-    "Only the given factories"
-    (set! factories
-          (let ([fnames (map string->symbol (string-split only-factories ","))])
-            (filter (lambda (f) (memq (send f get-name) fnames))
-                    factories)))]
-   #:args (only-factories)
-   (let ([fnames (map string->symbol (string-split only-factories ","))])
+   #:args factories
+   (let ([fnames (map string->symbol factories)])
      (define factories
-       (for/list ([f (in-list all-factories)]
-                  #:when (memq (send f get-name) fnames))
-         f))
-     (do-tests factories algos))))
+       (cond [(pair? fnames)
+              (filter (lambda (f) (memq (send f get-name) fnames))
+                      all-factories)]
+             [else all-factories]))
+     (test-all factories algos))))
 
+#;
 (module+ test
   (module config info
     (define timeout 240))

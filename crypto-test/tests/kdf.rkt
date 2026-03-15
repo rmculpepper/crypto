@@ -9,8 +9,14 @@
          crypto/private/common/catalog
          (prefix-in rkt: crypto/private/rkt/pbkdf2)
          "util.rkt")
-(provide test-kdfs
+(provide make-factory-kdf-test
+         test-kdfs
          test-kdfs-agree)
+
+(define (make-factory-kdf-test factory)
+  (test-suite "kdf"
+    (hprintf 1 "kdf\n")
+    (test-kdfs factory)))
 
 (define (test-kdfs factory)
   (for ([name (list-known-kdfs)])

@@ -24,7 +24,7 @@
     (hprintf 1 "PKey\n")
     (for/list ([pkname (in-list '(rsa dsa dh ec eddsa ecx))])
       (define pk (get-pk pkname factory))
-      (make-pk-test pkname pk))))
+      (and pk (make-pk-test pkname pk)))))
 
 ;; make-pk-test : Symbol PKImpl -> TestSuite
 (define (make-pk-test pkname pk)

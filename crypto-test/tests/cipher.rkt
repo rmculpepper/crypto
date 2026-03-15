@@ -10,7 +10,7 @@
          crypto/private/common/catalog
          rackunit
          "util.rkt")
-(provide (all-defined-out))
+(provide make-factory-cipher-test)
 
 (define-runtime-path kat-dir "data/")
 
