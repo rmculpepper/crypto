@@ -276,15 +276,16 @@
 
 (define (test-pk-sign/digest1 pk priv1 priv2 pad dspec di)
   (define factory (send pk get-factory))
-  (for ([msg (in-list messages)])
+  (for ([msg (in-list sign-digest-messages)])
     (define di (get-digest dspec factory))
+    (define dgst (check (digest di msg) #:values))
     (define other-msg (semirandom-bytes (bytes-length msg)))
     (define pub1 (pk-key->public-only-key priv1))
     (define pub2 (pk-key->public-only-key priv2))
     (define sig1 (digest/sign priv1 di msg #:pad pad))
     (define sig2 (digest/sign priv2 di msg #:pad pad))
-    (define sig1* (pk-sign priv1 (digest di msg) #:pad pad #:digest dspec))
-    (define sig2* (pk-sign priv2 (digest di msg) #:pad pad #:digest dspec))
+    (define sig1* (pk-sign priv1 dgst #:pad pad #:digest dspec))
+    (define sig2* (pk-sign priv2 dgst #:pad pad #:digest dspec))
     ;; Signatures are usually nondeterministic; eg, cannot expect sig1* = sig1.
     ;; But expect signatures from different keys to be different.
     (check sig1 #:is-not sig2)
@@ -295,10 +296,10 @@
     (check (digest/verify pub1 di msg sig1* #:pad pad) #:is #t)
     (check (digest/verify pub2 di msg sig2* #:pad pad) #:is #t)
     ;; Verify with pk-verify and digest
-    (check (pk-verify pub1 (digest di msg) sig1 #:pad pad #:digest dspec) #:is #t)
-    (check (pk-verify pub2 (digest di msg) sig2 #:pad pad #:digest dspec) #:is #t)
-    (check (pk-verify pub1 (digest di msg) sig1* #:pad pad #:digest dspec) #:is #t)
-    (check (pk-verify pub2 (digest di msg) sig2* #:pad pad #:digest dspec) #:is #t)
+    (check (pk-verify pub1 dgst sig1 #:pad pad #:digest dspec) #:is #t)
+    (check (pk-verify pub2 dgst sig2 #:pad pad #:digest dspec) #:is #t)
+    (check (pk-verify pub1 dgst sig1* #:pad pad #:digest dspec) #:is #t)
+    (check (pk-verify pub2 dgst sig2* #:pad pad #:digest dspec) #:is #t)
     ;; No verify mismatched sigs
     (check (digest/verify pub1 di msg sig2 #:pad pad) #:is #f)
     (check (digest/verify pub2 di msg sig1 #:pad pad) #:is #f)
@@ -313,9 +314,7 @@
     (test-pk-sign/nodigest1 pk priv1 priv2)))
 
 (define (test-pk-sign/nodigest1 pk priv1 priv2)
-  (for ([msg (in-list messages)]
-        ;; gcrypt can't sign empty message
-        #:when (positive? (bytes-length msg)))
+  (for ([msg (in-list sign-nodigest-messages)])
     (define other-msg (semirandom-bytes (bytes-length msg)))
     (define pub1 (pk-key->public-only-key priv1))
     (define pub2 (pk-key->public-only-key priv2))
@@ -329,6 +328,17 @@
     (unless (equal? msg other-msg)
       (check (pk-verify pub1 other-msg sig1) #:is #f)
       (check (pk-verify pub2 other-msg sig2) #:is #f))))
+
+(define sign-digest-messages
+  (list (semirandom-bytes 20)
+        (semirandom-bytes 100)))
+
+(define sign-nodigest-messages
+  (list #;#""  ;; gcrypt can't sign empty message
+        (semirandom-bytes 1)
+        (semirandom-bytes 32)
+        (semirandom-bytes 100)
+        (semirandom-bytes 1000)))
 
 ;; ----------------------------------------
 
