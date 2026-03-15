@@ -13,7 +13,7 @@
 (define libcrypto3-kdf-impl%
   (class kdf-impl-base%
     (inherit about)
-    (init-field evp salt? params0)
+    (init-field evp salt-mode params0)
     (inherit-field spec)
     (super-new)
 
@@ -100,11 +100,17 @@
     (define/override (pwhash-verify pass cred)
       (kdf-pwhash-verify this pass cred))
 
-    (define/override (salt-allowed?) salt?)
+    (define/override (salt-allowed?)
+      (case salt-mode [(req opt) #t] [(no) #f]))
     (define/override (check-salt salt)
-      (when (and salt? (not salt))
-        (crypto-error "salt required for KDF\n  KDF: ~a" (about)))
-      (when (and (not salt?) salt)
-        (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)))
+      (case salt-mode
+        [(req)
+         (unless salt
+           (crypto-error "salt required for KDF\n  KDF: ~a" (about)))]
+        [(opt)
+         (void)]
+        [(no)
+         (when salt
+           (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)))])
       salt)
     ))

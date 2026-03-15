@@ -161,9 +161,9 @@
     (define/override (-get-kdf spec)
       (define (fetch kdf-name)
         (NOERR (EVP_KDF_fetch libctx kdf-name #f)))
-      (define (make-impl evp params0 [salt? #t])
+      (define (make-impl evp params0 [salt-mode 'req])
         (new libcrypto3-kdf-impl% (factory this) (spec spec) (evp evp)
-             (salt? salt?) (params0 params0)))
+             (salt-mode salt-mode) (params0 params0)))
       (define (check/get-digest-name dspec)
         (define di (get-digest dspec)) ;; check availability
         (and di (get-digest-lcname dspec)))
@@ -181,7 +181,7 @@
             [(list 'hkdf di)
              (define evp (fetch "hkdf"))
              (define dname (check/get-digest-name di))
-             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)) 'opt))]
             [(list 'concat di)
              (define evp (fetch "ssdf"))
              (define dname (check/get-digest-name di))
@@ -194,7 +194,7 @@
             [(list 'ans-x9.63 di)
              (define evp (fetch "X963KDF"))
              (define dname (check/get-digest-name di))
-             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)) #f))]
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)) 'no))]
             [_ #f])
           (super -get-kdf spec)))
 
