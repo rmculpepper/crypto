@@ -18,9 +18,9 @@
 
 (define-runtime-path kat-dir "data/")
 
-;; test-factory-pkeys : Factory -> Void
-(define (test-factory-pkeys factory)
-  (test #:name "pkey"
+;; test-factory-pks : Factory -> Void
+(define (test-factory-pks factory)
+  (test #:name "pk"
     (for ([pkname (in-list '(rsa dsa dh ec eddsa ecx))])
       (define pk (get-pk pkname factory))
       (and pk (test-pk pkname pk)))))
@@ -253,14 +253,10 @@
            (test-pk-sign/digest pk privss pad))))]
     [(dsa ec)
      ;; pad=#f, digest=#f, but apply digest
-     (define pad #f)
-     (test #:name (format "sign w/ pad=~e" pad)
-       (test-pk-sign/digest pk privss pad))]
+     (test-pk-sign/digest pk privss #f)]
     [(eddsa)
      ;; pad=#f, digest=#f, apply to entire message
-     (define pad #f)
-     (test #:name (format "sign w/ pad=~e" pad)
-       (test-pk-sign/nodigest pk privss))]))
+     (test-pk-sign/nodigest pk privss)]))
 
 (define (test-pk-sign/digest pk privss pad)
   (define factory (send pk get-factory))
@@ -419,10 +415,118 @@
 
 ;; ============================================================
 
+;; xtest-pks : (Listof Factory) -> Void
+(define (xtest-pks factories)
+  (test #:name "pk cross"
+    (for ([pkspec (in-list '(rsa dsa dh ec eddsa ecx))])
+      (define (get-pki factory) (get-pk pkspec factory))
+      (define pks (filter values (map get-pki factories)))
+      (when (> (length pks) 1)
+        (define pk0 (car pks))
+        (test #:name (format "~s (~s)" pkspec (length pks))
+          (define privss (make-private-keyss pkspec pk0))
+          (define privsss
+            (cons privss
+                  (for/list ([pk (in-list (cdr pks))])
+                    (for/list ([privs (in-list privss)])
+                      (for/list ([priv (in-list privs)])
+                        (port-private-key priv pk))))))
+          (when (pk-can-encrypt? pk0) (xtest-pk-encrypt pkspec pks privsss))
+          (when (pk-can-key-agree? pk0) (xtest-pk-key-agree pkspec pks privsss))
+          (when (pk-can-sign? pk0) (xtest-pk-sign pkspec pks privsss)))))))
+
+(define (port-private-key priv pk)
+  (define priv-datum (pk-key->datum priv 'rkt-private))
+  (with-handlers ([exn:fail? (lambda (e) #f)])
+    (datum->pk-key priv-datum 'rkt-private (send pk get-factory))))
+
+;; filter2 : (Listof X) (Listof Y) (X -> Bool) -> (values (Listof X) (Listof Y))
+(define (filter2 xs ys ok?)
+  (define ok-xs+ys
+    (for/list ([x (in-list xs)] [y (in-list ys)] #:when (ok? x)) (cons x y)))
+  (values (map car ok-xs+ys) (map cdr ok-xs+ys)))
+
+(define (xtest-pk-sign pkspec pks privsss)
+  (case pkspec
+    [(rsa)
+     (for ([pad (in-list '(pkcs1-v1.5 pss pss*))])
+       (define-values (ok-pks ok-privsss)
+         (filter2 pks privsss (lambda (pk) (send pk can-sign pad))))
+       (when (> (length ok-pks))
+         (test #:name (format "sign w/ pad=~e" pad)
+           (xtest-pk-sign/digest pkspec ok-pks ok-privsss pad))))]
+    [(dsa ec)
+     ;; pad=#f, digest=#f, but apply digest
+     (xtest-pk-sign/digest pkspec pks privsss #f)]
+    [(eddsa)
+     ;; pad=#f, digest=#f, apply to entire message
+     (xtest-pk-sign/nodigest pkspec pks privsss)]))
+
+(define (xtest-pk-sign/digest pkspec pks privsss pad)
+  (for ([dspec (in-list all-digest-specs)])
+    (define (ok-pk? pk)
+      (and (get-digest dspec (send pk get-factory))
+           (send pk can-sign pad)
+           (send pk can-sign2? pad dspec)))
+    (test #:name (format "w/ digest=~e" dspec)
+      (for ([privssA (in-list privsss)]
+            [pkA (in-list pks)]
+            [iA (in-naturals)]
+            #:when (ok-pk? pkA)
+            [privssB (in-list privsss)]
+            [pkB (in-list pks)]
+            [iB (in-naturals)]
+            #:when (and (ok-pk? pkB) (not (= iA iB))))
+        (define diA (get-digest dspec (send pkA get-factory)))
+        (test #:name (format "~s to ~s"
+                             (send (send pkA get-factory) get-name)
+                             (send (send pkB get-factory) get-name))
+          (for ([privsA (in-list privssA)]
+                [privsB (in-list privssB)])
+            (match-define (list privA1 privA2) privsA)
+            (match-define (list privB1 privB2) privsB)
+            (when (and privA1 privA2 privB1 privB2) ;; conversion may have failed
+              (define pubB1 (pk-key->public-only-key privB1))
+              (define pubB2 (pk-key->public-only-key privB2))
+              (test-pk-sign/digest1 privA1 pubB1 privA2 pubB2 pad dspec diA))))))))
+
+(define (xtest-pk-sign/nodigest pkspec pks privsss)
+  (define (ok-pk? pk)
+    (send pk can-sign #f))
+  (for ([privssA (in-list privsss)]
+        [pkA (in-list pks)]
+        [iA (in-naturals)]
+        #:when (ok-pk? pkA)
+        [privssB (in-list privsss)]
+        [pkB (in-list pks)]
+        [iB (in-naturals)]
+        #:when (and (ok-pk? pkB) (not (= iA iB))))
+    (test #:name (format "~s to ~s"
+                         (send (send pkA get-factory) get-name)
+                         (send (send pkB get-factory) get-name))
+      (for ([privsA (in-list privssA)]
+            [privsB (in-list privssB)])
+        (match-define (list privA1 privA2) privsA)
+        (match-define (list privB1 privB2) privsB)
+        (when (and privA1 privA2 privB1 privB2)
+          (define pubB1 (pk-key->public-only-key privB1))
+          (define pubB2 (pk-key->public-only-key privB2))
+          (test-pk-sign/nodigest1 privA1 pubB1 privA2 pubB2))))))
+
+(define (xtest-pk-encrypt pkspec pks privsss)
+  (void))
+
+(define (xtest-pk-key-agree pkspec pks privsss)
+  (void))
+
+
+;; ============================================================
+
 (module+ main
   (require racket/cmdline crypto/all)
   (run-tests (lambda ()
+               (xtest-pks all-factories)
                (for ([factory (in-list all-factories)])
                  (test #:name (format "~s" (send factory get-name))
-                   (test-factory-pkeys factory))))
+                   (test-factory-pks factory))))
              #:progress? #t))

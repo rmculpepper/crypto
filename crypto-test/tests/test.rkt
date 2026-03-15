@@ -29,7 +29,7 @@
   (test #:name (format "~s tests" fnv)
     (when (memq 'digest algos) (test-factory-digests factory))
     (when (memq 'cipher algos) (test-factory-ciphers factory))
-    (when (memq 'pkey algos) (test-factory-pkeys factory))
+    (when (memq 'pk algos) (test-factory-pks factory))
     (when (memq 'kdf algos) (test-factory-kdfs factory))))
 
 ;; xtest-factories : (Listof Factory) (Listof Symbol) -> TestSuite
@@ -37,7 +37,7 @@
   (test #:name "cross"
     (when (memq 'digest algos) (xtest-digests factories))
     (when (memq 'cipher algos) (xtest-ciphers factories))
-    #;(when (memq 'pkey algos) (xtest-pkeys factories))
+    #;(when (memq 'pk algos) (xtest-pks factories))
     (void)))
 
 (define (factory-name+version factory)
