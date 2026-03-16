@@ -465,7 +465,7 @@
       (define q (NOERR (EVP_PKEY_get_bn_param/value pevp #"q")))
       (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
       (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
-      (define pgen (NOERR (EVP_PKEY_get_int_param pevp #"pcounter")))
+      (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
       (cond [q (encode-params-dhx fmt p g q j seed pgen)]
             [else (encode-params-dh fmt p g)]))
     ))
