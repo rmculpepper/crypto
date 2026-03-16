@@ -37,7 +37,8 @@
   (test #:name "cross"
     (when (memq 'digest algos) (xtest-digests factories))
     (when (memq 'cipher algos) (xtest-ciphers factories))
-    #;(when (memq 'pk algos) (xtest-pks factories))
+    (when (memq 'pk algos) (xtest-pks factories))
+    (when (memq 'kdf algos) (xtest-kdfs factories))
     (void)))
 
 (define (factory-name+version factory)
@@ -50,7 +51,7 @@
   (require racket/string
            racket/cmdline
            crypto/all)
-  (define algos '(digest cipher pkey kdf))
+  (define algos '(digest cipher pk kdf))
 
   (command-line
    #:once-each

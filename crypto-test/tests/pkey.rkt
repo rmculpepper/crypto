@@ -525,8 +525,8 @@
 (module+ main
   (require racket/cmdline crypto/all)
   (run-tests (lambda ()
-               (xtest-pks all-factories)
                (for ([factory (in-list all-factories)])
                  (test #:name (format "~s" (send factory get-name))
-                   (test-factory-pks factory))))
+                   (test-factory-pks factory)))
+               (xtest-pks all-factories))
              #:progress? #t))
