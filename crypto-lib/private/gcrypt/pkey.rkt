@@ -136,18 +136,15 @@
       (make-sexp `(public-key (rsa (n ,(unsigned->base256 n))
                                    (e ,(unsigned->base256 e))))))
 
-    (define/override (make-private-key n e d p q dp dq qInv)
-      ;; Note: gcrypt requires q < p (swap if needed)
-      (define-values (p* q* qInv*)
-        (cond [(< p q)
-               (values p q qInv)]
-              [else
-               (define qInv*-mpi (gcry_mpi_new))
-               (or (gcry_mpi_invm qInv*-mpi (int->mpi q) (int->mpi p))
-                   (internal-error "failed to calculate qInv"))
-               (values q p (mpi->int qInv*-mpi))]))
+    (define/override (make-private-key n e d p0 q0 dp dq qInv)
+      ;; gcrypto requires p < q; simpler to just always recompute u
+      (define-values (p q) (if (< p0 q0) (values p0 q0) (values q0 p0)))
+      (define u-mpi (gcry_mpi_new))
+      (unless (gcry_mpi_invm u-mpi (int->mpi p) (int->mpi q))
+        (internal-error "failed to calculate qInv"))
+      (define u (mpi->int u-mpi))
       (define pub (make-rsa-public-key n e))
-      (define priv (make-rsa-private-key n e d p* q* qInv*))
+      (define priv (make-rsa-private-key n e d p q u))
       (new gcrypt-rsa-key% (impl this) (pub pub) (priv priv)))
 
     (define/private (make-rsa-private-key n e d p q u)
