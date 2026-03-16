@@ -846,7 +846,7 @@
 ;; curve-lcname=>name : Hash[Symbol => String]
 ;; Maps between catalog name and libcrypto name.
 (define-values (curve-name=>lcname curve-lcname=>name)
-  (let ()
+  (let ([bad-curves '(SM2)])
     ;; Add builtin curves
     (define curve-count (EC_get_builtin_curves #f 0))
     (define ci-base (malloc curve-count _EC_builtin_curve 'atomic))
@@ -858,8 +858,9 @@
       (define nid (EC_builtin_curve-nid ci))
       (define libcrypto-name (string->immutable-string (OBJ_nid2sn nid)))
       (define name (alias->curve-name libcrypto-name))
-      (values (hash-set n=>lc name libcrypto-name)
-              (hash-set lc=>n libcrypto-name name)))))
+      (cond [(memq name bad-curves) (values n=>lc lc=>n)]
+            [else (values (hash-set n=>lc name libcrypto-name)
+                          (hash-set lc=>n libcrypto-name name))]))))
 
 (define (mod-expt n e p)
   ;; compute (N^E) mod P
