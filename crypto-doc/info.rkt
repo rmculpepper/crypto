@@ -1,3 +1,6 @@
+;; Copyright 2013-2022 Ryan Culpepper
+;; SPDX-License-Identifier: Apache-2.0
+
 #lang info
 
 ;; pkg info
@@ -11,6 +14,7 @@
                      "scribble-lib"
                      "crypto-lib"))
 (define pkg-authors '(ryanc))
+(define license 'Apache-2.0)
 
 ;; collection info
 
