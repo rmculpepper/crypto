@@ -197,11 +197,17 @@
 
 ;; ============================================================
 
+(define (run-cipher-tests factories)
+  (for ([factory (in-list factories)])
+    (test #:name (format "~s" (send factory get-name))
+      (test-factory-ciphers factory)))
+  (xtest-ciphers factories))
+
+(module+ test
+  (require crypto/all)
+  (run-cipher-tests all-factories))
+
 (module+ main
-  (require racket/cmdline crypto/all)
-  (run-tests (lambda ()
-               (for ([factory (in-list all-factories)])
-                 (test #:name (format "~s" (send factory get-name))
-                   (test-factory-ciphers factory)))
-               (xtest-ciphers all-factories))
+  (require crypto/all)
+  (run-tests (lambda () (run-cipher-tests all-factories))
              #:progress? #t))

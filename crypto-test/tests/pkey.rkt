@@ -522,11 +522,17 @@
 
 ;; ============================================================
 
+(define (run-pk-tests factories)
+  (for ([factory (in-list factories)])
+    (test #:name (format "~s" (send factory get-name))
+      (test-factory-pks factory)))
+  (xtest-pks factories))
+
+(module+ test
+  (require crypto/all)
+  (run-pk-tests all-factories))
+
 (module+ main
-  (require racket/cmdline crypto/all)
-  (run-tests (lambda ()
-               (for ([factory (in-list all-factories)])
-                 (test #:name (format "~s" (send factory get-name))
-                   (test-factory-pks factory)))
-               (xtest-pks all-factories))
+  (require crypto/all)
+  (run-tests (lambda () (run-pk-tests all-factories))
              #:progress? #t))

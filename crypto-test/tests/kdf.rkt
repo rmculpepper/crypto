@@ -181,11 +181,17 @@
 
 ;; ============================================================
 
+(define (run-kdf-tests factories)
+  (for ([factory (in-list factories)])
+    (test #:name (format "~s" (send factory get-name))
+      (test-factory-kdfs factory)))
+  (xtest-kdfs factories))
+
+(module+ test
+  (require crypto/all)
+  (run-kdf-tests all-factories))
+
 (module+ main
-  (require racket/cmdline crypto/all)
-  (run-tests (lambda ()
-               (for ([factory (in-list all-factories)])
-                 (test #:name (format "~s" (send factory get-name))
-                   (test-factory-kdfs factory)))
-               (xtest-kdfs all-factories))
+  (require crypto/all)
+  (run-tests (lambda () (run-kdf-tests all-factories))
              #:progress? #t))

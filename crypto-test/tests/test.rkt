@@ -68,15 +68,6 @@
              [else all-factories]))
      (test-all factories algos))))
 
-#;
 (module+ test
-  (module config info
-    (define timeout 240))
-  ;; disable keygen tests to avoid consuming lots of system entropy
-  (test-pk-keygen? #f)
-  (go))
-
-;; TODO:
-;; - add option for cross testing
-;; - add option for keygen testing
-;; - add option for paramgen testing (off by default?)
+  ;; Tests are run by specific modules, eg digest.rkt.
+  (void))
