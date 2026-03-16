@@ -183,7 +183,7 @@
 
 (define (run-kdf-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (format "~s" (send factory get-name))
+    (test #:name (send factory get-display-name)
       (test-factory-kdfs factory)))
   (xtest-kdfs factories))
 

@@ -25,8 +25,7 @@
 
 ;; test-factory : Factory (Listof Symbol) -> Void
 (define (test-factory factory algos)
-  (define fnv (factory-name+version factory))
-  (test #:name (format "~s tests" fnv)
+  (test #:name (send factory get-display-name)
     (when (memq 'digest algos) (test-factory-digests factory))
     (when (memq 'cipher algos) (test-factory-ciphers factory))
     (when (memq 'pk algos) (test-factory-pks factory))
@@ -40,10 +39,6 @@
     (when (memq 'pk algos) (xtest-pks factories))
     (when (memq 'kdf algos) (xtest-kdfs factories))
     (void)))
-
-(define (factory-name+version factory)
-  (cons (send factory get-name)
-        (send factory get-version)))
 
 ;; ----------------------------------------
 

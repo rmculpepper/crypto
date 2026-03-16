@@ -199,7 +199,7 @@
 
 (define (run-cipher-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (format "~s" (send factory get-name))
+    (test #:name (send factory get-display-name)
       (test-factory-ciphers factory)))
   (xtest-ciphers factories))
 

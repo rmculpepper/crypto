@@ -459,9 +459,9 @@
         [pkB (in-list pks)]
         [iB (in-naturals)]
         #:when (and (ok-pk? pkB) (not (= iA iB))))
-    (test #:name (format "~s to ~s"
-                         (send (send pkA get-factory) get-name)
-                         (send (send pkB get-factory) get-name))
+    (test #:name (format "~a to ~a"
+                         (send (send pkA get-factory) get-display-name)
+                         (send (send pkB get-factory) get-display-name))
       (for ([privsA (in-list privssA)]
             [privsB (in-list privssB)])
         (match-define (list privA1 privA2) privsA)
@@ -540,7 +540,7 @@
 
 (define (run-pk-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (format "~s" (send factory get-name))
+    (test #:name (send factory get-display-name)
       (test-factory-pks factory)))
   (xtest-pks factories))
 

@@ -172,7 +172,7 @@
 
 (define (run-digest-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (format "~s" (send factory get-name))
+    (test #:name (send factory get-display-name)
       (test-factory-digests factory)))
   (xtest-digests factories))
 
