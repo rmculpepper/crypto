@@ -76,6 +76,7 @@
 ;; (void (gcry_control GCRYCTL_ENABLE_QUICK_RANDOM 0))
 (define gcry-version (gcry_check_version #f))
 (define v1.8/later? (version>=? (version->list gcry-version) '(1 8))) ;; see pkey.rkt
+(define v1.11/later? (version>=? (version->list gcry-version) '(1 11))) ;; see pkey.rkt
 
 ;; ----------------------------------------
 ;; Digests

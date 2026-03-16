@@ -112,8 +112,10 @@
     (define/override (can-sign2? pad dspec)
       ;; Sign/verify fails on some digests (eg, blake2*, sha512/256), not clear
       ;; how to pre-check (gcry_md_get_asnoid not helpful).
-      (and (memq dspec '(sha1 sha224 sha256 sha384 sha512 md5
-                              sha3-224 sha3-256 sha3-384 sha3-512))
+      (and (or (memq dspec '(sha1 sha224 sha256 sha384 md5))
+               (and v1.11/later?
+                    ;; Unavailable or broken for signing in earlier versions (1.9.4).
+                    (memq dspec '(sha512 sha3-224 sha3-256 sha3-384 sha3-512))))
            (send factory get-digest dspec) #t))
 
     (define/override (generate-key config)
