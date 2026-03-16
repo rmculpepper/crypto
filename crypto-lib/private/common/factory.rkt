@@ -22,13 +22,15 @@
 
     (define/public (get-name) #f)
     (define/public (get-version) (and ok? '()))
-    (define/public (to-write-string prefix)
-      (format "~a~a~a"
-              (or prefix "crypto-factory:")
+    (define/public (get-display-name)
+      (format "~a:~a"
               (or (get-name) "?")
-              (cond [(not ok?) ":failed"]
-                    [(null? (get-version)) ""]
-                    [else (format ":~a" (string-join (map number->string (get-version)) "."))])))
+              (let ([version (and ok? (get-version))])
+                (cond [(not ok?) "failed"]
+                      [(null? version) "?"]
+                      [else (string-join (map number->string version) ".")]))))
+    (define/public (to-write-string prefix)
+      (format "~a~a" (or prefix "crypto-factory:") (get-display-name)))
 
     (define/public (info key)
       (case key
