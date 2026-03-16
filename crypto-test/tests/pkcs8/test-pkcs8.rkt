@@ -1,4 +1,4 @@
-;; Copyright 2019-2022 Ryan Culpepper
+;; Copyright 2019-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
