@@ -107,6 +107,13 @@
       (evp->private-key kevp))
     ))
 
+(define signing-digests
+  ;; https://docs.openssl.org/master/man3/EVP_DigestSignInit/
+  ;; but the following seem to be accepted in practice
+  '(sha1
+    sha224 sha256 sha384 sha512 sha512/224 sha512/256
+    sha3-224 sha3-256 sha3-384 sha3-512))
+
 (define libcrypto3-rsa-impl%
   (class libcrypto3-pk-impl%
     (inherit-field factory)
@@ -120,11 +127,9 @@
     (define/override (can-sign pad) 'depends)
     (define/override (can-sign2? pad dspec)
       (and (memq pad '(#f pkcs1-v1.5 pss pss*))
-           ;; https://docs.openssl.org/master/man3/EVP_DigestSignInit/
-           (and (memq dspec '(sha1
-                              sha224 sha256 sha384 sha512 sha512/224 sha512/256
-                              sha3-224 sha3-256 sha3-384 sha3-512))
-                (and (send factory get-digest dspec) #t))))
+           (or (memq dspec signing-digests)
+               (memq dspec '(md5 md4 md2)))
+           (and (send factory get-digest dspec) #t)))
 
     (define/override (make-public-key n e)
       (evp->public-key (fromdata #"RSA" 'public
@@ -166,6 +171,7 @@
 
 (define libcrypto3-dsa-impl%
   (class libcrypto3-pk-impl%
+    (inherit-field factory)
     (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'dsa))
 
@@ -275,6 +281,7 @@
 
 (define libcrypto3-ec-impl%
   (class libcrypto3-pk-impl%
+    (inherit-field factory)
     (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'ec))
 
@@ -673,14 +680,13 @@
 
     (define/override (-get-sign/verify-params sign? pad dspec)
       (unless (eq? pad #f) (err/bad-signature-pad this pad))
-      (case dspec
-        [(none) '()]
-        [else
-         ;; DSA does not include the digest identity in the signature
-         ;; calculation; this should only cause a length check.
-         (define factory (send impl get-factory))
-         (define dname (send factory get-digest-lcname dspec))
-         `((#"digest" utf8-string ,dname))]))
+      ;; DSA does not include the digest identity in the signature
+      ;; calculation; this should only cause a length check.
+      (cond [(memq dspec signing-digests)
+             (define factory (send impl get-factory))
+             (define dname (send factory get-digest-lcname dspec))
+             `((#"digest" utf8-string ,dname))]
+            [else '()]))
     ))
 
 ;; ----------------------------------------
@@ -736,14 +742,13 @@
 
     (define/override (-get-sign/verify-params sign? pad dspec)
       (unless (eq? pad #f) (err/bad-signature-pad this pad))
-      (case dspec
-        [(none) '()]
-        [else
-         ;; ECDSA does not include the digest identity in the signature
-         ;; calculation; this should only cause a length check.
-         (define factory (send impl get-factory))
-         (define dname (send factory get-digest-lcname dspec))
-         `((#"digest" utf8-string ,dname))]))
+      ;; ECDSA does not include the digest identity in the signature
+      ;; calculation; this should only cause a length check.
+      (cond [(memq dspec signing-digests)
+             (define factory (send impl get-factory))
+             (define dname (send factory get-digest-lcname dspec))
+             `((#"digest" utf8-string ,dname))]
+            [else '()]))
     ))
 
 ;; ----------------------------------------

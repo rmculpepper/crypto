@@ -18,6 +18,7 @@
 
 (define digests-3.0
   #hasheq(;; DigestSpec => String
+          [md2       . "md2"]
           [md4       . "md4"]
           [md5       . "md5"]
           [ripemd160 . "ripemd160"]
