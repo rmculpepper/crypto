@@ -11,7 +11,7 @@
          (prefix-in rkt: crypto/private/rkt/pbkdf2)
          "util.rkt")
 (provide test-factory-kdfs
-         test-kdfs-agree)
+         xtest-kdfs)
 
 (define-runtime-path kat-dir "data/")
 
@@ -25,14 +25,15 @@
           (test #:name "as kdf"
             (define config (get-config name))
             (let ([salt (and (send impl salt-allowed?) salt)])
-              (check (kdf impl key salt config) #:with bytes?)
-              (match name
-                [(list 'pbkdf2 'hmac di)
-                 (define dimpl (send factory get-digest di))
-                 (when dimpl
-                   (check (kdf impl key salt '((iterations 2000) (key-size 89)))
-                          #:is (rkt:pbkdf2-hmac dimpl key salt 2000 89)))]
-                [_ (void)])))
+              (check (kdf impl key salt config) #:with bytes?)))
+          (match name
+            [(list 'pbkdf2 'hmac di)
+             (define dimpl (send factory get-digest di))
+             (when dimpl
+               (test #:name "pbkdf2"
+                 (check (kdf impl key salt '((iterations 2000) (key-size 89)))
+                        #:is (rkt:pbkdf2-hmac dimpl key salt 2000 89))))]
+            [_ (void)])
           (define pwconfig (get-pwhash-config name))
           (when pwconfig
             (test #:name "as pwhash"
@@ -125,32 +126,6 @@
 
 ;; ----------------------------------------
 
-(define (test-kdfs-agree factories)
-  (test #:name "kdf cross-tests"
-    (for ([name (list-known-kdfs)])
-      (define config (get-config name))
-      (define pwconfig (get-pwhash-config name))
-      (define impls
-        (filter values
-                (for/list ([factory factories])
-                  (send factory get-kdf name))))
-      (when (= (length impls) 1)
-        (void))
-      (when (> (length impls) 1)
-        (test #:name (format "~a" name)
-          (define impl0 (car impls))
-          (define salt* (and (send impl0 salt-allowed?) salt))
-          (define r0 (kdf impl0 key salt* config))
-          (define cred0 (and pwconfig (pwhash impl0 key pwconfig)))
-          (for ([impl (cdr impls)])
-            (check (kdf impl key salt* config) #:is r0)
-            (when pwconfig
-              (check (pwhash-verify impl key cred0) #:is #t)
-              (check (pwhash-verify impl badkey cred0) #:is #f)
-              (define cred1 (pwhash impl key pwconfig))
-              (check (pwhash-verify impl0 key cred1) #:is #t)
-              (check (pwhash-verify impl0 badkey cred1) #:is #f))))))))
-
 (define (get-config name)
   (match name
     [(list 'pbkdf2 'hmac _)
@@ -180,10 +155,37 @@
 
 ;; ============================================================
 
+;; xtest-kdfs : (Listof Factory) -> Void
+(define (xtest-kdfs factories)
+  (test #:name "kdfs cross"
+    (for ([spec (in-list (list-known-kdfs))])
+      (define (get-kdfi factory) (get-kdf spec factory))
+      (define kdfis (filter values (map get-kdfi factories)))
+      (when (> (length kdfis) 1)
+        (define kdfi0 (car kdfis))
+        (define config (get-config spec))
+        (define pwconfig (get-pwhash-config spec))
+        (define cred0 (and pwconfig (pwhash kdfi0 key pwconfig)))
+        (for ([kdfi (in-list (cdr kdfis))])
+          (test #:name (format "~s (~s)" spec (length kdfis))
+            (let ([salt (and (send kdfi0 salt-allowed?) salt)])
+              (define out (kdf kdfi0 key salt config))
+              (for ([kdfi (in-list (cdr kdfis))])
+                (check (kdf kdfi key salt config) #:is out)))
+            (when pwconfig
+              (check (pwhash-verify kdfi key cred0) #:is #t)
+              (check (pwhash-verify kdfi badkey cred0) #:is #f)
+              (define cred (pwhash kdfi key pwconfig))
+              (check (pwhash-verify kdfi0 key cred) #:is #t)
+              (check (pwhash-verify kdfi0 badkey cred) #:is #f))))))))
+
+;; ============================================================
+
 (module+ main
   (require racket/cmdline crypto/all)
   (run-tests (lambda ()
                (for ([factory (in-list all-factories)])
                  (test #:name (format "~s" (send factory get-name))
-                   (test-factory-kdfs factory))))
+                   (test-factory-kdfs factory)))
+               (xtest-kdfs all-factories))
              #:progress? #t))
