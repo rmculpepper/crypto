@@ -56,7 +56,8 @@
          null)]
     [(ec)
      (for/list ([curve (in-list (send factory info 'all-ec-curves))]
-                #:when (not (memq curve bad-ec-curves)))
+                #:when (and (curve-alias->oid curve)
+                            (not (memq curve bad-ec-curves))))
        (define pkp (generate-pk-parameters pk `((curve ,curve))))
        (for/list ([i 2]) (generate-private-key pkp)))]
     [(eddsa)
@@ -253,10 +254,12 @@
            (test-pk-sign/digest pk privss pad))))]
     [(dsa ec)
      ;; pad=#f, digest=#f, but apply digest
-     (test-pk-sign/digest pk privss #f)]
+     (test #:name "sign"
+       (test-pk-sign/digest pk privss #f))]
     [(eddsa)
      ;; pad=#f, digest=#f, apply to entire message
-     (test-pk-sign/nodigest pk privss)]))
+     (test #:name "sign"
+       (test-pk-sign/nodigest pk privss))]))
 
 (define (test-pk-sign/digest pk privss pad)
   (define factory (send pk get-factory))
@@ -343,19 +346,20 @@
         (for ([privs (in-list privss)])
           ;; Assume priv1 != priv2
           (match-define (list priv1 priv2) privs)
-          (test-pk-encrypt1 pkspec pk priv1 priv2 pad))))))
+          (define pub1 (pk-key->public-only-key priv1))
+          (define pub2 (pk-key->public-only-key priv2))
+          (test-pk-encrypt1 priv1 pub1 priv2 pub2 pad))))))
 
-(define (test-pk-encrypt1 pkspec pk priv1 priv2 pad)
+(define (test-pk-encrypt1 priv1 pub1 priv2 pub2 pad)
   (define maxlen (pkey-max-encrypt-size priv1 pad))
   ;; gcrypt cannot encrypt empty message
   (for ([enclen (in-list '(#;0 7 16 19 24 32 41 56 112 128))]
         #:when (< enclen maxlen))
     (define msg (semirandom-bytes enclen))
-    (define ct (pk-encrypt priv1 msg #:pad pad))
-    (define pt (pk-decrypt priv1 ct #:pad pad))
-    (check (pk-decrypt priv1 ct #:pad pad) #:is msg)
+    (define ct1 (pk-encrypt pub1 msg #:pad pad))
+    (check (pk-decrypt priv1 ct1 #:pad pad) #:is msg)
     (check (with-handlers ([exn:fail? (lambda (e) #f)])
-             (pk-decrypt priv2 ct #:pad pad))
+             (pk-decrypt priv2 ct1 #:pad pad))
            #:is-not msg)))
 
 (define (pkey-max-encrypt-size pkey pad)
@@ -370,9 +374,9 @@
     (for ([privs (in-list privss)])
       ;; Assume priv1 != priv2
       (match-define (list priv1 priv2) privs)
-      (test-pk-key-agree1 pkspec pk priv1 priv2))))
+      (test-pk-key-agree1 priv1 priv2))))
 
-(define (test-pk-key-agree1 pkspec pk priv1 priv2)
+(define (test-pk-key-agree1 priv1 priv2)
   (define pub1 (pk-key->public-only-key priv1))
   (define pub2 (pk-key->public-only-key priv2))
   (define secret1 (pk-derive-secret priv1 pub2))
@@ -446,53 +450,7 @@
     (for/list ([x (in-list xs)] [y (in-list ys)] #:when (ok? x)) (cons x y)))
   (values (map car ok-xs+ys) (map cdr ok-xs+ys)))
 
-(define (xtest-pk-sign pkspec pks privsss)
-  (case pkspec
-    [(rsa)
-     (for ([pad (in-list '(pkcs1-v1.5 pss pss*))])
-       (define-values (ok-pks ok-privsss)
-         (filter2 pks privsss (lambda (pk) (send pk can-sign pad))))
-       (when (> (length ok-pks))
-         (test #:name (format "sign w/ pad=~e" pad)
-           (xtest-pk-sign/digest pkspec ok-pks ok-privsss pad))))]
-    [(dsa ec)
-     ;; pad=#f, digest=#f, but apply digest
-     (xtest-pk-sign/digest pkspec pks privsss #f)]
-    [(eddsa)
-     ;; pad=#f, digest=#f, apply to entire message
-     (xtest-pk-sign/nodigest pkspec pks privsss)]))
-
-(define (xtest-pk-sign/digest pkspec pks privsss pad)
-  (for ([dspec (in-list all-digest-specs)])
-    (define (ok-pk? pk)
-      (and (get-digest dspec (send pk get-factory))
-           (send pk can-sign pad)
-           (send pk can-sign2? pad dspec)))
-    (test #:name (format "w/ digest=~e" dspec)
-      (for ([privssA (in-list privsss)]
-            [pkA (in-list pks)]
-            [iA (in-naturals)]
-            #:when (ok-pk? pkA)
-            [privssB (in-list privsss)]
-            [pkB (in-list pks)]
-            [iB (in-naturals)]
-            #:when (and (ok-pk? pkB) (not (= iA iB))))
-        (define diA (get-digest dspec (send pkA get-factory)))
-        (test #:name (format "~s to ~s"
-                             (send (send pkA get-factory) get-name)
-                             (send (send pkB get-factory) get-name))
-          (for ([privsA (in-list privssA)]
-                [privsB (in-list privssB)])
-            (match-define (list privA1 privA2) privsA)
-            (match-define (list privB1 privB2) privsB)
-            (when (and privA1 privA2 privB1 privB2) ;; conversion may have failed
-              (define pubB1 (pk-key->public-only-key privB1))
-              (define pubB2 (pk-key->public-only-key privB2))
-              (test-pk-sign/digest1 privA1 pubB1 privA2 pubB2 pad dspec diA))))))))
-
-(define (xtest-pk-sign/nodigest pkspec pks privsss)
-  (define (ok-pk? pk)
-    (send pk can-sign #f))
+(define (call/cross-test pks privsss ok-pk? proc)
   (for ([privssA (in-list privsss)]
         [pkA (in-list pks)]
         [iA (in-naturals)]
@@ -508,17 +466,75 @@
             [privsB (in-list privssB)])
         (match-define (list privA1 privA2) privsA)
         (match-define (list privB1 privB2) privsB)
-        (when (and privA1 privA2 privB1 privB2)
-          (define pubB1 (pk-key->public-only-key privB1))
-          (define pubB2 (pk-key->public-only-key privB2))
-          (test-pk-sign/nodigest1 privA1 pubB1 privA2 pubB2))))))
+        (when (and privA1 privA2 privB1 privB2) ;; conversion may have failed
+          (proc pkA privA1 privA2 pkB privB1 privB2))))))
+
+(define (xtest-pk-sign pkspec pks privsss)
+  (case pkspec
+    [(rsa)
+     (for ([pad (in-list '(pkcs1-v1.5 pss pss*))])
+       (define-values (ok-pks ok-privsss)
+         (filter2 pks privsss (lambda (pk) (send pk can-sign pad))))
+       (when (> (length ok-pks))
+         (test #:name (format "sign w/ pad=~e" pad)
+           (xtest-pk-sign/digest pkspec ok-pks ok-privsss pad))))]
+    [(dsa ec)
+     ;; pad=#f, digest=#f, but apply digest
+     (test #:name "sign"
+       (xtest-pk-sign/digest pkspec pks privsss #f))]
+    [(eddsa)
+     ;; pad=#f, digest=#f, apply to entire message
+     (test #:name "sign"
+       (xtest-pk-sign/nodigest pkspec pks privsss))]))
+
+(define (xtest-pk-sign/digest pkspec pks privsss pad)
+  (for ([dspec (in-list all-digest-specs)])
+    (define (ok-pk? pk)
+      (and (get-digest dspec (send pk get-factory))
+           (send pk can-sign pad)
+           (send pk can-sign2? pad dspec)))
+    (test #:name (format "w/ digest=~e" dspec)
+      (call/cross-test
+       pks privsss ok-pk?
+       (lambda (pkA privA1 privA2 pkB privB1 privB2)
+         (define diA (get-digest dspec (send pkA get-factory)))
+         (define pubB1 (pk-key->public-only-key privB1))
+         (define pubB2 (pk-key->public-only-key privB2))
+         (test-pk-sign/digest1 privA1 pubB1 privA2 pubB2 pad dspec diA))))))
+
+(define (xtest-pk-sign/nodigest pkspec pks privsss)
+  (define (ok-pk? pk)
+    (send pk can-sign #f))
+  (call/cross-test
+   pks privsss ok-pk?
+   (lambda (pkA privA1 privA2 pkB privB1 privB2)
+     (define pubB1 (pk-key->public-only-key privB1))
+     (define pubB2 (pk-key->public-only-key privB2))
+     (test-pk-sign/nodigest1 privA1 pubB1 privA2 pubB2))))
 
 (define (xtest-pk-encrypt pkspec pks privsss)
-  (void))
+  (case pkspec
+    [(rsa)
+     (for ([pad (in-list '(pkcs1-v1.5 oaep))])
+       (define (ok-pk? pk) (send pk can-encrypt? pad))
+       (test #:name (format "encrypt w/ pad=~e" pad)
+         (call/cross-test
+          pks privsss ok-pk?
+          (lambda (pkA privA1 privA2 pkB privB1 privB2)
+            (define pubB1 (pk-key->public-only-key privB1))
+            (define pubB2 (pk-key->public-only-key privB2))
+            (test-pk-encrypt1 privA1 pubB1 privA2 pubB2 pad)))))]
+    [else (void)]))
 
 (define (xtest-pk-key-agree pkspec pks privsss)
-  (void))
-
+  (test #:name "key agreement"
+    (call/cross-test
+     pks privsss (lambda (pk) #t)
+     (lambda (pkA privA1 privA2 pkB privB1 privB2)
+       ;; The private keys do the computation, so for cross-testing, we want
+       ;; private keys with different impls.
+       (test-pk-key-agree1 privA1 privB2)
+       (test-pk-key-agree1 privA2 privB1)))))
 
 ;; ============================================================
 
