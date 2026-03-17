@@ -475,13 +475,16 @@
                (? nat? p) (? nat? q) (? nat? dp) (? nat? dq) (? nat? qInv))
          (-make-priv-rsa n e d p q dp dq qInv)]
         [(list 'dsa 'private (? nat? p) (? nat? q) (? nat? g) (? nat/f? y) (? nat? x))
-         (-make-priv-dsa p q g y x)]
+         (let ([y (or y (dsa/dh-recompute-y p g x))])
+           (-make-priv-dsa p q g y x))]
         [(list 'dh 'private (? nat? p) (? nat? g)
                (? nat? q) (? nat/f? j) (? bytes/f? seed) (? nat/f? pgen)
                (? nat/f? y) (? nat? x))
-         (-make-priv-dh p g q j (bcopy seed) pgen y x)]
+         (let ([y (or y (dsa/dh-recompute-y p g x))])
+           (-make-priv-dh p g q j (bcopy seed) pgen y x))]
         [(list 'dh 'private (? nat? p) (? nat? g) (? nat/f? y) (? nat? x))
-         (-make-priv-dh p g #f #f #f #f y x)]
+         (let ([y (or y (dsa/dh-recompute-y p g x))])
+           (-make-priv-dh p g #f #f #f #f y x))]
         [(list 'ec 'private (? oid? curve-oid) (? bytes/f? qB) (? nat? x))
          (-make-priv-ec curve-oid (bcopy qB) x)]
         [(list 'eddsa 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
@@ -514,15 +517,16 @@
 
     ;; ---- DSA ----
 
-    (define/public (-decode-pub-dsa params subjectPublicKey)
+    (define/public (-decode-pub-dsa params y)
       (match params
         [(h-dss-parms p q g)
-         (-make-pub-dsa p q g subjectPublicKey)]))
+         (-make-pub-dsa p q g y)]))
 
-    (define/public (-decode-priv-dsa params publicKey privateKey)
+    (define/public (-decode-priv-dsa params y x)
       (match params
         [(h-dss-parms p q g)
-         (-make-priv-dsa p q g publicKey privateKey)]))
+         (let ([y (or y (dsa/dh-recompute-y p g x))])
+           (-make-priv-dsa p q g y x))]))
 
     (define/public (-make-pub-dsa p q g y)
       (send-to-impl 'dsa make-public-key p q g y))
@@ -537,7 +541,8 @@
 
     (define/public (-decode-priv-dh params y x)
       (define-values (p g q j seed pgen) (get-dh-fields params))
-      (-make-priv-dh p g q j seed pgen y x))
+      (let ([y (or y (dsa/dh-recompute-y p g x))])
+        (-make-priv-dh p g q j seed pgen y x)))
 
     (define/public (-make-pub-dh p g q j seed pgen y)
       (send-to-impl 'dh make-public-key p g q j seed pgen y))
@@ -861,20 +866,20 @@
     [else (encode-params-dsa fmt p q g)]))
 
 (define (encode-priv-dsa fmt p q g y x)
-  ;; FIXME: recompute y if absent
-  (case fmt
-    [(PrivateKeyInfo)
-     (asn1->bytes/DER PrivateKeyInfo
-                      (h-private-key-info 0 (dsa-algid p q g) x))]
-    [(OneAsymmetricKey)
-     (asn1->bytes/DER OneAsymmetricKey
-                      (h-one-asymmetric-key 1 (dsa-algid p q g) x y))]
-    [(DSAPrivateKey)
-     (asn1->bytes/DER
-      (SEQUENCE-OF INTEGER)
-      (list 0 p q g y x))]
-    [(rkt-private) (list 'dsa 'private p q g y x)]
-    [else (encode-pub-dsa fmt p q g y)]))
+  (let ([y (or y (dsa/dh-recompute-y p g x))])
+    (case fmt
+      [(PrivateKeyInfo)
+       (asn1->bytes/DER PrivateKeyInfo
+                        (h-private-key-info 0 (dsa-algid p q g) x))]
+      [(OneAsymmetricKey)
+       (asn1->bytes/DER OneAsymmetricKey
+                        (h-one-asymmetric-key 1 (dsa-algid p q g) x y))]
+      [(DSAPrivateKey)
+       (asn1->bytes/DER
+        (SEQUENCE-OF INTEGER)
+        (list 0 p q g y x))]
+      [(rkt-private) (list 'dsa 'private p q g y x)]
+      [else (encode-pub-dsa fmt p q g y)])))
 
 ;; ---- DH ----
 
@@ -897,7 +902,9 @@
      (asn1->bytes/DER DomainParameters (make-domain-parameters p g q j seed pgen))]
     [(DHParameter)
      (asn1->bytes/DER DHParameter (h-dhparameter p g))]
-    [(rkt-params) (list 'dh 'params p g q j seed pgen)]
+    [(rkt-params)
+     (cond [q (list 'dh 'params p g q j seed pgen)]
+           [else (list 'dh 'params p g)])]
     [else #f]))
 
 (define (encode-pub-dh fmt p g q j seed pgen y)
@@ -905,20 +912,24 @@
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (dh-algid p g q j seed pgen) y))]
-    [(rkt-public) (list 'dh 'public p g q j seed pgen y)]
+    [(rkt-public)
+     (cond [q (list 'dh 'public p g q j seed pgen y)]
+           [else (list 'dh 'public p g y)])]
     [else (encode-params-dh fmt p g q j seed pgen)]))
 
 (define (encode-priv-dh fmt p g q j seed pgen y x)
-  ;; FIXME: recompute y if absent
-  (case fmt
-    [(PrivateKeyInfo)
-     (asn1->bytes/DER PrivateKeyInfo
-                      (h-private-key-info 0 (dh-algid p g q j seed pgen) x))]
-    [(OneAsymmetricKey)
-     (asn1->bytes/DER OneAsymmetricKey
-                      (h-one-asymmetric-key 1 (dh-algid p g q j seed pgen) x y))]
-    [(rkt-private) (list 'dh 'private p g q j seed pgen y x)]
-    [else (encode-pub-dh fmt p g q j seed pgen y)]))
+  (let ([y (or y (dsa/dh-recompute-y p g x))])
+    (case fmt
+      [(PrivateKeyInfo)
+       (asn1->bytes/DER PrivateKeyInfo
+                        (h-private-key-info 0 (dh-algid p g q j seed pgen) x))]
+      [(OneAsymmetricKey)
+       (asn1->bytes/DER OneAsymmetricKey
+                        (h-one-asymmetric-key 1 (dh-algid p g q j seed pgen) x y))]
+      [(rkt-private)
+       (cond [q (list 'dh 'private p g q j seed pgen y x)]
+             [else (list 'dh 'private p g y x)])]
+      [else (encode-pub-dh fmt p g q j seed pgen y)])))
 
 ;; ---- EC ----
 
@@ -1030,6 +1041,20 @@
   (case curve
     [(x25519) id-X25519]
     [(x448)   id-X448]))
+
+;; ============================================================
+
+(define (dsa/dh-recompute-y p g x)
+  ;; y = g^x mod p
+  (mod-expt g x p))
+
+(define (mod-expt n e p)
+  ;; compute (n^e) mod p, using ladder
+  (define (modp n) (modulo n p))
+  (let loop ([n n] [e e])
+    (cond [(zero? e) 1]
+          [(even? e) (loop (modp (* n n)) (quotient e 2))]
+          [else (modp (* n (loop n (sub1 e))))])))
 
 ;; ============================================================
 
