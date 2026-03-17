@@ -113,21 +113,18 @@
     (define/override (get-public-key)
       (if priv (new nettle-rsa-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-private-key fmt)
-      (encode-priv-rsa fmt
-                       (mpz->integer (rsa_public_key_struct-n pub))
-                       (mpz->integer (rsa_public_key_struct-e pub))
-                       (mpz->integer (rsa_private_key_struct-d priv))
-                       (mpz->integer (rsa_private_key_struct-p priv))
-                       (mpz->integer (rsa_private_key_struct-q priv))
-                       (mpz->integer (rsa_private_key_struct-a priv))
-                       (mpz->integer (rsa_private_key_struct-b priv))
-                       (mpz->integer (rsa_private_key_struct-c priv))))
-
-    (define/override (-write-public-key fmt)
-      (encode-pub-rsa fmt
-                      (mpz->integer (rsa_public_key_struct-n pub))
-                      (mpz->integer (rsa_public_key_struct-e pub))))
+    (define/override (-write-key fmt)
+      (define n (mpz->integer (rsa_public_key_struct-n pub)))
+      (define e (mpz->integer (rsa_public_key_struct-e pub)))
+      (cond [priv
+             (encode-priv-rsa fmt n e
+                              (mpz->integer (rsa_private_key_struct-d priv))
+                              (mpz->integer (rsa_private_key_struct-p priv))
+                              (mpz->integer (rsa_private_key_struct-q priv))
+                              (mpz->integer (rsa_private_key_struct-a priv))
+                              (mpz->integer (rsa_private_key_struct-b priv))
+                              (mpz->integer (rsa_private_key_struct-c priv)))]
+            [else (encode-pub-rsa fmt n e)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-rsa-key%)
@@ -619,10 +616,9 @@
     (define/override (get-public-key)
       (if priv (new nettle-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-public-key fmt)
-      (encode-pub-eddsa fmt 'ed25519 pub))
-    (define/override (-write-private-key fmt)
-      (encode-priv-eddsa fmt 'ed25519 pub priv))
+    (define/override (-write-key fmt)
+      (cond [priv (encode-priv-eddsa fmt 'ed25519 pub priv)]
+            [else (encode-pub-eddsa fmt 'ed25519 pub)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-ed25519-key%)
@@ -652,10 +648,9 @@
     (define/override (get-public-key)
       (if priv (new nettle-ed448-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-public-key fmt)
-      (encode-pub-eddsa fmt 'ed448 pub))
-    (define/override (-write-private-key fmt)
-      (encode-priv-eddsa fmt 'ed448 pub priv))
+    (define/override (-write-key fmt)
+      (cond [priv (encode-priv-eddsa fmt 'ed448 pub priv)]
+            [else (encode-pub-eddsa fmt 'ed448 pub)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-ed448-key%)
@@ -759,10 +754,9 @@
     (define/override (get-public-key)
       (if priv (new nettle-x25519-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-public-key fmt)
-      (encode-pub-ecx fmt 'x25519 pub))
-    (define/override (-write-private-key fmt)
-      (encode-priv-ecx fmt 'x25519 pub priv))
+    (define/override (-write-key fmt)
+      (cond [priv (encode-priv-ecx fmt 'x25519 pub priv)]
+            [else (encode-pub-ecx fmt 'x25519 pub)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-x25519-key%)
@@ -795,10 +789,9 @@
     (define/override (get-public-key)
       (if priv (new nettle-x448-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-public-key fmt)
-      (encode-pub-ecx fmt 'x448 pub))
-    (define/override (-write-private-key fmt)
-      (encode-priv-ecx fmt 'x448 pub priv))
+    (define/override (-write-key fmt)
+      (cond [priv (encode-priv-ecx fmt 'x448 pub priv)]
+            [else (encode-pub-ecx fmt 'x448 pub)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other nettle-x448-key%)

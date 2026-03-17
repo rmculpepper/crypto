@@ -438,11 +438,15 @@
     (super-new)
 
     (define/override (-write-params fmt)
-      (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
-      (define q (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"q")))
-      (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
+      (define-values (p q g) (dsa-evp-get-params pevp))
       (encode-params-dsa fmt p q g))
     ))
+
+(define (dsa-evp-get-params pevp)
+  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
+  (define q (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"q")))
+  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
+  (values p q g))
 
 (define libcrypto3-dh-params%
   (class libcrypto3-pk-params%
@@ -450,14 +454,18 @@
     (super-new)
 
     (define/override (-write-params fmt)
-      (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
-      (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
-      (define q (NOERR (EVP_PKEY_get_bn_param/value pevp #"q")))
-      (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
-      (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
-      (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
+      (define-values (p g q j seed pgen) (dh-evp-get-params pevp))
       (encode-params-dh fmt p g q j seed pgen))
     ))
+
+(define (dh-evp-get-params pevp)
+  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
+  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
+  (define q (NOERR (EVP_PKEY_get_bn_param/value pevp #"q")))
+  (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
+  (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
+  (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
+  (values p g q j seed pgen))
 
 ;; ----------------------------------------
 
@@ -595,23 +603,21 @@
     (inherit-field impl evp private?)
     (super-new)
 
-    (define/override (-write-public-key fmt)
+    (define/override (-write-key fmt)
       (define n (HANDLEp (EVP_PKEY_get_bn_param/value evp #"n")))
       (define e (HANDLEp (EVP_PKEY_get_bn_param/value evp #"e")))
-      (encode-pub-rsa fmt n e))
-
-    (define/override (-write-private-key fmt)
-      (define n (HANDLEp (EVP_PKEY_get_bn_param/value evp #"n")))
-      (define e (HANDLEp (EVP_PKEY_get_bn_param/value evp #"e")))
-      (define d (HANDLEp (EVP_PKEY_get_bn_param/value evp #"d")))
-      (define p (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor1")))
-      (define q (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor2")))
-      (define dp (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent1")))
-      (define dq (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent2")))
-      (define qInv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-coefficient1")))
-      ;; Writing keys with >2 prime factors is not supported.
-      (cond [(NOERR (EVP_PKEY_get_bn_param/value evp #"rsa-factor3")) #f]
-            [else (encode-priv-rsa fmt n e d p q dp dq qInv)]))
+      (cond [private?
+             (define d (HANDLEp (EVP_PKEY_get_bn_param/value evp #"d")))
+             (define p (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor1")))
+             (define q (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor2")))
+             (define dp (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent1")))
+             (define dq (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent2")))
+             (define qInv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-coefficient1")))
+             ;; Writing keys with >2 prime factors is not supported.
+             (cond [(NOERR (EVP_PKEY_get_bn_param/value evp #"rsa-factor3")) #f]
+                   [else (encode-priv-rsa fmt n e d p q dp dq qInv)])]
+            [else
+             (encode-pub-rsa fmt n e)]))
 
     (define/override (-get-encrypt/decrypt-params enc? pad)
       (case pad
@@ -645,20 +651,13 @@
     (inherit-field impl evp private?)
     (super-new)
 
-    (define/override (-write-public-key fmt)
+    (define/override (-write-key fmt)
+      (define-values (p q g) (dsa-evp-get-params evp))
       (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
-      (match (send (get-params) -write-params 'rkt-params)
-        [(list 'dsa 'params p q g)
-         (encode-pub-dsa fmt p q g pub)]
-        [#f #f]))
-
-    (define/override (-write-private-key fmt)
-      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
-      (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
-      (match (send (get-params) -write-params 'rkt-params)
-        [(list 'dsa 'params p q g)
-         (encode-priv-dsa fmt p q g pub priv)]
-        [#f #f]))
+      (cond [private?
+             (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+             (encode-priv-dsa fmt p q g pub priv)]
+            [else (encode-pub-dsa fmt p q g pub)]))
 
     (define/override (-get-sign/verify-params sign? pad dspec)
       (unless (eq? pad #f) (err/bad-signature-pad this pad))
@@ -679,20 +678,13 @@
     (inherit-field impl evp private?)
     (super-new)
 
-    (define/override (-write-public-key fmt)
+    (define/override (-write-key fmt)
+      (define-values (p g q j seed pgen) (dh-evp-get-params evp))
       (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
-      (match (send (get-params) -write-params 'rkt-params)
-        [(list 'dh 'params p g q j seed pgen)
-         (encode-pub-dh fmt p g q j seed pgen pub)]
-        [#f #f]))
-
-    (define/override (-write-private-key fmt)
-      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
-      (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
-      (match (send (get-params) -write-params 'rkt-params)
-        [(list 'dh 'params p g q j seed pgen)
-         (encode-priv-dh fmt p g q j seed pgen pub priv)]
-        [#f #f]))
+      (cond [private?
+             (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+             (encode-priv-dh fmt p g q j seed pgen pub priv)]
+            [else (encode-pub-dh fmt p g q j seed pgen pub)]))
 
     (define/override (-get-keyexch-params)
       `((#"pad" uint 1)))
@@ -705,18 +697,14 @@
     (inherit-field impl evp private?)
     (super-new)
 
-    (define/override (-write-public-key fmt)
+    (define/override (-write-key fmt)
       (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
       (define curve-oid (and curve-lcname (curve-lcname->oid curve-lcname)))
       (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"encoded-pub-key")))
-      (and curve-oid pub (encode-pub-ec fmt curve-oid pub)))
-
-    (define/override (-write-private-key fmt)
-      (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
-      (define curve-oid (and curve-lcname (curve-lcname->oid curve-lcname)))
-      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"encoded-pub-key")))
-      (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
-      (and curve-oid pub priv (encode-priv-ec fmt curve-oid pub priv)))
+      (cond [private?
+             (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+             (and curve-oid pub priv (encode-priv-ec fmt curve-oid pub priv))]
+            [else (and curve-oid pub (encode-pub-ec fmt curve-oid pub))]))
 
     (define/override (-get-sign/verify-params sign? pad dspec)
       (unless (eq? pad #f) (err/bad-signature-pad this pad))
@@ -745,16 +733,13 @@
             [(EVP_PKEY_is_a evp "ED448") 'ed448]
             [else (internal-error "unknown EdDSA curve")]))
 
-    (define/override (-write-public-key fmt)
+    (define/override (-write-key fmt)
       (define curve (get-curve))
       (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
-      (and pub (encode-pub-eddsa fmt curve pub)))
-
-    (define/override (-write-private-key fmt)
-      (define curve (get-curve))
-      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
-      (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
-      (and pub priv (encode-priv-eddsa fmt curve pub priv)))
+      (cond [private?
+             (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
+             (and pub priv (encode-priv-eddsa fmt curve pub priv))]
+            [else (and pub (encode-pub-eddsa fmt curve pub))]))
 
     (define/override (-sign msg _dspec _pad)
       (define mdctx (HANDLEp (EVP_MD_CTX_new)))
@@ -788,16 +773,13 @@
             [(EVP_PKEY_is_a evp "X448") 'x448]
             [else (internal-error "unknown ECX curve")]))
 
-    (define/override (-write-public-key fmt)
+    (define/override (-write-key fmt)
       (define curve (get-curve))
       (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
-      (and pub (encode-pub-ecx fmt curve pub)))
-
-    (define/override (-write-private-key fmt)
-      (define curve (get-curve))
-      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
-      (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
-      (and pub priv (encode-priv-ecx fmt curve pub priv)))
+      (cond [private?
+             (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
+             (and pub priv (encode-priv-ecx fmt curve pub priv))]
+            [else (and pub (encode-pub-ecx fmt curve pub))]))
     ))
 
 ;; ============================================================

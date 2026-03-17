@@ -122,11 +122,7 @@
       (or (-write-key fmt)
           (crypto-error "key format not supported\n  format: ~e\n  key: ~a"
                         fmt (about))))
-    (define/public (-write-key fmt)
-      (case fmt
-        [else (if (is-private?) (-write-private-key fmt) (-write-public-key fmt))]))
-    (define/public (-write-public-key fmt) #f)
-    (define/public (-write-private-key fmt) #f)
+    (define/public (-write-key fmt) #f)
 
     ;; ----
 

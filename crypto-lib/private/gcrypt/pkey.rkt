@@ -170,31 +170,34 @@
     (define/override (get-security-bits)
       (rsa-security-bits (gcry_pk_get_nbits pub)))
 
-    (define/override (-write-private-key fmt)
-      (define (get-mpi tag) (sexp-get-mpi priv "rsa" tag))
-      (define n-mpi (get-mpi "n"))
-      (define e-mpi (get-mpi "e"))
-      (define d-mpi (get-mpi "d"))
-      (define p-mpi (get-mpi "p"))
-      (define q-mpi (get-mpi "q"))
-      (define tmp (gcry_mpi_new))
-      (define dp-mpi (gcry_mpi_new))
-      (gcry_mpi_sub_ui tmp p-mpi 1)
-      (or (gcry_mpi_invm dp-mpi e-mpi tmp)
-          (internal-error "failed to calculate dP"))
-      (define dq-mpi (gcry_mpi_new))
-      (gcry_mpi_sub_ui tmp q-mpi 1)
-      (or (gcry_mpi_invm dq-mpi e-mpi tmp)
-          (internal-error "failed to calculate dQ"))
-      (define qInv-mpi (gcry_mpi_new))
-      (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
-          (internal-error "failed to calculate qInv"))
-      (apply encode-priv-rsa fmt
-             (map mpi->int (list n-mpi e-mpi d-mpi p-mpi q-mpi dp-mpi dq-mpi qInv-mpi))))
-
-    (define/override (-write-public-key fmt)
-      (define (get-int tag) (sexp-get-int pub "rsa" tag))
-      (encode-pub-rsa fmt (get-int "n") (get-int "e")))
+    (define/override (-write-key fmt)
+      (cond [priv
+             (define (get-mpi tag) (sexp-get-mpi priv "rsa" tag))
+             (define n-mpi (get-mpi "n"))
+             (define e-mpi (get-mpi "e"))
+             (define d-mpi (get-mpi "d"))
+             (define p-mpi (get-mpi "p"))
+             (define q-mpi (get-mpi "q"))
+             (define tmp (gcry_mpi_new))
+             (define dp-mpi (gcry_mpi_new))
+             (gcry_mpi_sub_ui tmp p-mpi 1)
+             (or (gcry_mpi_invm dp-mpi e-mpi tmp)
+                 (internal-error "failed to calculate dP"))
+             (define dq-mpi (gcry_mpi_new))
+             (gcry_mpi_sub_ui tmp q-mpi 1)
+             (or (gcry_mpi_invm dq-mpi e-mpi tmp)
+                 (internal-error "failed to calculate dQ"))
+             (define qInv-mpi (gcry_mpi_new))
+             (or (gcry_mpi_invm qInv-mpi p-mpi q-mpi)
+                 (internal-error "failed to calculate qInv"))
+             (apply encode-priv-rsa fmt
+                    (map mpi->int
+                         (list n-mpi e-mpi d-mpi p-mpi q-mpi dp-mpi dq-mpi qInv-mpi)))]
+            [else
+             (define (get-mpi tag) (sexp-get-mpi pub "rsa" tag))
+             (define n-mpi (get-mpi "n"))
+             (define e-mpi (get-mpi "e"))
+             (encode-pub-rsa fmt (mpi->int n-mpi) (mpi->int e-mpi))]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       (define padding (check-sig-pad pad))
@@ -326,13 +329,13 @@
     (define/override (get-security-bits)
       (dsa/dh-security-bits (gcry_pk_get_nbits pub)))
 
-    (define/override (-write-private-key fmt)
-      (define (get-int tag) (sexp-get-int priv "dsa" tag))
-      (apply encode-priv-dsa fmt (map get-int '("p" "q" "g" "y" "x"))))
-
-    (define/override (-write-public-key fmt)
-      (define (get-int tag) (sexp-get-int pub "dsa" tag))
-      (apply encode-pub-dsa fmt (map get-int '("p" "q" "g" "y"))))
+    (define/override (-write-key fmt)
+      (cond [priv
+             (define (get-int tag) (sexp-get-int priv "dsa" tag))
+             (apply encode-priv-dsa fmt (map get-int '("p" "q" "g" "y" "x")))]
+            [else
+             (define (get-int tag) (sexp-get-int pub "dsa" tag))
+             (apply encode-pub-dsa fmt (map get-int '("p" "q" "g" "y")))]))
 
     (define/override (sign-make-data-sexp digest digest-spec pad)
       ;; When the digest is larger than qbits, it must be truncated,
@@ -477,18 +480,16 @@
     (define/override (get-params)
       (new gcrypt-ec-params% (impl impl) (curve (get-curve))))
 
-    (define/override (-write-private-key fmt)
-      (define curve-oid (get-curve-oid priv))
-      (and curve-oid
-           (let ([qB (sexp-get-data priv "ecc" "q")]
-                 [d (sexp-get-int priv "ecc" "d")])
-             (encode-priv-ec fmt curve-oid qB d))))
-
-    (define/override (-write-public-key fmt)
-      (define curve-oid (get-curve-oid pub))
-      (and curve-oid
-           (let ([qB (sexp-get-data pub "ecc" "q")])
-             (encode-pub-ec fmt curve-oid qB))))
+    (define/override (-write-key fmt)
+      (cond [priv
+             (define curve-oid (get-curve-oid priv))
+             (define qB (sexp-get-data priv "ecc" "q"))
+             (define d (sexp-get-int priv "ecc" "d"))
+             (and curve-oid (encode-priv-ec fmt curve-oid qB d))]
+            [else
+             (define curve-oid (get-curve-oid pub))
+             (define qB (sexp-get-data pub "ecc" "q"))
+             (and curve-oid (encode-pub-ec fmt curve-oid qB))]))
 
     (define/public (get-curve [sexp pub])
       (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
@@ -618,14 +619,14 @@
     (define/override (get-public-key)
       (if priv (new this% (impl impl) (curve curve) (pub pub) (priv #f)) this))
 
-    (define/override (-write-private-key fmt)
-      (let ([qB (sexp-get-data priv "ecc" "q")]
-            [dB (sexp-get-data priv "ecc" "d")])
-        (encode-priv-eddsa fmt curve qB dB)))
-
-    (define/override (-write-public-key fmt)
-      (let ([qB (sexp-get-data pub "ecc" "q")])
-        (encode-pub-eddsa fmt curve qB)))
+    (define/override (-write-key fmt)
+      (cond [priv
+             (let ([qB (sexp-get-data priv "ecc" "q")]
+                   [dB (sexp-get-data priv "ecc" "d")])
+               (encode-priv-eddsa fmt curve qB dB))]
+            [else
+             (let ([qB (sexp-get-data pub "ecc" "q")])
+               (encode-pub-eddsa fmt curve qB))]))
 
     (define/override (sign-make-data-sexp msg _dspec pad)
       ;; No (hash-algo sha512); wrong for Ed448, unnecessary for Ed25519 (tested 1.9.4).
@@ -735,14 +736,14 @@
     (define/override (get-public-key)
       (if priv (new this% (impl impl) (curve curve) (pub pub) (priv #f)) this))
 
-    (define/override (-write-private-key fmt)
-      (let ([qB (sexp-get-data priv "ecc" "q")]
-            [dB (sexp-get-data priv "ecc" "d")])
-        (encode-priv-ecx fmt curve (export-q qB) dB)))
-
-    (define/override (-write-public-key fmt)
-      (let ([qB (sexp-get-data pub "ecc" "q")])
-        (encode-pub-ecx fmt curve (export-q qB))))
+    (define/override (-write-key fmt)
+      (cond [priv
+             (let ([qB (sexp-get-data priv "ecc" "q")]
+                   [dB (sexp-get-data priv "ecc" "d")])
+               (encode-priv-ecx fmt curve (export-q qB) dB))]
+            [else
+             (let ([qB (sexp-get-data pub "ecc" "q")])
+               (encode-pub-ecx fmt curve (export-q qB)))]))
 
     (define/private (export-q qB)
       (case curve [(x25519) (ec-point->raw qB)] [(x448) qB]))

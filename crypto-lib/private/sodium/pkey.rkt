@@ -90,10 +90,9 @@
     (define/override (get-public-key)
       (if priv (new sodium-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-public-key fmt)
-      (encode-pub-eddsa fmt 'ed25519 pub))
-    (define/override (-write-private-key fmt)
-      (encode-priv-eddsa fmt 'ed25519 pub (subbytes priv 0 32)))
+    (define/override (-write-key fmt)
+      (cond [priv (encode-priv-eddsa fmt 'ed25519 pub (subbytes priv 0 32))]
+            [else (encode-pub-eddsa fmt 'ed25519 pub)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other sodium-ed25519-key%)
@@ -178,10 +177,9 @@
     (define/override (get-public-key)
       (if priv (new sodium-x25519-key% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (-write-public-key fmt)
-      (encode-pub-ecx fmt 'x25519 pub))
-    (define/override (-write-private-key fmt)
-      (encode-priv-ecx fmt 'x25519 pub priv))
+    (define/override (-write-key fmt)
+      (cond [priv (encode-priv-ecx fmt 'x25519 pub priv)]
+            [else (encode-pub-ecx fmt 'x25519 pub)]))
 
     (define/override (equal-to-key? other)
       (and (is-a? other sodium-x25519-key%)
