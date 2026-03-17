@@ -30,6 +30,7 @@
   (test #:name (format "~s" pkname)
     (test-pk-kat pkname pk)
     (let ([privss (make-private-keyss pkname pk)])
+      (test-pk-datum pkname pk privss)
       (when (pk-can-encrypt? pk) (test-pk-encrypt pkname pk privss))
       (when (pk-can-key-agree? pk) (test-pk-key-agree pkname pk privss))
       (when (pk-can-sign? pk) (test-pk-sign pkname pk privss)))))
@@ -72,6 +73,42 @@
 (define bad-ec-curves
   ;; These libcrypto curves fail sign/verify tests, maybe too short (155, 185 bits)
   '(Oakley-EC2N-3 Oakley-EC2N-4))
+
+;; ----------------------------------------
+
+(define (test-pk-datum pkname pk privss)
+  (define factory (send pk get-factory))
+  (test #:name "import/export"
+    (define-values (privformats paramformats)
+      (case pkname
+        [(rsa) (values '(PrivateKeyInfo RSAPrivateKey) #f)]
+        [(dsa) (values '(OneAsymmetricKey) '(DSAParameters))]
+        [(dh)  (values '(OneAsymmetricKey) '(DHParameter DomainParameters))]
+        [(ec)  (values '(PrivateKeyInfo) '())]
+        [(eddsa ecx) (values '(OneAsymmetricKey) '())]))
+    (test #:name "private"
+      (for ([fmt (in-list (append '(rkt-private) privformats))])
+        (for* ([privs (in-list privss)] [priv (in-list privs)] #:when priv)
+          (define datum (check (pk-key->datum priv fmt) #:values))
+          (unless (memq fmt '(rkt-private))
+            (check datum #:with bytes?))
+          (check (datum->pk-key datum fmt factory) #:no-error))))
+    (test #:name "public"
+      (for ([fmt (in-list '(rkt-public SubjectPublicKeyInfo))])
+        (for* ([privs (in-list privss)] [priv (in-list privs)] #:when priv)
+          (define pub (pk-key->public-only-key priv))
+          (define datum (check (pk-key->datum priv fmt) #:values))
+          (define pub-datum (check (pk-key->datum pub fmt) #:values))
+          (unless (memq fmt '(rkt-public))
+            (check datum #:with bytes?)
+            (check pub-datum #:with bytes?))
+          (check pub-datum #:is datum)
+          (check (datum->pk-key datum fmt factory) #:no-error)
+          (check (datum->pk-key pub-datum fmt factory) #:no-error))))
+    (test #:name "params"
+      (for ([fmt (in-list (if paramformats (append '(rkt-params) paramformats) null))])
+        (for* ([privs (in-list privss)] [priv (in-list privs)] #:when priv)
+          (check (pk-key->datum priv fmt) #:values))))))
 
 ;; ----------------------------------------
 
