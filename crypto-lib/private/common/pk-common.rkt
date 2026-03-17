@@ -124,34 +124,6 @@
                         fmt (about))))
     (define/public (-write-key fmt)
       (case fmt
-        [(SubjectPublicKeyInfo rkt-public) (-write-public-key fmt)]
-        [(age/v1-public)
-         (match (-write-key 'rkt-public)
-           [(list 'ecx 'public 'x25519 pub)
-            (bech32-encode "age" pub)]
-           [_ #f])]
-        [(age/v1-private)
-         (match (-write-key 'rkt-private)
-           [(list 'ecx 'private 'x25519 pub priv)
-            (string-upcase (bech32-encode "age-secret-key-" priv))]
-           [_ #f])]
-        [(openssh-public)
-         (define (bstr bs)
-           (bytes-append (integer->bytes (bytes-length bs) 4 #f) bs))
-         (define (mpint n)
-           (define nlen (integer-bytes-length n #t))
-           (bytes-append (integer->bytes nlen 4 #f) (integer->bytes n nlen #t)))
-         (match (-write-key 'rkt-public)
-           [(list 'rsa 'public n e)
-            (define bin (bytes-append (bstr #"ssh-rsa") (mpint e) (mpint n)))
-            (format "ssh-rsa ~a" (base64-encode bin))]
-           [(list 'eddsa 'public 'ed25519 pub)
-            (define bin (bytes-append (bstr #"ssh-ed25519") (bstr pub)))
-            (format "ssh-ed25519 ~a" (base64-encode bin))]
-           [(list 'eddsa 'public 'ed448 pub)
-            (define bin (bytes-append (bstr #"ssh-ed448") (bstr pub)))
-            (format "ssh-ed448 ~a" (base64-encode bin))]
-           [_ #f])]
         [else (if (is-private?) (-write-private-key fmt) (-write-public-key fmt))]))
     (define/public (-write-public-key fmt) #f)
     (define/public (-write-private-key fmt) #f)
@@ -794,6 +766,20 @@
      (list 'ed448 pub)]
     [else #f]))
 
+;; write-openssh-pub : Bytes (U Bytes ExactInteger) ... -> String
+(define (write-openssh-pub prefix . parts)
+  (define (bstr bs)
+    (bytes-append (integer->bytes (bytes-length bs) 4 #f) bs))
+  (define (mpint n)
+    (define nlen (integer-bytes-length n #t))
+    (bytes-append (integer->bytes nlen 4 #f) (integer->bytes n nlen #t)))
+  (define bin (apply bytes-append
+                     (for/list ([part (in-list (cons prefix parts))])
+                       (cond [(bytes? part) (bstr part)]
+                             [(exact-integer? part) (mpint part)]))))
+  (format "~a ~a" (base64-encode bin)))
+
+
 ;; ============================================================
 ;; Writing Keys
 
@@ -826,6 +812,7 @@
                        (h-algorithm-identifier rsaEncryption #f)
                        (h-rsa-public-key n e)))]
     [(rkt-public) (list 'rsa 'public n e)]
+    [(openssh-public) (write-openssh-pub #"ssh-rsa" e n)]
     [else #f]))
 
 (define (encode-priv-rsa fmt n e d p q dp dq qInv)
@@ -987,6 +974,11 @@
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (eddsa-algid curve) qB))]
     [(rkt-public) (list 'eddsa 'public curve (bcopy qB))]
+    [(openssh-public)
+     (case curve
+       [(ed25519) (write-openssh-pub #"ssh-ed25519" qB)]
+       [(ed448) (write-openssh-pub #"ssh-ed448" qB)]
+       [else #f])]
     [else (encode-params-eddsa fmt curve)]))
 
 (define (encode-priv-eddsa fmt curve qB dB)
@@ -1024,6 +1016,9 @@
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (ecx-algid curve) qB))]
     [(rkt-public) (list 'ecx 'public curve (bcopy qB))]
+    [(age/v1-public)
+     (and (eq? curve 'x25519)
+          (bech32-encode "age" qB))]
     [else (encode-params-ecx fmt curve)]))
 
 (define (encode-priv-ecx fmt curve qB dB)
@@ -1035,6 +1030,9 @@
      (asn1->bytes/DER OneAsymmetricKey
                       (h-one-asymmetric-key 0 (ecx-algid curve) dB qB))]
     [(rkt-private) (list 'ecx 'private curve (bcopy qB) (bcopy dB))]
+    [(age/v1-private)
+     (and (eq? curve 'x25519)
+          (string-upcase (bech32-encode "age-secret-key-" dB)))]
     [else (encode-pub-ecx fmt curve qB)]))
 
 (define (x-curve->oid curve)
