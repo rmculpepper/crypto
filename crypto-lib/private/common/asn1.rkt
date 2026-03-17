@@ -3,6 +3,7 @@
 
 #lang racket/base
 (require asn1
+         hash-view
          "error.rkt")
 (provide (all-defined-out))
 
@@ -469,6 +470,22 @@
 (define RSA:Version:two-prime 0)
 (define RSA:Version:multi 1) ;; version must be multi if otherPrimeInfos present
 
+(hash-view h-rsa-public-key
+  (modulus publicExponent)
+  #:immutable)
+
+(hash-view h-rsa-private-key
+  (version
+   modulus
+   publicExponent
+   privateExponent
+   prime1
+   prime2
+   exponent1
+   exponent2
+   coefficient)
+  #:immutable)
+
 ;; -- DSA
 
 (define DSAPublicKey INTEGER) ;; public key, y
@@ -491,6 +508,10 @@
             [y INTEGER]
             [x INTEGER]))
 
+(hash-view h-dss-parms (p q g) #:immutable)
+(hash-view h-dss-sig-value (r s) #:immutable)
+(hash-view h-dsa-private-key (version p q g y x) #:immutable)
+
 ;; -- DH
 
 (define DHPublicKey INTEGER) ;; public key, y = g^x mod p
@@ -510,6 +531,16 @@
   (SEQUENCE [prime INTEGER]
             [base INTEGER]
             [privateValueLength INTEGER #:optional]))
+
+(hash-view h-validation-parms
+  (seed pgenCounter)
+  #:immutable)
+(hash-view h-domain-parameters
+  (p g q [j #:default/omit #f] [validationParms #:default/omit #f])
+  #:immutable)
+(hash-view h-dhparameter
+  (prime base)
+  #:immutable)
 
 ;; -- EC
 
@@ -535,6 +566,15 @@
 
 (define ecPrivkeyVer1 1)
 
+(hash-view h-ecdsa-sig-value
+  (r s)
+  #:immutable)
+(hash-view h-ec-private-key
+  (version
+   privateKey
+   [publicKey #:default/omit #f])
+  #:immutable)
+
 ;; -- Misc
 
 (define Attributes (SET-OF ANY/DER))
@@ -555,6 +595,11 @@
 (define AlgorithmIdentifier/DER
   (WRAP (SEQUENCE [algorithm  OBJECT-IDENTIFIER]
                   [parameters ANY/DER #:optional])))
+
+;; Use 'omit to force omission of parameters; use #f for present NULL.
+(hash-view h-algorithm-identifier
+  (algorithm [parameters #:default/omit 'omit])
+  #:immutable)
 
 (define PUBKEY
   ;; for SubjectPublicKeyInfo, PrivateKeyInfo, OneAsymmetricKey
@@ -704,6 +749,22 @@
                     #:decode (lambda (v) (bytes->asn1/DER type v))))]
         [else OCTET-STRING]))
 
+(hash-view h-subject-public-key-info
+  (algorithm subjectPublicKey)
+  #:immutable)
+
+(hash-view h-private-key-info
+  (version
+   privateKeyAlgorithm
+   privateKey)
+  #:immutable)
+
+(hash-view h-one-asymmetric-key
+  (version
+   privateKeyAlgorithm
+   privateKey
+   [publicKey #:default/omit #f])
+  #:immutable)
 
 ;; ------------------------------------------------------------
 ;; PKCS #5 Types and Relations

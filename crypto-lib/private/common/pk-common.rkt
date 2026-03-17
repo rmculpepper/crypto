@@ -349,9 +349,8 @@
          (-check-bytes fmt sk)
          (match (bytes->asn1/DER SubjectPublicKeyInfo sk)
            ;; Note: decode w/ type checks some well-formedness properties
-           [(hash-table ['algorithm alg] ['subjectPublicKey subjectPublicKey])
-            (define alg-oid (hash-ref alg 'algorithm))
-            (define params (hash-ref alg 'parameters #f))
+           [(h-subject-public-key-info alg subjectPublicKey)
+            (match-define (h-algorithm-identifier alg-oid params) alg)
             (cond [(equal? alg-oid rsaEncryption)
                    (-decode-pub-rsa subjectPublicKey)]
                   [(equal? alg-oid id-dsa)
@@ -375,8 +374,7 @@
         [(PrivateKeyInfo OneAsymmetricKey)
          (-check-bytes fmt sk)
          (define (decode version alg privateKey publicKey)
-           (define alg-oid (hash-ref alg 'algorithm))
-           (define alg-params (hash-ref alg 'parameters #f))
+           (match-define (h-algorithm-identifier alg-oid alg-params) alg)
            (cond [(equal? alg-oid rsaEncryption)
                   (-decode-priv-rsa privateKey)]
                  [(equal? alg-oid id-dsa)
@@ -401,17 +399,12 @@
            ;; unless OneAsymmetricKey is requested.
            [(PrivateKeyInfo)
             (match (bytes->asn1/DER PrivateKeyInfo sk)
-              [(hash-table ['version version]
-                           ['privateKeyAlgorithm alg]
-                           ['privateKey privateKey])
+              [(h-private-key-info version alg privateKey)
                (decode version alg privateKey #f)]
               [_ #f])]
            [(OneAsymmetricKey)
             (match (bytes->asn1/DER OneAsymmetricKey sk)
-              [(hash-table ['version version]
-                           ['privateKeyAlgorithm alg]
-                           ['privateKey privateKey]
-                           ['publicKey publicKey])
+              [(h-one-asymmetric-key version alg privateKey publicKey)
                (decode version alg privateKey publicKey)]
               [_ #f])])]
         [(RSAPrivateKey)
@@ -505,23 +498,14 @@
 
     (define/public (-decode-pub-rsa subjectPublicKey)
       (match subjectPublicKey
-        [(hash-table ['modulus n] ['publicExponent e])
-         (-make-pub-rsa n e)]
-        [_ #f]))
+        [(h-rsa-public-key n e)
+         (-make-pub-rsa n e)]))
 
     (define/public (-decode-priv-rsa privateKey)
       (match privateKey
-        [(hash-table ['version 0] ;; support only two-prime keys
-                     ['modulus n]
-                     ['publicExponent e]
-                     ['privateExponent d]
-                     ['prime1 p]
-                     ['prime2 q]
-                     ['exponent1 dp]     ;; e * dp = 1 mod (p-1)
-                     ['exponent2 dq]     ;; e * dq = 1 mod (q-1)
-                     ['coefficient qInv]);; q * c = 1 mod p
-         (-make-priv-rsa n e d p q dp dq qInv)]
-        [_ #f]))
+        ;; support only two-prime keys (version = 0, otherPrimeInfos absent)
+        [(h-rsa-private-key 0 n e d p q dp dq qInv)
+         (-make-priv-rsa n e d p q dp dq qInv)]))
 
     (define/public (-make-pub-rsa n e)
       (send-to-impl 'rsa make-public-key n e))
@@ -532,15 +516,13 @@
 
     (define/public (-decode-pub-dsa params subjectPublicKey)
       (match params
-        [(hash-table ['p p] ['q q] ['g g])
-         (-make-pub-dsa p q g subjectPublicKey)]
-        [_ #f]))
+        [(h-dss-parms p q g)
+         (-make-pub-dsa p q g subjectPublicKey)]))
 
-    (define/public (-decode-priv-dsa alg-params publicKey privateKey)
-      (match alg-params
-        [(hash-table ['p p] ['q q] ['g g])
-         (-make-priv-dsa p q g publicKey privateKey)]
-        [_ #f]))
+    (define/public (-decode-priv-dsa params publicKey privateKey)
+      (match params
+        [(h-dss-parms p q g)
+         (-make-priv-dsa p q g publicKey privateKey)]))
 
     (define/public (-make-pub-dsa p q g y)
       (send-to-impl 'dsa make-public-key p q g y))
@@ -563,24 +545,17 @@
       (send-to-impl 'dh make-private-key p g q j seed pgen y x))
 
     (define/private (get-dh-fields params)
-      (cond [(hash-has-key? params 'p)
-             (define p (hash-ref params 'p))
-             (define g (hash-ref params 'g))
-             (define q (hash-ref params 'q))
-             (define j (hash-ref params 'j #f))
-             (define vp (hash-ref params 'validationParms #f))
-             (define seed (and vp (hash-ref vp 'seed)))
-             (define pgen (and vp (hash-ref vp 'pgenCounter)))
-             (cond [(and (bit-string? seed) (zero? (bit-string-unused seed)))
-                    (values p g q j (bit-string-bytes seed) pgen)]
-                   [else
-                    ;; If seed is not octet-aligned, just drop it.
-                    (values p g q j #f #f)])]
-            [(hash-has-key? params 'prime)
-             (define p (hash-ref params 'prime))
-             (define g (hash-ref params 'base))
-             (values p g #f #f #f #f)]
-            [else (crypto-error "invalid DH parameters")]))
+      (match params
+        [(h-domain-parameters p g q j vp)
+         (match vp
+           ;; If seed is not octet-aligned, just drop it (and pgen).
+           [(h-validation-parms seed pgen)
+            #:when (and (bit-string? seed) (zero? (bit-string-unused seed)))
+            (values p g q j (bit-string-bytes seed) pgen)]
+           [#f
+            (values p g q j #f #f)])]
+        [(h-dhparameter p g)
+         (values p g #f #f #f #f)]))
 
     ;; ---- EC ----
 
@@ -590,11 +565,11 @@
          (-make-pub-ec curve-oid subjectPublicKey)]
         [_ #f]))
 
-    (define/public (-decode-priv-ec alg-params publicKey privateKey)
-      (match alg-params
+    (define/public (-decode-priv-ec params publicKey privateKey)
+      (match params
         [`(namedCurve ,curve-oid)
          (match privateKey
-           [(hash-table ['version 1] ['privateKey xB] ['publicKey qB])
+           [(h-ec-private-key 1 xB qB)
             (-make-priv-ec curve-oid (or qB publicKey) (base256->unsigned xB))]
            [_ #f])]
         [_ #f]))
@@ -634,8 +609,8 @@
       (case fmt
         [(AlgorithmIdentifier)
          (-check-bytes fmt buf)
-         (match (ensure-keys (bytes->asn1/DER AlgorithmIdentifier/DER buf) '(parameters))
-           [(hash-table ['algorithm alg-oid] ['parameters parameters])
+         (match (bytes->asn1/DER AlgorithmIdentifier/DER buf)
+           [(h-algorithm-identifier alg-oid parameters)
             (cond [(equal? alg-oid id-dsa)
                    (read-params parameters 'Dss-Parms)] ;; Dss-Parms
                   [(equal? alg-oid dhpublicnumber)
@@ -648,27 +623,22 @@
                   [(equal? alg-oid id-Ed448)   (-make-params-eddsa 'ed448)]
                   [(equal? alg-oid id-X25519)  (-make-params-ecx   'x25519)]
                   [(equal? alg-oid id-X448)    (-make-params-ecx   'x448)]
-                  [else #f])]
-           [_ #f])]
+                  [else #f])])]
         [(DSAParameters Dss-Parms)
          (-check-bytes fmt buf)
          (match (bytes->asn1/DER Dss-Parms buf)
-           [(hash-table ['p p] ['q q] ['g g])
-            (-make-params-dsa p q g)]
-           [_ #f])]
+           [(h-dss-parms p q g)
+            (-make-params-dsa p q g)])]
         [(DomainParameters) ;; ANSI X9.42
          (-check-bytes fmt buf)
-         (define params (bytes->asn1/DER DomainParameters buf))
-         (cond [params
-                (define-values (p g q j seed pgen) (get-dh-fields params))
-                (-make-params-dh p g q j seed pgen)]
-               [else #f])]
+         (define-values (p g q j seed pgen)
+           (get-dh-fields (bytes->asn1/DER DomainParameters buf)))
+         (-make-params-dh p g q j seed pgen)]
         [(DHParameter) ;; PKCS#3
          (-check-bytes fmt buf)
          (match (bytes->asn1/DER DHParameter buf)
-           [(hash-table ['prime prime] ['base base])
-            (-make-params-dh prime base)]
-           [_ #f])]
+           [(h-dhparameter p g)
+            (-make-params-dh p g)])]
         [(EcpkParameters)
          (-check-bytes fmt buf)
          (match (bytes->asn1/DER EcpkParameters buf)
@@ -831,6 +801,7 @@
 ;; - RFC 8410 says in general
 ;;   - for Ed25519 etc, parameters must be absent
 
+#;
 (define (private-key->der fmt priv pub)
   (cond [(and (eq? fmt 'OneAsymmetricKey) pub)
          (asn1->bytes/DER OneAsymmetricKey
@@ -844,70 +815,60 @@
 (define (encode-pub-rsa fmt n e)
   (case fmt
     [(SubjectPublicKeyInfo)
-     (asn1->bytes/DER
-      SubjectPublicKeyInfo
-      ;; CAB BR (v1.7.3) section 7.1.3.1.1 says MUST include NULL parameter
-      (hasheq 'algorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
-              'subjectPublicKey (hasheq 'modulus n 'publicExponent e)))]
+     ;; CAB BR (v1.7.3) section 7.1.3.1.1 says MUST include NULL parameter
+     (asn1->bytes/DER SubjectPublicKeyInfo
+                      (h-subject-public-key-info
+                       (h-algorithm-identifier rsaEncryption #f)
+                       (h-rsa-public-key n e)))]
     [(rkt-public) (list 'rsa 'public n e)]
     [else #f]))
 
 (define (encode-priv-rsa fmt n e d p q dp dq qInv)
   (case fmt
     [(PrivateKeyInfo OneAsymmetricKey)
-     ;; OAK note: private key already contains public key fields
+     ;; OAK note: private key already contains public key fields, so just
+     ;; produce PrivateKeyInfo syntax
      (asn1->bytes/DER
       PrivateKeyInfo
-      (hasheq 'version 0
-              'privateKeyAlgorithm (hasheq 'algorithm rsaEncryption 'parameters #f)
-              'privateKey (-priv-rsa n e d p q dp dq qInv)))]
+      (h-private-key-info 0
+                          (h-algorithm-identifier rsaEncryption #f)
+                          (h-rsa-private-key 0 n e d p q dp dq qInv)))]
     [(RSAPrivateKey)
-     (asn1->bytes/DER RSAPrivateKey (-priv-rsa n e d p q dp dq qInv))]
+     (asn1->bytes/DER RSAPrivateKey (h-rsa-private-key 0 n e d p q dp dq qInv))]
     [(rkt-private) (list 'rsa 'private 0 n e d p q dp dq qInv)]
     [else (encode-pub-rsa fmt n e)]))
 
-(define (-priv-rsa n e d p q dp dq qInv)
-  (hasheq 'version 0
-          'modulus n
-          'publicExponent e
-          'privateExponent d
-          'prime1 p
-          'prime2 q
-          'exponent1 dp
-          'exponent2 dq
-          'coefficient qInv))
-
 ;; ---- DSA ----
+
+(define (dsa-algid p q g)
+  (h-algorithm-identifier id-dsa (h-dss-parms p q g)))
 
 (define (encode-params-dsa fmt p q g)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY
-       (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g)))]
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (dsa-algid p q g))]
     [(DSAParameters Dss-Parms)
-     (asn1->bytes/DER Dss-Parms (hasheq 'p p 'q q 'g g))]
+     (asn1->bytes/DER Dss-Parms (h-dss-parms p q g))]
     [(rkt-params) (list 'dsa 'params p q g)]
     [else #f]))
 
 (define (encode-pub-dsa fmt p q g y)
   (case fmt
     [(SubjectPublicKeyInfo)
-     (asn1->bytes/DER
-      SubjectPublicKeyInfo
-      (hasheq 'algorithm (hasheq 'algorithm id-dsa 'parameters (hasheq 'p p 'q q 'g g))
-              'subjectPublicKey y))]
+     (asn1->bytes/DER SubjectPublicKeyInfo
+                      (h-subject-public-key-info (dsa-algid p q g) y))]
     [(rkt-public) (list 'dsa 'public p q g y)]
-    [else #f]))
+    [else (encode-params-dsa fmt p q g)]))
 
 (define (encode-priv-dsa fmt p q g y x)
+  ;; FIXME: recompute y if absent
   (case fmt
-    [(PrivateKeyInfo OneAsymmetricKey)
-     (private-key->der
-      fmt
-      (hasheq 'privateKeyAlgorithm (hasheq 'algorithm id-dsa
-                                           'parameters (hasheq 'p p 'q q 'g g))
-              'privateKey x)
-      y)]
+    [(PrivateKeyInfo)
+     (asn1->bytes/DER PrivateKeyInfo
+                      (h-private-key-info 0 (dsa-algid p q g) x))]
+    [(OneAsymmetricKey)
+     (asn1->bytes/DER OneAsymmetricKey
+                      (h-one-asymmetric-key 1 (dsa-algid p q g) x y))]
     [(DSAPrivateKey)
      (asn1->bytes/DER
       (SEQUENCE-OF INTEGER)
@@ -917,61 +878,57 @@
 
 ;; ---- DH ----
 
-(define (make-dh-params p g q j seed pgen)
-  (let* ([p (hasheq 'p p 'g g 'q q)]
-         [p (if j (hash-set p 'j j) p)])
-    (if (and seed pgen)
-        (hash-set p 'validationParms
-                  (hasheq 'seed (bit-string seed 0)
-                          'pgenCounter pgen))
-        p)))
+(define (dh-algid p g q j seed pgen)
+  (if q
+      (h-algorithm-identifier dhpublicnumber
+                              (make-domain-parameters p g q j seed pgen))
+      (h-algorithm-identifier dhKeyAgreement
+                              (h-dhparameter p g))))
+
+(define (make-domain-parameters p g q j seed pgen)
+  (define vp (and (and seed pgen) (h-validation-parms (bit-string seed 0) pgen)))
+  (h-domain-parameters p g q j vp))
 
 (define (encode-params-dh fmt p g q j seed pgen)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY
-       (hasheq 'algorithm dhpublicnumber
-               'parameters (make-dh-params p g q j seed pgen)))]
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (dh-algid p g q j seed pgen))]
     [(DomainParameters)
-     (asn1->bytes/DER DomainParameters (make-dh-params p g q j seed pgen))]
+     (asn1->bytes/DER DomainParameters (make-domain-parameters p g q j seed pgen))]
     [(DHParameter)
-     (asn1->bytes/DER DHParameter (hasheq 'prime p 'base g))]
+     (asn1->bytes/DER DHParameter (h-dhparameter p g))]
     [(rkt-params) (list 'dh 'params p g q j seed pgen)]
     [else #f]))
 
 (define (encode-pub-dh fmt p g q j seed pgen y)
   (case fmt
     [(SubjectPublicKeyInfo)
-     (asn1->bytes/DER
-      SubjectPublicKeyInfo
-      (hasheq 'algorithm
-              (hasheq 'algorithm dhpublicnumber
-                      'parameters (make-dh-params p g q j seed pgen))
-              'subjectPublicKey y))]
+     (asn1->bytes/DER SubjectPublicKeyInfo
+                      (h-subject-public-key-info (dh-algid p g q j seed pgen) y))]
     [(rkt-public) (list 'dh 'public p g q j seed pgen y)]
-    [else #f]))
+    [else (encode-params-dh fmt p g q j seed pgen)]))
 
 (define (encode-priv-dh fmt p g q j seed pgen y x)
+  ;; FIXME: recompute y if absent
   (case fmt
-    [(PrivateKeyInfo OneAsymmetricKey)
-     (private-key->der
-      fmt
-      (hasheq 'privateKeyAlgorithm
-              (hasheq 'algorithm dhpublicnumber
-                      'parameters (make-dh-params p g q j seed pgen))
-              'privateKey x)
-      y)]
+    [(PrivateKeyInfo)
+     (asn1->bytes/DER PrivateKeyInfo
+                      (h-private-key-info 0 (dh-algid p g q j seed pgen) x))]
+    [(OneAsymmetricKey)
+     (asn1->bytes/DER OneAsymmetricKey
+                      (h-one-asymmetric-key 1 (dh-algid p g q j seed pgen) x y))]
     [(rkt-private) (list 'dh 'private p g q j seed pgen y x)]
-    [else (encode-pub-dh fmt p g y)]))
+    [else (encode-pub-dh fmt p g q j seed pgen y)]))
 
 ;; ---- EC ----
+
+(define (ec-algid curve-oid)
+  (h-algorithm-identifier id-ecPublicKey (list 'namedCurve curve-oid)))
 
 (define (encode-params-ec fmt curve-oid)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY
-       (hasheq 'algorithm id-ecPublicKey
-               'parameters (list 'namedCurve curve-oid)))]
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (ec-algid curve-oid))]
     [(EcpkParameters)
      (asn1->bytes/DER EcpkParameters (list 'namedCurve curve-oid))]
     [(rkt-params) (list 'ec 'params curve-oid)]
@@ -980,61 +937,57 @@
 (define (encode-pub-ec fmt curve-oid qB)
   (case fmt
     [(SubjectPublicKeyInfo)
-     (asn1->bytes/DER
-      SubjectPublicKeyInfo
-      (hasheq 'algorithm (hasheq 'algorithm id-ecPublicKey
-                                 'parameters (list 'namedCurve curve-oid))
-              'subjectPublicKey qB))]
+     (asn1->bytes/DER SubjectPublicKeyInfo
+                      (h-subject-public-key-info (ec-algid curve-oid) qB))]
     [(rkt-public) (list 'ec 'public curve-oid (bcopy qB))]
-    [else #f]))
+    [else (encode-params-ec fmt curve-oid)]))
 
 (define (encode-priv-ec fmt curve-oid qB d)
   (case fmt
     [(PrivateKeyInfo OneAsymmetricKey)
-     ;; OAK note: private key already contains public key
+     ;; OAK note: private key already contains public key, so just produce
+     ;; PrivateKeyInfo syntax
      (asn1->bytes/DER
       PrivateKeyInfo
-      (hasheq 'version 0
-              'privateKeyAlgorithm (hasheq 'algorithm id-ecPublicKey
-                                           'parameters (list 'namedCurve curve-oid))
-              'privateKey (hasheq 'version 1
-                                  'privateKey (unsigned->base256 d)
-                                  'publicKey qB)))]
+      (h-private-key-info 0 (ec-algid curve-oid)
+                          (h-ec-private-key
+                           ecPrivkeyVer1
+                           (unsigned->base256 d)
+                           qB)))]
     [(rkt-private) (list 'ec 'private curve-oid (bcopy qB) d)]
     [else (encode-pub-ec fmt curve-oid qB)]))
 
 ;; ---- EdDSA ----
 
+(define (eddsa-algid curve)
+  ;; RFC 8410 says parameters MUST be absent.
+  (h-algorithm-identifier (ed-curve->oid curve) 'omit))
+
 (define (encode-params-eddsa fmt curve)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER
-      AlgorithmIdentifier/PUBKEY
-      ;; RFC 8410 says parameters MUST be absent.
-      (hasheq 'algorithm (ed-curve->oid curve)))]
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (eddsa-algid curve))]
     [(rkt-params) (list 'eddsa 'params curve)]
     [else #f]))
-
-(define (encode-priv-eddsa fmt curve qB dB)
-  (case fmt
-    [(PrivateKeyInfo OneAsymmetricKey)
-     (private-key->der
-      fmt
-      (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (ed-curve->oid curve))
-              'privateKey dB)
-      qB)]
-    [(rkt-private) (list 'eddsa 'private curve (bcopy qB) (bcopy dB))]
-    [else (encode-pub-eddsa fmt curve qB)]))
 
 (define (encode-pub-eddsa fmt curve qB)
   (case fmt
     [(SubjectPublicKeyInfo)
-     (asn1->bytes/DER
-      SubjectPublicKeyInfo
-      (hasheq 'algorithm (hasheq 'algorithm (ed-curve->oid curve))
-              'subjectPublicKey qB))]
+     (asn1->bytes/DER SubjectPublicKeyInfo
+                      (h-subject-public-key-info (eddsa-algid curve) qB))]
     [(rkt-public) (list 'eddsa 'public curve (bcopy qB))]
-    [else #f]))
+    [else (encode-params-eddsa fmt curve)]))
+
+(define (encode-priv-eddsa fmt curve qB dB)
+  (case fmt
+    [(PrivateKeyInfo)
+     (asn1->bytes/DER PrivateKeyInfo
+                      (h-private-key-info 0 (eddsa-algid curve) dB))]
+    [(OneAsymmetricKey)
+     (asn1->bytes/DER OneAsymmetricKey
+                      (h-one-asymmetric-key 1 (eddsa-algid curve) dB qB))]
+    [(rkt-private) (list 'eddsa 'private curve (bcopy qB) (bcopy dB))]
+    [else (encode-pub-eddsa fmt curve qB)]))
 
 (define (ed-curve->oid curve)
   (case curve
@@ -1043,36 +996,35 @@
 
 ;; ---- ECX ----
 
+(define (ecx-algid curve)
+  ;; RFC 8410 says parameters MUST be absent.
+  (h-algorithm-identifier (x-curve->oid curve)))
+
 (define (encode-params-ecx fmt curve)
   (case fmt
     [(AlgorithmIdentifier)
-     (asn1->bytes/DER
-      AlgorithmIdentifier/PUBKEY
-      ;; RFC 8410 says parameters MUST be absent.
-      (hasheq 'algorithm (x-curve->oid curve)))]
+     (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (ecx-algid curve))]
     [(rkt-params) (list 'ecx 'params curve)]
     [else #f]))
-
-(define (encode-priv-ecx fmt curve qB dB)
-  (case fmt
-    [(PrivateKeyInfo OneAsymmetricKey)
-     (private-key->der
-      fmt
-      (hasheq 'privateKeyAlgorithm (hasheq 'algorithm (x-curve->oid curve))
-              'privateKey dB)
-      qB)]
-    [(rkt-private) (list 'ecx 'private curve (bcopy qB) (bcopy dB))]
-    [else (encode-pub-ecx fmt curve qB)]))
 
 (define (encode-pub-ecx fmt curve qB)
   (case fmt
     [(SubjectPublicKeyInfo)
-     (asn1->bytes/DER
-      SubjectPublicKeyInfo
-      (hasheq 'algorithm (hasheq 'algorithm (x-curve->oid curve))
-              'subjectPublicKey qB))]
+     (asn1->bytes/DER SubjectPublicKeyInfo
+                      (h-subject-public-key-info (ecx-algid curve) qB))]
     [(rkt-public) (list 'ecx 'public curve (bcopy qB))]
-    [else #f]))
+    [else (encode-params-ecx fmt curve)]))
+
+(define (encode-priv-ecx fmt curve qB dB)
+  (case fmt
+    [(PrivateKeyInfo)
+     (asn1->bytes/DER PrivateKeyInfo
+                      (h-private-key-info 0 (ecx-algid curve) dB))]
+    [(OneAsymmetricKey)
+     (asn1->bytes/DER OneAsymmetricKey
+                      (h-one-asymmetric-key 0 (ecx-algid curve) dB qB))]
+    [(rkt-private) (list 'ecx 'private curve (bcopy qB) (bcopy dB))]
+    [else (encode-pub-ecx fmt curve qB)]))
 
 (define (x-curve->oid curve)
   (case curve
@@ -1096,10 +1048,12 @@
 
 ;; bytes->ec-point : Bytes -> (cons Nat Nat)
 (define (bytes->ec-point buf)
-  (define (bad) (crypto-error "failed to parse ECPoint"))
+  (define (bad) (crypto-error "failed to parse ECPoint (invalid)"))
   (define buflen (bytes-length buf))
   (unless (> buflen 0) (bad))
   (case (bytes-ref buf 0)
+    [(#x02 #x03) ;; compressed point
+     (crypto-error "failed to parse compressed ECPoint (not implemented)")]
     [(#x04) ;; uncompressed point
      (unless (odd? buflen) (bad))
      (define len (quotient (sub1 (bytes-length buf)) 2))

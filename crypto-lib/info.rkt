@@ -10,6 +10,7 @@
 (define deps
   '("base"
     "asn1-lib"
+    "hash-view-lib"
     ["base64-lib" #:version "1.1"]
     "binaryio-lib"
     ["gmp-lib" #:version "1.1"]
