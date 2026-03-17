@@ -62,6 +62,12 @@
     (define/public (make-params . _) #f)
     (define/public (make-public-key . _) #f)
     (define/public (make-private-key . _) #f)
+
+    ;; Called by pk-{dsa,dh,ec}-params% generate-key:
+    ;; - generate-key-from-params : PK-Params -> PK-Key
+
+    ;; Called by pk-{eddsa,ecx}-params% generate-key:
+    ;; - generate-key-from-curve : Symbol -> PK-Key
     ))
 
 (define pk-params-base%
@@ -75,7 +81,9 @@
        (cond [(is-a? this pk-curve-params<%>)
               (format ":~a" (send this get-curve))]
              [else ""])))
-    (abstract generate-key)
+
+    (abstract generate-key) ;; Config -> PK-Key
+
     (define/public (write-params fmt)
       (or (-write-params fmt)
           (crypto-error "parameters format not supported\n  format: ~e\n  parameters: ~a"
@@ -230,7 +238,39 @@
       (err/no-impl this))
     ))
 
-;; ------------------------------------------------------------
+;; ============================================================
+
+(define pk-dsa-params%
+  (class* pk-params-base% ()
+    (inherit-field impl)
+    (super-new)
+
+    (abstract get-param-values) ;; -> (values Nat Nat Nat)
+
+    (define/override (-write-params fmt)
+      (define-values (p q g) (get-param-values))
+      (encode-params-dsa fmt p q g))
+
+    (define/override (generate-key config)
+      (check-config config '() "DSA keygen from parameters")
+      (send impl generate-key-from-params this))
+    ))
+
+(define pk-dh-params%
+  (class* pk-params-base% ()
+    (inherit-field impl)
+    (super-new)
+
+    (abstract get-param-values) ;; -> (values Nat Nat Nat/#f Nat/#f Bytes/#f Nat/#f)
+
+    (define/override (-write-params fmt)
+      (define-values (p g q j seed pgen) (get-param-values))
+      (encode-params-dh fmt p g q j seed pgen))
+
+    (define/override (generate-key config)
+      (check-config config '() "DH keygen from parameters")
+      (send impl generate-key-from-params this))
+    ))
 
 (define pk-ec-params%
   (class* pk-params-base% (pk-curve-params<%>)
@@ -247,7 +287,7 @@
       (and curve-oid (encode-params-ec fmt curve-oid)))
 
     (define/override (generate-key config)
-      (check-config config '() "EC key generation")
+      (check-config config '() "EC keygen")
       (send impl generate-key-from-params this))
     ))
 
@@ -263,8 +303,8 @@
       (encode-params-eddsa fmt curve))
 
     (define/override (generate-key config)
-      (check-config config '() "EdDSA key generation")
-      (send impl generate-key-from-params curve))
+      (check-config config '() "EdDSA keygen")
+      (send impl generate-key-from-curve curve))
     ))
 
 (define pk-ecx-params%
@@ -280,7 +320,7 @@
 
     (define/override (generate-key config)
       (check-config config '() "EC/X key generation")
-      (send impl generate-key-from-params curve))
+      (send impl generate-key-from-curve curve))
     ))
 
 ;; ============================================================

@@ -252,6 +252,13 @@
           (crypto-error "failed to generate parameters"))
       params)
 
+    (define/public (generate-key-from-params pkp)
+      (define params (get-field params pkp))
+      (define pub (new-mpz))
+      (define priv (new-mpz))
+      (nettle_dsa_generate_keypair params pub priv (get-random-ctx))
+      (new nettle-dsa-key% (impl this) (params params) (pub pub) (priv priv)))
+
     ;; ----
 
     (define/override (make-params p q g)
@@ -285,23 +292,15 @@
     ))
 
 (define nettle-dsa-params%
-  (class pk-params-base%
+  (class pk-dsa-params%
     (init-field params)
     (inherit-field impl)
     (super-new)
 
-    (define/override (generate-key config)
-      (check-config config '() "DSA key generation from parameters")
-      (define pub (new-mpz))
-      (define priv (new-mpz))
-      (nettle_dsa_generate_keypair params pub priv (send impl get-random-ctx))
-      (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv priv)))
-
-    (define/override (-write-params fmt)
-      (encode-params-dsa fmt
-                         (mpz->integer (dsa_params_struct-p params))
-                         (mpz->integer (dsa_params_struct-q params))
-                         (mpz->integer (dsa_params_struct-g params))))
+    (define/override (get-param-values)
+      (values (mpz->integer (dsa_params_struct-p params))
+              (mpz->integer (dsa_params_struct-q params))
+              (mpz->integer (dsa_params_struct-g params))))
     ))
 
 (define nettle-dsa-key%
@@ -546,7 +545,7 @@
       (or (make-params curve)
           (err/no-curve curve this)))
 
-    (define/public (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (case curve
         [(ed25519) (and ed25519-ok? (generate-ed25519-key))]
         [(ed448) (and ed448-ok? (generate-ed448-key))]))
@@ -686,7 +685,7 @@
       (or (make-params curve)
           (err/no-curve curve this)))
 
-    (define/public (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (case curve
         [(x25519) (and x25519-ok? (generate-x25519-key))]
         [(x448) (and x448-ok? (generate-x448-key))]))

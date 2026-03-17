@@ -88,13 +88,16 @@
       ;; FIXME: EVP_PKEY_check, etc
       evp)
 
-    ;; generate-key-from-params : EVP_PKEY -> EVP_PKEY
-    ;; Note: type of method varies in subclasses! (see also pk-common.rkt)
-    (define/public (generate-key-from-params pevp)
+    ;; generate-key-from-pevp : EVP_PKEY -> PK-Key
+    (define/public (generate-key-from-pevp pevp)
       (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) pevp #f)))
       (HANDLEp (EVP_PKEY_keygen_init ctx))
       (define kevp (HANDLEp (EVP_PKEY_generate ctx)))
       (evp->private-key kevp))
+
+    ;; generate-key-from-params : PK-Params -> PK-Key
+    (define/public (generate-key-from-params pkp)
+      (generate-key-from-pevp (get-field pevp pkp)))
     ))
 
 (define signing-digests
@@ -303,11 +306,6 @@
            (let ([params `((#"group" utf8-string ,curve-name))])
              (evp->params (fromdata #"EC" 'params params)))))
 
-    ;; generate-key-from-params : libcrypto-ec-params -> EVP_PKEY
-    ;; Note: method type differs from superclass!
-    (define/override (generate-key-from-params pkp)
-      (super generate-key-from-params (get-field pevp pkp)))
-
     (define/override (generate-key config)
       (define curve (check/ref-config '(curve) config config:ec-paramgen "EC keygen"))
       (define curve-name (curve-name->lcname curve))
@@ -351,11 +349,9 @@
     (define/override (generate-key config)
       (define curve
         (check/ref-config '(curve) config config:eddsa-keygen "EDDSA keygen"))
-      (generate-key-from-params curve))
+      (generate-key-from-curve curve))
 
-    ;; generate-key-from-params : Symbol -> pk-key
-    ;; Note: method type differs from superclass!
-    (define/override (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (case curve
         [(ed25519)
          (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "ED25519")))
@@ -401,11 +397,9 @@
     (define/override (generate-key config)
       (define curve
         (check/ref-config '(curve) config config:ecx-keygen "ECX keygen"))
-      (generate-key-from-params curve))
+      (generate-key-from-curve curve))
 
-    ;; generate-key-from-params : Symbol -> pk-key
-    ;; Note: method type differs from superclass!
-    (define/override (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (case curve
         [(x25519)
          (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "X25519")))
@@ -418,28 +412,26 @@
 
 ;; ============================================================
 
-(define libcrypto3-pk-params%
-  (class pk-params-base%
+(define (libcrypto3-pk-params-mixin base%)
+  (class base%
     (init-field pevp)
-    (inherit-field impl)
     (super-new)
 
     (define/override (get-security-bits)
       (EVP_PKEY_get_security_bits pevp))
-
-    (define/override (generate-key config)
-      (check-config config '() "keygen from parameters")
-      (send impl generate-key-from-params pevp))
     ))
 
 (define libcrypto3-dsa-params%
-  (class libcrypto3-pk-params%
+  (class (libcrypto3-pk-params-mixin pk-dsa-params%)
     (inherit-field impl pevp)
     (super-new)
 
     (define/override (-write-params fmt)
       (define-values (p q g) (dsa-evp-get-params pevp))
       (encode-params-dsa fmt p q g))
+
+    (define/override (get-param-values)
+      (dsa-evp-get-params pevp))
     ))
 
 (define (dsa-evp-get-params pevp)
@@ -449,13 +441,16 @@
   (values p q g))
 
 (define libcrypto3-dh-params%
-  (class libcrypto3-pk-params%
+  (class (libcrypto3-pk-params-mixin pk-dh-params%)
     (inherit-field impl pevp)
     (super-new)
 
     (define/override (-write-params fmt)
       (define-values (p g q j seed pgen) (dh-evp-get-params pevp))
       (encode-params-dh fmt p g q j seed pgen))
+
+    (define/override (get-param-values)
+      (dh-evp-get-params pevp))
     ))
 
 (define (dh-evp-get-params pevp)
@@ -470,13 +465,9 @@
 ;; ----------------------------------------
 
 (define libcrypto3-ec-params%
-  (class pk-ec-params%
-    (init-field pevp)
-    (inherit-field impl)
+  (class (libcrypto3-pk-params-mixin pk-ec-params%)
+    (inherit-field impl pevp)
     (super-new)
-
-    (define/override (get-security-bits)
-      (EVP_PKEY_get_security_bits pevp))
 
     (define/override (get-curve)
       (define curve-lcname

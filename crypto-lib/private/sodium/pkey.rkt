@@ -37,7 +37,7 @@
         [(ed25519) (new pk-eddsa-params% (impl this) (curve curve))]
         [else (err/no-curve curve this)]))
 
-    (define/public (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (case curve
         [(ed25519)
          (define priv (make-bytes crypto_sign_ed25519_SECRETKEYBYTES))
@@ -129,7 +129,7 @@
         [(x25519) (new pk-ecx-params% (impl this) (curve curve))]
         [else (err/no-curve curve this)]))
 
-    (define/public (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (case curve
         [(x25519)
          (define priv (crypto-random-bytes crypto_scalarmult_curve25519_SCALARBYTES))

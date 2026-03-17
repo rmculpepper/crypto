@@ -560,7 +560,7 @@
       (unless (check-curve curve) (err/no-curve curve this))
       (new pk-eddsa-params% (impl this) (curve curve)))
 
-    (define/public (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (define curve-name (or (check-curve curve) (err/no-curve curve this)))
       (define-values (pub priv)
         (-generate-keypair
@@ -678,7 +678,7 @@
       (unless (check-curve curve) (err/no-curve curve this))
       (new pk-ecx-params% (impl this) (curve curve)))
 
-    (define/public (generate-key-from-params curve)
+    (define/public (generate-key-from-curve curve)
       (define curve-name (or (check-curve curve) (err/no-curve curve this)))
       (define-values (pub priv)
         (-generate-keypair (make-sexp `(genkey (ecdh (curve ,curve-name))))))
