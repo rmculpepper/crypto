@@ -51,16 +51,6 @@
          (define p (HANDLEp (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk))))
          (make-key (HANDLEp (EVP_PKCS82PKEY_ex p (get-libctx) #f)) #t)]
         [else #f]))
-
-    (define/override (-make-params-dhx p g q j seed pgen)
-      (define impl (send factory get-pk 'dh))
-      (send impl make-paramsx p g q j seed pgen))
-    (define/override (-make-pub-dhx p g q j seed pgen y)
-      (define impl (send factory get-pk 'dh))
-      (send impl make-public-keyx p g q j seed pgen y))
-    (define/override (-make-priv-dhx p g q j seed pgen y x)
-      (define impl (send factory get-pk 'dh))
-      (send impl make-private-keyx p g q j seed pgen y x))
     ))
 
 ;; ============================================================
@@ -226,20 +216,13 @@
     (define/override (get-params-class) libcrypto3-dh-params%)
     (define/override (get-key-class) libcrypto3-dh-key%)
 
-    (define/override (make-params p g)
-      (make-paramsx p g #f #f #f #f))
-    (define/override (make-public-key p g y)
-      (make-public-keyx p g #f #f #f #f y))
-    (define/override (make-private-key p g y x)
-      (make-private-keyx p g #f #f #f #f y x))
-
-    (define/public (make-paramsx p g q j seed pgen)
+    (define/override (make-params p g q j seed pgen)
       (evp->params (fromdata #"DH" 'params
                              (make-fromdata-params p g q j seed pgen #f #f))))
-    (define/public (make-public-keyx p g q j seed pgen y)
+    (define/override (make-public-key p g q j seed pgen y)
       (evp->public-key (fromdata #"DH" 'public
                                  (make-fromdata-params p g q j seed pgen y #f))))
-    (define/public (make-private-keyx p g q j seed pgen y x)
+    (define/override (make-private-key p g q j seed pgen y x)
       (evp->private-key (fromdata #"DH" 'private
                                   (make-fromdata-params p g q j seed pgen y x))))
 
@@ -473,8 +456,7 @@
       (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
       (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
       (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
-      (cond [q (encode-params-dhx fmt p g q j seed pgen)]
-            [else (encode-params-dh fmt p g)]))
+      (encode-params-dh fmt p g q j seed pgen))
     ))
 
 ;; ----------------------------------------
@@ -701,9 +683,7 @@
       (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
       (match (send (get-params) -write-params 'rkt-params)
         [(list 'dh 'params p g q j seed pgen)
-         (encode-pub-dhx fmt p g q j seed pgen pub)]
-        [(list 'dh 'params p g)
-         (encode-pub-dh fmt p g pub)]
+         (encode-pub-dh fmt p g q j seed pgen pub)]
         [#f #f]))
 
     (define/override (-write-private-key fmt)
@@ -711,9 +691,7 @@
       (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
       (match (send (get-params) -write-params 'rkt-params)
         [(list 'dh 'params p g q j seed pgen)
-         (encode-priv-dhx fmt p g q j seed pgen pub priv)]
-        [(list 'dh 'params p g)
-         (encode-priv-dh fmt p g pub priv)]
+         (encode-priv-dh fmt p g q j seed pgen pub priv)]
         [#f #f]))
 
     (define/override (-get-keyexch-params)
