@@ -317,12 +317,7 @@
                                    (g ,(unsigned->base256 g))
                                    (y ,(unsigned->base256 y))))))
 
-    (define/override (make-private-key p q g y0 x)
-      (define y  ;; g^x mod p
-        (or y0
-            (let ([y (gcry_mpi_new)])
-              (gcry_mpi_powm y (int->mpi g) (int->mpi x) (int->mpi p))
-              (mpi->int y))))
+    (define/override (make-private-key p q g y x)
       (define pub (make-dsa-public-key p q g y))
       (define priv (make-dsa-private-key p q g y x))
       (define impl (send factory get-pk 'dsa))

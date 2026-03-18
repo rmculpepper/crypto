@@ -272,15 +272,7 @@
     (define/override (make-private-key p q g y x)
       (define params (-params-dsa p q g))
       (define priv (integer->mpz x))
-      (define pub
-        (cond [y (integer->mpz y)]
-              [else ;; must recompute public key, y = g^x mod p
-               (define yz (new-mpz))
-               (mpz_powm yz
-                         (dsa_params_struct-g params)
-                         priv
-                         (dsa_params_struct-p params))
-               yz]))
+      (define pub (integer->mpz y))
       (new nettle-dsa-key% (impl this) (params params) (pub pub) (priv priv)))
 
     (define/private (-params-dsa p q g)
