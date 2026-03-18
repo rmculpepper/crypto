@@ -572,24 +572,26 @@
       (define pub (make-sized-copy ED448_KEY_SIZE qB))
       (new nettle-ed448-key% (impl this) (pub pub) (priv #f)))
 
-    (define/override (make-private-key curve _qB dB)
-      ;; Note: qB (public key) might be missing, so just recompute
+    (define/override (make-private-key curve qB dB)
       (case curve
-        [(ed25519) (and ed25519-ok? (make-ed25519-private-key dB))]
-        [(ed448) (and ed448-ok? (make-ed448-private-key dB))]
+        [(ed25519) (and ed25519-ok? (make-ed25519-private-key qB dB))]
+        [(ed448) (and ed448-ok? (make-ed448-private-key qB dB))]
         [else #f]))
 
-    (define/private (make-ed25519-private-key dB)
+    ;; public key might be missing, so recompute; if present, check
+    (define/private (make-ed25519-private-key qB dB)
       (define priv (make-sized-copy ED25519_KEY_SIZE dB))
       (define pub (make-bytes ED25519_KEY_SIZE))
       (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED25519_KEY_SIZE))
       (nettle_ed25519_sha512_public_key pub priv)
+      (check-recomputed-qB pub qB)
       (new nettle-ed25519-key% (impl this) (pub pub) (priv priv)))
-    (define/private (make-ed448-private-key dB)
+    (define/private (make-ed448-private-key qB dB)
       (define priv (make-sized-copy ED448_KEY_SIZE dB))
       (define pub (make-bytes ED448_KEY_SIZE))
       (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED448_KEY_SIZE))
       (nettle_ed448_shake256_public_key pub priv)
+      (check-recomputed-qB pub qB)
       (new nettle-ed448-key% (impl this) (pub pub) (priv priv)))
     ))
 
@@ -714,22 +716,24 @@
       (define pub (make-sized-copy X448_KEY_SIZE qB))
       (new nettle-x448-key% (impl this) (pub pub) (priv #f)))
 
-    (define/override (make-private-key curve _qB dB)
-      ;; Note: qB (public key) might be missing, so just recompute
+    (define/override (make-private-key curve qB dB)
       (case curve
-        [(x25519) (and x25519-ok? (make-x25519-private-key dB))]
-        [(x448) (and x448-ok? (make-x448-private-key dB))]
+        [(x25519) (and x25519-ok? (make-x25519-private-key qB dB))]
+        [(x448) (and x448-ok? (make-x448-private-key qB dB))]
         [else #f]))
 
-    (define/private (make-x25519-private-key dB)
+    ;; public key might be missing, so recompute; if present, check
+    (define/private (make-x25519-private-key qB dB)
       (define priv (make-sized-copy X25519_KEY_SIZE dB))
       (define pub (make-bytes X25519_KEY_SIZE))
       (nettle_curve25519_mul_g pub priv)
+      (check-recomputed-qB pub qB)
       (new nettle-x25519-key% (impl this) (pub pub) (priv priv)))
-    (define/private (make-x448-private-key dB)
+    (define/private (make-x448-private-key qB dB)
       (define priv (make-sized-copy X448_KEY_SIZE dB))
       (define pub (make-bytes X448_KEY_SIZE))
       (nettle_curve448_mul_g pub priv)
+      (check-recomputed-qB pub qB)
       (new nettle-x448-key% (impl this) (pub pub) (priv priv)))
     ))
 
