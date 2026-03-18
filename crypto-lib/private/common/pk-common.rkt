@@ -1065,7 +1065,8 @@
     [(OneAsymmetricKey)
      (asn1->bytes/DER OneAsymmetricKey
                       (h-one-asymmetric-key 0 (ecx-algid curve) dB qB))]
-    [(rkt-private) (list 'ecx 'private curve (bcopy qB) (bcopy dB))]
+    [(rkt-private)
+     (list 'ecx 'private curve (bcopy qB) (bcopy dB))]
     [(age/v1-private)
      (and (eq? curve 'x25519)
           (string-upcase (bech32-encode "age-secret-key-" dB)))]
@@ -1125,6 +1126,37 @@
 ;; curve-alias->oid : Symbol/String -> OID/#f
 (define (curve-alias->oid alias)
   (curve-name->oid (alias->curve-name alias)))
+
+;; ============================================================
+
+;; Reference: https://datatracker.ietf.org/doc/html/rfc7748, Section 5
+
+;; Check if bytestring has the proper form of X{25519,448} secret key.
+(define (ecx-secret-wf? curve priv)
+  (case curve
+    [(x25519)
+     (and (= (bytes-length priv) 32)
+          (= #b000 (bitwise-and #b111 (bytes-ref priv 0)))
+          (= #b01000000 (bitwise-and #b11000000 (bytes-ref priv 31))))]
+    [(x448)
+     (and (= (bytes-length priv) 56)
+          (= #b00 (bitwise-and #b11 (bytes-ref priv 0)))
+          (= #b10000000 (bitwise-and #b10000000 (bytes-ref priv 55))))]))
+
+;; Modify bytestring to have the proper form of X{25519,448} secret key.
+(define (ecx-clamp-secret! curve priv)
+  (case curve
+    [(x25519)
+     (unless (= (bytes-length priv) 32)
+       (internal-error 'x25519-clamp-secret! "wrong length"))
+     (bytes-set! priv 0  (bitwise-and #b11111000 (bytes-ref priv 0)))
+     (bytes-set! priv 31 (bitwise-and #b01111111 (bytes-ref priv 31)))
+     (bytes-set! priv 31 (bitwise-ior #b01000000 (bytes-ref priv 31)))]
+    [(x448)
+     (unless (= (bytes-length priv) 56)
+       (internal-error 'x448-clamp-secret! "wrong length"))
+     (bytes-set! priv 0  (bitwise-and #b11111100 (bytes-ref priv 0)))
+     (bytes-set! priv 55 (bitwise-ior #b10000000 (bytes-ref priv 55)))]))
 
 ;; ============================================================
 
