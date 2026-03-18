@@ -267,26 +267,45 @@
 
 ;; ============================================================
 
-;; TODO: implement DSA param support
-
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
     (inherit-field spec factory)
     (inherit -generate-keypair)
     (super-new (spec 'dsa))
 
+    (define/override (has-params?) #t)
     (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
 
-    (define/override (generate-key config)
+    (define/override (generate-params config)
+      ;; gcrypt has no separate paramgen operation,
+      ;; so generate private key and extract params
+      (define pkey (generate-key config "DSA paramgen"))
+      (match (send pkey -write-key 'rkt-params)
+        [(list 'rkt 'params p q g) (make-params p q g)]))
+
+    (define/override (generate-key config [op "DSA keygen"])
       (define-values (nbits qbits)
-        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA parameters generation"))
+        (check/ref-config '(nbits qbits) config config:dsa-paramgen op))
       (let ([qbits (or qbits 256)])
         (define-values (pub priv)
           (-generate-keypair
            (make-sexp `(genkey (dsa (nbits ,nbits) (qbits ,qbits))))))
         (new gcrypt-dsa-key% (impl this) (pub pub) (priv priv))))
 
+    (define/public (generate-key-from-params pkp)
+      (define-values (p q g) (send pkp get-param-values))
+      (define-values (pub priv)
+        (-generate-keypair
+         (let ([p (unsigned->base256 p)]
+               [q (unsigned->base256 q)]
+               [g (unsigned->base256 g)])
+           (make-sexp `(genkey (dsa (domain (p ,p) (q ,q) (g ,g))))))))
+      (new gcrypt-dsa-key% (impl this) (pub pub) (priv priv)))
+
     ;; ----
+
+    (define/override (make-params p q g)
+      (new gcrypt-dsa-params% (impl this) (p p) (q q) (g g)))
 
     (define/override (make-public-key p q g y)
       (define pub (make-dsa-public-key p q g y))
@@ -318,6 +337,15 @@
                                       (x ,(unsigned->base256 x))))))
       (gcry_pk_testkey priv)
       priv)
+    ))
+
+(define gcrypt-dsa-params%
+  (class pk-dsa-params%
+    (init-field p q g)
+    (super-new)
+
+    (define/override (get-param-values)
+      (values p q g))
     ))
 
 (define gcrypt-dsa-key%
