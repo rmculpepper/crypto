@@ -684,11 +684,13 @@
 
     (define/private (generate-x25519-key)
       (define priv (crypto-random-bytes X25519_KEY_SIZE))
+      (ecx-clamp-secret! 'x25519 priv)
       (define pub (make-bytes X25519_KEY_SIZE))
       (nettle_curve25519_mul_g pub priv)
       (new nettle-x25519-key% (impl this) (priv priv) (pub pub)))
     (define/private (generate-x448-key)
       (define priv (crypto-random-bytes X448_KEY_SIZE))
+      (ecx-clamp-secret! 'x448 priv)
       (define pub (make-bytes X448_KEY_SIZE))
       (nettle_curve448_mul_g pub priv)
       (new nettle-x448-key% (impl this) (priv priv) (pub pub)))
