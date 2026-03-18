@@ -722,3 +722,21 @@
   (_fun (sexp : (_ptr o _gcry_sexp)) (mode : _int) (ctx : _gcry_ctx)
         -> (s : _gcry_error) -> (values s sexp))
   #:wrap (compose (allocator gcry_sexp_release) check2))
+
+;; ----------------------------------------
+
+;; Since 1.9
+
+(define GCRY_ECC_CURVE25519 1)
+(define GCRY_ECC_CURVE448   2)
+
+(define-gcrypt gcry_ecc_get_algo_keylen
+  (_fun [curveid : _int] -> _uint))
+
+(define-gcrypt gcry_ecc_mul_point
+  (_fun [curveid : _int]
+        [result : _pointer]         ;; w/o #x40 prefix
+        [scalar : #;const _pointer] ;; in standard little-endian form
+        [point : #;const _pointer]  ;; NULL for curve base point
+        -> _gcry_error)
+  #:wrap check)
