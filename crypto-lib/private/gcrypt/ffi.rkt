@@ -75,8 +75,9 @@
 
 ;; (void (gcry_control GCRYCTL_ENABLE_QUICK_RANDOM 0))
 (define gcry-version (gcry_check_version #f))
-(define v1.8/later? (version>=? (version->list gcry-version) '(1 8))) ;; see pkey.rkt
-(define v1.11/later? (version>=? (version->list gcry-version) '(1 11))) ;; see pkey.rkt
+(define v1.8/later? (version>=? (version->list gcry-version) '(1 8)))
+(define v1.9/later? (version>=? (version->list gcry-version) '(1 9)))
+(define v1.11/later? (version>=? (version->list gcry-version) '(1 11)))
 
 ;; ----------------------------------------
 ;; Digests
@@ -657,10 +658,10 @@
             brainpoolP320r1 brainpoolP384r1 brainpoolP512r1)))
 
 (define ed25519-ok? (gcry-curve-ok? 'Ed25519))
-(define x25519-ok?  (gcry-curve-ok? 'Curve25519))
+(define x25519-ok?  (and v1.9/later? (gcry-curve-ok? 'Curve25519)))
 
 (define ed448-ok? (gcry-curve-ok? 'Ed448))
-(define x448-ok?  (gcry-curve-ok? 'X448))
+(define x448-ok?  (and v1.9/later? (gcry-curve-ok? 'X448)))
 
 ;; ----------------------------------------
 
