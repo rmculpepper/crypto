@@ -80,7 +80,7 @@
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
 
-    ;; Called by pk-read-key%; signature depends on spec
+    ;; Called by datum->pk-{key,parameters}%; signature depends on spec
     (define/public (make-params . _) #f)
     (define/public (make-public-key . _) #f)
     (define/public (make-private-key . _) #f)

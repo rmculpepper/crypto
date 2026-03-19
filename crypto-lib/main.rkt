@@ -3,12 +3,14 @@
 
 #lang racket/base
 (require racket/contract/base
+         racket/match
          racket/class
          racket/random
          "private/common/interfaces.rkt"
          "private/common/catalog.rkt"
          "private/common/common.rkt"
          "private/common/error.rkt"
+         (only-in "private/common/pk-format.rkt" parse-params parse-key)
          "private/common/util.rkt")
 
 (provide crypto-factory?
@@ -516,13 +518,15 @@
   [pk-key->datum
    (-> pk-key? symbol? any/c)]
   [datum->pk-key
-   (->* [any/c symbol?] [(or/c crypto-factory? (listof crypto-factory?))]
+   (->* [any/c symbol?]
+        [(or/c pk-impl? crypto-factory? (listof (or/c pk-impl? crypto-factory?)))]
         pk-key?)]
 
   [pk-parameters->datum
    (-> pk-parameters? symbol? any/c)]
   [datum->pk-parameters
-   (->* [any/c symbol?] [(or/c crypto-factory? (listof crypto-factory?))]
+   (->* [any/c symbol?]
+        [(or/c pk-impl? crypto-factory? (listof (or/c pk-impl? crypto-factory?)))]
         pk-parameters?)]
 
   [pk-sign
@@ -624,24 +628,39 @@
     (for/and ([k (in-list ks)])
       (send k1 equal-to-key? k))))
 
+(define (pksrc-ormap src pkspec f)
+  (define srcs (if (list? src) src (list src)))
+  (for/or ([src (in-list srcs)])
+    (define pk
+      (cond [(pk-impl? src) (and (eq? (send src get-spec) pkspec) src)]
+            [(crypto-factory? src) (get-pk pkspec src)]))
+    (and pk (f pk))))
+
 (define (pk-key->datum pk fmt)
   (with-crypto-entry 'pk-key->datum
     (send pk write-key fmt)))
-(define (datum->pk-key datum fmt [factory/s (crypto-factories)])
+(define (datum->pk-key datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-key
-    (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
-          (let ([reader (send factory get-pk-reader)])
-            (and reader (send reader read-key datum fmt))))
+    (or (match (parse-key fmt datum)
+          [(list* keytype pkspec vs)
+           (pksrc-ormap src pkspec
+                        (lambda (pk)
+                          (case keytype
+                            [(public) (send/apply pk make-public-key vs)]
+                            [(private) (send/apply pk make-private-key vs)])))]
+          [#f #f])
         (crypto-error "unable to read key\n  format: ~e" fmt))))
 
 (define (pk-parameters->datum pkp fmt)
   (with-crypto-entry 'pk-parameters->datum
     (send pkp write-params fmt)))
-(define (datum->pk-parameters datum fmt [factory/s (crypto-factories)])
+(define (datum->pk-parameters datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-parameters
-    (or (for/or ([factory (in-list (if (list? factory/s) factory/s (list factory/s)))])
-          (let ([reader (send factory get-pk-reader)])
-            (and reader (send reader read-params datum fmt))))
+    (define srcs (if (list? src) src (list src)))
+    (or (match (parse-params fmt datum)
+          [(list* 'params pkspec vs)
+           (pksrc-ormap src pkspec (lambda (pk) (send/apply pk make-params vs)))]
+          [#f #f])
         (crypto-error "unable to read parameters\n  format: ~e" fmt))))
 
 (define (pk-key->public-only-key pk)
