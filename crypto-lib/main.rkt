@@ -643,11 +643,7 @@
   (with-crypto-entry 'datum->pk-key
     (or (match (parse-key fmt datum)
           [(list* keytype pkspec vs)
-           (pksrc-ormap src pkspec
-                        (lambda (pk)
-                          (case keytype
-                            [(public) (send/apply pk make-public-key vs)]
-                            [(private) (send/apply pk make-private-key vs)])))]
+           (pksrc-ormap src pkspec (lambda (pk) (send pk import keytype vs)))]
           [#f #f])
         (crypto-error "unable to read key\n  format: ~e" fmt))))
 

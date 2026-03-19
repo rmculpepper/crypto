@@ -80,7 +80,12 @@
     (define/public (can-key-agree?) #f)
     (define/public (has-params?) #f)
 
-    ;; Called by datum->pk-{key,parameters}%; signature depends on spec
+    ;; Called by datum->pk-{key,parameters}%, signature depends on spec
+    (define/public (import keytype vs)
+      (case keytype
+        [(params) (send/apply this make-params vs)]
+        [(public) (send/apply this make-public-key vs)]
+        [(private) (send/apply this make-private-key vs)]))
     (define/public (make-params . _) #f)
     (define/public (make-public-key . _) #f)
     (define/public (make-private-key . _) #f)

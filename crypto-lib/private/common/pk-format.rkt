@@ -583,10 +583,13 @@
 ;; - RFC 8410 says in general
 ;;   - for Ed25519 etc, parameters must be absent
 
+;; internal formats produces ParseResult, avoids depending on parsing code
+
 ;; ---- RSA ----
 
 (define (encode-pub-rsa fmt n e)
   (case fmt
+    [(internal internal-public) (ok-public 'rsa n e)]
     [(SubjectPublicKeyInfo)
      ;; CAB BR (v1.7.3) section 7.1.3.1.1 says MUST include NULL parameter
      (asn1->bytes/DER SubjectPublicKeyInfo
@@ -599,6 +602,7 @@
 
 (define (encode-priv-rsa fmt n e d p q dp dq qInv)
   (case fmt
+    [(internal internal-private) (ok-private 'rsa n e d p q dp dq qInv)]
     [(PrivateKeyInfo OneAsymmetricKey)
      ;; OAK note: private key already contains public key fields, so just
      ;; produce PrivateKeyInfo syntax
@@ -619,6 +623,7 @@
 
 (define (encode-params-dsa fmt p q g)
   (case fmt
+    [(internal internal-params) (ok-params 'dsa p q g)]
     [(AlgorithmIdentifier)
      (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (dsa-algid p q g))]
     [(DSAParameters Dss-Parms)
@@ -628,6 +633,7 @@
 
 (define (encode-pub-dsa fmt p q g y)
   (case fmt
+    [(internal internal-public) (ok-public 'dsa p q g y)]
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (dsa-algid p q g) y))]
@@ -637,6 +643,7 @@
 (define (encode-priv-dsa fmt p q g y x)
   (let ([y (or y (dsa/dh-recompute-y p g x))])
     (case fmt
+      [(internal internal-private) (ok-private 'dsa p q g y x)]
       [(PrivateKeyInfo)
        (asn1->bytes/DER PrivateKeyInfo
                         (h-private-key-info 0 (dsa-algid p q g) x))]
@@ -665,6 +672,7 @@
 
 (define (encode-params-dh fmt p g q j seed pgen)
   (case fmt
+    [(internal internal-params) (ok-params 'dh p g q j seed pgen)]
     [(AlgorithmIdentifier)
      (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (dh-algid p g q j seed pgen))]
     [(DomainParameters)
@@ -678,6 +686,7 @@
 
 (define (encode-pub-dh fmt p g q j seed pgen y)
   (case fmt
+    [(internal internal-public) (ok-public 'dh p g q j seed pgen y)]
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (dh-algid p g q j seed pgen) y))]
@@ -689,6 +698,7 @@
 (define (encode-priv-dh fmt p g q j seed pgen y x)
   (let ([y (or y (dsa/dh-recompute-y p g x))])
     (case fmt
+      [(internal internal-private) (ok-private 'dh p g q j seed pgen y x)]
       [(PrivateKeyInfo)
        (asn1->bytes/DER PrivateKeyInfo
                         (h-private-key-info 0 (dh-algid p g q j seed pgen) x))]
@@ -707,6 +717,7 @@
 
 (define (encode-params-ec fmt curve-oid)
   (case fmt
+    [(internal internal-params) (ok-params 'ec curve-oid)]
     [(AlgorithmIdentifier)
      (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (ec-algid curve-oid))]
     [(EcpkParameters)
@@ -716,6 +727,7 @@
 
 (define (encode-pub-ec fmt curve-oid qB)
   (case fmt
+    [(internal internal-public) (ok-public 'ec curve-oid qB)]
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (ec-algid curve-oid) qB))]
@@ -724,6 +736,7 @@
 
 (define (encode-priv-ec fmt curve-oid qB d)
   (case fmt
+    [(internal internal-private) (ok-private 'ec curve-oid qB d)]
     [(PrivateKeyInfo OneAsymmetricKey)
      ;; OAK note: private key already contains public key, so just produce
      ;; PrivateKeyInfo syntax
@@ -745,6 +758,7 @@
 
 (define (encode-params-eddsa fmt curve)
   (case fmt
+    [(internal internal-params) (ok-params 'eddsa curve)]
     [(AlgorithmIdentifier)
      (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (eddsa-algid curve))]
     [(rkt-params) (list 'eddsa 'params curve)]
@@ -752,6 +766,7 @@
 
 (define (encode-pub-eddsa fmt curve qB)
   (case fmt
+    [(internal internal-public) (ok-public 'eddsa curve qB)]
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (eddsa-algid curve) qB))]
@@ -765,6 +780,7 @@
 
 (define (encode-priv-eddsa fmt curve qB dB)
   (case fmt
+    [(internal internal-private) (ok-private 'eddsa curve qB dB)]
     [(PrivateKeyInfo)
      (asn1->bytes/DER PrivateKeyInfo
                       (h-private-key-info 0 (eddsa-algid curve) dB))]
@@ -787,6 +803,7 @@
 
 (define (encode-params-ecx fmt curve)
   (case fmt
+    [(internal internal-params) (ok-params 'ecx curve)]
     [(AlgorithmIdentifier)
      (asn1->bytes/DER AlgorithmIdentifier/PUBKEY (ecx-algid curve))]
     [(rkt-params) (list 'ecx 'params curve)]
@@ -794,6 +811,7 @@
 
 (define (encode-pub-ecx fmt curve qB)
   (case fmt
+    [(internal internal-public) (ok-public 'ecx curve qB)]
     [(SubjectPublicKeyInfo)
      (asn1->bytes/DER SubjectPublicKeyInfo
                       (h-subject-public-key-info (ecx-algid curve) qB))]
@@ -805,6 +823,7 @@
 
 (define (encode-priv-ecx fmt curve qB dB)
   (case fmt
+    [(internal internal-private) (ok-private 'ecx qB dB)]
     [(PrivateKeyInfo)
      (asn1->bytes/DER PrivateKeyInfo
                       (h-private-key-info 0 (ecx-algid curve) dB))]
