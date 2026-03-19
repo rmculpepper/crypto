@@ -90,6 +90,14 @@
     (define/public (make-public-key . _) #f)
     (define/public (make-private-key . _) #f)
 
+    ;; import-key : PKey [Boolean] -> (U PKey #f)
+    ;; Import key from different impl, must be same pkspec
+    (define/public (import-key pkey [public? #f])
+      (match (send pkey -write-key (if public? 'internal-public 'internal))
+        [(list* keytype (== (get-spec)) vs)
+         (import keytype vs)]
+        [else #f]))
+
     ;; Called by pk-{dsa,dh,ec}-params% generate-key:
     ;; - generate-key-from-params : PK-Params -> PK-Key
 
@@ -210,32 +218,22 @@
         (crypto-error "decryption requires private key\n  key: ~a" (about)))
       (-decrypt buf pad))
 
-    (define/public (compute-secret peer-pubkey)
+    (define/public (compute-secret peer)
+      (define (incompatible peer)
+        (crypto-error "peer key is not compatible\n  peer: ~a\n  key: ~a"
+                      (send peer about) (about)))
+      (define (convert-failed)
+        (internal-error "failed to convert peer key"))
       (-check-key-agree)
-      (let ([peer-pubkey
-             (cond [(pk-key? peer-pubkey) peer-pubkey]
-                   [else (-convert-for-key-agree peer-pubkey)])])
-        (unless (pk-key? peer-pubkey)
-          (internal-error "failed to convert peer key"))
-        (let ([peer-pubkey
-               (cond [(eq? (send peer-pubkey get-impl) impl) peer-pubkey]
-                     [else ;; public key from different impl, must convert
-                      (define (bad)
-                        (crypto-error "~a~a\n  peer: ~a\n  key: ~a"
-                                      "peer key has different implementation"
-                                      ";\n and conversion to this implementation failed"
-                                      (send peer-pubkey about) (about)))
-                      (define peer-pub (or (send peer-pubkey -write-key 'rkt-public) (bad)))
-                      (define peer-pubkey*
-                        (let* ([factory (send impl get-factory)]
-                               [reader (send factory get-pk-reader)])
-                          (or (send reader read-key peer-pub 'rkt-public) (bad))))
-                      (unless (eq? (send peer-pubkey* get-impl) impl) (bad))
-                      peer-pubkey*])])
-          (unless (-compatible-for-key-agree? peer-pubkey)
-            (crypto-error "peer key is not compatible\n  peer: ~a\n  key: ~a"
-                          (send peer-pubkey about) (about)))
-          (-compute-secret peer-pubkey))))
+      (let ([peer (if (pk-key? peer) peer (-convert-for-key-agree peer))])
+        (unless (pk-key? peer) (convert-failed))
+        (unless (eq? (send peer get-spec) (send impl get-spec)) (incompatible peer))
+        (let ([peer (cond [(eq? (send peer get-impl) impl) peer]
+                          ;; public key from different impl, must convert
+                          [(send impl import-key peer #t) => values]
+                          [else (convert-failed)])])
+          (unless (-compatible-for-key-agree? peer) (incompatible peer))
+          (-compute-secret peer))))
 
     (define/public (-compatible-for-key-agree? peer-pubkey)
       ;; PRE: peer-pubkey is key with same impl as this
