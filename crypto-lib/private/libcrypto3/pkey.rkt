@@ -18,39 +18,6 @@
   (class pk-read-key-base%
     (inherit-field factory)
     (super-new (spec 'libcrypto3-read-key))
-
-    (define/private (get-libctx) (send factory get-libctx))
-
-    ;; libcrypto-read-key : Bytes Symbol -> pkey/#f
-    ;; Not used by datum->pk-key, but retained for debugging/testing.
-    (define/public (libcrypto-read-key sk fmt)
-      (unless (bytes? sk)
-        (raise-argument-error 'libcrypto-read-key "bytes?" sk))
-      (define (make-key evp private?)
-        (define impl (and evp (evp->impl evp)))
-        (cond [private? (and impl (send impl evp->private-key evp))]
-              [else (and impl (send impl evp->public-key evp))]))
-      (define (evp->impl evp)
-        (define spec
-          (cond [(EVP_PKEY_is_a evp "RSA") 'rsa]
-                [(EVP_PKEY_is_a evp "DSA") 'dsa]
-                [(EVP_PKEY_is_a evp "DH") 'dh] ;; or DHX?
-                [(EVP_PKEY_is_a evp "EC") 'ec]
-                [(or (EVP_PKEY_is_a evp "ED25519")
-                     (EVP_PKEY_is_a evp "ED448"))
-                 'eddsa]
-                [(or (EVP_PKEY_is_a evp "X25519")
-                     (EVP_PKEY_is_a evp "X448"))
-                 'ecx]
-                [else #f]))
-        (and spec (send factory get-pk spec)))
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (make-key (HANDLEp (d2i_PUBKEY_ex sk (bytes-length sk) (get-libctx) #f)))]
-        [(PrivateKeyInfo)
-         (define p (HANDLEp (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk))))
-         (make-key (HANDLEp (EVP_PKCS82PKEY_ex p (get-libctx) #f)) #t)]
-        [else #f]))
     ))
 
 ;; ============================================================
