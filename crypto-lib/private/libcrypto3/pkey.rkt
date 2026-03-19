@@ -769,6 +769,9 @@
              (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
              (and pub priv (encode-priv-ecx fmt curve pub priv))]
             [else (and pub (encode-pub-ecx fmt curve pub))]))
+
+    (define/override (-convert-for-key-agree bs)
+      (send impl make-public-key (get-curve) bs))
     ))
 
 ;; ============================================================
