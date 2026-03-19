@@ -133,6 +133,7 @@
       (case curve
         [(x25519)
          (define priv (crypto-random-bytes crypto_scalarmult_curve25519_SCALARBYTES))
+         (ecx-clamp-secret! 'x25519 priv)
          (define pub  (make-bytes crypto_scalarmult_curve25519_BYTES))
          (define status (crypto_scalarmult_curve25519_base pub priv))
          (unless (zero? status) (crypto-error "key generation failed"))
