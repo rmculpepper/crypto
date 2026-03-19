@@ -144,6 +144,10 @@
        (test #:name "ecdh"
          (kat-for-each "ecdh.rktd"
                        (lambda (datum) (test-ecdh-kat pk datum))))]
+      [(ecx)
+       (test #:name "ecx"
+         (kat-for-each "ecx.rktd"
+                       (lambda (datum) (test-ecx-kat pk datum))))]
       [else (void)])))
 
 (define (test-rsa-sign-pkcs1-kat pk datum)
@@ -266,6 +270,16 @@
               (let ([QP (bytes-append (bytes #x04) (hex->bytes QPxH) (hex->bytes QPyH))])
                 (datum->pk-key `(ec public ,curve-oid ,QP) 'rkt-public factory)))
             (check (pk-derive-secret priv pub) #:is (hex->bytes ZH))])))]))
+
+(define (test-ecx-kat pk datum)
+  (define factory (send pk get-factory))
+  (match datum
+    [`(,curve (d ,(app hex->bytes d)) (peerq ,(app hex->bytes peerq))
+              (derive ,(app hex->bytes derive)))
+     (when (memq curve (send factory info 'all-ecx-curves))
+       (define priv-datum `(ecx private ,curve #f ,d))
+       (define priv (check (datum->pk-key priv-datum 'rkt-private factory) #:values))
+       (check (pk-derive-secret priv peerq) #:is derive))]))
 
 (define (dsa-r+s->bytes R S) ;; move to common
   (asn1->bytes/DER Dss-Sig-Value (hasheq 'r R 's S)))
