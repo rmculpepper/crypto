@@ -14,12 +14,6 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
-(define libcrypto3-read-key%
-  (class pk-read-key-base%
-    (inherit-field factory)
-    (super-new (spec 'libcrypto3-read-key))
-    ))
-
 ;; ============================================================
 ;; Base
 

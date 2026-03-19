@@ -156,9 +156,6 @@
         [(ecx) (new libcrypto3-ecx-impl% (factory this))]
         [else #f]))
 
-    (define/override (-get-pk-reader)
-      (new libcrypto3-read-key% (factory this)))
-
     (define/override (-get-kdf spec)
       (define (fetch kdf-name)
         (NOERR (EVP_KDF_fetch libctx kdf-name #f)))

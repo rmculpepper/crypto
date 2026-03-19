@@ -32,9 +32,6 @@
         [(ecx) (new decaf-ecx-impl% (factory this))]
         [else #f]))
 
-    (define/override (-get-pk-reader)
-      (new decaf-read-key% (factory this)))
-
     ;; ----
 
     (define/override (info key)

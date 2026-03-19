@@ -134,9 +134,6 @@
         [(ecx) (and (or x25519-ok? x448-ok?) (new nettle-ecx-impl% (factory this)))]
         [else #f]))
 
-    (define/override (-get-pk-reader)
-      (new nettle-read-key% (factory this)))
-
     (define/override (-get-kdf spec)
       (match spec
         [(list 'pbkdf2 'hmac di-spec)

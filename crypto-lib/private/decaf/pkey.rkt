@@ -9,11 +9,6 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
-(define decaf-read-key%
-  (class pk-read-key-base%
-    (inherit-field factory)
-    (super-new (spec 'decaf-read-key))))
-
 ;; ============================================================
 ;; Ed25519
 

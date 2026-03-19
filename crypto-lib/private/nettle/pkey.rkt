@@ -24,14 +24,6 @@
 
 ;; ============================================================
 
-(define nettle-read-key%
-  (class pk-read-key-base%
-    (inherit-field factory)
-    (super-new (spec 'nettle-read-key))
-    ))
-
-;; ============================================================
-
 (define nettle-pk-impl%
   (class pk-impl-base%
     (inherit-field factory)

@@ -22,28 +22,6 @@
 ;; ============================================================
 ;; Base classes
 
-(define pk-read-key-base%
-  (class* impl-base% (pk-read-key<%>)
-    (inherit-field factory)
-    (super-new)
-
-    (define/public (read-key sk fmt)
-      (match (parse-key fmt sk)
-        [(list* 'public pkspec vs)
-         (define pk (send factory get-pk pkspec))
-         (and pk (send/apply pk make-public-key vs))]
-        [(list* 'private pkspec vs)
-         (define pk (send factory get-pk pkspec))
-         (and pk (send/apply pk make-private-key vs))]
-        [#f #f]))
-    (define/public (read-params sk fmt)
-      (match (parse-params fmt sk)
-        [(list* 'params pkspec vs)
-         (define pk (send factory get-pk pkspec))
-         (and pk (send/apply pk make-params vs))]
-        [#f #f]))
-    ))
-
 (define pk-impl-base%
   (class* impl-base% (pk-impl<%>)
     (inherit about get-spec get-factory)

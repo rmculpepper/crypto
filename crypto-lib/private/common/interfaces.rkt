@@ -15,7 +15,6 @@
          cipher-impl<%>
          cipher-ctx<%>
          pk-impl<%>
-         pk-read-key<%>
          pk-params<%>
          pk-curve-params<%>
          pk-key<%>
@@ -59,8 +58,6 @@
 
 (define (impl? v) (is-a? v impl<%>))
 (define (ctx? v) (is-a? v ctx<%>))
-
-(define (pk-read-key? v) (is-a? v pk-read-key<%>))
 
 (define info/c any/c)
 (define spec/c any/c)
@@ -158,7 +155,6 @@
     [get-cipher     (->m cipher-spec? (or/c #f cipher-impl?))]
     [get-pk         (->m pk-spec? (or/c #f pk-impl?))]
     [get-kdf        (->m kdf-spec? (or/c #f kdf-impl?))]
-    [get-pk-reader  (->m (or/c #f pk-read-key?))]
     ))
 
 ;; ============================================================
@@ -223,12 +219,6 @@
     [can-sign        (->m pk-sign-pad/c (or/c #f 'depends 'nodigest 'ignoredg))]
     [can-sign2?      (->m pk-sign-pad/c (or/c #f digest-spec?) boolean?)]
     [has-params?     (->m boolean?)]
-    ))
-
-(define pk-read-key<%>
-  (interface (impl<%>)
-    [read-key        (->m any/c symbol? any/c #|(or/c #f pk-key?)|#)] ;; FIXME
-    [read-params     (->m any/c symbol? any/c #|(or/c #f pk-parameters?)|#)] ;; FIXME
     ))
 
 (define pk-params<%>

@@ -12,11 +12,6 @@
 ;; Size of serialized public and private key components.
 (define KEYSIZE 32)
 
-(define sodium-read-key%
-  (class pk-read-key-base%
-    (inherit-field factory)
-    (super-new (spec 'sodium-read-key))))
-
 ;; ============================================================
 ;; Ed25519
 

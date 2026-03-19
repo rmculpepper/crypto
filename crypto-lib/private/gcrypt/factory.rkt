@@ -174,9 +174,6 @@
            (or (search block-ciphers block-modes)
                (search stream-ciphers '()))))
 
-    (define/override (-get-pk-reader)
-      (new gcrypt-read-key% (factory this)))
-
     (define/override (-get-pk spec)
       (case spec
         [(rsa) (new gcrypt-rsa-impl% (factory this))]

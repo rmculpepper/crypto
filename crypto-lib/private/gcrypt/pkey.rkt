@@ -30,11 +30,6 @@
 (define (sexp-get-int outersexp outertag tag)
   (mpi->int (sexp-get-mpi outersexp outertag tag)))
 
-(define gcrypt-read-key%
-  (class pk-read-key-base%
-    (inherit-field factory)
-    (super-new (spec 'gcrypt-read-key))))
-
 ;; ============================================================
 
 (define gcrypt-pk-impl%

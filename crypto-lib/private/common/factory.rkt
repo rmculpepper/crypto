@@ -170,8 +170,6 @@
       (get/table spec values -get-pk))
     (define/public (get-kdf spec)
       (get/table spec values -get-kdf))
-    (define/public (get-pk-reader)
-      (get/table '*pk-reader* values (lambda (k) (-get-pk-reader))))
 
     (define/public (-get-cipher0 info)
       (define ci (-get-cipher info))
@@ -188,9 +186,6 @@
 
     ;; -get-pk : pk-spec -> (U pk-impl #f)
     (define/public (-get-pk spec) #f)
-
-    ;; -get-pk-reader : -> (U pk-read-key #f)
-    (define/public (-get-pk-reader) #f)
 
     ;; -get-kdf : -> (U kdf-impl #f)
     (define/public (-get-kdf spec)
