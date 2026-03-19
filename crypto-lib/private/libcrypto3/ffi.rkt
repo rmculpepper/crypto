@@ -297,6 +297,10 @@
     (ptr-add! dpointer (data-size type data)))
   buf)
 
+(define-crypto OSSL_PARAM_free
+  (_fun [p : _OSSL_PARAM] -> _void)
+  #:wrap (deallocator))
+
 ;; ----------------------------------------
 ;; Nonmoving strings
 
@@ -719,6 +723,9 @@
 (define-crypto EVP_PKEY_is_a
   (_fun [key : #;const _EVP_PKEY] [type : #;const _string] -> _bool))
 
+(define-crypto EVP_PKEY_get0_type_name
+  (_fun [key : #;const _EVP_PKEY] -> _bytes))
+
 (define-crypto EVP_PKEY_get_security_bits
   (_fun [pkey : #;const _EVP_PKEY] -> _int))
 
@@ -861,7 +868,8 @@
   (_fun [pkey : _EVP_PKEY]
         [selection : _int]
         [params : (_ptr o _OSSL_PARAM-array)] ;; free with OSSL_PARAM_free
-        -> [r : _int] -> (and (ok-result? r) params)))
+        -> [r : _int] -> (and (ok-result? r) params))
+  #:wrap (allocator OSSL_PARAM_free))
 
 (define EVP_PKEY_KEY_PARAMETERS #x84)
 (define EVP_PKEY_PUBLIC_KEY     #x86)

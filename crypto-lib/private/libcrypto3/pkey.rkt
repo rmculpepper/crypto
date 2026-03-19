@@ -34,21 +34,23 @@
     (define/public (get-params-class) (err/no-impl this))
     (define/public (get-key-class) (err/no-impl this))
 
-    ;; fromdata : String Int ParamList/#f -> EVP_PKEY/#f
+    ;; fromdata : Bytes Symbol ParamList/#f -> EVP_PKEY
     (define/public (fromdata keytype mode params)
       (define selection
         (case mode
           [(params)  EVP_PKEY_KEY_PARAMETERS]
           [(public)  EVP_PKEY_PUBLIC_KEY]
           [(private) EVP_PKEY_KEYPAIR]))
+      (define paramsarray (make-param-array params))
+      (fromdata* keytype selection paramsarray))
+
+    ;; fromdata* : Bytes Int OSSL_PARAM-array -> EVP_PKEY
+    (define/public (fromdata* keytype selection paramsarray)
       (define keytype-ptr (nonmoving keytype))
       (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) keytype-ptr #f)))
       (HANDLEp (EVP_PKEY_fromdata_init ctx))
-      (define paramsarray (make-param-array params))
-      (define evp (HANDLEp (EVP_PKEY_fromdata ctx selection paramsarray)))
-      (void/reference-sink keytype-ptr)
-      ;; FIXME: EVP_PKEY_check, etc
-      evp)
+      (begin0 (HANDLEp (EVP_PKEY_fromdata ctx selection paramsarray))
+        (void/reference-sink keytype-ptr)))
 
     ;; generate-key-from-pevp : EVP_PKEY -> PK-Key
     (define/public (generate-key-from-pevp pevp)
@@ -87,10 +89,13 @@
     (define/override (is-private?) private?)
 
     (define/override (get-public-key)
-      ;; FIXME: check this doesn't lose information (eg, DHX vs DH)
-      (define pub (HANDLEp (i2d_PUBKEY evp)))
-      (define pub-evp (HANDLEp (d2i_PUBKEY_ex pub (bytes-length pub) (get-libctx) #f)))
-      (send impl evp->public-key pub-evp))
+      (cond [private?
+             (define keytype (EVP_PKEY_get0_type_name evp))
+             (define data (EVP_PKEY_todata evp EVP_PKEY_PUBLIC_KEY))
+             (define pub-evp (send impl fromdata* keytype EVP_PKEY_PUBLIC_KEY data))
+             (OSSL_PARAM_free data)
+             (send impl evp->public-key pub-evp)]
+            [else this]))
 
     (define/override (get-params)
       (cond [private? (send (get-public-key) get-params)]
