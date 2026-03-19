@@ -54,6 +54,7 @@
     ))
 
 ;; ============================================================
+;; Base
 
 (define libcrypto3-pk-impl%
   (class pk-impl-base%
@@ -100,316 +101,6 @@
       (generate-key-from-pevp (get-field pevp pkp)))
     ))
 
-(define signing-digests
-  ;; https://docs.openssl.org/master/man3/EVP_DigestSignInit/
-  ;; but the following seem to be accepted in practice
-  '(sha1
-    sha224 sha256 sha384 sha512 sha512/224 sha512/256
-    sha3-224 sha3-256 sha3-384 sha3-512))
-
-(define libcrypto3-rsa-impl%
-  (class libcrypto3-pk-impl%
-    (inherit-field factory)
-    (inherit get-libctx evp->public-key evp->private-key fromdata)
-    (super-new (spec 'rsa))
-
-    (define/override (get-key-class) libcrypto3-rsa-key%)
-
-    (define/override (can-encrypt? pad)
-      (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
-    (define/override (can-sign pad) 'depends)
-    (define/override (can-sign2? pad dspec)
-      (and (memq pad '(#f pkcs1-v1.5 pss pss*))
-           (or (memq dspec signing-digests)
-               (memq dspec '(md5 md4 md2)))
-           (and (send factory get-digest dspec) #t)))
-
-    (define/override (make-public-key n e)
-      (evp->public-key (fromdata #"RSA" 'public
-                                 (make-fromdata-params n e #f #f #f #f #f #f))))
-    (define/override (make-private-key n e d p q dp dq qInv)
-      (evp->private-key (fromdata #"RSA" 'private
-                                  (make-fromdata-params n e d p q dp dq qInv))))
-
-    (define/private (make-fromdata-params n e d p q dp dq qInv)
-      (define derive? (and n e d p q (not (and dp dq qInv))))
-      `((#"n" ubignum ,n)
-        (#"e" ubignum ,e)
-        (#"d" ubignum ,d #:?)
-        (#"rsa-factor1" ubignum ,p #:?)
-        (#"rsa-factor2" ubignum ,q #:?)
-        (#"rsa-exponent1" ubignum ,dp #:?)
-        (#"rsa-exponent2" ubignum ,dq #:?)
-        (#"rsa-coefficient1" ubignum ,qInv #:?)
-        (#"rsa-derive-from-pq" uint ,(and derive? 1) #:?)))
-
-    (define/override (generate-key config)
-      (define-values (nbits e)
-        (check/ref-config '(nbits e) config config:rsa-keygen "RSA keygen"))
-      (cond [e
-             (define params (make-param-array
-                             `((#"bits" uint ,nbits)
-                               (#"e" uint ,e #:?))))
-             (define keytype (nonmoving #"rsa"))
-             (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) keytype #f)))
-             (HANDLEp (EVP_PKEY_keygen_init ctx))
-             (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
-             (define evp (HANDLEp (EVP_PKEY_generate ctx)))
-             (void/reference-sink keytype)
-             (evp->private-key evp)]
-            [else
-             (define evp (HANDLEp (EVP_PKEY_Q_keygen/RSA (get-libctx) #f nbits)))
-             (evp->private-key evp)]))
-    ))
-
-(define libcrypto3-dsa-impl%
-  (class libcrypto3-pk-impl%
-    (inherit-field factory)
-    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'dsa))
-
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-    (define/override (has-params?) #t)
-
-    (define/override (get-params-class) libcrypto3-dsa-params%)
-    (define/override (get-key-class) libcrypto3-dsa-key%)
-
-    (define/override (make-params p q g)
-      (evp->params (fromdata #"DSA" 'params
-                             (make-fromdata-params p q g #f #f))))
-    (define/override (make-public-key p q g y)
-      (evp->public-key (fromdata #"DSA" 'public
-                                 (make-fromdata-params p q g y #f))))
-    (define/override (make-private-key p q g y x)
-      (evp->private-key (fromdata #"DSA" 'private
-                                  (make-fromdata-params p q g y x))))
-
-    (define/private (make-fromdata-params p q g y x)
-      `((#"p" ubignum ,p)
-        (#"q" ubignum ,q)
-        (#"g" ubignum ,g)
-        (#"pub" ubignum ,y #:?)
-        (#"priv" ubignum ,x #:?)))
-
-    (define/override (generate-params config)
-      (define-values (nbits qbits)
-        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA paramgen"))
-      (define dsa-ptr (nonmoving #"DSA"))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dsa-ptr #f)))
-      (HANDLEp (EVP_PKEY_paramgen_init ctx))
-      (define params (make-param-array
-                      `((#"pbits" uint ,nbits #:?)
-                        (#"qbits" uint ,qbits #:?))))
-      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
-      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
-                            #:or-fail-with "parameter generation failed"))
-      (void/reference-sink dsa-ptr)
-      (evp->params pevp))
-    ))
-
-(define libcrypto3-dh-impl%
-  (class libcrypto3-pk-impl%
-    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'dh))
-
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
-
-    (define/override (get-params-class) libcrypto3-dh-params%)
-    (define/override (get-key-class) libcrypto3-dh-key%)
-
-    (define/override (make-params p g q j seed pgen)
-      (evp->params (fromdata #"DH" 'params
-                             (make-fromdata-params p g q j seed pgen #f #f))))
-    (define/override (make-public-key p g q j seed pgen y)
-      (evp->public-key (fromdata #"DH" 'public
-                                 (make-fromdata-params p g q j seed pgen y #f))))
-    (define/override (make-private-key p g q j seed pgen y x)
-      (evp->private-key (fromdata #"DH" 'private
-                                  (make-fromdata-params p g q j seed pgen y x))))
-
-    (define/private (make-fromdata-params p g q j seed pgen y x)
-      `((#"p" ubignum ,p)
-        (#"g" ubignum ,g)
-        (#"q" ubignum ,q #:?)
-        (#"j" ubignum ,j #:?)
-        (#"seed" octet-string ,(and seed pgen seed) #:?)
-        (#"pcounter" uint ,(and seed pgen pgen) #:?)
-        (#"pub" ubignum ,y #:?)
-        (#"priv" ubignum ,x #:?)))
-
-    (define/override (generate-params config)
-      (define-values (nbits generator)
-        (check/ref-config '(nbits generator) config config:dh-paramgen "DH paramgen"))
-      (define dh-ptr (nonmoving #"DH"))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dh-ptr #f)))
-      (HANDLEp (EVP_PKEY_paramgen_init ctx))
-      (define params (make-param-array
-                      `((#"pbits" uint ,nbits #:?)
-                        #;(#"qbits" uint ,qbits #:?)
-                        (#"g" uint ,generator #:?))))
-      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
-      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
-                            #:or-fail-with "parameter generation failed"))
-      (void/reference-sink dh-ptr)
-      (evp->params pevp))
-
-    (define/public (libcrypto-named-params group)
-      ;; Group is one of:
-      ;; - 'ffdhe2048 'ffdhe3072 'ffdhe4096 'ffdhe6144 'ffdhe8192
-      ;; - 'modp_2048 'modp_3072 'modp_4096 'modp_6144 'modp_8192
-      ;; - 'modp_1536 'dh_1024_160 'dh_2048_224 'dh_2048_256
-      (evp->params (fromdata #"DHX" 'params
-                             `((#"group" utf8-string ,(symbol->string group))))))
-    ))
-
-(define libcrypto3-ec-impl%
-  (class libcrypto3-pk-impl%
-    (inherit-field factory)
-    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'ec))
-
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
-
-    (define/override (get-params-class) libcrypto3-ec-params%)
-    (define/override (get-key-class) libcrypto3-ec-key%)
-
-    (define/override (make-params curve-oid)
-      (define curve-name (curve-oid->lcname curve-oid))
-      (and curve-name
-           (let ([params (make-fromdata-params curve-name #f #f)])
-             (evp->params (fromdata #"EC" 'params params)))))
-    (define/override (make-public-key curve-oid qB)
-      (define curve-name (curve-oid->lcname curve-oid))
-      (and curve-name
-           (let ([params (make-fromdata-params curve-name qB #f)])
-             (evp->public-key (fromdata #"EC" 'public params)))))
-    (define/override (make-private-key curve-oid qB x)
-      (define curve-name (curve-oid->lcname curve-oid))
-      (and curve-name
-           (let ([params (make-fromdata-params curve-name qB x)])
-             (evp->private-key (fromdata #"EC" 'private params)))))
-
-    (define/private (make-fromdata-params curve-name qB x)
-      `((#"group" utf8-string ,curve-name)
-        (#"pub" octet-string ,qB #:?)
-        (#"priv" ubignum ,x #:?)))
-
-    (define/override (generate-params config)
-      (define curve (check/ref-config '(curve) config config:ec-paramgen "EC paramgen"))
-      (define curve-name (curve-alias->lcname curve))
-      (and curve-name
-           (let ([params `((#"group" utf8-string ,curve-name))])
-             (evp->params (fromdata #"EC" 'params params)))))
-
-    (define/override (generate-key config)
-      (define curve (check/ref-config '(curve) config config:ec-paramgen "EC keygen"))
-      (define curve-name (curve-name->lcname curve))
-      (and curve-name
-           (evp->private-key (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-name)
-                                      #:or-fail-with "key generation failed"))))
-    ))
-
-(define libcrypto3-eddsa-impl%
-  (class libcrypto3-pk-impl%
-    (inherit evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'eddsa))
-
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
-    (define/override (has-params?) #t)
-
-    (define/override (get-key-class) libcrypto3-eddsa-key%)
-
-    (define/override (make-params curve)
-      (new pk-eddsa-params% (impl this) (curve curve)))
-    (define/override (make-public-key curve qB)
-      (evp->public-key (fromdata (curve->keytype curve) 'public
-                                 (make-fromdata-params qB #f))))
-    (define/override (make-private-key curve qB dB)
-      (evp->private-key (fromdata (curve->keytype curve) 'private
-                                  (make-fromdata-params qB dB))))
-
-    (define/private (make-fromdata-params qB dB)
-      `((#"pub" octet-string ,qB #:?)
-        (#"priv" octet-string ,dB #:?)))
-
-    (define/private (curve->keytype curve)
-      (case curve [(ed25519) #"ED25519"] [(ed448) #"ED448"] [else #f]))
-
-    (define/override (generate-params config)
-      (define curve
-        (check/ref-config '(curve) config config:eddsa-keygen "EDDSA paramgen"))
-      ;; FIXME: check that curve is available?
-      (make-params curve))
-
-    (define/override (generate-key config)
-      (define curve
-        (check/ref-config '(curve) config config:eddsa-keygen "EDDSA keygen"))
-      (generate-key-from-curve curve))
-
-    (define/public (generate-key-from-curve curve)
-      (case curve
-        [(ed25519)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "ED25519")))
-         (evp->private-key evp)]
-        [(ed448)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "ED448")))
-         (evp->private-key evp)]
-        [else #f]))
-    ))
-
-(define libcrypto3-ecx-impl%
-  (class libcrypto3-pk-impl%
-    (inherit evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'ecx))
-
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
-
-    (define/override (get-key-class) libcrypto3-ecx-key%)
-
-    (define/override (make-params curve)
-      (new pk-ecx-params% (impl this) (curve curve)))
-    (define/override (make-public-key curve qB)
-      (evp->public-key (fromdata (curve->keytype curve) 'public
-                                 (make-fromdata-params qB #f))))
-    (define/override (make-private-key curve qB dB)
-      (evp->private-key (fromdata (curve->keytype curve) 'private
-                                  (make-fromdata-params qB dB))))
-
-    (define/private (make-fromdata-params qB dB)
-      `((#"pub" octet-string ,qB #:?)
-        (#"priv" octet-string ,dB #:?)))
-
-    (define/private (curve->keytype curve)
-      (case curve [(x25519) #"X25519"] [(x448) #"X448"] [else #f]))
-
-    (define/override (generate-params config)
-      (define curve
-        (check/ref-config '(curve) config config:ecx-keygen "ECX paramgen"))
-      ;; FIXME: check that curve is available
-      (make-params curve))
-
-    (define/override (generate-key config)
-      (define curve
-        (check/ref-config '(curve) config config:ecx-keygen "ECX keygen"))
-      (generate-key-from-curve curve))
-
-    (define/public (generate-key-from-curve curve)
-      (case curve
-        [(x25519)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "X25519")))
-         (evp->private-key evp)]
-        [(x448)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "X448")))
-         (evp->private-key evp)]
-        [else #f]))
-    ))
-
-;; ============================================================
-
 (define (libcrypto3-pk-params-mixin base%)
   (class base%
     (init-field pevp)
@@ -419,62 +110,7 @@
       (EVP_PKEY_get_security_bits pevp))
     ))
 
-(define libcrypto3-dsa-params%
-  (class (libcrypto3-pk-params-mixin pk-dsa-params%)
-    (inherit-field impl pevp)
-    (super-new)
-
-    (define/override (-write-params fmt)
-      (define-values (p q g) (dsa-evp-get-params pevp))
-      (encode-params-dsa fmt p q g))
-
-    (define/override (get-param-values)
-      (dsa-evp-get-params pevp))
-    ))
-
-(define (dsa-evp-get-params pevp)
-  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
-  (define q (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"q")))
-  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
-  (values p q g))
-
-(define libcrypto3-dh-params%
-  (class (libcrypto3-pk-params-mixin pk-dh-params%)
-    (inherit-field impl pevp)
-    (super-new)
-
-    (define/override (-write-params fmt)
-      (define-values (p g q j seed pgen) (dh-evp-get-params pevp))
-      (encode-params-dh fmt p g q j seed pgen))
-
-    (define/override (get-param-values)
-      (dh-evp-get-params pevp))
-    ))
-
-(define (dh-evp-get-params pevp)
-  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
-  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
-  (define q (NOERR (EVP_PKEY_get_bn_param/value pevp #"q")))
-  (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
-  (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
-  (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
-  (values p g q j seed pgen))
-
 ;; ----------------------------------------
-
-(define libcrypto3-ec-params%
-  (class (libcrypto3-pk-params-mixin pk-ec-params%)
-    (inherit-field impl pevp)
-    (super-new)
-
-    (define/override (get-curve)
-      (define curve-lcname
-        (NOERR (EVP_PKEY_get_utf8_string_param/value pevp #"group")))
-      (cond [curve-lcname (curve-lcname->name curve-lcname)]
-            [else (internal-error "unable to fetch curve name")]))
-    ))
-
-;; ============================================================
 
 (define libcrypto3-pk-key%
   (class pk-key-base%
@@ -585,6 +221,71 @@
       (NOERR (EVP_PKEY_parameters_eq evp (get-field evp peer-pubkey))))
     ))
 
+(define signing-digests
+  ;; https://docs.openssl.org/master/man3/EVP_DigestSignInit/
+  ;; but the following seem to be accepted in practice
+  '(sha1
+    sha224 sha256 sha384 sha512 sha512/224 sha512/256
+    sha3-224 sha3-256 sha3-384 sha3-512))
+
+;; ============================================================
+;; RSA
+
+(define libcrypto3-rsa-impl%
+  (class libcrypto3-pk-impl%
+    (inherit-field factory)
+    (inherit get-libctx evp->public-key evp->private-key fromdata)
+    (super-new (spec 'rsa))
+
+    (define/override (get-key-class) libcrypto3-rsa-key%)
+
+    (define/override (can-encrypt? pad)
+      (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
+    (define/override (can-sign pad) 'depends)
+    (define/override (can-sign2? pad dspec)
+      (and (memq pad '(#f pkcs1-v1.5 pss pss*))
+           (or (memq dspec signing-digests)
+               (memq dspec '(md5 md4 md2)))
+           (and (send factory get-digest dspec) #t)))
+
+    (define/override (make-public-key n e)
+      (evp->public-key (fromdata #"RSA" 'public
+                                 (make-fromdata-params n e #f #f #f #f #f #f))))
+    (define/override (make-private-key n e d p q dp dq qInv)
+      (evp->private-key (fromdata #"RSA" 'private
+                                  (make-fromdata-params n e d p q dp dq qInv))))
+
+    (define/private (make-fromdata-params n e d p q dp dq qInv)
+      (define derive? (and n e d p q (not (and dp dq qInv))))
+      `((#"n" ubignum ,n)
+        (#"e" ubignum ,e)
+        (#"d" ubignum ,d #:?)
+        (#"rsa-factor1" ubignum ,p #:?)
+        (#"rsa-factor2" ubignum ,q #:?)
+        (#"rsa-exponent1" ubignum ,dp #:?)
+        (#"rsa-exponent2" ubignum ,dq #:?)
+        (#"rsa-coefficient1" ubignum ,qInv #:?)
+        (#"rsa-derive-from-pq" uint ,(and derive? 1) #:?)))
+
+    (define/override (generate-key config)
+      (define-values (nbits e)
+        (check/ref-config '(nbits e) config config:rsa-keygen "RSA keygen"))
+      (cond [e
+             (define params (make-param-array
+                             `((#"bits" uint ,nbits)
+                               (#"e" uint ,e #:?))))
+             (define keytype (nonmoving #"rsa"))
+             (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) keytype #f)))
+             (HANDLEp (EVP_PKEY_keygen_init ctx))
+             (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
+             (define evp (HANDLEp (EVP_PKEY_generate ctx)))
+             (void/reference-sink keytype)
+             (evp->private-key evp)]
+            [else
+             (define evp (HANDLEp (EVP_PKEY_Q_keygen/RSA (get-libctx) #f nbits)))
+             (evp->private-key evp)]))
+    ))
+
 ;; ----------------------------------------
 
 (define libcrypto3-rsa-key%
@@ -632,6 +333,73 @@
         [else (err/bad-signature-pad this pad)]))
     ))
 
+;; ============================================================
+;; DSA
+
+(define libcrypto3-dsa-impl%
+  (class libcrypto3-pk-impl%
+    (inherit-field factory)
+    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
+    (super-new (spec 'dsa))
+
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
+    (define/override (has-params?) #t)
+
+    (define/override (get-params-class) libcrypto3-dsa-params%)
+    (define/override (get-key-class) libcrypto3-dsa-key%)
+
+    (define/override (make-params p q g)
+      (evp->params (fromdata #"DSA" 'params
+                             (make-fromdata-params p q g #f #f))))
+    (define/override (make-public-key p q g y)
+      (evp->public-key (fromdata #"DSA" 'public
+                                 (make-fromdata-params p q g y #f))))
+    (define/override (make-private-key p q g y x)
+      (evp->private-key (fromdata #"DSA" 'private
+                                  (make-fromdata-params p q g y x))))
+
+    (define/private (make-fromdata-params p q g y x)
+      `((#"p" ubignum ,p)
+        (#"q" ubignum ,q)
+        (#"g" ubignum ,g)
+        (#"pub" ubignum ,y #:?)
+        (#"priv" ubignum ,x #:?)))
+
+    (define/override (generate-params config)
+      (define-values (nbits qbits)
+        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA paramgen"))
+      (define dsa-ptr (nonmoving #"DSA"))
+      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dsa-ptr #f)))
+      (HANDLEp (EVP_PKEY_paramgen_init ctx))
+      (define params (make-param-array
+                      `((#"pbits" uint ,nbits #:?)
+                        (#"qbits" uint ,qbits #:?))))
+      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
+      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
+                            #:or-fail-with "parameter generation failed"))
+      (void/reference-sink dsa-ptr)
+      (evp->params pevp))
+    ))
+
+(define libcrypto3-dsa-params%
+  (class (libcrypto3-pk-params-mixin pk-dsa-params%)
+    (inherit-field impl pevp)
+    (super-new)
+
+    (define/override (-write-params fmt)
+      (define-values (p q g) (dsa-evp-get-params pevp))
+      (encode-params-dsa fmt p q g))
+
+    (define/override (get-param-values)
+      (dsa-evp-get-params pevp))
+    ))
+
+(define (dsa-evp-get-params pevp)
+  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
+  (define q (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"q")))
+  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
+  (values p q g))
+
 ;; ----------------------------------------
 
 (define libcrypto3-dsa-key%
@@ -659,6 +427,87 @@
             [else '()]))
     ))
 
+;; ============================================================
+;; DH
+
+(define libcrypto3-dh-impl%
+  (class libcrypto3-pk-impl%
+    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
+    (super-new (spec 'dh))
+
+    (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
+
+    (define/override (get-params-class) libcrypto3-dh-params%)
+    (define/override (get-key-class) libcrypto3-dh-key%)
+
+    (define/override (make-params p g q j seed pgen)
+      (evp->params (fromdata #"DH" 'params
+                             (make-fromdata-params p g q j seed pgen #f #f))))
+    (define/override (make-public-key p g q j seed pgen y)
+      (evp->public-key (fromdata #"DH" 'public
+                                 (make-fromdata-params p g q j seed pgen y #f))))
+    (define/override (make-private-key p g q j seed pgen y x)
+      (evp->private-key (fromdata #"DH" 'private
+                                  (make-fromdata-params p g q j seed pgen y x))))
+
+    (define/private (make-fromdata-params p g q j seed pgen y x)
+      `((#"p" ubignum ,p)
+        (#"g" ubignum ,g)
+        (#"q" ubignum ,q #:?)
+        (#"j" ubignum ,j #:?)
+        (#"seed" octet-string ,(and seed pgen seed) #:?)
+        (#"pcounter" uint ,(and seed pgen pgen) #:?)
+        (#"pub" ubignum ,y #:?)
+        (#"priv" ubignum ,x #:?)))
+
+    (define/override (generate-params config)
+      (define-values (nbits generator)
+        (check/ref-config '(nbits generator) config config:dh-paramgen "DH paramgen"))
+      (define dh-ptr (nonmoving #"DH"))
+      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dh-ptr #f)))
+      (HANDLEp (EVP_PKEY_paramgen_init ctx))
+      (define params (make-param-array
+                      `((#"pbits" uint ,nbits #:?)
+                        #;(#"qbits" uint ,qbits #:?)
+                        (#"g" uint ,generator #:?))))
+      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
+      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
+                            #:or-fail-with "parameter generation failed"))
+      (void/reference-sink dh-ptr)
+      (evp->params pevp))
+
+    (define/public (libcrypto-named-params group)
+      ;; Group is one of:
+      ;; - 'ffdhe2048 'ffdhe3072 'ffdhe4096 'ffdhe6144 'ffdhe8192
+      ;; - 'modp_2048 'modp_3072 'modp_4096 'modp_6144 'modp_8192
+      ;; - 'modp_1536 'dh_1024_160 'dh_2048_224 'dh_2048_256
+      (evp->params (fromdata #"DHX" 'params
+                             `((#"group" utf8-string ,(symbol->string group))))))
+    ))
+
+(define libcrypto3-dh-params%
+  (class (libcrypto3-pk-params-mixin pk-dh-params%)
+    (inherit-field impl pevp)
+    (super-new)
+
+    (define/override (-write-params fmt)
+      (define-values (p g q j seed pgen) (dh-evp-get-params pevp))
+      (encode-params-dh fmt p g q j seed pgen))
+
+    (define/override (get-param-values)
+      (dh-evp-get-params pevp))
+    ))
+
+(define (dh-evp-get-params pevp)
+  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
+  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
+  (define q (NOERR (EVP_PKEY_get_bn_param/value pevp #"q")))
+  (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
+  (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
+  (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
+  (values p g q j seed pgen))
+
 ;; ----------------------------------------
 
 (define libcrypto3-dh-key%
@@ -677,6 +526,70 @@
 
     (define/override (-get-keyexch-params)
       `((#"pad" uint 1)))
+    ))
+
+;; ============================================================
+;; EC
+
+(define libcrypto3-ec-impl%
+  (class libcrypto3-pk-impl%
+    (inherit-field factory)
+    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
+    (super-new (spec 'ec))
+
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
+    (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
+
+    (define/override (get-params-class) libcrypto3-ec-params%)
+    (define/override (get-key-class) libcrypto3-ec-key%)
+
+    (define/override (make-params curve-oid)
+      (define curve-name (curve-oid->lcname curve-oid))
+      (and curve-name
+           (let ([params (make-fromdata-params curve-name #f #f)])
+             (evp->params (fromdata #"EC" 'params params)))))
+    (define/override (make-public-key curve-oid qB)
+      (define curve-name (curve-oid->lcname curve-oid))
+      (and curve-name
+           (let ([params (make-fromdata-params curve-name qB #f)])
+             (evp->public-key (fromdata #"EC" 'public params)))))
+    (define/override (make-private-key curve-oid qB x)
+      (define curve-name (curve-oid->lcname curve-oid))
+      (and curve-name
+           (let ([params (make-fromdata-params curve-name qB x)])
+             (evp->private-key (fromdata #"EC" 'private params)))))
+
+    (define/private (make-fromdata-params curve-name qB x)
+      `((#"group" utf8-string ,curve-name)
+        (#"pub" octet-string ,qB #:?)
+        (#"priv" ubignum ,x #:?)))
+
+    (define/override (generate-params config)
+      (define curve (check/ref-config '(curve) config config:ec-paramgen "EC paramgen"))
+      (define curve-name (curve-alias->lcname curve))
+      (and curve-name
+           (let ([params `((#"group" utf8-string ,curve-name))])
+             (evp->params (fromdata #"EC" 'params params)))))
+
+    (define/override (generate-key config)
+      (define curve (check/ref-config '(curve) config config:ec-paramgen "EC keygen"))
+      (define curve-name (curve-name->lcname curve))
+      (and curve-name
+           (evp->private-key (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-name)
+                                      #:or-fail-with "key generation failed"))))
+    ))
+
+(define libcrypto3-ec-params%
+  (class (libcrypto3-pk-params-mixin pk-ec-params%)
+    (inherit-field impl pevp)
+    (super-new)
+
+    (define/override (get-curve)
+      (define curve-lcname
+        (NOERR (EVP_PKEY_get_utf8_string_param/value pevp #"group")))
+      (cond [curve-lcname (curve-lcname->name curve-lcname)]
+            [else (internal-error "unable to fetch curve name")]))
     ))
 
 ;; ----------------------------------------
@@ -704,6 +617,57 @@
              (define dname (send factory get-digest-lcname dspec))
              `((#"digest" utf8-string ,dname))]
             [else '()]))
+    ))
+
+;; ============================================================
+;; EdDSA
+
+(define libcrypto3-eddsa-impl%
+  (class libcrypto3-pk-impl%
+    (inherit evp->public-key evp->private-key fromdata get-libctx)
+    (super-new (spec 'eddsa))
+
+    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
+    (define/override (has-params?) #t)
+
+    (define/override (get-key-class) libcrypto3-eddsa-key%)
+
+    (define/override (make-params curve)
+      (new pk-eddsa-params% (impl this) (curve curve)))
+    (define/override (make-public-key curve qB)
+      (evp->public-key (fromdata (curve->keytype curve) 'public
+                                 (make-fromdata-params qB #f))))
+    (define/override (make-private-key curve qB dB)
+      (evp->private-key (fromdata (curve->keytype curve) 'private
+                                  (make-fromdata-params qB dB))))
+
+    (define/private (make-fromdata-params qB dB)
+      `((#"pub" octet-string ,qB #:?)
+        (#"priv" octet-string ,dB #:?)))
+
+    (define/private (curve->keytype curve)
+      (case curve [(ed25519) #"ED25519"] [(ed448) #"ED448"] [else #f]))
+
+    (define/override (generate-params config)
+      (define curve
+        (check/ref-config '(curve) config config:eddsa-keygen "EDDSA paramgen"))
+      ;; FIXME: check that curve is available?
+      (make-params curve))
+
+    (define/override (generate-key config)
+      (define curve
+        (check/ref-config '(curve) config config:eddsa-keygen "EDDSA keygen"))
+      (generate-key-from-curve curve))
+
+    (define/public (generate-key-from-curve curve)
+      (case curve
+        [(ed25519)
+         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "ED25519")))
+         (evp->private-key evp)]
+        [(ed448)
+         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "ED448")))
+         (evp->private-key evp)]
+        [else #f]))
     ))
 
 ;; ----------------------------------------
@@ -745,6 +709,57 @@
       (define params (make-param-array '()))
       (HANDLEp (EVP_DigestVerifyInit_ex mdctx #f (get-libctx) #f evp params))
       (NOERR (EVP_DigestVerify mdctx sig (bytes-length sig) msg (bytes-length msg))))
+    ))
+
+;; ============================================================
+;; ECX
+
+(define libcrypto3-ecx-impl%
+  (class libcrypto3-pk-impl%
+    (inherit evp->public-key evp->private-key fromdata get-libctx)
+    (super-new (spec 'ecx))
+
+    (define/override (can-key-agree?) #t)
+    (define/override (has-params?) #t)
+
+    (define/override (get-key-class) libcrypto3-ecx-key%)
+
+    (define/override (make-params curve)
+      (new pk-ecx-params% (impl this) (curve curve)))
+    (define/override (make-public-key curve qB)
+      (evp->public-key (fromdata (curve->keytype curve) 'public
+                                 (make-fromdata-params qB #f))))
+    (define/override (make-private-key curve qB dB)
+      (evp->private-key (fromdata (curve->keytype curve) 'private
+                                  (make-fromdata-params qB dB))))
+
+    (define/private (make-fromdata-params qB dB)
+      `((#"pub" octet-string ,qB #:?)
+        (#"priv" octet-string ,dB #:?)))
+
+    (define/private (curve->keytype curve)
+      (case curve [(x25519) #"X25519"] [(x448) #"X448"] [else #f]))
+
+    (define/override (generate-params config)
+      (define curve
+        (check/ref-config '(curve) config config:ecx-keygen "ECX paramgen"))
+      ;; FIXME: check that curve is available
+      (make-params curve))
+
+    (define/override (generate-key config)
+      (define curve
+        (check/ref-config '(curve) config config:ecx-keygen "ECX keygen"))
+      (generate-key-from-curve curve))
+
+    (define/public (generate-key-from-curve curve)
+      (case curve
+        [(x25519)
+         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "X25519")))
+         (evp->private-key evp)]
+        [(x448)
+         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "X448")))
+         (evp->private-key evp)]
+        [else #f]))
     ))
 
 ;; ----------------------------------------
