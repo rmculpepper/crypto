@@ -44,17 +44,13 @@
      (for/list ([nbits (in-list '(#;1024 2048 3072))])
        (for/list ([i 2]) (generate-private-key pk `((nbits ,nbits)))))]
     [(dsa)
-     (if (send pk has-params?)
-         (for/list ([pkpd (in-list dsa-params)])
-           (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
-           (for/list ([i 2]) (generate-private-key pkp)))
-         null)]
+     (for/list ([pkpd (in-list dsa-params)])
+       (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
+       (for/list ([i 2]) (generate-private-key pkp)))]
     [(dh)
-     (if (send pk has-params?)
-         (for/list ([pkpd (in-list dh-params)])
-           (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
-           (for/list ([i 2]) (generate-private-key pkp)))
-         null)]
+     (for/list ([pkpd (in-list dh-params)])
+       (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
+       (for/list ([i 2]) (generate-private-key pkp)))]
     [(ec)
      (for/list ([curve (in-list (send factory info 'all-ec-curves))]
                 #:when (and (curve-alias->oid curve)
