@@ -488,7 +488,12 @@
 
 (define (port-private-key priv pk)
   (define priv-datum (pk-key->datum priv 'rkt-private))
-  (with-handlers ([exn:fail? (lambda (e) #f)])
+  (with-handlers ([exn:fail?
+                   (lambda (e)
+                     (when #f
+                       (eprintf "failed to convert ~e to ~e\n~s\n~e\n\n" priv pk
+                                (exn-message e) priv-datum))
+                     #f)])
     (datum->pk-key priv-datum 'rkt-private (send pk get-factory))))
 
 ;; filter2 : (Listof X) (Listof Y) (X -> Bool) -> (values (Listof X) (Listof Y))
