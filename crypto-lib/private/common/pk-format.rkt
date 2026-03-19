@@ -1,4 +1,4 @@
-;; Copyright 2013-2022 Ryan Culpepper
+;; Copyright 2013-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
@@ -15,432 +15,506 @@
          "asn1.rkt"
          "../../util/bech32.rkt")
 (provide (all-defined-out)
-         curve-name->oid
-         curve-alias->oid
-         curve-oid->name)
+         curve-alias->oid)
+
+;; Conventions:
+;; - `parse-X` takes user data (bytes, usually)
+;; - `decode-X` takes "ASNValue" -- parsed ASN.1 (result of bytes->asn1/DER)
+;;   - can rely on well-formed ASN.1 representation types
+
+;; ParseResult = (list (U 'params 'public 'private) PKSpec Any ...)
+(define (ok-params pkspec . vs) (list* 'params pkspec vs))
+(define (ok-public pkspec . vs) (list* 'public pkspec vs))
+(define (ok-private pkspec . vs) (list* 'private pkspec vs))
+(define (err/fmt fmt [why ""])
+  (crypto-error "invalid key datum~a\n  format: ~e" why fmt))
+
 
 ;; ============================================================
-;; Reading Keys
+;; Parsing Parameters
 
-;; To avoid shared refs to mutable data:
-;; - read-key makes a copy of bytestrings before forwarding them to implementations
-;; - encode-*-* with 'rkt-* fmt makes a copy of bytestrings in arguments
-;;   (but only for arguments where bytestring are expected)
+;; parse-params : Symbol Datum -> ParseResult
+(define (parse-params fmt buf)
+  (case fmt
+    [(AlgorithmIdentifier)
+     (-check-bytes fmt buf)
+     (parse-AlgorithmIdentifier buf)]
+    [(DSAParameters Dss-Parms)
+     (-check-bytes fmt buf)
+     (decode-DSAParameters (bytes->asn1/DER Dss-Parms buf))]
+    [(DomainParameters) ;; ANSI X9.42
+     (-check-bytes fmt buf)
+     (decode-DomainParameters (bytes->asn1/DER DomainParameters buf))]
+    [(DHParameter) ;; PKCS#3
+     (-check-bytes fmt buf)
+     (decode-DHParameter (bytes->asn1/DER DHParameter buf))]
+    [(EcpkParameters)
+     (-check-bytes fmt buf)
+     (decode-EcpkParameters (bytes->asn1/DER EcpkParameters buf))]
+    [(rkt-params) (read-rkt-params buf)]
+    [else (crypto-error "unknown parameters format\n  format: ~e" fmt)]))
 
-(define pk-read-key-base%
-  (class* impl-base% (pk-read-key<%>)
-    (inherit-field factory)
-    (super-new)
+(define (parse-AlgorithmIdentifier buf)
+  (decode-AlgorithmIdentifier
+   (bytes->asn1/DER AlgorithmIdentifier buf)))
+(define (decode-AlgorithmIdentifier ast)
+  (match ast
+    [(h-algorithm-identifier alg-oid params)
+     (cond [(equal? alg-oid id-dsa)
+            (decode-DSAParameters params)]
+           [(equal? alg-oid dhpublicnumber)
+            (decode-DomainParameters params)]
+           [(equal? alg-oid dhKeyAgreement)
+            (decode-DHParameter params)]
+           [(equal? alg-oid id-ecPublicKey)
+            (decode-EcpkParameters params)]
+           [(equal? alg-oid id-Ed25519) (ok-params 'eddsa 'ed25519)]
+           [(equal? alg-oid id-Ed448)   (ok-params 'eddsa 'ed448)]
+           [(equal? alg-oid id-X25519)  (ok-params 'ecx   'x25519)]
+           [(equal? alg-oid id-X448)    (ok-params 'ecx   'x448)]
+           [else #f])]))
 
-    (define/public (read-key sk fmt)
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (-check-bytes fmt sk)
-         (match (bytes->asn1/DER SubjectPublicKeyInfo sk)
-           ;; Note: decode w/ type checks some well-formedness properties
-           [(h-subject-public-key-info alg subjectPublicKey)
-            (match-define (h-algorithm-identifier alg-oid params) alg)
-            (cond [(equal? alg-oid rsaEncryption)
-                   (-decode-pub-rsa subjectPublicKey)]
-                  [(equal? alg-oid id-dsa)
-                   (-decode-pub-dsa params subjectPublicKey)]
-                  [(equal? alg-oid dhpublicnumber)
-                   (-decode-pub-dh params subjectPublicKey)]
-                  [(equal? alg-oid dhKeyAgreement)
-                   (-decode-pub-dh params subjectPublicKey)]
-                  [(equal? alg-oid id-ecPublicKey)
-                   (-decode-pub-ec params subjectPublicKey)]
-                  [(equal? alg-oid id-Ed25519)
-                   (-decode-pub-eddsa 'ed25519 subjectPublicKey)]
-                  [(equal? alg-oid id-Ed448)
-                   (-decode-pub-eddsa 'ed448 subjectPublicKey)]
-                  [(equal? alg-oid id-X25519)
-                   (-decode-pub-ecx 'x25519 subjectPublicKey)]
-                  [(equal? alg-oid id-X448)
-                   (-decode-pub-ecx 'x448 subjectPublicKey)]
-                  [else #f])]
-           [_ #f])]
-        [(PrivateKeyInfo OneAsymmetricKey)
-         (-check-bytes fmt sk)
-         (define (decode version alg privateKey publicKey)
-           (match-define (h-algorithm-identifier alg-oid alg-params) alg)
-           (cond [(equal? alg-oid rsaEncryption)
-                  (-decode-priv-rsa privateKey)]
-                 [(equal? alg-oid id-dsa)
-                  (-decode-priv-dsa alg-params publicKey privateKey)]
-                 [(equal? alg-oid dhpublicnumber)
-                  (-decode-priv-dh alg-params publicKey privateKey)]
-                 [(equal? alg-oid dhKeyAgreement)
-                  (-decode-priv-dh alg-params publicKey privateKey)]
-                 [(equal? alg-oid id-ecPublicKey)
-                  (-decode-priv-ec alg-params publicKey privateKey)]
-                 [(equal? alg-oid id-Ed25519)
-                  (-decode-priv-eddsa 'ed25519 publicKey privateKey)]
-                 [(equal? alg-oid id-Ed448)
-                  (-decode-priv-eddsa 'ed448 publicKey privateKey)]
-                 [(equal? alg-oid id-X25519)
-                  (-decode-priv-ecx 'x25519 publicKey privateKey)]
-                 [(equal? alg-oid id-X448)
-                  (-decode-priv-ecx 'x448 publicKey privateKey)]
-                 [else #f]))
-         (case fmt
-           ;; Avoid attempting to parse the publicKey field (which could fail!)
-           ;; unless OneAsymmetricKey is requested.
-           [(PrivateKeyInfo)
-            (match (bytes->asn1/DER PrivateKeyInfo sk)
-              [(h-private-key-info version alg privateKey)
-               (decode version alg privateKey #f)]
-              [_ #f])]
-           [(OneAsymmetricKey)
-            (match (bytes->asn1/DER OneAsymmetricKey sk)
-              [(h-one-asymmetric-key version alg privateKey publicKey)
-               (decode version alg privateKey publicKey)]
-              [_ #f])])]
-        [(RSAPrivateKey)
-         (-check-bytes fmt sk)
-         (-decode-priv-rsa (bytes->asn1/DER RSAPrivateKey sk))]
-        [(DSAPrivateKey)
-         (-check-bytes fmt sk)
-         (match (bytes->asn1/DER (SEQUENCE-OF INTEGER) sk)
-           [(list 0 p q g y x) ;; FIXME!
-            (-make-priv-dsa p q g y x)])]
-        [(rkt-private) (read-rkt-private-key sk)]
-        [(rkt-public) (read-rkt-public-key sk)]
-        [(age/v1-private)
-         (-check-type fmt 'bech32-string? bech32-string? sk)
-         (match (bech32-decode sk)
-           [(list "age-secret-key-" priv)
-            (-decode-priv-ecx 'x25519 #f priv)]
-           [_ #f])]
-        [(age/v1-public)
-         (-check-type fmt 'bech32-string? bech32-string? sk)
-         (match (bech32-decode sk)
-           [(list "age" pub)
-            (-decode-pub-ecx 'x25519 pub)]
-           [_ #f])]
-        [(openssh-public)
-         (-check-type fmt 'string? string? sk)
-         (match (parse-openssh-pub sk)
-           [(list 'rsa e n)
-            (-make-pub-rsa n e)]
-           [(list 'ed25519 pub)
-            (-decode-pub-eddsa 'ed25519 pub)]
-           [(list 'ed448 pub)
-            (-decode-pub-eddsa 'ed448 pub)]
-           [_ #f])]
-        [else #f]))
+(define (decode-DSAParameters params)
+  (match params
+    [(h-dss-parms p q g)
+     (check-dsa p q g)
+     (ok-params 'dsa p q g)]))
 
-    (define/private (read-rkt-public-key sk)
-      (define nat? exact-nonnegative-integer?)
-      (define (nat/f? x) (or (nat? x) (eq? x #f)))
-      (define (bytes/f? x) (or (bytes? x) (eq? x #f)))
-      (define (oid? x) (and (list? x) (andmap nat? x)))
-      (match sk
-        [(list 'rsa 'public (? nat? n) (? nat? e))
-         (-make-pub-rsa n e)]
-        [(list 'dsa 'public (? nat? p) (? nat? q) (? nat? g) (? nat? y))
-         (-make-pub-dsa p q g y)]
-        [(list 'dh 'public (? nat? p) (? nat? g)
-               (? nat? q) (? nat/f? j) (? bytes/f? seed) (? nat/f? pgen)
-               (? nat? y))
-         (-make-pub-dh p g q j (bcopy seed) pgen y)]
-        [(list 'dh 'public (? nat? p) (? nat? g) (? nat? y))
-         (-make-pub-dh p g #f #f #f #f y)]
-        [(list 'ec 'public (? oid? curve-oid) (? bytes? qB))
-         (-make-pub-ec curve-oid (bcopy qB))]
-        [(list 'eddsa 'public curve (? bytes? qB))
-         (-make-pub-eddsa curve (bcopy qB))]
-        [(list 'ecx 'public curve (? bytes? qB))
-         (-make-pub-ecx curve (bcopy qB))]
-        [_ #f]))
+(define (decode-DomainParameters params)
+  (define-values (p g q j seed pgen) (extract-dh-params params))
+  (check-dh p g q j)
+  (ok-params 'dh p g q j seed pgen))
 
-    (define/private (read-rkt-private-key sk)
-      (define nat? exact-nonnegative-integer?)
-      (define (nat/f? x) (or (nat? x) (eq? x #f)))
-      (define (bytes/f? x) (or (bytes? x) (eq? x #f)))
-      (define (oid? x) (and (list? x) (andmap nat? x)))
-      (match sk
-        [(list 'rsa 'private 0 (? nat? n) (? nat? e) (? nat? d)
-               (? nat? p) (? nat? q) (? nat? dp) (? nat? dq) (? nat? qInv))
-         (-make-priv-rsa n e d p q dp dq qInv)]
-        [(list 'dsa 'private (? nat? p) (? nat? q) (? nat? g) (? nat/f? y) (? nat? x))
-         (let ([y (or y (dsa/dh-recompute-y p g x))])
-           (-make-priv-dsa p q g y x))]
-        [(list 'dh 'private (? nat? p) (? nat? g)
-               (? nat? q) (? nat/f? j) (? bytes/f? seed) (? nat/f? pgen)
-               (? nat/f? y) (? nat? x))
-         (let ([y (or y (dsa/dh-recompute-y p g x))])
-           (-make-priv-dh p g q j (bcopy seed) pgen y x))]
-        [(list 'dh 'private (? nat? p) (? nat? g) (? nat/f? y) (? nat? x))
-         (let ([y (or y (dsa/dh-recompute-y p g x))])
-           (-make-priv-dh p g #f #f #f #f y x))]
-        [(list 'ec 'private (? oid? curve-oid) (? bytes/f? qB) (? nat? x))
-         (-make-priv-ec curve-oid (bcopy qB) x)]
-        [(list 'eddsa 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
-         (-make-priv-eddsa curve (bcopy qB) (bcopy dB))]
-        [(list 'ecx 'private (? symbol? curve) (? bytes/f? qB) (? bytes? dB))
-         (-make-priv-ecx curve (bcopy qB) (bcopy dB))]
-        [_ #f]))
+(define (decode-DHParameter params)
+  (define-values (p g q j seed pgen) (extract-dh-params params))
+  ;; cannot check-dh without q
+  (ok-params 'dh p g q j seed pgen))
 
-    (define-syntax-rule (send-to-impl spec method arg ...)
-      (let ([impl (send factory get-pk spec)])
-        (and impl (send impl method arg ...))))
+(define (extract-dh-params params)
+  (match params
+    [(h-domain-parameters p g q j vp)
+     (match vp
+       ;; if seed is not octet-aligned, just drop it (and pgen)
+       [(h-validation-parms seed pgen)
+        #:when (and (bit-string? seed) (zero? (bit-string-unused seed)))
+        (values p g q j (bit-string-bytes seed) pgen)]
+       [#f
+        (values p g q j #f #f)])]
+    [(h-dhparameter p g)
+     (values p g #f #f #f #f)]))
 
-    ;; ---- RSA ----
+(define (decode-EcpkParameters params)
+  (define curve-oid (extract-ec-params params))
+  (ok-params 'ec curve-oid))
 
-    (define/public (-decode-pub-rsa subjectPublicKey)
-      (match subjectPublicKey
-        [(h-rsa-public-key n e)
-         (-make-pub-rsa n e)]))
+(define (extract-ec-params params)
+  (match params
+    [(list 'namedCurve curve-oid) curve-oid]
+    [_ (crypto-error "unsupported EC parameters (expected named curve)")]))
 
-    (define/public (-decode-priv-rsa privateKey)
-      (match privateKey
-        ;; support only two-prime keys (version = 0, otherPrimeInfos absent)
-        [(h-rsa-private-key 0 n e d p q dp dq qInv)
-         (-make-priv-rsa n e d p q dp dq qInv)]))
 
-    (define/public (-make-pub-rsa n e)
-      (send-to-impl 'rsa make-public-key n e))
-    (define/public (-make-priv-rsa n e d p q dp dq qInv)
-      (send-to-impl 'rsa make-private-key n e d p q dp dq qInv))
+;; ============================================================
+;; Parsing Keys
 
-    ;; ---- DSA ----
+;; parse-key : Symbol Datum -> ParseResult
+(define (parse-key fmt sk)
+  (case fmt
+    [(rkt-private) (read-rkt-private-key sk)]
+    [(rkt-public) (read-rkt-public-key sk)]
+    [(SubjectPublicKeyInfo)
+     (-check-bytes fmt sk)
+     (parse-SubjectPublicKeyInfo sk)]
+    [(PrivateKeyInfo OneAsymmetricKey)
+     (-check-bytes fmt sk)
+     (parse-PrivateKeyInfo sk)]
+    [(RSAPrivateKey)
+     (-check-bytes fmt sk)
+     (decode-RSAPrivateKey (bytes->asn1/DER RSAPrivateKey sk))]
+    [(DSAPrivateKey)
+     (-check-bytes fmt sk)
+     (match (bytes->asn1/DER (SEQUENCE-OF INTEGER) sk)
+       [(list 0 p q g y x) ;; FIXME!
+        (check-dsa p q g)
+        (ok-private 'dsa p q g y x)]
+       [_ (err/fmt fmt)])]
+    [(age/v1-private)
+     (-check-type fmt 'bech32-string? bech32-string? sk)
+     (match (bech32-decode sk)
+       [(list "age-secret-key-" priv)
+        (ok-private 'ecx 'x25519 #f priv)]
+       [_ (err/fmt fmt)])]
+    [(age/v1-public)
+     (-check-type fmt 'bech32-string? bech32-string? sk)
+     (match (bech32-decode sk)
+       [(list "age" pub)
+        (ok-public 'ecx 'x25519 pub)]
+       [_ (err/fmt fmt)])]
+    [(openssh-public)
+     (-check-type fmt 'string? string? sk)
+     (match (parse-openssh-pub sk)
+       [(list 'rsa e n)
+        (ok-public 'rsa n e)]
+       [(list 'ed25519 pub)
+        (ok-public 'eddsa 'ed25519 pub)]
+       [(list 'ed448 pub)
+        (ok-public 'eddsa 'ed448 pub)]
+       [_ (err/fmt fmt)])]
+    [else (crypto-error "unknown key format\n  format: ~e" fmt)]))
 
-    (define/public (-decode-pub-dsa params y)
-      (match params
-        [(h-dss-parms p q g)
-         (-make-pub-dsa p q g y)]))
+;; decode-public-key : OID Params PublicKey -> ParseResult
+(define (decode-public-key alg-oid alg-params publicKey)
+  (cond [(equal? alg-oid rsaEncryption)
+         (decode-RSAPublicKey publicKey)]
+        [(equal? alg-oid id-dsa)
+         (decode-DSAPublicKey alg-params publicKey)]
+        [(equal? alg-oid dhpublicnumber)
+         (decode-dh-public-key alg-params publicKey)]
+        [(equal? alg-oid dhKeyAgreement)
+         (decode-dh-public-key alg-params publicKey)]
+        [(equal? alg-oid id-ecPublicKey)
+         (decode-ec-public-key alg-params publicKey)]
+        [(equal? alg-oid id-Ed25519)
+         (ok-public 'eddsa 'ed25519 publicKey)]
+        [(equal? alg-oid id-Ed448)
+         (ok-public 'eddsa 'ed448 publicKey)]
+        [(equal? alg-oid id-X25519)
+         (ok-public 'ecx 'x25519 publicKey)]
+        [(equal? alg-oid id-X448)
+         (ok-public 'ecx 'x448 publicKey)]
+        [else (crypto-error "unknown algorithm identifier\n  OID: ~e" alg-oid)]))
 
-    (define/public (-decode-priv-dsa params y x)
-      (match params
-        [(h-dss-parms p q g)
-         (let ([y (or y (dsa/dh-recompute-y p g x))])
-           (-make-priv-dsa p q g y x))]))
+;; decode-private-key : OID Params PublicKey/#f PrivateKey -> ParseResult
+(define (decode-private-key alg-oid alg-params publicKey privateKey)
+  (cond [(equal? alg-oid rsaEncryption)
+         (decode-RSAPrivateKey privateKey)]
+        [(equal? alg-oid id-dsa)
+         (decode-dsa-private-key alg-params publicKey privateKey)]
+        [(equal? alg-oid dhpublicnumber)
+         (decode-dh-private-key alg-params publicKey privateKey)]
+        [(equal? alg-oid dhKeyAgreement)
+         (decode-dh-private-key alg-params publicKey privateKey)]
+        [(equal? alg-oid id-ecPublicKey)
+         (decode-ec-private-key alg-params publicKey privateKey)]
+        [(equal? alg-oid id-Ed25519)
+         (ok-private 'eddsa 'ed25519 publicKey privateKey)]
+        [(equal? alg-oid id-Ed448)
+         (ok-private 'eddsa 'ed448 publicKey privateKey)]
+        [(equal? alg-oid id-X25519)
+         (ok-private 'ecx 'x25519 publicKey privateKey)]
+        [(equal? alg-oid id-X448)
+         (ok-private 'ecx 'x448 publicKey privateKey)]
+        [else (crypto-error "unknown algorithm identifier\n  OID: ~e" alg-oid)]))
 
-    (define/public (-make-pub-dsa p q g y)
-      (send-to-impl 'dsa make-public-key p q g y))
-    (define/public (-make-priv-dsa p q g y x)
-      (send-to-impl 'dsa make-private-key p q g y x))
+(define (parse-SubjectPublicKeyInfo sk)
+  (decode-SubjectPublicKeyInfo (bytes->asn1/DER SubjectPublicKeyInfo sk)))
+(define (decode-SubjectPublicKeyInfo spki)
+  (match spki
+    [(h-subject-public-key-info alg subjectPublicKey)
+     (match alg
+       [(h-algorithm-identifier alg-oid alg-params)
+        (decode-public-key alg-oid alg-params subjectPublicKey)])]))
 
-    ;; ---- DH ----
+(define (parse-PrivateKeyInfo sk)
+  ;; parse as OneAsymmetricKey (PrivateKeyInfo v2), also accepts v1
+  (decode-PrivateKeyInfo (bytes->asn1/DER OneAsymmetricKey sk)))
+(define (decode-PrivateKeyInfo pki)
+  (match pki
+    [(h-one-asymmetric-key version alg privateKey publicKey)
+     (match alg
+       [(h-algorithm-identifier alg-oid alg-params)
+        (decode-private-key alg-oid alg-params publicKey privateKey)])]))
 
-    (define/public (-decode-pub-dh params y)
-      (define-values (p g q j seed pgen) (get-dh-fields params))
-      (-make-pub-dh p g q j seed pgen y))
+(define (decode-RSAPublicKey subjectPublicKey)
+  (match subjectPublicKey
+    [(h-rsa-public-key n e)
+     (ok-public 'rsa n e)]))
+(define (decode-RSAPrivateKey privateKey)
+  (match privateKey
+    ;; support only two-prime keys (version = 0, otherPrimeInfos absent)
+    [(h-rsa-private-key 0 n e d p q dp dq qInv)
+     (ok-private 'rsa n e d p q dp dq qInv)]))
 
-    (define/public (-decode-priv-dh params y x)
-      (define-values (p g q j seed pgen) (get-dh-fields params))
-      (let ([y (or y (dsa/dh-recompute-y p g x))])
-        (-make-priv-dh p g q j seed pgen y x)))
+(define (decode-DSAPublicKey params y)
+  (match params
+    [(h-dss-parms p q g)
+     (check-dsa p q g)
+     (ok-public 'dsa p q g y)]))
+(define (decode-dsa-private-key params y x)
+  (match params
+    [(h-dss-parms p q g)
+     (check-dsa p q g)
+     (let ([y (or y (dsa/dh-recompute-y p g x))])
+       (ok-private 'dsa p q g y x))]))
 
-    (define/public (-make-pub-dh p g q j seed pgen y)
-      (send-to-impl 'dh make-public-key p g q j seed pgen y))
-    (define/public (-make-priv-dh p g q j seed pgen y x)
-      (send-to-impl 'dh make-private-key p g q j seed pgen y x))
+(define (decode-dh-public-key params y)
+  (define-values (p g q j seed pgen) (extract-dh-params params))
+  (check-dh p g q j)
+  (ok-public 'dh p g q j seed pgen y))
+(define (decode-dh-private-key params y x)
+  (define-values (p g q j seed pgen) (extract-dh-params params))
+  (check-dh p g q j)
+  (let ([y (or y (dsa/dh-recompute-y p g x))])
+    (ok-private 'dh p g q j seed pgen y x)))
 
-    (define/private (get-dh-fields params)
-      (match params
-        [(h-domain-parameters p g q j vp)
-         (match vp
-           ;; If seed is not octet-aligned, just drop it (and pgen).
-           [(h-validation-parms seed pgen)
-            #:when (and (bit-string? seed) (zero? (bit-string-unused seed)))
-            (values p g q j (bit-string-bytes seed) pgen)]
-           [#f
-            (values p g q j #f #f)])]
-        [(h-dhparameter p g)
-         (values p g #f #f #f #f)]))
+(define (decode-ec-public-key params subjectPublicKey)
+  (define curve-oid (extract-ec-params params))
+  (ok-public 'ec curve-oid subjectPublicKey))
+(define (decode-ec-private-key params publicKey privateKey)
+  (define curve-oid (extract-ec-params params))
+  (match privateKey
+    [(h-ec-private-key 1 xB qB)
+     (ok-private 'ec curve-oid (or qB publicKey) (base256->unsigned xB))]))
 
-    ;; ---- EC ----
+(define (decode-eddsa-public-key curve qB)
+  (ok-public 'eddsa curve qB))
+(define (decode-eddsa-private-key curve qB dB)
+  (ok-public 'eddsa curve qB dB))
 
-    (define/public (-decode-pub-ec params subjectPublicKey)
-      (match params
-        [`(namedCurve ,curve-oid)
-         (-make-pub-ec curve-oid subjectPublicKey)]
-        [_ #f]))
+(define (decode-ecx-public-key curve qB)
+  (ok-public 'ecx curve qB))
+(define (-decode-priv-ecx curve qB dB)
+  (ok-public 'ecx curve qB dB))
 
-    (define/public (-decode-priv-ec params publicKey privateKey)
-      (match params
-        [`(namedCurve ,curve-oid)
-         (match privateKey
-           [(h-ec-private-key 1 xB qB)
-            (-make-priv-ec curve-oid (or qB publicKey) (base256->unsigned xB))]
-           [_ #f])]
-        [_ #f]))
 
-    (define/public (-make-pub-ec curve-oid qB)
-      (send-to-impl 'ec make-public-key curve-oid qB))
-    (define/public (-make-priv-ec curve-oid qB x)
-      (send-to-impl 'ec make-private-key curve-oid qB x))
+;; ============================================================
+;; rkt-{params,public,private} formats
 
-    ;; ---- EdDSA ----
+(define (read-rkt-params p)
+  (match p
+    [(list 'dsa 'params p q g)
+     (tc-dsa p q g)
+     (check-dsa p q g)
+     (ok-params 'dsa p q g)]
+    [(list 'dh 'params p g q j seed pgen)
+     (tc-dh p g q j seed pgen)
+     (check-dh p g q j)
+     (ok-params 'dh p g q j (bcopy seed) pgen)]
+    [(list 'dh 'params p g)
+     (tc exact-positive-integer? #f '(p g) p g)
+     (ok-params 'dh p g #f #f #f #f)]
+    [(list 'ec 'params curve-oid)
+     (tc oid? #f '(curve-oid) curve-oid)
+     (ok-params 'ec curve-oid)]
+    [(list 'eddsa 'params curve)
+     (tc eddsa-curve? #f '(curve) curve)
+     (ok-params 'eddsa curve)]
+    [(list 'ecx 'params curve)
+     (tc ecx-curve? #f '(curve) curve)
+     (ok-params 'ecx curve)]
+    [_ (err/fmt 'rkt-params)]))
 
-    (define/public (-decode-pub-eddsa curve qB)
-      (-make-pub-eddsa curve qB))
-    (define/public (-decode-priv-eddsa curve qB dB)
-      (-make-priv-eddsa curve qB dB))
+(define (read-rkt-public-key sk)
+  (match sk
+    [(list 'rsa 'public n e)
+     (tc exact-positive-integer? #f '(n e) n e)
+     (ok-public 'rsa n e)]
+    [(list 'dsa 'public p q g y)
+     (tc-dsa p q g)
+     (tc exact-positive-integer? #f '(y) y)
+     (check-dsa p q g)
+     (ok-public 'dsa p q g y)]
+    [(list 'dh 'public p g q j seed pgen y)
+     (tc-dh p g q j seed pgen)
+     (tc exact-positive-integer? #f '(y) y)
+     (check-dh p g q j)
+     (ok-public 'dh p g q j (bcopy seed) pgen y)]
+    [(list 'dh 'public p g y)
+     (tc exact-positive-integer? #f '(p g y) p g y)
+     ;; cannot check-dh witout q
+     (ok-public 'dh p g #f #f #f #f y)]
+    [(list 'ec 'public curve-oid Q)
+     (tc oid? #f '(curve-oid) curve-oid)
+     (tc-ec-point #f 'Q Q)
+     (ok-public 'ec curve-oid (bcopy Q))]
+    [(list 'eddsa 'public curve Q)
+     (tc eddsa-curve? #f '(curve) curve)
+     (tc bytes? #f '(Q) Q)
+     (ok-public 'eddsa curve (bcopy Q))]
+    [(list 'ecx 'public curve Q)
+     (tc ecx-curve? #f '(curve) curve)
+     (tc bytes? #f '(Q) Q)
+     (ok-public 'ecx curve (bcopy Q))]
+    [_ (err/fmt 'rkt-public)]))
 
-    (define/public (-make-pub-eddsa curve qB)
-      (send-to-impl 'eddsa make-public-key curve qB))
-    (define/public (-make-priv-eddsa curve qB dB)
-      (send-to-impl 'eddsa make-private-key curve qB dB))
+(define (read-rkt-private-key sk)
+  (match sk
+    [(list 'rsa 'private 0 n e d p q dp dq qInv)
+     (tc exact-positive-integer? #f '(n e d p q dp dq qInv) n e d p q dp dq qInv)
+     (ok-private 'rsa n e d p q dp dq qInv)]
+    [(list 'dsa 'private p q g y x)
+     (tc exact-positive-integer? #f '(p q g x) p g g x)
+     (tc exact-positive-integer? #t '(y) y)
+     (check-dsa p q g)
+     (let ([y (or y (dsa/dh-recompute-y p g x))])
+       (ok-private 'dsa p q g y x))]
+    [(list 'dh 'private p g q j seed pgen y x)
+     (tc-dh p g q j seed pgen)
+     (tc exact-positive-integer? #t '(y) y)
+     (tc exact-positive-integer? #f '(x) x)
+     (check-dh p g q j)
+     (let ([y (or y (dsa/dh-recompute-y p g x))])
+       (ok-private 'dh p g q j (bcopy seed) pgen y x))]
+    [(list 'dh 'private p g y x)
+     (tc exact-positive-integer? #f '(p g x) p g x)
+     (tc exact-positive-integer? #t '(y) y)
+     ;; cannot check-dh without q
+     (let ([y (or y (dsa/dh-recompute-y p g x))])
+       (ok-private 'dh p g #f #f #f #f y x))]
+    [(list 'ec 'private curve-oid Q x)
+     (tc oid? #f '(curve-oid) curve-oid)
+     (tc-ec-point #f 'Q Q)
+     (tc exact-positive-integer? #f '(x) x)
+     (ok-private 'ec curve-oid (bcopy Q) x)]
+    [(list 'eddsa 'private curve Q d)
+     (tc eddsa-curve? #f '(curve) curve)
+     (tc bytes? #t '(Q) Q)
+     (tc bytes? #f '(d) d)
+     (ok-private 'eddsa curve (bcopy Q) (bcopy d))]
+    [(list 'ecx 'private curve Q d)
+     (tc ecx-curve? #f '(curve) curve)
+     (tc bytes? #t '(Q) Q)
+     (tc bytes? #f '(d) d)
+     (ok-private 'ecx curve (bcopy Q) (bcopy d))]
+    [_ (err/fmt 'rkt-private)]))
 
-    ;; ---- ECX ----
+;; Don't put value in error; potentially secret data.
+(define (tc pred or-false? labels . vs)
+  (for ([label (in-list labels)] [v (in-list vs)])
+    (unless (or (pred v) (and or-false? (eq? v #f)))
+      (crypto-error "invalid key datum (bad ~s value)" label))))
 
-    (define/public (-decode-pub-ecx curve qB)
-      (-make-pub-ecx curve qB))
-    (define/public (-decode-priv-ecx curve qB dB)
-      (-make-priv-ecx curve qB dB))
+(define (tc-dsa p q g)
+  (tc exact-positive-integer? #f '(p q g) p q g))
 
-    (define/public (-make-pub-ecx curve qB)
-      (send-to-impl 'ecx make-public-key curve qB))
-    (define/public (-make-priv-ecx curve qB dB)
-      (send-to-impl 'ecx make-private-key curve qB dB))
+(define (tc-dh p g q j seed pgen)
+  (tc exact-positive-integer? #f '(p g q) p g q)
+  (tc exact-positive-integer? #t '(j) j)
+  (tc bytes? #t '(seed) seed)
+  (tc exact-nonnegative-integer? #t '(pgenCounter) pgen))
 
-    ;; ----------------------------------------
+(define (tc-ec-point or-false? label v)
+  (unless (or (ok-ec-point? v) (and or-false? (eq? v #f)))
+    (crypto-error "invalid key datum (bad ~s EC point)" label)))
 
-    (define/public (read-params buf fmt)
-      (case fmt
-        [(AlgorithmIdentifier)
-         (-check-bytes fmt buf)
-         (match (bytes->asn1/DER AlgorithmIdentifier/DER buf)
-           [(h-algorithm-identifier alg-oid parameters)
-            (cond [(equal? alg-oid id-dsa)
-                   (read-params parameters 'Dss-Parms)] ;; Dss-Parms
-                  [(equal? alg-oid dhpublicnumber)
-                   (read-params parameters 'DomainParameters)]
-                  [(equal? alg-oid dhKeyAgreement)
-                   (read-params parameters 'DHParameter)] ;; DHParameter
-                  [(equal? alg-oid id-ecPublicKey)
-                   (read-params parameters 'EcpkParameters)] ;; EcpkParameters
-                  [(equal? alg-oid id-Ed25519) (-make-params-eddsa 'ed25519)]
-                  [(equal? alg-oid id-Ed448)   (-make-params-eddsa 'ed448)]
-                  [(equal? alg-oid id-X25519)  (-make-params-ecx   'x25519)]
-                  [(equal? alg-oid id-X448)    (-make-params-ecx   'x448)]
-                  [else #f])])]
-        [(DSAParameters Dss-Parms)
-         (-check-bytes fmt buf)
-         (match (bytes->asn1/DER Dss-Parms buf)
-           [(h-dss-parms p q g)
-            (-make-params-dsa p q g)])]
-        [(DomainParameters) ;; ANSI X9.42
-         (-check-bytes fmt buf)
-         (define-values (p g q j seed pgen)
-           (get-dh-fields (bytes->asn1/DER DomainParameters buf)))
-         (-make-params-dh p g q j seed pgen)]
-        [(DHParameter) ;; PKCS#3
-         (-check-bytes fmt buf)
-         (match (bytes->asn1/DER DHParameter buf)
-           [(h-dhparameter p g)
-            (-make-params-dh p g)])]
-        [(EcpkParameters)
-         (-check-bytes fmt buf)
-         (match (bytes->asn1/DER EcpkParameters buf)
-           [(list 'namedCurve curve-oid)
-            (-make-params-ec curve-oid)]
-           [_ #f])]
-        [(rkt-params) (read-rkt-params buf)]
-        [else #f]))
+(define (oid? x) (and (list? x) (andmap exact-nonnegative-integer? x)))
+(define (eddsa-curve? v) (memq v '(ed25519 ed448)))
+(define (ecx-curve? v) (memq v '(x25519 x448)))
 
-    (define/private (read-rkt-params p)
-      (define nat? exact-nonnegative-integer?)
-      (define (nat/f? x) (or (nat? x) (eq? x #f)))
-      (define (bytes/f? x) (or (bytes? x) (eq? x #f)))
-      (define (oid? x) (and (list? x) (andmap nat? x)))
-      (match p
-        [(list 'dsa 'params (? nat? p) (? nat? q) (? nat? g))
-         (-make-params-dsa p q g)]
-        [(list 'dh 'params (? nat? p) (? nat? g)
-               (? nat? q) (? nat/f? j) (? bytes/f? seed) (? nat/f? pgen))
-         (-make-params-dh p g q j (bcopy seed) pgen)]
-        [(list 'dh 'params (? nat? p) (? nat? g))
-         (-make-params-dh p g #f #f #f #f)]
-        [(list 'ec 'params (? oid? curve-oid))
-         (-make-params-ec curve-oid)]
-        [(list 'eddsa 'params (? symbol? curve))
-         (-make-params-eddsa curve)]
-        [(list 'ecx 'params (? symbol? curve))
-         (-make-params-ecx curve)]
-        [_ #f]))
+;; bcopy : (U Bytes #f) -> (U ImmutableBytes #f)
+;; Avoid shared refs to mutable data.
+(define (bcopy x) (if (bytes? x) (bytes->immutable-bytes x) x))
 
-    (define/public (-make-params-dsa p q g)
-      (send-to-impl 'dsa make-params p q g))
-    (define/public (-make-params-dh p g q j seed pgen)
-      (send-to-impl 'dh make-params p g q j seed pgen))
-    (define/public (-make-params-ec curve-oid)
-      (send-to-impl 'ec make-params curve-oid))
-    (define/public (-make-params-eddsa curve)
-      (send-to-impl 'eddsa make-params curve))
-    (define/public (-make-params-ecx curve)
-      (send-to-impl 'ecx make-params curve))
+;; ----------------------------------------
 
-    ;; ----------------------------------------
+(define (-check-bytes fmt v)
+  (-check-type fmt 'bytes? bytes? v))
+(define (-check-type fmt what pred v)
+  (unless (pred v)
+    (crypto-error "invalid datum for format\n  expected: ~a\n  format: ~e"
+                  what fmt)))
 
-    (define/private (-check-bytes fmt v)
-      (-check-type fmt 'bytes? bytes? v))
-    (define/private (-check-type fmt what pred v)
-      (unless (pred v)
-        (crypto-error "bad value for key format\n  expected: ~a\n  got: ~e\n  format: ~e"
-                      what v fmt)))
-    ))
+;; ----------------------------------------
+;; DSA/DH
 
-(define translate-key%
-  (class pk-read-key-base%
-    (init-field fmt)
-    (super-new (factory #f) (spec 'translate-key))
-    (define/override (-make-pub-rsa n e)
-      (encode-pub-rsa fmt n e))
-    (define/override (-make-priv-rsa n e d p q dp dq qInv)
-      (encode-priv-rsa fmt n e d p q dp dq qInv))
-    (define/override (-make-params-dsa p q g)
-      (encode-params-dsa fmt p q g))
-    (define/override (-make-pub-dsa p q g y)
-      (encode-pub-dsa fmt p q g y))
-    (define/override (-make-priv-dsa p q g y x)
-      (encode-priv-dsa fmt p q g y x))
-    (define/override (-make-params-dh p g q j seed pgen)
-      (encode-params-dh fmt p g q j seed pgen))
-    (define/override (-make-pub-dh p g q j seed pgen y)
-      (encode-pub-dh fmt p g q j seed pgen y))
-    (define/override (-make-priv-dh p g q j seed pgen y x)
-      (encode-priv-dh fmt p g q j seed pgen y x))
-    (define/override (-make-params-ec curve-oid)
-      (encode-params-ec fmt curve-oid))
-    (define/override (-make-pub-ec curve-oid qB)
-      (encode-pub-ec fmt curve-oid qB))
-    (define/override (-make-priv-ec curve-oid qB x)
-      (encode-priv-ec fmt curve-oid qB x))
-    (define/override (-make-params-eddsa curve)
-      (encode-params-eddsa fmt curve))
-    (define/override (-make-pub-eddsa curve qB)
-      (encode-pub-eddsa fmt curve qB))
-    (define/override (-make-priv-eddsa curve qB dB)
-      (encode-priv-eddsa fmt curve qB dB))
-    (define/override (-make-params-ecx curve)
-      (encode-params-ecx fmt curve))
-    (define/override (-make-pub-ecx curve qB)
-      (encode-pub-ecx fmt curve qB))
-    (define/override (-make-priv-ecx curve qB dB)
-      (encode-priv-ecx fmt curve qB dB))
-    ))
+(define (check-dsa p q g) ;; checks basic validity, not strength
+  (define (bad) (crypto-error "invalid DSA parameters"))
+  (unless (= 1 (remainder p q)) (bad))
+  (unless (= 1 (mod-expt g q p)) (bad)))
 
-;; translate-key : Datum KeyFormat KeyFormat -> (U Datum #f)
-(define (translate-key key-datum from-fmt to-fmt)
-  (send (new translate-key% (fmt to-fmt)) read-key key-datum from-fmt))
+(define (check-dh p g q j) ;; checks basic validity, not strength
+  (define (bad) (crypto-error "invalid DH parameters"))
+  (cond [j (unless (= p (add1 (* q j))) (bad))]
+        [else (unless (= 1 (remainder p q)) (bad))])
+  (unless (= (mod-expt g q p) 1) (bad)))
+
+(define (dsa/dh-recompute-y p g x)
+  ;; y = g^x mod p
+  (mod-expt g x p))
+
+(define (mod-expt n e p)
+  ;; compute (n^e) mod p, using ladder
+  (define (modp n) (modulo n p))
+  (let loop ([n n] [e e])
+    (cond [(zero? e) 1]
+          [(even? e) (loop (modp (* n n)) (quotient e 2))]
+          [else (modp (* n (loop n (sub1 e))))])))
+
+;; ----------------------------------------
+;; EC Points and Curves
+
+;; References:
+;; - SEC1 §2.3 for point to octet encoding
+;; - RFC 5480 §2.2: MUST support uncompressed form, MAY support compressed
+
+;; ok-ec-point? : Any -> (U 'comp 'nocomp #f)
+(define (ok-ec-point? v)
+  (define MIN-COORD-LEN 20) ;; no standard curves smaller than 160-bits
+  (define len (and (bytes? v) (bytes-length v)))
+  (and len (> len 0)
+       (case (bytes-ref v 0)
+         [(#x04) (and (> len (* 2 MIN-COORD-LEN)) 'nocomp)]
+         [(#x02 #x03) (and (> len MIN-COORD-LEN) 'comp)]
+         [else #f])))
+
+;; curve-alias->oid : Symbol/String -> OID/#f
+(define (curve-alias->oid alias)
+  (curve-name->oid (alias->curve-name alias)))
+
+
+;; ============================================================
+;; Key/Parameters Translation
 
 ;; translate-params : Datum ParamsFormat ParamsFormat -> (U Datum #f)
 (define (translate-params params-datum from-fmt to-fmt)
-  (send (new translate-key% (fmt to-fmt)) read-params params-datum from-fmt))
+  (encode-params to-fmt (parse-params from-fmt params-datum)))
 
-;; bcopy : (U Bytes #f) -> (U Bytes #f)
-;; Makes a fresh copy when given bytes.
-(define (bcopy x) (if (bytes? x) (bytes-copy x) x))
+;; translate-key : Datum KeyFormat KeyFormat -> (U Datum #f)
+(define (translate-key key-datum from-fmt to-fmt)
+  (encode-key to-fmt (parse-key from-fmt key-datum)))
 
-;; check-recomputed-qB : Bytes (U Bytes #f) -> Void
-(define (check-recomputed-qB new-qB maybe-old-qB)
-  (when maybe-old-qB
-    (unless (equal? new-qB maybe-old-qB)
-      (crypto-error "public key does not match private key"))))
+(define (encode-params fmt parsed)
+  (match parsed
+    [(list 'params 'dsa p q g)
+     (encode-params-dsa fmt p q g)]
+    [(list 'params 'dh p g q j seed pgen)
+     (encode-params-dh fmt p g q j seed pgen)]
+    [(list 'params 'ec curve-oid)
+     (encode-params-ec fmt curve-oid)]
+    [(list 'params 'ec eddsa curve)
+     (encode-params-eddsa fmt curve)]
+    [(list 'params 'ecx curve)
+     (encode-params-ecx fmt curve)]
+    [_ #f]))
+
+(define (encode-key fmt parsed)
+  (match parsed
+    [(list 'public 'rsa n e)
+     (encode-pub-rsa fmt n e)]
+    [(list 'private 'rsa n e d p q dp dq qInv)
+     (encode-priv-rsa fmt n e d p q dp dq qInv)]
+    [(list 'public 'dsa p q g y)
+     (encode-pub-dsa fmt p q g y)]
+    [(list 'private 'dsa p q g y x)
+     (encode-priv-dsa fmt p q g y x)]
+    [(list 'public 'dh p g q j seed pgen y)
+     (encode-pub-dh fmt p g q j seed pgen y)]
+    [(list 'private 'dh p g q j seed pgen y x)
+     (encode-priv-dh fmt p g q j seed pgen y x)]
+    [(list 'public 'ec curve-oid qB)
+     (encode-pub-ec fmt curve-oid qB)]
+    [(list 'private 'ec curve-oid qB x)
+     (encode-priv-ec fmt curve-oid qB x)]
+    [(list 'public 'eddsa curve qB)
+     (encode-pub-eddsa fmt curve qB)]
+    [(list 'private 'eddsa curve qB dB)
+     (encode-priv-eddsa fmt curve qB dB)]
+    [(list 'public 'ecx curve qB)
+     (encode-pub-ecx fmt curve qB)]
+    [(list 'private 'ecx curve qB dB)
+     (encode-priv-ecx fmt curve qB dB)]
+    [_ (encode-params fmt parsed)]))
+
+;; ----------------------------------------
 
 ;; References (OpenSSH key format):
 ;; - https://www.thedigitalcatonline.com/blog/2018/04/25/rsa-keys/ (overview)
@@ -449,9 +523,9 @@
 (define (parse-openssh-pub s)
   (cond [(regexp-match #rx"^(ssh-rsa|ssh-ed25519|ssh-ed448) ([a-zA-Z0-9+/]+)(?: |$)" s)
          => (lambda (m) (parse-openssh-pub* (cadr m) (base64-decode (caddr m))))]
-        [else (error 'wtf) #f]))
+        [else (err/fmt 'openssh-public)]))
 (define (parse-openssh-pub* outer-tag-s bin)
-  (define (bad msg) (crypto-error "invalid key encoding~a" msg))
+  (define (bad msg) (err/fmt 'openssh-public msg))
   (define binlen (bytes-length bin))
   (define (check-len n) (unless (<= n binlen) (bad " (index out of range)")))
   (define (get-uint4 n) (check-len (+ n 4)) (bytes->integer bin #f #t n (+ n 4)))
@@ -748,84 +822,3 @@
   (case curve
     [(x25519) id-X25519]
     [(x448)   id-X448]))
-
-;; ============================================================
-
-(define (dsa/dh-recompute-y p g x)
-  ;; y = g^x mod p
-  (mod-expt g x p))
-
-(define (mod-expt n e p)
-  ;; compute (n^e) mod p, using ladder
-  (define (modp n) (modulo n p))
-  (let loop ([n n] [e e])
-    (cond [(zero? e) 1]
-          [(even? e) (loop (modp (* n n)) (quotient e 2))]
-          [else (modp (* n (loop n (sub1 e))))])))
-
-;; ============================================================
-
-;; EC public key = ECPoint = octet string
-;; EC private key = unsigned integer
-
-;; Reference: SEC1 Section 2.3
-;; We assume no compression, valid, not infinity, prime field.
-;; mlen = ceil(bitlen(p) / 8), where q is the field in question.
-
-;; ec-point->bytes : Nat Nat -> Bytes
-(define (ec-point->bytes mlen x y)
-  ;; no compression, assumes valid, assumes not infinity/zero point
-  ;; (eprintf "encode\n mlen=~v\n x=~v\n y=~v\n" mlen x y)
-  (bytes-append (bytes #x04) (integer->bytes x mlen #f #t) (integer->bytes y mlen #f #t)))
-
-;; bytes->ec-point : Bytes -> (cons Nat Nat)
-(define (bytes->ec-point buf)
-  (define (bad) (crypto-error "failed to parse ECPoint (invalid)"))
-  (define buflen (bytes-length buf))
-  (unless (> buflen 0) (bad))
-  (case (bytes-ref buf 0)
-    [(#x02 #x03) ;; compressed point
-     (crypto-error "failed to parse compressed ECPoint (not implemented)")]
-    [(#x04) ;; uncompressed point
-     (unless (odd? buflen) (bad))
-     (define len (quotient (sub1 (bytes-length buf)) 2))
-     (define x (bytes->integer buf #f #t 1 (+ 1 len)))
-     (define y (bytes->integer buf #f #t (+ 1 len) (+ 1 len len)))
-     ;; (eprintf "decode\n mlen=~v\n x=~v\n y=~v\n" len x y)
-     (cons x y)]
-    [else (bad)]))
-
-;; curve-alias->oid : Symbol/String -> OID/#f
-(define (curve-alias->oid alias)
-  (curve-name->oid (alias->curve-name alias)))
-
-;; ============================================================
-
-;; Reference: https://datatracker.ietf.org/doc/html/rfc7748, Section 5
-
-;; Check if bytestring has the proper form of X{25519,448} secret key.
-(define (ecx-secret-wf? curve priv)
-  (case curve
-    [(x25519)
-     (and (= (bytes-length priv) 32)
-          (= #b000 (bitwise-and #b111 (bytes-ref priv 0)))
-          (= #b01000000 (bitwise-and #b11000000 (bytes-ref priv 31))))]
-    [(x448)
-     (and (= (bytes-length priv) 56)
-          (= #b00 (bitwise-and #b11 (bytes-ref priv 0)))
-          (= #b10000000 (bitwise-and #b10000000 (bytes-ref priv 55))))]))
-
-;; Modify bytestring to have the proper form of X{25519,448} secret key.
-(define (ecx-clamp-secret! curve priv)
-  (case curve
-    [(x25519)
-     (unless (= (bytes-length priv) 32)
-       (internal-error 'x25519-clamp-secret! "wrong length"))
-     (bytes-set! priv 0  (bitwise-and #b11111000 (bytes-ref priv 0)))
-     (bytes-set! priv 31 (bitwise-and #b01111111 (bytes-ref priv 31)))
-     (bytes-set! priv 31 (bitwise-ior #b01000000 (bytes-ref priv 31)))]
-    [(x448)
-     (unless (= (bytes-length priv) 56)
-       (internal-error 'x448-clamp-secret! "wrong length"))
-     (bytes-set! priv 0  (bitwise-and #b11111100 (bytes-ref priv 0)))
-     (bytes-set! priv 55 (bitwise-ior #b10000000 (bytes-ref priv 55)))]))
