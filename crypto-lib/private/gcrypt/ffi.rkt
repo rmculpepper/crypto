@@ -30,8 +30,6 @@
 (define-ffi-definer define-gcrypt libgcrypt
   #:default-make-fail make-not-available)
 
-(define gcrypt-ok? (and libgcrypt #t))
-
 ;; ----
 
 (define _gcry_error _uint)
@@ -77,7 +75,10 @@
 (define gcry-version (gcry_check_version #f))
 (define v1.8/later? (version>=? (version->list gcry-version) '(1 8)))
 (define v1.9/later? (version>=? (version->list gcry-version) '(1 9)))
+(define v1.10/later? (version>=? (version->list gcry-version) '(1 10)))
 (define v1.11/later? (version>=? (version->list gcry-version) '(1 11)))
+
+(define gcrypt-ok? (and libgcrypt v1.8/later?))
 
 ;; ----------------------------------------
 ;; Digests
@@ -175,9 +176,7 @@
   (_fun _int _int _pointer _pointer -> _gcry_error))
 
 (define (gcry_md_test_algo a)
-  (if gcrypt-ok?
-      (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f))
-      #f))
+  (and gcrypt-ok? (zero? (gcry_md_algo_info a GCRYCTL_TEST_ALGO #f #f))))
 
 (define-gcrypt gcry_md_get_asnoid
   (_fun (md) ::
@@ -389,9 +388,7 @@
   (_fun _int _int _pointer _pointer -> _gcry_error))
 
 (define (gcry_cipher_test_algo a)
-  (if gcrypt-ok?
-      (zero? (gcry_cipher_algo_info a GCRYCTL_TEST_ALGO #f #f))
-      #f))
+  (and gcrypt-ok? (zero? (gcry_cipher_algo_info a GCRYCTL_TEST_ALGO #f #f))))
 
 (define-gcrypt gcry_cipher_final
   (_fun _gcry_cipher_hd (_int = GCRYCTL_FINALIZE) (_pointer = #f) (_size = 0) -> _gcry_error)

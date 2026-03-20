@@ -186,17 +186,15 @@
     (define/override (-get-kdf spec)
       (or (match spec
             [(list 'pbkdf2 'hmac di-spec)
-             #:when (version>=? (get-version) '(1 5))
              (let ([di (get-digest di-spec)])
                (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
             ['scrypt
-             #:when (version>=? (get-version) '(1 6))
              (new gcrypt-scrypt-impl% (spec spec) (factory this))]
             [(or 'argon2d 'argon2i 'argon2id)
-             #:when (version>=? (get-version) '(1 10))
+             #:when v1.10/later?
              (new gcrypt-argon2-impl% (spec spec) (factory this))]
             [(list 'hkdf di-spec)
-             #:when (version>=? (get-version) '(1 10))
+             #:when v1.11/later?
              (match (assq di-spec digests)
                [(list _ algid blocksize hmac-algid)
                 (and hmac-algid (gcry_md_test_algo algid)

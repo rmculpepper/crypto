@@ -100,10 +100,7 @@
     (super-new (spec 'rsa))
 
     (define/override (can-encrypt? pad) (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
-    (define/override (can-sign pad)
-      ;; Before 1.8, can't set salt for PSS.
-      (define ok-pads (if v1.8/later? '(#f pkcs1-v1.5 pss) '(#f pkcs1-v1.5)))
-      (and (memq pad ok-pads) 'ignoredg))
+    (define/override (can-sign pad) (and (memq pad '(#f pkcs1-v1.5 pss)) 'ignoredg))
     (define/override (can-sign2? pad dspec)
       ;; Sign/verify fails on some digests (eg, blake2*, sha512/256), not clear
       ;; how to pre-check (gcry_md_get_asnoid not helpful).
