@@ -12,22 +12,29 @@
          racket/runtime-path
          "../common/ffi.rkt")
 
+;; Requires v3.6 (2020-04-29) or later
+
 (provide (protect-out (all-defined-out)))
 
 ;; Cooperate with `raco distribute`.
 (define-runtime-path libnettle-so
-  '(so "libnettle" ("8" "7" "6" #f)))
+  '(so "libnettle" ("8" #f)))
 
 (define-values (libnettle nettle-load-error)
-  (ffi-lib-or-why-not libnettle-so '("8" "7" "6" #f)))
+  (ffi-lib-or-why-not libnettle-so '("8" #f)))
 
 (define-ffi-definer define-nettle libnettle
   #:default-make-fail make-not-available)
 
-(define nettle-ok? (and libnettle #t))
+(define-nettle nettle_version_major (_fun -> _int)
+  #:fail (lambda () (lambda () 0)))
+(define-nettle nettle_version_minor (_fun -> _int)
+  #:fail (lambda () (lambda () 0)))
 
-(define-nettle nettle_version_major (_fun -> _int))
-(define-nettle nettle_version_minor (_fun -> _int))
+(define nettle-ok?
+  (and libnettle
+       (and (= (nettle_version_major) 3)
+            (>= (nettle_version_minor) 6))))
 
 (define (get-ok? fun-name)
   (and libnettle (get-ffi-obj fun-name libnettle _fpointer (lambda () #f)) #t))
@@ -458,10 +465,10 @@
 ;; ============================================================
 
 (define-runtime-path libhogweed-so
-  '(so "libhogweed" ("6" "5" "4" #f)))
+  '(so "libhogweed" ("6" #f)))
 
 (define-values (libhogweed hogweed-load-error)
-  (ffi-lib-or-why-not libhogweed-so '("6" "5" "4" #f)))
+  (ffi-lib-or-why-not libhogweed-so '("6" #f)))
 
 (define-ffi-definer define-nettleHW libhogweed
   #:default-make-fail make-not-available)
