@@ -223,13 +223,19 @@
          (match test-datum
            [`((Msg ,MsgH) (X ,X) (Y ,Y) (R ,R) (S ,S) (Result ,Result))
             (define Msg (hex->bytes* MsgH))
-            (define pub (datum->pk-key `(dsa public ,P ,Q ,G ,Y) 'rkt-public factory))
-            (define sig (dsa-r+s->bytes R S))
-            (define expect-verify? (regexp-match? #rx"^P" Result))
-            (check (digest/verify pub di Msg sig) #:is expect-verify?)
-            (check (let ([dgst (digest di Msg)])
-                     (pk-verify pub (digest di Msg) sig #:digest dspec))
-                   #:is expect-verify?)])))]))
+            (define pub
+              ;; may fail due to pubkey checks ("Y changed")
+              (with-handlers ([exn:fail? (lambda (e) #f)])
+                (datum->pk-key `(dsa public ,P ,Q ,G ,Y) 'rkt-public factory)))
+            (unless (regexp-match? #rx"Y changed" Result)
+              (check pub #:with pk-key?))
+            (when pub
+              (define sig (dsa-r+s->bytes R S))
+              (define expect-verify? (regexp-match? #rx"^P" Result))
+              (check (digest/verify pub di Msg sig) #:is expect-verify?)
+              (check (let ([dgst (digest di Msg)])
+                       (pk-verify pub (digest di Msg) sig #:digest dspec))
+                     #:is expect-verify?))])))]))
 
 (define (test-ecdsa-kat pk datum)
   (define factory (send pk get-factory))
