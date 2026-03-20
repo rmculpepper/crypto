@@ -25,11 +25,25 @@
     (define/public (get-libctx) (send factory get-libctx))
 
     (define/public (evp->params evp)
-      (and evp (new (get-params-class) (impl this) (pevp evp))))
+      (and (evp-ok? evp 'params)
+           (new (get-params-class) (impl this) (pevp evp))))
     (define/public (evp->public-key evp)
-      (and evp (new (get-key-class) (impl this) (evp evp) (private? #f))))
+      (and (evp-ok? evp 'public)
+           (new (get-key-class) (impl this) (evp evp) (private? #f))))
     (define/public (evp->private-key evp)
-      (and evp (new (get-key-class) (impl this) (evp evp) (private? #t))))
+      (and (evp-ok? evp 'private)
+           (new (get-key-class) (impl this) (evp evp) (private? #t))))
+
+    (define/private (evp-ok? evp mode)
+      (and evp
+           (let ([ctx (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)])
+             (HANDLEp (EVP_PKEY_param_check ctx)
+                      #:or-fail-with "key parameters validation failed")
+             (case mode
+               [(public) (HANDLEp (EVP_PKEY_public_check ctx)
+                                  #:or-fail-with "public key validation failed")]
+               [(private) (HANDLEp (EVP_PKEY_check ctx)
+                                   #:or-fail-with "private key validation failed")]))))
 
     (define/public (get-params-class) (err/no-impl this))
     (define/public (get-key-class) (err/no-impl this))

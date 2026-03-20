@@ -835,20 +835,23 @@
 ;; ----------------------------------------
 ;; Validation
 
+;; Count "not supported for algorithm" (-2) as okay result.
+(define (ok/na? r) (or (> r 0) (= r -2)))
+
 (define-crypto EVP_PKEY_check
-  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok/na? r)))
 (define-crypto EVP_PKEY_param_check
-  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok/na? r)))
 (define-crypto EVP_PKEY_param_check_quick
-  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok/na? r)))
 (define-crypto EVP_PKEY_public_check
-  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok/na? r)))
 (define-crypto EVP_PKEY_public_check_quick
-  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok/na? r)))
 (define-crypto EVP_PKEY_private_check
-  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok/na? r)))
 (define-crypto EVP_PKEY_pairwise_check
-  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok-result? r)))
+  (_fun [ctx : _EVP_PKEY_CTX] -> [r : _int] -> (ok/na? r)))
 
 ;; ----------------------------------------
 ;; Import and export components
