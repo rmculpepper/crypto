@@ -644,10 +644,8 @@
   (let ([y (or y (dsa/dh-recompute-y p g x))])
     (case fmt
       [(internal internal-private) (ok-private 'dsa p q g y x)]
-      [(PrivateKeyInfo)
-       (asn1->bytes/DER PrivateKeyInfo
-                        (h-private-key-info 0 (dsa-algid p q g) x))]
-      [(OneAsymmetricKey)
+      [(PrivateKeyInfo OneAsymmetricKey)
+       ;; actually use OneAsymmetricKey format
        (asn1->bytes/DER OneAsymmetricKey
                         (h-one-asymmetric-key 1 (dsa-algid p q g) x y))]
       [(DSAPrivateKey)
@@ -699,10 +697,8 @@
   (let ([y (or y (dsa/dh-recompute-y p g x))])
     (case fmt
       [(internal internal-private) (ok-private 'dh p g q j seed pgen y x)]
-      [(PrivateKeyInfo)
-       (asn1->bytes/DER PrivateKeyInfo
-                        (h-private-key-info 0 (dh-algid p g q j seed pgen) x))]
-      [(OneAsymmetricKey)
+      [(PrivateKeyInfo OneAsymmetricKey)
+       ;; actually use OneAsymmetricKey format
        (asn1->bytes/DER OneAsymmetricKey
                         (h-one-asymmetric-key 1 (dh-algid p g q j seed pgen) x y))]
       [(rkt-private)
@@ -781,10 +777,8 @@
 (define (encode-priv-eddsa fmt curve qB dB)
   (case fmt
     [(internal internal-private) (ok-private 'eddsa curve qB dB)]
-    [(PrivateKeyInfo)
-     (asn1->bytes/DER PrivateKeyInfo
-                      (h-private-key-info 0 (eddsa-algid curve) dB))]
-    [(OneAsymmetricKey)
+    [(PrivateKeyInfo OneAsymmetricKey)
+     ;; actually use OneAsymmetricKey format
      (asn1->bytes/DER OneAsymmetricKey
                       (h-one-asymmetric-key 1 (eddsa-algid curve) dB qB))]
     [(rkt-private) (list 'eddsa 'private curve (bcopy qB) (bcopy dB))]
@@ -824,10 +818,8 @@
 (define (encode-priv-ecx fmt curve qB dB)
   (case fmt
     [(internal internal-private) (ok-private 'ecx qB dB)]
-    [(PrivateKeyInfo)
-     (asn1->bytes/DER PrivateKeyInfo
-                      (h-private-key-info 0 (ecx-algid curve) dB))]
-    [(OneAsymmetricKey)
+    [(PrivateKeyInfo OneAsymmetricKey)
+     ;; actually use OneAsymmetricKey format
      (asn1->bytes/DER OneAsymmetricKey
                       (h-one-asymmetric-key 0 (ecx-algid curve) dB qB))]
     [(rkt-private)
