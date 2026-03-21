@@ -22,7 +22,7 @@
 @(define the-eval (make-base-eval))
 @(the-eval '(require crypto crypto/util/asn1 crypto/util/bech32))
 
-@title[#:tag "util"]{Miscellaneous Utilities}
+@title[#:tag "util"]{Utilities}
 
 @; ------------------------------------------------------------
 @section[#:tag "main-util"]{Main Utilities}
@@ -87,8 +87,8 @@ and Key-Size Selection)}. See also @racket[security-level/c].
 @bold{Note: } The security strength of a cryptographic primitive is generally
 not the same as its key size or its output size. Furthermore, reasoning in terms
 of security bits requires considering all parts of a system: for example, if a
-message has only 20 bits of entropy, then taking the SHA-512 of it still only
-has 20 bits of entropy.
+message has only 20 bits of entropy, then its SHA-512 hash still only has 20
+bits of entropy.
 
 @history[#:added "1.8"]}
 

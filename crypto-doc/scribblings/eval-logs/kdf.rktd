@@ -23,7 +23,7 @@
    c
    (u
     .
-    #"M\275\226\361\355\272@\231\37\365}9\354<81$3O\256\270\331\346QFZ_5?9\312\5")))
+    #"\232v\203P':(h\373\222\265\16#\374\373\20\317Rz\26vS\360\200\6\355UPm\17\352\6")))
  #""
  #"")
 ((kdf
@@ -62,12 +62,12 @@
    values
    c
    (c
-    (u . #"\265\361c&2\361\301\26\273\271\264\255\334\365\313\212")
+    (u . #" Fq\223L\36\16T\331\214\4\253\272\202\356\r")
     c
-    (u . #"\235\t\220s\246C\f\230if'\303M\210\314\236"))))
+    (u . #"\376_\21\202\320i\203\20\251\363\373\222'#\371\310"))))
  #""
  #"")
-((define pwcred (pwhash 'argon2id #"mypassword" '((t 1000) (m 4096) (p 1))))
+((define pwcred (pwhash 'argon2id #"mypassword" '((m 4096) (t 10) (p 1))))
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
@@ -83,7 +83,7 @@
    c
    (u
     .
-    "$argon2id$v=19$m=4096,t=1000,p=1$m+clolnAitzUfS2LdXAecw$tk4bWb9R4qjzOexnJVVkdCdKjSaZIVzjD7x7QBKZGeE")))
+    "$argon2id$v=19$m=4096,t=10,p=1$+IVbyVp7GvrbCxetj1N0Hg$2ySdH3AeiBWVr8pcmWA9WVUW+QLn3ejZrPPq+zFxR7I")))
  #""
  #"")
 ((pwhash-verify #f #"mypassword" pwcred)

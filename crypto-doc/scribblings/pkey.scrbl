@@ -11,13 +11,13 @@
 
 Public-key (PK) cryptography covers operations such as
 @seclink["pk-sign"]{signing}, @seclink["pk-encrypt"]{encryption}, and
-@seclink["pk-keyagree"]{key agreement} between parties that do not
-start with any shared secrets. Instead of shared secrets, each party
-possesses a keypair consisting of a secret private key and a
-widely-published public key. Not all PK cryptosystems support all PK
-operations (for example, DSA does not support encryption or secret
-derivation), and some PK implementations may support a subset of a PK
-cryptosystem's potential operations.
+@seclink["pk-keyagree"]{key agreement} between parties that do not start
+with any shared secrets. Instead of shared secrets, each party possesses
+a keypair consisting of a secret private key and a non-secret public
+key. Not all PK cryptosystems support all PK operations (for example,
+DSA only supports signing, not encryption or key agreement), and some PK
+implementations may support a subset of a PK cryptosystem's potential
+operations.
 
 
 @defproc[(pk-spec? [v any/c]) boolean?]{
@@ -34,23 +34,29 @@ following PK systems are supported:
 @item{@racket['rsa] --- @as-index{RSA} keys with RSAES-* encryption
 and RSASSA-* signing @cite{PKCS1}.}
 
-@item{@racket['dsa] --- @as-index{DSA} keys with DSA signing.}
+@item{@racket['dsa] --- @as-index{DSA} keys with DSA signing @cite["FIPS186-4"].}
 
 @item{@racket['dh] --- @as-index{Diffie-Hellman} key agreement using
-modular integer arithmetic @cite{RFC2631}.}
+modular integer exponentiation @cite["RFC2631" "SP800-56A"].}
 
-@item{@racket['ec] --- Elliptic curve keys with @as-index{ECDSA}
-signing and @as-index{ECDH} key agreement @cite{SEC1}. Only named
-curves are supported, and different implementations support different
-curves; use @racket[factory-print-info] to see supported curves.}
+@item{@racket['ec] --- Elliptic curve keys with @as-index{ECDSA} signing and
+@as-index{ECDH} key agreement @cite["SEC1" "FIPS186-5" "SP800-56A"]. Only named
+curves are supported, and different implementations support different sets of
+curves.}
 
-@item{@racket['eddsa] --- Edwards curve keys with @as-index{EdDSA} signing,
-specifically @as-index{Ed25519} and @as-index{Ed448}.}
+@item{@racket['eddsa] --- Specialized elliptic curve keys with
+@as-index{EdDSA} signing, specifically @as-index{Ed25519} and
+@as-index{Ed448} @cite["RFC8032" "FIPS186-5"]. Not compatible with
+@racket['ec] keys and operations.}
 
-@item{@racket['ecx] --- Montgomery curve keys with ECDH key agreement,
-specifically @as-index{X25519} and @as-index{X448}.}
+@item{@racket['ecx] --- Specialized elliptic curve keys with ECDH key
+agreement, specifically @as-index{X25519} and @as-index{X448}
+@cite["RFC7748"]. Not compatible with @racket['ec] keys and operations.}
 
 ]
+
+Use @racket[factory-print-info] to see supported systems and named elliptic
+curves.
 
 @history[#:changed "1.1" @elem{Added @racket['eddsa] and @racket['ecx].}]
 }
@@ -65,9 +71,9 @@ Returns @racket[#t] if @racket[v] is a PK cryptosystem implementation,
                  [factories (or/c crypto-factory? (listof crypto-factory?))])
          (or/c pk-impl? #f)]{
 
-Returns an implementation of PK algorithm @racket[pki] from the given
-@racket[factories]. If no factory in @racket[factories] implements
-@racket[pki], returns @racket[#f].
+Returns an implementation of PK system @racket[pki] from the given
+@racket[factories], or @racket[#f] if no factory in @racket[factories]
+implements @racket[pki].
 }
 
 @deftogether[[
@@ -105,19 +111,15 @@ required. That is, every private key is also a public key. This
 library uses the term ``public-only key'' to refer to a public key
 that is not a private key.
 
-In some PK cryptosystems, the public components are further divided
-into key-specific values and ``key parameters.'' Key parameters are
-public quantities that are expensive to compute; they can be generated
-once and many keypairs can use the same parameter values. For example,
-a DSA key requires a large prime with certain relatively rare
-mathematical properties, and so finding such a prime is relatively
-expensive, but once a suitable prime is found, generating private keys
-is relatively fast, and since the prime is public, many keypairs can
-use the same prime. Elliptic curve (EC) cryptography is another
-example: the key parameter is the curve equation, and the public and
-private key components are points on the curve. In contrast, RSA does
-not have key parameters; simple quantities like the size of an RSA
-modulus are not key parameters.
+In some PK cryptosystems, the public components are further divided into
+key-specific values and shared ``parameters.'' For example, elliptic curve (EC)
+keys only interoperate if they use the ``curve'' (comprising a modulus, a
+polynomial equation, and a generator point). That is, EC keys have one
+parameter, the curve, in addition to the key-specific public value, a point on
+that curve. Keys only interoperate if they have the same parameter values. The
+following key types have parameters: @racket['dsa], @racket['dh], @racket['ec],
+@racket['eddsa], and @racket['ecx]. The @racket['rsa] system does not; the
+bit-length of an RSA public modulus is not a parameter.
 
 @defproc[(pk-key? [v any/c]) boolean?]{
 
@@ -134,8 +136,9 @@ Returns @racket[#t] if @racket[v] is a private key.
 @defproc[(public-only-key? [v any/c]) boolean?]{
 
 Returns @racket[#t] if @racket[v] is a public key but not a private
-key, @racket[#f] otherwise. Equivalent to @racket[(and (pk-key? v)
-(not (private-key? v)))].
+key, @racket[#f] otherwise.
+
+Equivalent to @racket[(and (pk-key? v) (not (private-key? v)))].
 }
 
 @defproc[(pk-parameters? [v any/c]) boolean?]{
@@ -198,7 +201,7 @@ modulus of size @racket[_nbits]. Examples include @racket[1024] and
 ]}
 
 @item{The following configuration values are recognized for DH
-(@racket['dh]): 
+(@racket['dh]):
 @itemlist[
 
 @item{@racket[(list 'nbits _nbits)] --- Optional. Generate a prime
@@ -215,8 +218,10 @@ given @racket[_generator]; must be either @racket[2] or @racket[5].}
 @itemlist[
 
 @item{@racket[(list 'curve _curve-name)] --- Required. Use the standard curve
-named @racket[_curve-name]. Examples include @racket["NIST P-256"] and
-@racket["secp192r1"]. Use @racket[factory-print-info] to show available curves.}
+named @racket[_curve-name], which must be a symbol or string. Examples include
+@racket["NIST P-256"] and @racket['secp192r1]. Use @racket[factory-print-info]
+to show available curves. (No additional values are generated; the result is a
+parameters object representing the curve.)}
 
 ]}
 
@@ -224,18 +229,20 @@ named @racket[_curve-name]. Examples include @racket["NIST P-256"] and
 (@racket['eddsa]):
 @itemlist[
 
-@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key
-for the given curve. The @racket[_curve-sym] must be @racket['ed25519]
-or @racket['ed448].}
+@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key for the
+given curve. The @racket[_curve-sym] must be @racket['ed25519] or
+@racket['ed448]. (No additional values are generated; the result is a parameters
+object representing the curve.)}
 
 ]}
 
 @item{The following configuration values are recognized for @racket['ecx]:
 @itemlist[
 
-@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key
-for the given curve. The @racket[_curve-sym] must be @racket['x25519]
-or @racket['x448].}
+@item{@racket[(list 'curve _curve-sym)] --- Required. Generate a key for the
+given curve. The @racket[_curve-sym] must be @racket['x25519] or
+@racket['x448]. (No additional values are generated; the result is a parameters
+object representing the curve.)}
 
 ]}
 
@@ -263,15 +270,14 @@ then @racket[keygen-config] must be empty.}
 (@racket['rsa]):
 @itemlist[
 
-@item{@racket[(list 'nbits _nbits)] --- Optional. Generate a modulus
-of size @racket[_nbits]. Examples include @racket[1024] and
-@racket[2048].}
+@item{@racket[(list 'nbits _nbits)] --- Optional. Generate a modulus of size
+@racket[_nbits]. A typical value for @racket[_nbits] is @racket[2048].}
 
 ]}
 
 @item{If @racket[pki] is a PK specifier (@racket[pk-spec?]) or PK
 implementation (@racket[pk-impl?]), then the same configuration
-arguments are supported as for @racket[generate-parameters]. This is
+arguments are supported as for @racket[generate-pk-parameters]. This is
 equivalent to @racket[(generate-private-key (generate-pk-parameters
 pki keygen-config) '())].
 
@@ -282,17 +288,16 @@ pki keygen-config) '())].
 
 @section[#:tag "pk-sign"]{PK Signatures}
 
-In PK signing, the sender uses their own private key to sign a
-message; any other party can verify the sender's signature using the
-sender's public key.
+In PK signing, the sender uses their own private key to sign a message, and any
+other party can verify the sender's signature using the sender's public key.
 
-In RSA, DSA, and ECDSA, only short messages can be signed directly (limits are
+With RSA, DSA, and ECDSA, only short messages can be signed directly (limits are
 generally proportional to the size of the keys), so a typical process is to
 compute a digest of the message and sign the digest. The message and digest
 signature are sent together, possibly with additional data.
 
-In EdDSA, messages are signed directly. (The signing process computes a message
-digest internally.)
+With EdDSA, messages are signed directly. (The signing process computes a
+message digest internally.)
 
 @defproc[(pk-sign [pk private-key?]
                   [msg bytes?]
@@ -308,17 +313,17 @@ one of the following:
 @itemlist[
 @item{@racket['pkcs1-v1.5] or @racket[#f] --- use PKCS#1-v1.5 padding}
 @item{@racket['pss] --- use PSS padding with a salt length equal to
-@racket[(digest-size di)]}
+@racket[(digest-size _dspec)]}
 @item{@racket['pss*] --- sign using PSS padding with a salt length
-equal to @racket[(digest-size di)], but infer the salt length when
+equal to @racket[(digest-size _dspec)], but infer the salt length when
 verifying}
 ]
 For all other cryptosystems, @racket[padding] must be @racket[#f].
 
-If @racket[pk] is an RSA private key, then @racket[dspec] must be the name
-of a digest algorithm, and @racket[msg] must be a digest computed with
-@racket[dspec] (in particular, it must have the correct size for
-@racket[dspec]). The resulting signature depends on the identity of the
+If @racket[pk] is an RSA private key, then @racket[dspec] must be the name of a
+digest algorithm, and @racket[msg] should be a digest computed with
+@racket[dspec] (in particular, the length of @racket[msg] must be the output
+size of @racket[dspec]). The resulting signature depends on the identity of the
 digest algorithm. Different RSA implementations may support different digest
 algorithms.
 
@@ -383,7 +388,7 @@ not support pre-hashing EdDSA variants, eg Ed25519ph.)
                          [#:pad padding (or/c #f 'pkcs1-v1.5 'pss 'pss*) #f])
          bytes?]
 @defproc[(pk-verify-digest [pk pk-key?]
-                           [di (or/c digest-spec? digest-impl?)] 
+                           [di (or/c digest-spec? digest-impl?)]
                            [dgst bytes?]
                            [sig bytes?]
                            [#:pad padding (or/c #f 'pkcs1-v1.5 'pss) #f])
@@ -484,40 +489,24 @@ supported:
 @item{@racket['SubjectPublicKeyInfo] --- DER-encoded
 SubjectPublicKeyInfo @cite["PKIX"] representation of the public part
 of @racket[pk]. All key types are supported, and an identifier for the
-key type is embedded in the encoding.
-
-For compatibility with OpenSSL, DH keys are encoded using the PKCS #3
-identifier and parameters @cite["PKCS3"] rather than those specified by
-@cite["PKIX-AlgId"], and EdDSA keys are encoded using the algorithm
-identifiers specified in @cite["PKIX-EdC"].}
+key type is embedded in the encoding @cite["PKIX-AlgId" "PKIX-EdC"].}
 
 @item{@racket['PrivateKeyInfo] --- DER-encoded PrivateKeyInfo
-@cite["PKCS8"] representation of @racket[pk], which must be a private
-key. All key types are supported, and an identifier for the key type
-is embedded in the encoding.
+@cite["PKCS8"] or OneAsymmetricKey @cite["AKP"] representation of
+@racket[pk], which must be a private key. All key types are supported,
+and an identifier for the key type is embedded in the encoding.
 
-For DSA, DH, and EdDSA keys, the PrivateKeyInfo (version 1) format does not
-store derived public-key fields. Some implementations (eg GCrypt) do not
-expose the ability to recompute the public key, so they may not be able to
-read such keys. See also @racket['OneAsymmetricKey].}
+OneAsymmetricKey is essentially PrivateKeyInfo v2; it adds an optional
+field for the public key. The OneAsymmetricKey (v2) format is
+automatically used when necessary; otherwise, the PrivateKeyInfo (v1)
+format is used when the private key format already includes the public
+components.}
 
-@item{@racket['OneAsymmetricKey] --- DER-encoded OneAsymmetricKey
-@cite["AKP"] representation of @racket[pk], which must be a private
-key. OneAsymmetricKey is essentially PrivateKeyInfo version 2; it adds an
-optional field for the public key. Prefer OneAsymmetricKey for storing DSA,
-DH, and EdDSA keys.}
+@item{@racket['OneAsymmetricKey] --- Alias for @racket['PrivateKeyInfo].}
 
 @item{@racket['RSAPrivateKey] --- DER-encoded RSAPrivateKey
 @cite["PKCS1"] representation of @racket[pk], which must be an RSA
 private key.}
-
-@;{@item{@racket['DSAPrivateKey] --- DER-encoded representation of
-@racket[pk], which must be a DSA private key, in a non-standard format
-used by OpenSSL.}}
-
-@;{@item{@racket['ECPrivateKey] --- DER-encoded ECPrivateKey @cite{SEC1}
-representation of @racket[pk], which must be an EC private key. Only
-keys using named curves are supported.}}
 
 @item{@racket['age/v1-private] --- String encoded in the
 @hyperlink["https://age-encryption.org/v1"]{age-encryption (v1)} format,
@@ -538,10 +527,11 @@ Ed25519, and Ed448 public keys are currently supported.}
 
 @itemlist[
 
-@item{@racket[(list 'rsa 'private _n _e _d)]}
+@item{@racket[(list 'rsa 'private 0 _n _e _d _p _q _dp _dq _qInv)]}
 @item{@racket[(list 'dsa 'private _p _q _g _y _d)]}
+@item{@racket[(list 'dh  'private _p _g _q _j _seed _pgen _y _x)]}
 @item{@racket[(list 'dh  'private _p _g _y _x)]}
-@item{@racket[(list 'ec  'private _curve-oid _q-bytes _x)]}
+@item{@racket[(list 'ec  'private _curve-oid _q-bytes _d)]}
 @item{@racket[(list 'eddsa 'private _curve-sym _q-bytes _d-bytes)]}
 @item{@racket[(list 'ecx 'private _curve-sym _q-bytes _d-bytes)]}
 
@@ -553,6 +543,7 @@ Ed25519, and Ed448 public keys are currently supported.}
 
 @item{@racket[(list 'rsa 'public _n _e)]}
 @item{@racket[(list 'dsa 'public _p _q _g _y)]}
+@item{@racket[(list 'dh  'private _p _g _q _j _seed _pgen _y)]}
 @item{@racket[(list 'dh  'public _p _g _y)]}
 @item{@racket[(list 'ec  'public _curve-oid _q-bytes)]}
 @item{@racket[(list 'eddsa 'public _curve-sym _q-bytes)]}
@@ -569,27 +560,36 @@ More formats may be added in future versions of this library.
 and @racket['rkt-public] formats.}
 #:changed "1.9" @elem{Added @racket['age/v1-public], @racket['age/v1-private],
 and @racket['openssh-public] formats.}
+#:changed "2.0" @elem{Added the longer DH variants of @racket['rkt-public]
+and @racket['rkt-private] encodings.}
+#:changed "2.0" @elem{Previously, SubjectPublicKeyInfo encoding of DH keys used
+the PKCS #3 identifier and parameters @cite["PKCS3"] for compatibility with old
+versions of OpenSSL.}
 ]}
 
 @defproc[(datum->pk-key [datum any/c]
                         [fmt symbol?]
-                        [factories (or/c crypto-factory? (listof crypto-factory?))
-                                   (crypto-factories)])
+                        [sources (or/c pk-impl? crypto-factory?
+                                       (listof (or/c pk-impl? crypto-factory?)))
+                                 (crypto-factories)])
          pk-key?]{
 
 Parses @racket[datum] and returns a PK key associated with an
-implementation from @racket[factories]. If no implementation in
-@racket[factories] supports @racket[fmt], an exception is raised.
+implementation from @racket[sources]. If no implementation in
+@racket[sources] supports the decoded key, an exception is raised.
 
 See @racket[pk-key->datum] for information about the @racket[fmt]
 argument.
+
+@history[#:changed "2.0" @elem{Generalized @racket[sources] argument
+from factories to allow PK implementations also.}]
 }
 
 @defproc[(pk-parameters->datum [pkp pk-parameters?]
                                [fmt symbol?])
          printable/c]{
 
-Returns a datum representing the key parameters @racket[pkp], where
+Returns a datum representing the PK parameters @racket[pkp], where
 the encoding is selected by @racket[fmt]. Unless noted below, the
 result is a bytestring (@racket[bytes?]). The following @racket[fmt]
 options are supported:
@@ -599,26 +599,28 @@ options are supported:
 @item{@racket['AlgorithmIdentifier] --- DER-encoded
 AlgorithmIdentifier @cite["PKIX"] representation of @racket[pkp]. All
 key parameter types are supported, and an identifier for the key
-parameter type is embedded in the encoding.
+parameter type is embedded in the encoding.}
 
-For @racket['dh] parameters, the PKCS #3 identifier and parameter
-format @cite["PKCS3"] are used rather than those specified by
-@cite["PKIX-AlgId"], for compatibility with OpenSSL.}
+@item{@racket['DSAParameters] --- DER-encoded Dss-Parms
+@cite["PKIX-AlgId"] for DSA parameters.}
 
-@item{@racket['DSAParameters] --- DER-encoded Dss-Parms @cite["PKIX-AlgId"]}
+@item{@racket['DomainParameters] --- DER-encoded DomainParameters
+@cite["PKIX-AlgId"] for DH parameters.}
 
-@item{@racket['DHParameter] --- DER-encoded DHParameter
-@cite["PKCS3"]. Note: this format differs from the DomainParameters
-format specified by PKIX.}
+@item{@racket['DHParameter] --- DER-encoded DHParameter @cite["PKCS3"]
+for DH parameters. (This format contains insufficient information for
+parameter validation.)}
 
 @item{@racket['EcpkParameters] --- DER-encoded EcpkParameters
-@cite["PKIX-AlgId"] (called ECDomainParameters in @cite["SEC1"]).}
+@cite["PKIX-AlgId"] (called ECDomainParameters in @cite["SEC1"]) for EC
+parameters.}
 
 @item{@racket['rkt-params] --- An S-expression of one of the following forms:
 
 @itemlist[
 
 @item{@racket[(list 'dsa 'params _p _q _g)]}
+@item{@racket[(list 'dh  'params _p _g _q _j _seed _pgen)]}
 @item{@racket[(list 'dh  'params _p _g)]}
 @item{@racket[(list 'ec  'params _curve-oid)]}
 @item{@racket[(list 'eddsa 'params _curve-sym)]}
@@ -630,18 +632,24 @@ format specified by PKIX.}
 
 More formats may be added in future versions of this library.
 
-@history[#:changed "1.1" @elem{Added @racket['rkt-params] support.}]
-}
+@history[#:changed "1.1" @elem{Added @racket['rkt-params] support.}
+#:changed "2.0" @elem{Added the longer DH variants of the @racket['rkt-params]
+encoding.}
+#:changed "2.0" @elem{Previously, AlgorithmIdentifier encoding of DH keys used
+the PKCS #3 identifier and parameters @cite["PKCS3"] for compatibility with old
+versions of OpenSSL.}
+]}
 
 @defproc[(datum->pk-parameters [datum any/c]
                                [fmt symbol?]
-                               [factories (or/c crypto-factory? (listof crypto-factory?)) 
-                                          (crypto-factories)])
+                               [sources (or/c pk-impl? crypto-factory?
+                                              (listof (or/c pk-impl? crypto-factory?)))
+                                        (crypto-factories)])
          pk-parameters?]{
 
-Parses @racket[datum] and returns a key-parameters value associated
-with an implementation in @racket[factories]. If no implementation is
-found that accepts @racket[fmt], an exception is raised.
+Parses @racket[datum] and returns a PK parameters value associated with
+an implementation in @racket[sources]. If no implementation is found
+that supports the decoded parameters, an exception is raised.
 }
 
 
@@ -725,9 +733,18 @@ Equivalent to the following:
            #:title "RFC 5958: Asymmetric Key Packages"
            #:url "https://tools.ietf.org/html/rfc5958"]
 
+@bib-entry[#:key "FIPS186-4"
+           #:title "Digital Signature Standard"
+           @; DOI: @url{https://doi.org/10.6028/NIST.FIPS.186-4}
+           #:url "https://csrc.nist.gov/pubs/fips/186-4/final"]
+
+@bib-entry[#:key "FIPS186-5"
+           #:title "Digital Signature Standard"
+           #:url "https://csrc.nist.gov/pubs/fips/186-5/final"]
+
 @bib-entry[#:key "PKCS1"
-           #:title "PKCS #1: RSA Cryptography, version 2.1"
-           #:url "https://tools.ietf.org/html/rfc3447"]
+           #:title "PKCS #1: RSA Cryptography, version 2.2"
+           #:url "https://tools.ietf.org/html/rfc8017"]
 
 @bib-entry[#:key "PKCS3"
            #:title "PKCS #3: Diffie-Hellman Key-Agreement Standard"]
@@ -752,12 +769,26 @@ Equivalent to the following:
            #:title "RFC 2631: Diffie-Hellman Key Agreement Method"
            #:url "https://tools.ietf.org/html/rfc2631"]
 
+@bib-entry[#:key "RFC7468"
+           #:title "Textual Encodings of PKIX, PKCS, and CMS Structures"
+           #:url "https://tools.ietf.org/html/rfc7468"]
+
+@bib-entry[#:key "RFC7748"
+           #:title "Elliptic Curves for Security"
+           #:url "https://tools.ietf.org/html/rfc7748"]
+
+@bib-entry[#:key "RFC8032"
+           #:title "Edwards-Curve Digital Signature Algorithm (EdDSA)"
+           #:url "https://tools.ietf.org/html/rfc8032"]
+
 @bib-entry[#:key "SEC1"
            #:title "SEC 1: Elliptic Curve Cryptography"
            #:url "http://www.secg.org/sec1-v2.pdf"]
 
-@bib-entry[#:key "RFC7468"
-           #:title "Textual Encodings of PKIX, PKCS, and CMS Structures"
-           #:url "https://tools.ietf.org/html/rfc7468"]
-]
+@;{
+@bib-entry[#:key "SP800-56A"
+           #:title "Recommendation for Pair-Wise Key-Establishment Schemes Using Discrete Logarithm Cryptography"
+           #:url "https://csrc.nist.gov/pubs/sp/800/56/a/r3/final"]
+}
 
+]

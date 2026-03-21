@@ -7,7 +7,7 @@
                      racket/random
                      crypto))
 
-@title[#:tag "misc"]{Miscellaneous Notes}
+@title[#:tag "misc"]{Notes}
 
 @; ------------------------------------------------------------
 @section[#:tag "provider-notes"]{Notes on Cryptography Providers}

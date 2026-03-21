@@ -114,7 +114,11 @@ Factory for
 @hyperlink["http://www.openssl.org/docs/crypto/crypto.html"]{libcrypto},
 the cryptography library of OpenSSL. The necessary foreign library is
 typically part of the operating system or distributed with Racket.
+OpenSSL version 3.0 or later is required.
+
+@history[#:changed "2.0" @elem{Dropped support for versions before 3.0.}]
 }
+
 
 @section[#:tag "gcrypt-factory"]{GCrypt}
 
@@ -126,7 +130,9 @@ Factory for
 @hyperlink["http://www.gnu.org/software/libgcrypt/"]{GCrypt} (aka
 @as-index{libgcrypt}), a cryptography library from the GNU project,
 originally part of GnuPG.  The @tt{libgcrypt.so.20} foreign library is
-required.
+required, and the version must be 1.8 or later.
+
+@history[#:changed "2.0" @elem{Dropped support for versions before 1.8.}]
 }
 
 @section[#:tag "nettle-factory"]{Nettle}
@@ -137,10 +143,13 @@ required.
 
 Factory for
 @hyperlink["http://www.lysator.liu.se/~nisse/nettle/"]{Nettle}, a
-lightweight cryptography library. The @tt{libnettle.so.{7,6}} foreign
-library is required, and @tt{libhogweed.so.{5,4}} is required for
-public-key crypto support.
+lightweight cryptography library. The @tt{libnettle.so.8} foreign
+library is required, and @tt{libhogweed.so.6} is required for
+public-key crypto support, and the version must be 3.6 or later.
+
+@history[#:changed "2.0" @elem{Dropped support for versions before 3.6.}]
 }
+
 
 @section[#:tag "sodium-factory"]{Sodium}
 

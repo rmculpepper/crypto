@@ -4,7 +4,7 @@
                      racket/contract
                      crypto))
 
-@title[#:version "1.1"]{Crypto: Cryptographic Operations}
+@title[#:version "2.0"]{Crypto: Cryptographic Operations}
 @author[@author+email["Ryan Culpepper" "ryanc@racket-lang.org"]]
 
 @defmodule[crypto]
@@ -17,21 +17,6 @@ signatures, encryption, and key agreement.
 @hyperlink["http://github.com"]{GitHub} at the following project page:
 
 @centered{@url{https://github.com/rmculpepper/crypto}}
-
-@bold{Acknowledgements} This library is partly based on the
-@racketmodname[(planet vyzo/crypto)] library by Dimitris Vyzovitis.
-
-@bold{Copying} This program is free software: you can redistribute
-it and/or modify it under the terms of the
-@hyperlink["http://www.gnu.org/licenses/lgpl.html"]{GNU Lesser General
-Public License} as published by the Free Software Foundation, either
-version 3 of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-General Public License and GNU Lesser General Public License for more
-details.
 
 @local-table-of-contents[]
 

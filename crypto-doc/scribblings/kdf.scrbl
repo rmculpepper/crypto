@@ -16,17 +16,16 @@
 
 @title[#:tag "kdf"]{Key Derivation and Password Hashing}
 
-A key derivation function can be used to derive keys from secret
+A key derivation function (KDF) can be used to derive keys from secret
 material that is not directly suitable for use as a key, such as a
 passphrase or the result of a key agreement algorithm. Differnt KDFs
 have different additional parameters such as work factors and context
 information fields.
 
 KDFs with adjustable work factors are also used to store passwords
-@cite["HtSSaP" "DUB"]. A KDF is preferable to a simple digest function
+@cite["OWASP" "DUB"]. A KDF is preferable to a simple digest function
 (even with a salt) because the work factor can be chosen to make
-exhaustively searching the space of likely passwords (typically short
-and composed of alpha-numeric characters) costly.
+exhaustively searching the space of likely passwords costly.
 
 
 @defproc[(kdf-spec? [v any/c])
@@ -108,17 +107,19 @@ Returns an implementation of KDF @racket[k] from the given
 }
 
 @defproc[(kdf [k (or/c kdf-spec? kdf-impl?)]
-              [pass bytes?]
+              [input bytes?]
               [salt (or/c bytes? #f)]
               [params (listof (list/c symbol? any/c)) '()])
          bytes?]{
 
-Runs the KDF specified by @racket[k] on the password or passphrase
-@racket[pass] and the given @racket[salt] and produces a derived key
-(or password hash). Additional parameters such as iteration count are
-passed via @racket[params].
+Runs the KDF specified by @racket[k] on @racket[input] and @racket[salt] and
+produces a derived key (or password hash). Additional parameters such as
+iteration count are passed via @racket[params].
 
-The salt must be a bytestring (@racket[bytes?]) except in the
+The @racket[input] argument may be a password or passphrase, or it may be input
+keying material from a key agreement operation.
+
+The @racket[salt] must be a bytestring (@racket[bytes?]) except in the
 following cases: if the KDF is @racket['ans-x9.63], @racket['concat]
 with a digest, @racket['sp800-108-counter], or
 @racket['sp800-108-double-pipeline], then @racket[salt] must be
@@ -133,9 +134,6 @@ The following parameters are recognized for @racket[(list 'pbkdf2
 @item{@racket[(list 'key-size _key-size)] --- the size of the output}
 ]
 
-In 2000 PKCS#5 @cite["PKCS5"] recommended a minimum of 1000
-iterations; the iteration count should be exponentially larger today.
-
 The following parameters are recognized for @racket['scrypt]:
 
 @itemlist[
@@ -144,10 +142,6 @@ The following parameters are recognized for @racket['scrypt]:
 @item{@racket[(list 'r _r)] --- the block size}
 @item{@racket[(list 'key-size _key-size)] --- the size of the output}
 ]
-
-In 2009 the original scrypt paper @cite["scrypt"] used parameters such
-as 2@superscript{14} to 2@superscript{20} for @racket[_N], 1 for
-@racket[_p], and 8 for @racket[_r].
 
 The following parameters are recognized for @racket['argon2d],
 @racket['argon2i], and @racket['argon2id]:
@@ -201,10 +195,12 @@ recommendations regarding the contents and format of this field}
 Computes a ``password hash'' from @racket[password] suitable for
 storage, using the KDF algorithm @racket[k]. The resulting string
 contains an identifier for the algorithm as well as the parameters from
-@racket[config]. The result also contains an automatically generated salt.
-The formats are intended to be compatible with
+@racket[config]. The result also contains an automatically generated
+salt.  The formats are intended to be compatible with
 @hyperlink["https://passlib.readthedocs.io/en/stable/modular_crypt_format.html"]{Modular
-Crypt Format}.
+Crypt Format} and
+@hyperlink["https://github.com/P-H-C/phc-string-format/blob/master/phc-sf-spec.md"]{PHC
+String Format}.
 
 The @racket[config] parameters are nearly the same as for @racket[kdf],
 with the following exceptions:
@@ -220,8 +216,10 @@ always generates password hashes with 32 bytes of raw output (before
 encoding).}
 ]
 
+See @cite["OWASP"] for parameter recommendations.
+
 @examples[#:eval the-eval
-(define pwcred (pwhash 'argon2id #"mypassword" '((t 1000) (m 4096) (p 1))))
+(define pwcred (pwhash 'argon2id #"mypassword" '((m 4096) (t 10) (p 1))))
 pwcred
 ]
 
