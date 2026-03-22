@@ -89,10 +89,6 @@
       (cond [priv (encode-priv-eddsa fmt 'ed25519 pub (subbytes priv 0 32))]
             [else (encode-pub-eddsa fmt 'ed25519 pub)]))
 
-    (define/override (equal-to-key? other)
-      (and (is-a? other sodium-ed25519-key%)
-           (equal? pub (get-field pub other))))
-
     (define/override (-sign msg _dspec pad)
       (define sig (make-bytes crypto_sign_ed25519_BYTES))
       (define s (crypto_sign_ed25519_detached sig msg (bytes-length msg) priv))
@@ -176,10 +172,6 @@
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt 'x25519 pub priv)]
             [else (encode-pub-ecx fmt 'x25519 pub)]))
-
-    (define/override (equal-to-key? other)
-      (and (is-a? other sodium-x25519-key%)
-           (equal? pub (get-field pub other))))
 
     (define/override (-compute-secret peer-pubkey)
       (define peer-pub

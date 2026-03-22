@@ -626,7 +626,7 @@
 (define (public-key=? k1 . ks)
   (with-crypto-entry 'public-key=?
     (for/and ([k (in-list ks)])
-      (send k1 equal-to-key? k))))
+      (send k1 public-equal? k))))
 
 (define (pksrc-ormap src pkspec f)
   (define srcs (if (list? src) src (list src)))

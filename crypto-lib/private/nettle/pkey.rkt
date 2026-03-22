@@ -118,15 +118,6 @@
                               (mpz->integer (rsa_private_key_struct-c priv)))]
             [else (encode-pub-rsa fmt n e)]))
 
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-rsa-key%)
-           (= (rsa_public_key_struct-size pub)
-              (rsa_public_key_struct-size (get-field pub other)))
-           (mpz=? (rsa_public_key_struct-n pub)
-                  (rsa_public_key_struct-n (get-field pub other)))
-           (mpz=? (rsa_public_key_struct-e pub)
-                  (rsa_public_key_struct-e (get-field pub other)))))
-
     (define/override (-sign digest digest-spec pad)
       (define randctx (send impl get-random-ctx))
       (define sigz (new-mpz))
@@ -313,16 +304,6 @@
       (cond [priv (let ([x (mpz->integer priv)]) (encode-priv-dsa fmt p q g y x))]
             [else (encode-pub-dsa fmt p q g y)]))
 
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-dsa-key%)
-           (mpz=? (dsa_params_struct-p params)
-                  (dsa_params_struct-p (get-field params other)))
-           (mpz=? (dsa_params_struct-q params)
-                  (dsa_params_struct-q (get-field params other)))
-           (mpz=? (dsa_params_struct-g params)
-                  (dsa_params_struct-g (get-field params other)))
-           (mpz=? pub (get-field pub other))))
-
     (define/override (-sign digest digest-spec pad)
       (define sig (new-dsa_signature))
       (or (nettle_dsa_sign params priv (send impl get-random-ctx) digest sig)
@@ -437,10 +418,6 @@
              (encode-priv-ec fmt curve-oid qB (mpz->integer dz))]
             [else
              (encode-pub-ec fmt curve-oid qB)]))
-
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-ec-key%)
-           (ecc_point=? pub (get-field pub other))))
 
     (define/override (-sign digest digest-spec pad)
       (define randctx (send impl get-random-ctx))
@@ -605,10 +582,6 @@
       (cond [priv (encode-priv-eddsa fmt 'ed25519 pub priv)]
             [else (encode-pub-eddsa fmt 'ed25519 pub)]))
 
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-ed25519-key%)
-           (equal? pub (get-field pub other))))
-
     (define/override (-sign msg _dspec pad)
       (define sig (make-bytes ED25519_SIGNATURE_SIZE))
       (nettle_ed25519_sha512_sign pub priv (bytes-length msg) msg sig)
@@ -636,10 +609,6 @@
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-eddsa fmt 'ed448 pub priv)]
             [else (encode-pub-eddsa fmt 'ed448 pub)]))
-
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-ed448-key%)
-           (equal? pub (get-field pub other))))
 
     (define/override (-sign msg _dspec pad)
       (define sig (make-bytes ED448_SIGNATURE_SIZE))
@@ -747,10 +716,6 @@
       (cond [priv (encode-priv-ecx fmt 'x25519 pub priv)]
             [else (encode-pub-ecx fmt 'x25519 pub)]))
 
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-x25519-key%)
-           (equal? pub (get-field pub other))))
-
     (define/override (-compute-secret peer-pubkey)
       (define peer-pub (get-field pub peer-pubkey))
       (define secret (make-bytes X25519_KEY_SIZE))
@@ -781,10 +746,6 @@
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt 'x448 pub priv)]
             [else (encode-pub-ecx fmt 'x448 pub)]))
-
-    (define/override (equal-to-key? other)
-      (and (is-a? other nettle-x448-key%)
-           (equal? pub (get-field pub other))))
 
     (define/override (-compute-secret peer-pubkey)
       (define peer-pub (get-field pub peer-pubkey))

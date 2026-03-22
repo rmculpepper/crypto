@@ -61,12 +61,6 @@
     (define/override (get-public-key)
       (if priv (new this% (impl impl) (pub pub) (priv #f)) this))
 
-    (define/override (equal-to-key? other)
-      (and (is-a? other gcrypt-pk-key%)
-           (let ([d1 (send this write-key 'rkt-public)]
-                 [d2 (send other write-key 'rkt-public)])
-             (and d1 d2 (equal? d1 d2)))))
-
     (define/override (-sign digest digest-spec pad)
       (check-sig-pad pad)
       (define data-sexp (sign-make-data-sexp digest digest-spec pad))

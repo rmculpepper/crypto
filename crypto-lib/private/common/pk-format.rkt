@@ -744,7 +744,7 @@
                            (unsigned->base256 d)
                            qB)))]
     [(rkt-private) (list 'ec 'private curve-oid (bcopy qB) d)]
-    [else (encode-pub-ec fmt curve-oid qB)]))
+    [else (if qB (encode-pub-ec fmt curve-oid qB) (encode-params-ec fmt curve-oid))]))
 
 ;; ---- EdDSA ----
 
@@ -782,7 +782,7 @@
      (asn1->bytes/DER OneAsymmetricKey
                       (h-one-asymmetric-key 1 (eddsa-algid curve) dB qB))]
     [(rkt-private) (list 'eddsa 'private curve (bcopy qB) (bcopy dB))]
-    [else (encode-pub-eddsa fmt curve qB)]))
+    [else (if qB (encode-pub-eddsa fmt curve qB) (encode-params-eddsa fmt curve))]))
 
 (define (ed-curve->oid curve)
   (case curve
@@ -827,7 +827,7 @@
     [(age/v1-private)
      (and (eq? curve 'x25519)
           (string-upcase (bech32-encode "age-secret-key-" dB)))]
-    [else (encode-pub-ecx fmt curve qB)]))
+    [else (if qB (encode-pub-ecx fmt curve qB) (encode-params-ecx fmt curve))]))
 
 (define (x-curve->oid curve)
   (case curve

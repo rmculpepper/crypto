@@ -241,7 +241,7 @@
     [get-security-bits  (->m (or/c #f nat?))]
 
     [write-key          (->m symbol? any/c)]
-    [equal-to-key?      (->m pk-key? boolean?)]
+    [public-equal?      (->m pk-key? boolean?)]
 
     [sign               (->m bytes? (or/c #f digest-spec?) pk-sign-pad/c bytes?)]
     [verify             (->m bytes? (or/c #f digest-spec?) pk-sign-pad/c bytes? boolean?)]

@@ -87,10 +87,6 @@
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-eddsa fmt (get-curve) pub priv)]
             [else (encode-pub-eddsa fmt (get-curve) pub)]))
-    (define/override (equal-to-key? other)
-      (and (is-a? other decaf-ed*-key%)
-           (equal? (get-curve) (send other get-curve))
-           (equal? pub (get-field pub other))))
     ))
 
 (define decaf-ed25519-key%
@@ -195,10 +191,6 @@
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt (get-curve) pub priv)]
             [else (encode-pub-ecx fmt (get-curve) pub)]))
-    (define/override (equal-to-key? other)
-      (and (is-a? other decaf-x*-key%)
-           (equal? (get-curve) (send other get-curve))
-           (equal? pub (get-field pub other))))
     (define/override (-compatible-for-key-agree? peer-pubkey)
       (equal? (get-curve) (send peer-pubkey get-curve)))
     (define/override (-convert-for-key-agree bs)

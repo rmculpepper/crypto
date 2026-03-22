@@ -126,10 +126,6 @@
               (HANDLEp (i2d_PKCS8_PRIV_KEY_INFO (HANDLEp (EVP_PKEY2PKCS8 evp)))))]
         [else #f]))
 
-    (define/override (equal-to-key? other)
-      (and (is-a? other libcrypto3-pk-key%)
-           (NOERR (EVP_PKEY_eq evp (get-field evp other)))))
-
     ;; ----------------------------------------
     ;; Encrypt
 

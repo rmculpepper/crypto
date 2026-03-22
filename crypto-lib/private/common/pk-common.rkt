@@ -132,7 +132,14 @@
 
     (abstract is-private?)
     (abstract get-public-key)
-    (abstract equal-to-key?)
+
+    (define/public (public-equal? other)
+      (define this-internal (-write-key 'internal-public))
+      (define other-internal (send other -write-key 'internal-public))
+      (unless (and this-internal other-internal)
+        (internal-error "key comparison failed\n  key 1: ~a\n  key 2: ~a"
+                        (about) (send other about)))
+      (equal? this-internal other-internal))
 
     (define/public (get-params)
       (if (send impl has-params?)
