@@ -49,7 +49,7 @@
     (define/override (can-sign2? pad dspec)
       (case pad
         [(pkcs1-v1.5 #f) (and (memq dspec '(#f md5 sha1 sha256 sha512)) #t)]
-        [(pss) (and pss-ok? (memq dspec '(#f sha256 sha384 sha512)) #t)]
+        [(pss) (and (memq dspec '(#f sha256 sha384 sha512)) #t)]
         [else #f]))
 
     (define/override (generate-key config)
@@ -131,7 +131,6 @@
              [(sha512) (nettle_rsa_sha512_sign_digest_tr pub priv randctx digest sigz)]
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
           [(pss)
-           (unless pss-ok? (err/bad-signature-pad impl pad))
            (define saltlen (digest-spec-size digest-spec))
            (define salt (crypto-random-bytes saltlen))
            (case digest-spec
@@ -160,7 +159,6 @@
              [(sha512) (nettle_rsa_sha512_verify_digest pub digest sigz)]
              [else (nosupport/digest+pad "verification" digest-spec pad)])]
           [(pss)
-           (unless pss-ok? (err/bad-signature-pad impl pad))
            (define saltlen (digest-spec-size digest-spec))
            (case digest-spec
              [(sha256) (nettle_rsa_pss_sha256_verify_digest pub saltlen digest sigz)]

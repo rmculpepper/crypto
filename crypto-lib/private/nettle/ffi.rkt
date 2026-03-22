@@ -531,44 +531,47 @@
 (define-nettleHW nettle_rsa_private_key_prepare
   (_fun _rsa_private_key -> _bool))
 
-(define-nettleHW nettle_rsa_md5_sign_digest    (_fun _rsa_private_key _bytes _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha1_sign_digest   (_fun _rsa_private_key _bytes _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha256_sign_digest (_fun _rsa_private_key _bytes _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha512_sign_digest (_fun _rsa_private_key _bytes _mpz_t -> _bool))
-
 (define sign-digest-type
   (_fun _rsa_public_key _rsa_private_key _pointer (_fpointer = yarrow_random)
         _bytes _mpz_t -> _bool))
-(define (((make-sign-fallback f)) pub priv randctx digest sig) (f priv digest sig))
 
 ;; timing-resistant functions added in Nettle 3.2
-(define-nettleHW nettle_rsa_md5_sign_digest_tr sign-digest-type
-  #:fail (make-sign-fallback nettle_rsa_md5_sign_digest))
-(define-nettleHW nettle_rsa_sha1_sign_digest_tr sign-digest-type
-  #:fail (make-sign-fallback nettle_rsa_sha1_sign_digest))
-(define-nettleHW nettle_rsa_sha256_sign_digest_tr sign-digest-type
-  #:fail (make-sign-fallback nettle_rsa_sha256_sign_digest))
-(define-nettleHW nettle_rsa_sha512_sign_digest_tr sign-digest-type
-  #:fail (make-sign-fallback nettle_rsa_sha512_sign_digest))
+(define-nettleHW nettle_rsa_md5_sign_digest_tr sign-digest-type)
+(define-nettleHW nettle_rsa_sha1_sign_digest_tr sign-digest-type)
+(define-nettleHW nettle_rsa_sha256_sign_digest_tr sign-digest-type)
+(define-nettleHW nettle_rsa_sha512_sign_digest_tr sign-digest-type)
+
+(define-nettleHW nettle_rsa_md5_verify_digest
+  (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha1_verify_digest
+  (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha256_verify_digest
+  (_fun _rsa_public_key _pointer _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_sha512_verify_digest
+  (_fun _rsa_public_key _pointer _mpz_t -> _bool))
 
 ;; PSS functions added in Nettle 3.4
-(define pss-ok? (get-hw-ok? #"nettle_rsa_pss_sha256_sign_digest_tr"))
 (define pss-sign-digest-type
-  (_fun _rsa_public_key _rsa_private_key _pointer (_fpointer = yarrow_random)
-        _size _bytes _bytes _mpz_t -> _bool))
+  (_fun [pub : _rsa_public_key]
+        [priv : _rsa_private_key]
+        [random_ctx : _pointer]
+        [random_fun : _fpointer = yarrow_random]
+        [saltlen : _size]
+        [salt : _bytes]
+        [digest : _bytes]
+        [sig : _mpz_t]
+        -> _bool))
 
 (define-nettleHW nettle_rsa_pss_sha256_sign_digest_tr pss-sign-digest-type)
 (define-nettleHW nettle_rsa_pss_sha384_sign_digest_tr pss-sign-digest-type)
 (define-nettleHW nettle_rsa_pss_sha512_sign_digest_tr pss-sign-digest-type)
 
-(define-nettleHW nettle_rsa_md5_verify_digest    (_fun _rsa_public_key _pointer _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha1_verify_digest   (_fun _rsa_public_key _pointer _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha256_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_sha512_verify_digest (_fun _rsa_public_key _pointer _mpz_t -> _bool))
-
-(define-nettleHW nettle_rsa_pss_sha256_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_pss_sha384_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
-(define-nettleHW nettle_rsa_pss_sha512_verify_digest (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_pss_sha256_verify_digest
+  (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_pss_sha384_verify_digest
+  (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
+(define-nettleHW nettle_rsa_pss_sha512_verify_digest
+  (_fun _rsa_public_key _size _bytes _mpz_t -> _bool))
 
 (define-nettleHW nettle_rsa_generate_keypair
   (_fun _rsa_public_key
