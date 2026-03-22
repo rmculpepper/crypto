@@ -417,7 +417,8 @@
    (->* [(or/c kdf-spec? kdf-impl?)
          bytes?
          (or/c bytes? #f)]
-        [(listof (list/c symbol? any/c))]
+        [(listof (list/c symbol? any/c))
+         #:key-size (or/c exact-nonnegative-integer? #f)]
         bytes?)]
   [pwhash
    (->* [(or/c kdf-spec? kdf-impl?) bytes?]
@@ -442,10 +443,10 @@
 
 (define (-get-kdf-impl o) (to-impl o #:what "KDF" #:lookup get-kdf))
 
-(define (kdf k pass salt [params '()])
+(define (kdf k pass salt [params '()] #:key-size [key-size #f])
   (with-crypto-entry 'kdf
     (let ([k (-get-kdf-impl k)])
-      (send k kdf0 params pass salt))))
+      (send k derive key-size params pass salt))))
 
 (define (pwhash k pass [params '()])
   (with-crypto-entry 'pwhash
@@ -474,7 +475,7 @@
                      #:key-size [key-size (digest-size di)])
   (with-crypto-entry 'pbkdf2-hmac
     (let ([k (-get-kdf-impl `(pbkdf2 hmac ,di))])
-      (send k kdf `((iterations ,iterations) (key-size ,key-size)) pass salt))))
+      (send k derive key-size `((iterations ,iterations)) pass salt))))
 
 (define (scrypt pass salt
                 #:N N
@@ -483,8 +484,7 @@
                 #:key-size [key-size 32])
   (with-crypto-entry 'scrypt
     (let ([k (-get-kdf-impl 'scrypt)])
-      (send k kdf `((N ,N) (p ,p) (r ,r) (key-size ,key-size))
-            pass salt))))
+      (send k derive key-size `((N ,N) (p ,p) (r ,r)) pass salt))))
 
 ;; ============================================================
 ;; Public-key Systems

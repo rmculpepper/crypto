@@ -262,5 +262,6 @@
 
 (define kdf-impl<%>
   (interface (impl<%>)
-    [kdf0       (->m kdf-params/c bytes? (or/c #f bytes?) bytes?)]
+    [derive (->m (or/c #f exact-nonnegative-integer?) kdf-params/c bytes? (or/c #f bytes?)
+                 bytes?)]
     ))

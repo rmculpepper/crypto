@@ -7,6 +7,7 @@
          racket/string
          base64
          "interfaces.rkt"
+         "catalog.rkt"
          "common.rkt"
          "error.rkt"
          "util.rkt"
@@ -42,28 +43,23 @@
     (super-new)
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "kdf:")))
-    (define/public (kdf0 params pass salt)
-      (kdf params pass (check-salt salt)))
-    (define/public (kdf params pass salt)
+    (define/public (derive key-size params pass salt)
+      (let ([key-size (or key-size (config-ref params 'key-size #f))])
+        (unless key-size (crypto-error "missing key-size"))
+        (-derive key-size params pass (check-salt salt))))
+    (define/public (-derive key-size params pass salt)
       (err/no-impl this))
     (define/public (pwhash params pass)
       (err/no-impl this))
     (define/public (pwhash-verify pass cred)
       (err/no-impl this))
-    (define/public (salt-allowed?) #t)
+    (define/public (salt-mode)
+      (kdf-spec-salt-mode (get-spec)))
     (define/public (check-salt salt)
-      (unless salt (crypto-error "salt required for KDF\n  KDF: ~a" (about)))
-      salt)
-    ))
-
-(define kdf-impl-base/no-salt%
-  (class kdf-impl-base%
-    (inherit about)
-    (super-new)
-    (define/override (salt-allowed?) #f)
-    (define/override (check-salt salt)
-      (when salt (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)))
-      #f)
+      (case (salt-mode)
+        [(req) (or salt (crypto-error "salt required for KDF\n  KDF: ~a" (about)))]
+        [(opt) (or salt (kdf-spec-default-salt (get-spec)))]
+        [else (if salt (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)) #f)]))
     ))
 
 (define hkdf-impl%
@@ -71,25 +67,19 @@
     (init-field di)
     (super-new)
 
-    (define/override (kdf params pass salt)
-      (define-values (info key-size)
-        (check/ref-config '(info key-size) params config:info-kdf "HKDF"))
-      (define salt* (or salt (make-bytes (send di get-block-size) 0)))
+    (define/override (-derive key-size params pass salt)
+      (define info (check/ref-config '(info) params config:info-kdf "HKDF"))
       (define (hmac-h key msg) (send di hmac key msg))
-      (rkt:hkdf hmac-h salt* info key-size pass))
-
-    (define/override (check-salt salt)
-      (or salt (make-bytes (send di get-block-size) 0)))
+      (rkt:hkdf hmac-h salt info key-size pass))
     ))
 
 (define ans-x9.63-kdf-impl%
-  (class kdf-impl-base/no-salt%
+  (class kdf-impl-base%
     (init-field di)
     (super-new)
 
-    (define/override (kdf params pass salt)
-      (define-values (info key-size)
-        (check/ref-config '(info key-size) params config:info-kdf "ANS X9.63 KDF"))
+    (define/override (-derive key-size params pass _salt)
+      (define info (check/ref-config '(info) params config:info-kdf "ANS X9.63 KDF"))
       (define (H msg) (send di digest msg #f))
       (rkt:ans-x9.63-kdf H info key-size pass))
     ))
@@ -100,32 +90,24 @@
     (init-field di hmac?)
     (super-new)
 
-    (define/override (kdf params pass salt)
-      (define-values (info key-size)
-        (check/ref-config '(info key-size) params config:info-kdf
+    (define/override (-derive key-size params pass salt)
+      (define info
+        (check/ref-config '(info) params config:info-kdf
                           "NIST SP 800-56 One-Step KDF"))
-      (define salt*
-        (cond [(and hmac? salt) salt]
-              [hmac? (make-bytes (send di get-block-size) 0)]
-              [salt (crypto-error "salt not supported for KDF\n  KDF: ~a" (about))]
-              [else #f]))
       (define H
-        (cond [hmac? (lambda (msg) (send di hmac salt* msg))]
+        (cond [hmac? (lambda (msg) (send di hmac salt msg))]
               [else  (lambda (msg) (send di digest msg #f))]))
       (rkt:concat-kdf H info key-size pass))
-
-    (define/override (salt-allowed?) hmac?)
-    (define/override (check-salt salt) salt)
     ))
 
 (define sp800-108-counter-hmac-kdf-impl%
-  (class kdf-impl-base/no-salt%
+  (class kdf-impl-base%
     (init-field di)
     (super-new)
 
-    (define/override (kdf params pass salt)
-      (define-values (info key-size)
-        (check/ref-config '(info key-size) params config:info-kdf
+    (define/override (-derive key-size params pass _salt)
+      (define info
+        (check/ref-config '(info) params config:info-kdf
                           "NIST SP 800-108 Counter KDF"))
       (define (prf seed msg) (send di hmac seed msg))
       (rkt:sp800-108-counter-kdf prf info key-size pass))
@@ -137,25 +119,23 @@
     (init-field di)
     (super-new)
 
-    (define/override (kdf params pass salt)
-      (define-values (info key-size)
-        (check/ref-config '(info key-size) params config:info-kdf
+    (define/override (-derive key-size params pass salt)
+      (define info
+        (check/ref-config '(info) params config:info-kdf
                           "NIST SP 800-108 Feedback KDF"))
       (define ctr? #t) ;; FIXME, make configurable
       (define (prf seed msg) (send di hmac seed msg))
       (rkt:sp800-108-feedback-kdf prf ctr? info key-size salt pass))
-
-    (define/override (check-salt salt) (or salt #""))
     ))
 
 (define sp800-108-double-pipeline-hmac-kdf-impl%
-  (class kdf-impl-base/no-salt%
+  (class kdf-impl-base%
     (init-field di)
     (super-new)
 
-    (define/override (kdf params pass salt)
-      (define-values (info key-size)
-        (check/ref-config '(info key-size) params config:info-kdf
+    (define/override (-derive key-size params pass _salt)
+      (define info
+        (check/ref-config '(info) params config:info-kdf
                           "NIST SP 800-108 Double-Pipeline KDF"))
       (define ctr? #t) ;; FIXME, make configurable
       (define (prf seed msg) (send di hmac seed msg))
@@ -170,23 +150,23 @@
     (check/ref-config '(m t p v) config config:argon2-base "argon2"))
   (define alg (send ki get-spec))
   (define salt (crypto-random-bytes 16))
-  (define pwh (send ki kdf `((m ,m) (t ,t) (p ,p) (v ,v) (key-size 32)) pass salt))
+  (define pwh (send ki derive 32 `((m ,m) (t ,t) (p ,p) (v ,v)) pass salt))
   (encode-pwhash (hash '$id alg 'v v 'm m 't t 'p p 'salt salt 'pwhash pwh)))
 
 (define (kdf-pwhash-scrypt ki config pass)
   (define-values (ln p r)
     (check/ref-config '(ln p r) config config:scrypt-pwhash "scrypt"))
   (define salt (crypto-random-bytes 16))
-  (define pwh (send ki kdf `((N ,(expt 2 ln)) (r ,r) (p ,p) (key-size 32)) pass salt))
+  (define pwh (send ki derive 32 `((N ,(expt 2 ln)) (r ,r) (p ,p)) pass salt))
   (encode-pwhash (hash '$id 'scrypt 'ln ln 'r r 'p p 'salt salt 'pwhash pwh)))
 
 (define (kdf-pwhash-pbkdf2 ki spec config pass)
   (define id (or (hash-ref pbkdf2-spec=>id spec #f)
-                 (crypto-error "unsupported spec")))
+                 (crypto-error "PBKDF2 variant unsupported for password hashing")))
   (define-values (iters)
     (check/ref-config '(iterations) config config:pbkdf2-base "PBKDF2"))
   (define salt (crypto-random-bytes 16))
-  (define pwh (send ki kdf `((iterations ,iters) (key-size 32)) pass salt))
+  (define pwh (send ki derive 32 `((iterations ,iters)) pass salt))
   (encode-pwhash (hash '$id id 'rounds iters 'salt salt 'pwhash pwh)))
 
 (define pbkdf2-spec=>id
@@ -206,14 +186,14 @@
   (define config
     (match env
       [(hash-table ['$id (or 'argon2i 'argon2d 'argon2id)] ['v v] ['m m] ['t t] ['p p])
-       `((v ,v) (m ,m) (t ,t) (p ,p) (key-size 32))]
+       `((v ,v) (m ,m) (t ,t) (p ,p))]
       [(hash-table ['$id (or 'pbkdf2 'pbkdf2-sha256 'pbkdf2-sha512)] ['rounds rounds])
-       `((iterations ,rounds) (key-size 32))]
+       `((iterations ,rounds))]
       [(hash-table ['$id 'scrypt] ['ln ln] ['r r] ['p p])
-       `((N ,(expt 2 ln)) (r ,r) (p ,p) (key-size 32))]))
+       `((N ,(expt 2 ln)) (r ,r) (p ,p))]))
   (define salt (hash-ref env 'salt))
   (define pwh (hash-ref env 'pwhash))
-  (define pwh* (send ki kdf config pass salt))
+  (define pwh* (send ki derive (bytes-length pwh) config pass salt))
   (crypto-bytes=? pwh pwh*))
 
 (define (id->kdf-spec id)
@@ -226,7 +206,7 @@
 
 ;; ----------------------------------------
 
-;; FIXME: make key-size a param to kdf instead?
+;; Deprecated:
 (define config:kdf-key-size
   `((key-size   ,exact-positive-integer? #f #:opt 32)))
 
@@ -425,7 +405,7 @@
 
 ;; ------------------------------------------------------------
 
-;; encode : Env -> String
+;; encode-pwhash : Env -> String
 (define (encode-pwhash env)
   (define id (hash-ref env '$id))
   (define cses (id->crypt-spec id))

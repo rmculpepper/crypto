@@ -19,9 +19,9 @@
     (inherit-field spec)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (t m p v key-size)
-        (check/ref-config '(t m p v key-size) config config:argon2-kdf "argon2"))
+    (define/override (-derive key-size config pass salt)
+      (define-values (t m p v)
+        (check/ref-config '(t m p v) config config:argon2-kdf "argon2"))
       (check-version v)
       (case spec
         [(argon2d)  (argon2d_hash_raw  t m p pass salt key-size)]

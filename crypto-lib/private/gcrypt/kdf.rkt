@@ -15,9 +15,8 @@
     (inherit-field spec)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (iters key-size)
-        (check/ref-config '(iterations key-size) config config:pbkdf2-kdf "PBKDF2"))
+    (define/override (-derive key-size config pass salt)
+      (define iters (check/ref-config '(iterations) config config:pbkdf2-kdf "PBKDF2"))
       (define md (get-field md di))
       (gcry_kdf_derive pass GCRY_KDF_PBKDF2 md salt iters key-size))
 
@@ -32,9 +31,9 @@
     (inherit about)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (N ln p r key-size)
-        (check/ref-config '(N ln p r key-size) config config:scrypt-kdf "scrypt"))
+    (define/override (-derive key-size config pass salt)
+      (define-values (N ln p r)
+        (check/ref-config '(N ln p r) config config:scrypt-kdf "scrypt"))
       (define N* (or N (expt 2 ln)))
       (unless (equal? r 8)
         (impl-limit-error "r parameter must be 8\n  given: ~e\n  in: ~a" r (about)))
@@ -74,14 +73,16 @@
 
 (define gcrypt-argon2-impl%
   (class gcrypt-kdf-impl-base%
-    (inherit do-kdf)
+    (inherit about do-kdf)
     (inherit-field spec)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (t m p v key-size)
-        (check/ref-config '(t m p v key-size) config config:argon2-kdf "Argon2"))
-      ;; (unless (eqv? v #x13) __)
+    (define/override (-derive key-size config pass salt)
+      (define-values (t m p v)
+        (check/ref-config '(t m p v) config config:argon2-kdf "Argon2"))
+      (unless (eqv? v 19)
+        (crypto-error "argon2 version unsupported\n  version: ~e\n  impl: ~a"
+                      v (about)))
       ;; Note: requires non-empty salt
       (do-kdf GCRY_KDF_ARGON2
               (case spec
@@ -107,9 +108,8 @@
     (init-field mac-algo)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (info key-size)
-        (check/ref-config '(info key-size) config config:info-kdf "HKDF"))
+    (define/override (-derive key-size config pass salt)
+      (define info (check/ref-config '(info key-size) config config:info-kdf "HKDF"))
       ;; Note: requires non-empty pass
       (do-kdf GCRY_KDF_HKDF mac-algo
               #:length key-size

@@ -24,7 +24,7 @@
         (test #:name (format "~s" name)
           (test #:name "as kdf"
             (define config (get-config name))
-            (let ([salt (and (send impl salt-allowed?) salt)])
+            (let ([salt (case (send impl salt-mode) [(req opt) salt] [else #f])])
               (check (kdf impl key salt config) #:with bytes?)))
           (match name
             [(list 'pbkdf2 'hmac di)
@@ -71,7 +71,7 @@
 (define (check-misc-kat kdfi test-datum)
   (define (do-check z L info expected)
     (let ([L (or L (bytes-length expected))])
-      (kdf kdfi z salt `((key-size ,L) (info ,info)))))
+      (kdf kdfi z salt `((info ,info)) #:key-size L)))
   (define (get key [f values])
     (cond [(memq key test-datum) => (lambda (l) (f (cadr l)))] [else #f]))
   (define z    (get '#:z hex->bytes))
@@ -134,7 +134,7 @@
      `((N ,(expt 2 16)) (p 1) (r 8) (key-size 52))]
     [(or 'argon2d 'argon2i 'argon2id)
      `((t 4) (m ,(expt 2 16)) (p 1) (key-size 71))]
-    [_ '()]))
+    [_ '((key-size 32))]))
 
 (define (get-pwhash-config spec)
   (match spec
@@ -168,7 +168,7 @@
         (define cred0 (and pwconfig (pwhash kdfi0 key pwconfig)))
         (for ([kdfi (in-list (cdr kdfis))])
           (test #:name (format "~s (~s)" spec (length kdfis))
-            (let ([salt (and (send kdfi0 salt-allowed?) salt)])
+            (let ([salt (case (send kdfi0 salt-mode) [(req opt) salt] [else #f])])
               (define out (kdf kdfi0 key salt config))
               (for ([kdfi (in-list (cdr kdfis))])
                 (check (kdf kdfi key salt config) #:is out)))

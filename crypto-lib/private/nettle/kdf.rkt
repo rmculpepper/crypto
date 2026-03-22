@@ -17,13 +17,11 @@
     (inherit-field spec)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (iters key-size)
-        (check/ref-config '(iterations key-size) config config:pbkdf2-kdf "PBKDF2"))
+    (define/override (-derive key-size config pass salt)
+      (define iters (check/ref-config '(iterations) config config:pbkdf2-kdf "PBKDF2"))
       (case (send di get-spec)
         [(sha1) (nettle_pbkdf2_hmac_sha1 pass salt iters key-size)]
-        [(sha256) (nettle_pbkdf2_hmac_sha256 pass salt iters key-size)]
-        [else #f]))
+        [(sha256) (nettle_pbkdf2_hmac_sha256 pass salt iters key-size)]))
 
     (define/override (pwhash config pass)
       (kdf-pwhash-pbkdf2 this spec config pass))

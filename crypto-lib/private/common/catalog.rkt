@@ -514,3 +514,26 @@
 
 (define (list-known-simple-kdfs) ;; no `(pbkdf2 hmac ,digest)
   '(argon2d argon2i argon2id bcrypt scrypt))
+
+;; kdf-spec-salt-mode : KDFSpec -> (U 'req 'opt #f)
+(define (kdf-spec-salt-mode spec)
+  (match spec
+    ;; Salt not allowed:
+    [(list 'ans-x9.63 di) #f]
+    [(list 'concat di) #f]
+    [(list 'sp800-108-counter 'hmac di) #f]
+    [(list 'sp800-108-double-pipeline 'hmac di) #f]
+    ;; Salt optional:
+    [(list 'hkdf di) 'opt]
+    [(list 'concat 'hmac di) 'opt]
+    ;; Salt required (scrypt, PBKDF2, SP800-108 Feedback mode):
+    [_ 'req]))
+
+;; kdf-spec-default-salt : KDFSpec -> Bytes
+(define (kdf-spec-default-salt spec)
+  (match spec
+    ;; HKDF RFC says if absent, set to zeros of length hash *output*
+    [(list 'hkdf di) (make-bytes (digest-spec-size di) 0)]
+    ;; SP800-56Cr2 says if absent, set to zeros of length hash *block*
+    [(list 'concat 'hmac di) (make-bytes (digest-spec-block-size di) 0)]
+    ))

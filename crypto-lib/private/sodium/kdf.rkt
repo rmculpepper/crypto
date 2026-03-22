@@ -19,9 +19,9 @@
     (inherit about)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (t mkb p key-size)
-        (check/ref-config '(t m p key-size) config config:argon2-kdf "argon2"))
+    (define/override (-derive key-size config pass salt)
+      (define-values (t mkb p)
+        (check/ref-config '(t m p) config config:argon2-kdf "argon2"))
       (unless (equal? p 1)
         (impl-limit-error "parallelism parameter must be 1\n  given: ~e\n  kdf: ~a"
                           p (about)))
@@ -66,9 +66,9 @@
     (inherit about)
     (super-new)
 
-    (define/override (kdf config pass salt)
-      (define-values (N ln p r key-size)
-        (check/ref-config '(N ln p r key-size) config config:scrypt-kdf "scrypt"))
+    (define/override (-derive key-size config pass salt)
+      (define-values (N ln p r)
+        (check/ref-config '(N ln p r) config config:scrypt-kdf "scrypt"))
       (define N* (or N (expt 2 ln)))
       (define out (make-bytes key-size))
       (define status
