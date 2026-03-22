@@ -5,7 +5,7 @@
 
 ;; pkg info
 
-(define version "1.10")
+(define version "2.0")
 (define collection "crypto")
 (define deps
   '("base"
