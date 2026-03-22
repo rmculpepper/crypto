@@ -294,7 +294,7 @@
                 OPENSSL_INFO_CPU_SETTINGS))]
         ;; Standard info
         [(all-ec-curves)
-         (sort (hash-keys curve-name=>lcname) string-ci<?
+         (sort (get-all-curve-names) string-ci<?
                #:key symbol->string #:cache-keys? #t)]
         [(all-eddsa-curves)
          '(ed25519 ed448)]

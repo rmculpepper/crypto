@@ -368,6 +368,19 @@
 (define-crypto OBJ_nid2sn
   (_fun [nid : _int] -> #;const _string))
 
+(define-cpointer-type _ASN1_OBJECT)
+
+(define-crypto OBJ_nid2obj
+  (_fun [nid : _int] -> _ASN1_OBJECT))
+
+(define-crypto OBJ_obj2txt
+  (_fun [buf : _bytes = (make-bytes 200)]
+        [buflen : _int = (bytes-length buf)]
+        [obj : #;const _ASN1_OBJECT]
+        [no_name : _int = 1]
+        -> [r : _int]
+        -> (and (< 0 r 200) (bytes->string/latin-1 buf #\nul 0 r))))
+
 ;; ----------------------------------------
 ;; Misc
 

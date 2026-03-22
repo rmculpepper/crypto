@@ -4,6 +4,7 @@
 #lang racket/base
 (require racket/class
          racket/match
+         racket/string
          ffi/unsafe
          asn1
          "../common/catalog.rkt"
@@ -521,39 +522,40 @@
     (define/override (get-key-class) libcrypto3-ec-key%)
 
     (define/override (make-params curve-oid)
-      (define curve-name (curve-oid->lcname curve-oid))
-      (and curve-name
-           (let ([params (make-fromdata-params curve-name #f #f)])
+      (define curve-lcname (curve-oid->lcname curve-oid))
+      (and curve-lcname
+           (let ([params (make-fromdata-params curve-lcname #f #f)])
              (evp->params (fromdata #"EC" 'params params)))))
     (define/override (make-public-key curve-oid qB)
-      (define curve-name (curve-oid->lcname curve-oid))
-      (and curve-name
-           (let ([params (make-fromdata-params curve-name qB #f)])
+      (define curve-lcname (curve-oid->lcname curve-oid))
+      (and curve-lcname
+           (let ([params (make-fromdata-params curve-lcname qB #f)])
              (evp->public-key (fromdata #"EC" 'public params)))))
     (define/override (make-private-key curve-oid qB x)
-      (define curve-name (curve-oid->lcname curve-oid))
-      (and curve-name
-           (let ([params (make-fromdata-params curve-name qB x)])
+      (define curve-lcname (curve-oid->lcname curve-oid))
+      (and curve-lcname
+           (let ([params (make-fromdata-params curve-lcname qB x)])
              (evp->private-key (fromdata #"EC" 'private params)))))
 
-    (define/private (make-fromdata-params curve-name qB x)
-      `((#"group" utf8-string ,curve-name)
+    (define/private (make-fromdata-params curve-lcname qB x)
+      `((#"group" utf8-string ,curve-lcname)
         (#"pub" octet-string ,qB #:?)
         (#"priv" ubignum ,x #:?)))
 
     (define/override (generate-params config)
       (define curve (check/ref-config '(curve) config config:ec-paramgen "EC paramgen"))
-      (define curve-name (curve-alias->lcname curve))
-      (and curve-name
-           (let ([params `((#"group" utf8-string ,curve-name))])
+      (define curve-lcname (curve-alias->lcname curve))
+      (and curve-lcname
+           (let ([params `((#"group" utf8-string ,curve-lcname))])
              (evp->params (fromdata #"EC" 'params params)))))
 
     (define/override (generate-key config)
       (define curve (check/ref-config '(curve) config config:ec-paramgen "EC keygen"))
-      (define curve-name (curve-name->lcname curve))
-      (and curve-name
-           (evp->private-key (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-name)
-                                      #:or-fail-with "key generation failed"))))
+      (define curve-lcname (curve-alias->lcname curve))
+      (and curve-lcname
+           (evp->private-key
+            (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-lcname)
+                     #:or-fail-with "key generation failed"))))
     ))
 
 (define libcrypto3-ec-params%
@@ -767,45 +769,56 @@
 
 ;; ============================================================
 
+;; CurveInfo = (curveinfo Symbol Nat OID String)
+(struct curveinfo (name nid oid lcname) #:prefab)
+
+;; get-all-curve-names : -> (Listof Symbol)
+(define (get-all-curve-names)
+  (map curveinfo-name all-curveinfos))
+
 ;; curve-oid->lcname : OID -> String/#f
 ;; Returns #f if curve not available.
-(define (curve-oid->lcname curve-oid)
-  (curve-name->lcname (curve-oid->name curve-oid)))
-
-;; curve-name->lcname : Symbol -> String/#f
-;; Returns #f if curve not available.
-(define (curve-name->lcname name)
-  (hash-ref curve-name=>lcname name #f))
+(define (curve-oid->lcname oid)
+  (define ci (hash-ref oid=>curveinfo oid #f))
+  (and ci (curveinfo-lcname ci)))
 
 ;; curve-alias->lcname : Symbol -> String/#f
 ;; Returns #f if curve not available.
 (define (curve-alias->lcname alias)
-  (curve-name->lcname (alias->curve-name alias)))
+  (define ci (hash-ref name=>curveinfo (alias->curve-name alias) #f))
+  (and ci (curveinfo-lcname ci)))
 
 ;; curve-lcname->name : String -> Symbol
 (define (curve-lcname->name lcname)
-  (hash-ref curve-lcname=>name lcname))
+  (define ci (hash-ref lcname=>curveinfo lcname #f))
+  (and ci (curveinfo-name ci)))
 
 ;; curve-lcname->oid : String -> OID
 (define (curve-lcname->oid lcname)
-  (curve-name->oid (curve-lcname->name lcname)))
+  (define ci (hash-ref lcname=>curveinfo lcname #f))
+  (and ci (curveinfo-oid ci)))
 
-;; curve-name=>lcname : Hash[Symbol => String]
-;; curve-lcname=>name : Hash[Symbol => String]
-;; Maps between catalog name and libcrypto name.
-(define-values (curve-name=>lcname curve-lcname=>name)
+;; all-curveinfos : (Listof CurveInfo)
+(define all-curveinfos
   (let ([bad-curves '(SM2)])
     ;; Add builtin curves
     (define curve-count (EC_get_builtin_curves #f 0))
     (define ci-base (malloc curve-count _EC_builtin_curve 'atomic))
     (cpointer-push-tag! ci-base EC_builtin_curve-tag)
     (EC_get_builtin_curves ci-base curve-count)
-    (for/fold ([n=>lc (hasheq)] [lc=>n (hash)])
-              ([i (in-range curve-count)])
+    (for/fold ([all-cis null]) ([i (in-range curve-count)])
       (define ci (ptr-add ci-base i _EC_builtin_curve))
       (define nid (EC_builtin_curve-nid ci))
-      (define libcrypto-name (string->immutable-string (OBJ_nid2sn nid)))
-      (define name (alias->curve-name libcrypto-name))
-      (cond [(memq name bad-curves) (values n=>lc lc=>n)]
-            [else (values (hash-set n=>lc name libcrypto-name)
-                          (hash-set lc=>n libcrypto-name name))]))))
+      (define lcname (string->immutable-string (OBJ_nid2sn nid)))
+      (define oid-str (and nid (OBJ_obj2txt (OBJ_nid2obj nid))))
+      (define oid (and oid-str (map string->number (string-split oid-str "."))))
+      (define name (alias->curve-name lcname))
+      (cond [(memq name bad-curves) all-cis]
+            [else (cons (curveinfo name nid oid lcname) all-cis)]))))
+
+(define oid=>curveinfo
+  (for/hash ([ci (in-list all-curveinfos)]) (values (curveinfo-oid ci) ci)))
+(define name=>curveinfo
+  (for/hasheq ([ci (in-list all-curveinfos)]) (values (curveinfo-name ci) ci)))
+(define lcname=>curveinfo
+  (for/hash ([ci (in-list all-curveinfos)]) (values (curveinfo-lcname ci) ci)))
