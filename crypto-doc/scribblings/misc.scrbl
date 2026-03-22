@@ -53,17 +53,18 @@ libcrypto-specific behavior.
 
 @subsection[#:tag "gcrypt-notes"]{GCrypt Quirks}
 
-If ECDSA is used with a digest longer than the bit-length of the
-curve, gcrypt either fails to correctly truncate the digest or
-otherwise handles it by default in a way incompatible with libcrypto
-and nettle. Consequently, this library truncates the digest before
-passing it to gcrypt for signing.
-@; {https://crypto.stackexchange.com/questions/18488/ecdsa-with-sha256-and-sepc192r1-curve-impossible-or-how-to-calculate-e}
+If DSA or ECDSA is used with a digest longer than the bit-length of the group,
+gcrypt either fails to correctly truncate the digest. Consequently, this library
+truncates the digest before passing it to gcrypt for signing.
 
-GCrypt does not expose operations to compute EC and EdDSA public keys
+Gcrypt does not expose operations to compute EC and EdDSA public keys
 from the private keys, so reading a private key in PrivateKeyInfo or
 OneAsymmetricKey form may fail if the optional public key field is
 missing.
+
+The documented EdDSA interface cannot handle signing or verifying a zero-length
+input. The documented RSA interface cannot handle encrypting a zero-length
+input.
 
 
 @subsection[#:tag "sodium-notes"]{Sodium Quirks}
