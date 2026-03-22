@@ -82,14 +82,15 @@
 ;; KDF
 
 (test #:name "kdf"
-  (check (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '((sparkles 10)))
+  (check (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '((sparkles 10)) #:key-size 32)
          #:error #rx"unsupported option for PBKDF2\n  option: 'sparkles")
 
-  (check (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '())
+  (check (kdf '(pbkdf2 hmac sha1) #"pass" #"salt" '() #:key-size 32)
          #:error #rx"missing required option for PBKDF2\n  option: 'iterations")
 
   (when (get-kdf 'scrypt)
-    (check (kdf 'scrypt #"pass" #"salt" `((N ,(expt 2 16)) (ln 16) (r 8) (p 1)))
+    (check (kdf 'scrypt #"pass" #"salt" `((N ,(expt 2 16)) (ln 16) (r 8) (p 1))
+                #:key-size 32)
            #:error #rx"conflicting options for scrypt\n  options: 'N and 'ln")))
 
 ;; ============================================================
@@ -128,4 +129,4 @@
          #:error #rx"wrong size for digest\n  expected: 32 bytes\n  given: 20 bytes")
 
   (check (pk-derive-secret ecxpriv ecpub)
-         #:error #rx"peer key has different implementation.*\n  peer: "))
+         #:error #rx"peer key is not compatible"))
