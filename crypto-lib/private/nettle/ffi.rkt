@@ -617,31 +617,6 @@
   #:fail (lambda () (lambda (pub priv randomctx cleartext ciphertext)
                       (nettle_rsa_decrypt priv cleartext ciphertext))))
 
-;; Added in Nettle 3.10
-;; (define-nettleHW nettle_rsa_oaep_sha256_encrypt
-;;   (_fun [pub : #;const _rsa_public_key]
-;;         [randomctx : _pointer]
-;;         [_fpointer = yarrow_random]
-;;         [labellen : _size]
-;;         [label : #;const _pointer]
-;;         [msglen : _size]
-;;         [msg : #;const _pointer]
-;;         [ciphertext : _pointer]
-;;         -> _bool) ;; #t = success, #f = failure
-;;   #:fail (lambda () #f))
-;; (define-nettleHW nettle_rsa_oaep_sha256_decrypt
-;;   (_fun [pub : _rsa_public_key]
-;;         [priv : _rsa_private_key]
-;;         [randomctx : _pointer]
-;;         [_fpointer = yarrow_random]
-;;         [labellen : _size]
-;;         [label : _pointer]
-;;         [msglen : (_ptr io _size)]
-;;         [msgbuf : _pointer]
-;;         [ciphertext : _pointer]
-;;         -> [r : _bool] -> (and r msglen))
-;;   #:fail (lambda () #f))
-
 ;; ----------------------------------------
 ;; DSA
 
@@ -931,5 +906,5 @@
 
 ;; Added in 3.10
 ;; - add sha512_224, sha512_256 to nettle_get_hashes()
-;; - RSA-OAEP
+;; - RSA-OAEP -- but only for sha256, sha384, sha512
 ;; - sha3_256_shake_output, sha3_128_init, ...
