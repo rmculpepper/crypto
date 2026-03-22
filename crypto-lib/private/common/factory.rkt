@@ -171,6 +171,13 @@
     (define/public (get-kdf spec)
       (get/table spec values -get-kdf))
 
+    (define/public (import-pk parsed)
+      (match parsed
+        [(cons pkspec _)
+         (let ([pk (get-pk pkspec)])
+           (and pk (send pk import-pk parsed)))]
+        [_ #f]))
+
     (define/public (-get-cipher0 info)
       (define ci (-get-cipher info))
       (cond [(cipher-impl? ci) ci]

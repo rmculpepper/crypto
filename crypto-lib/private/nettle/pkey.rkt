@@ -102,9 +102,6 @@
 
     (define/override (is-private?) (and priv #t))
 
-    (define/override (get-public-key)
-      (if priv (new nettle-rsa-key% (impl impl) (pub pub) (priv #f)) this))
-
     (define/override (-write-key fmt)
       (define n (mpz->integer (rsa_public_key_struct-n pub)))
       (define e (mpz->integer (rsa_public_key_struct-e pub)))
@@ -290,9 +287,6 @@
 
     (define/override (is-private?) (and priv #t))
 
-    (define/override (get-public-key)
-      (if priv (new nettle-dsa-key% (impl impl) (params params) (pub pub) (priv #f)) this))
-
     (define/override (get-params)
       (new nettle-dsa-params% (impl impl) (params params)))
 
@@ -400,9 +394,6 @@
     (super-new)
 
     (define/override (is-private?) (and priv #t))
-
-    (define/override (get-public-key)
-      (if priv (new nettle-ec-key% (impl impl) (pub pub) (priv #f)) this))
 
     (define/override (get-params)
       (new nettle-ec-params% (impl impl) (ecc (ecc_point_struct-ecc pub))))
@@ -575,9 +566,6 @@
     (define/override (get-params)
       (send impl curve->params 'ed25519))
 
-    (define/override (get-public-key)
-      (if priv (new nettle-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
-
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-eddsa fmt 'ed25519 pub priv)]
             [else (encode-pub-eddsa fmt 'ed25519 pub)]))
@@ -602,9 +590,6 @@
 
     (define/override (get-params)
       (send impl curve->params 'ed448))
-
-    (define/override (get-public-key)
-      (if priv (new nettle-ed448-key% (impl impl) (pub pub) (priv #f)) this))
 
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-eddsa fmt 'ed448 pub priv)]
@@ -709,9 +694,6 @@
     (define/override (get-params)
       (send impl curve->params 'x25519))
 
-    (define/override (get-public-key)
-      (if priv (new nettle-x25519-key% (impl impl) (pub pub) (priv #f)) this))
-
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt 'x25519 pub priv)]
             [else (encode-pub-ecx fmt 'x25519 pub)]))
@@ -739,9 +721,6 @@
 
     (define/override (get-params)
       (send impl curve->params 'x448))
-
-    (define/override (get-public-key)
-      (if priv (new nettle-x448-key% (impl impl) (pub pub) (priv #f)) this))
 
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt 'x448 pub priv)]

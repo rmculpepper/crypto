@@ -82,9 +82,6 @@
     (define/override (get-params)
       (send impl curve->params 'ed25519))
 
-    (define/override (get-public-key)
-      (if priv (new sodium-ed25519-key% (impl impl) (pub pub) (priv #f)) this))
-
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-eddsa fmt 'ed25519 pub (subbytes priv 0 32))]
             [else (encode-pub-eddsa fmt 'ed25519 pub)]))
@@ -165,9 +162,6 @@
 
     (define/override (get-params)
       (send impl curve->params 'x25519))
-
-    (define/override (get-public-key)
-      (if priv (new sodium-x25519-key% (impl impl) (pub pub) (priv #f)) this))
 
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt 'x25519 pub priv)]

@@ -82,8 +82,6 @@
     (define/override (is-private?) (and priv #t))
     (define/override (get-params)
       (send impl curve->params (get-curve)))
-    (define/override (get-public-key)
-      (if priv (send impl make-public-key (get-curve) pub) this))
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-eddsa fmt (get-curve) pub priv)]
             [else (encode-pub-eddsa fmt (get-curve) pub)]))
@@ -186,8 +184,6 @@
     (define/override (is-private?) (and priv #t))
     (define/override (get-params)
       (send impl curve->params (get-curve)))
-    (define/override (get-public-key)
-      (if priv (send impl make-public-key (get-curve) pub) this))
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt (get-curve) pub priv)]
             [else (encode-pub-ecx fmt (get-curve) pub)]))

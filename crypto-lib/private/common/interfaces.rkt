@@ -155,6 +155,7 @@
     [get-cipher     (->m cipher-spec? (or/c #f cipher-impl?))]
     [get-pk         (->m pk-spec? (or/c #f pk-impl?))]
     [get-kdf        (->m kdf-spec? (or/c #f kdf-impl?))]
+    [import-pk      (->m any/c (or/c #f pk-key? pk-parameters?))]
     ))
 
 ;; ============================================================
@@ -219,6 +220,7 @@
     [can-sign        (->m pk-sign-pad/c (or/c #f 'depends 'nodigest 'ignoredg))]
     [can-sign2?      (->m pk-sign-pad/c (or/c #f digest-spec?) boolean?)]
     [has-params?     (->m boolean?)]
+    [import-pk       (->m any/c (or/c #f pk-key? pk-parameters?))]
     ))
 
 (define pk-params<%>

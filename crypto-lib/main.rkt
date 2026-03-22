@@ -628,23 +628,14 @@
     (for/and ([k (in-list ks)])
       (send k1 public-equal? k))))
 
-(define (pksrc-ormap src pkspec f)
-  (define srcs (if (list? src) src (list src)))
-  (for/or ([src (in-list srcs)])
-    (define pk
-      (cond [(pk-impl? src) (and (eq? (send src get-spec) pkspec) src)]
-            [(crypto-factory? src) (get-pk pkspec src)]))
-    (and pk (f pk))))
-
 (define (pk-key->datum pk fmt)
   (with-crypto-entry 'pk-key->datum
     (send pk write-key fmt)))
 (define (datum->pk-key datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-key
-    (or (match (parse-key fmt datum)
-          [(list* keytype pkspec vs)
-           (pksrc-ormap src pkspec (lambda (pk) (send pk import keytype vs)))]
-          [#f #f])
+    (define parsed (parse-key fmt datum))
+    (or (and parsed (for/or ([src (in-list (if (list? src) src (list src)))])
+                      (send src import-pk parsed)))
         (crypto-error "unable to read key\n  format: ~e" fmt))))
 
 (define (pk-parameters->datum pkp fmt)
@@ -652,11 +643,9 @@
     (send pkp write-params fmt)))
 (define (datum->pk-parameters datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-parameters
-    (define srcs (if (list? src) src (list src)))
-    (or (match (parse-params fmt datum)
-          [(list* 'params pkspec vs)
-           (pksrc-ormap src pkspec (lambda (pk) (send/apply pk make-params vs)))]
-          [#f #f])
+    (define parsed (parse-params fmt datum))
+    (or (and parsed (for/or ([src (in-list (if (list? src) src (list src)))])
+                      (send src import-pk parsed)))
         (crypto-error "unable to read parameters\n  format: ~e" fmt))))
 
 (define (pk-key->public-only-key pk)

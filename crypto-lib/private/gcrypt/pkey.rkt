@@ -58,9 +58,6 @@
 
     (define/override (is-private?) (and priv #t))
 
-    (define/override (get-public-key)
-      (if priv (new this% (impl impl) (pub pub) (priv #f)) this))
-
     (define/override (-sign digest digest-spec pad)
       (check-sig-pad pad)
       (define data-sexp (sign-make-data-sexp digest digest-spec pad))
@@ -625,9 +622,6 @@
     (define/override (get-params)
       (send impl curve->params curve))
 
-    (define/override (get-public-key)
-      (if priv (new this% (impl impl) (curve curve) (pub pub) (priv #f)) this))
-
     (define/override (-write-key fmt)
       (cond [priv
              (let ([qB (sexp-get-data priv "ecc" "q")]
@@ -744,9 +738,6 @@
 
     (define/override (get-params)
       (send impl curve->params curve))
-
-    (define/override (get-public-key)
-      (if priv (new this% (impl impl) (curve curve) (pub pub) (priv #f)) this))
 
     (define/override (-write-key fmt)
       (cond [priv (encode-priv-ecx fmt curve pub priv)]

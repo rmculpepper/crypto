@@ -59,11 +59,14 @@
     (define/public (has-params?) #f)
 
     ;; Called by datum->pk-{key,parameters}%, signature depends on spec
-    (define/public (import keytype vs)
-      (case keytype
-        [(params) (send/apply this make-params vs)]
-        [(public) (send/apply this make-public-key vs)]
-        [(private) (send/apply this make-private-key vs)]))
+    (define/public (import-pk parsed)
+      (match parsed
+        [(list* (== (get-spec)) keytype vs)
+         (case keytype
+           [(PARAMS) (send/apply this make-params vs)]
+           [(PUBLIC) (send/apply this make-public-key vs)]
+           [(SECRET) (send/apply this make-private-key vs)])]
+        [_ #f]))
     (define/public (make-params . _) #f)
     (define/public (make-public-key . _) #f)
     (define/public (make-private-key . _) #f)
@@ -71,10 +74,8 @@
     ;; import-key : PKey [Boolean] -> (U PKey #f)
     ;; Import key from different impl, must be same pkspec
     (define/public (import-key pkey [public? #f])
-      (match (send pkey -write-key (if public? 'internal-public 'internal))
-        [(list* keytype (== (get-spec)) vs)
-         (import keytype vs)]
-        [else #f]))
+      (define fmt (if public? 'internal-public 'internal))
+      (import-pk (send pkey -write-key fmt)))
 
     ;; Called by pk-{dsa,dh,ec}-params% generate-key:
     ;; - generate-key-from-params : PK-Params -> PK-Key
@@ -131,7 +132,9 @@
           #f))
 
     (abstract is-private?)
-    (abstract get-public-key)
+
+    (define/public (get-public-key)
+      (if (is-private?) (send impl import-pk (-write-key 'internal-public)) this))
 
     (define/public (public-equal? other)
       (define this-internal (-write-key 'internal-public))

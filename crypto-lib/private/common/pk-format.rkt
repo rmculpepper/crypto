@@ -22,10 +22,10 @@
 ;; - `decode-X` takes "ASNValue" -- parsed ASN.1 (result of bytes->asn1/DER)
 ;;   - can rely on well-formed ASN.1 representation types
 
-;; ParseResult = (list (U 'params 'public 'private) PKSpec Any ...)
-(define (ok-params pkspec . vs) (list* 'params pkspec vs))
-(define (ok-public pkspec . vs) (list* 'public pkspec vs))
-(define (ok-private pkspec . vs) (list* 'private pkspec vs))
+;; ParseResult = (list PKSpec (U 'PARAMS 'PUBLIC 'SECRET) Any ...)
+(define (ok-params pkspec . vs)  (list* pkspec 'PARAMS vs))
+(define (ok-public pkspec . vs)  (list* pkspec 'PUBLIC vs))
+(define (ok-private pkspec . vs) (list* pkspec 'SECRET vs))
 (define (err/fmt fmt [why ""])
   (crypto-error "invalid key datum~a\n  format: ~e" why fmt))
 
