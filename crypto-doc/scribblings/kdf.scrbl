@@ -109,12 +109,15 @@ Returns an implementation of KDF @racket[k] from the given
 @defproc[(kdf [k (or/c kdf-spec? kdf-impl?)]
               [input bytes?]
               [salt (or/c bytes? #f)]
-              [params (listof (list/c symbol? any/c)) '()])
+              [params (listof (list/c symbol? any/c)) '()]
+              [#:key-size key-size (or/c exact-nonnegative-integer? #f) #f])
          bytes?]{
 
 Runs the KDF specified by @racket[k] on @racket[input] and @racket[salt] and
-produces a derived key (or password hash). Additional parameters such as
-iteration count are passed via @racket[params].
+produces a derived key (or password hash) of length @racket[key-size]
+bytes. Additional parameters such as iteration count are passed via
+@racket[params]. If @racket[key-size] is @racket[#f], then it must be
+given in @racket[params] with the key @racket['key-size].
 
 The @racket[input] argument may be a password or passphrase, or it may be input
 keying material from a key agreement operation.
@@ -123,15 +126,16 @@ The @racket[salt] must be a bytestring (@racket[bytes?]) except in the
 following cases: if the KDF is @racket['ans-x9.63], @racket['concat]
 with a digest, @racket['sp800-108-counter], or
 @racket['sp800-108-double-pipeline], then @racket[salt] must be
-@racket[#f]; if the KDF is @racket['hkdf] or @racket['concat] with
-HMAC, then @racket[salt] may be either @racket[#f] or a bytestring.
+@racket[#f]; if the KDF is @racket['hkdf] or @racket['concat] with HMAC,
+then @racket[salt] may be either @racket[#f] or a bytestring. (Note that
+KDFs with optional salt do not treat @racket[#f] as equivalent to
+@racket[#""], but to a digest-dependent string of zeros.)
 
 The following parameters are recognized for @racket[(list 'pbkdf2
 'hmac _digest)]:
 
 @itemlist[
 @item{@racket[(list 'iterations _iterations)] --- number of iterations}
-@item{@racket[(list 'key-size _key-size)] --- the size of the output}
 ]
 
 The following parameters are recognized for @racket['scrypt]:
@@ -140,17 +144,15 @@ The following parameters are recognized for @racket['scrypt]:
 @item{@racket[(list 'N _N)] --- the CPU/memory cost}
 @item{@racket[(list 'p _p)] --- the parallelization factor}
 @item{@racket[(list 'r _r)] --- the block size}
-@item{@racket[(list 'key-size _key-size)] --- the size of the output}
 ]
 
 The following parameters are recognized for @racket['argon2d],
 @racket['argon2i], and @racket['argon2id]:
 
 @itemlist[
-@item{@racket[(list 't _t)] --- the time cost}
 @item{@racket[(list 'm _m)] --- the memory cost (in kb)}
+@item{@racket[(list 't _t)] --- the time cost}
 @item{@racket[(list 'p _p)] --- the parallelism}
-@item{@racket[(list 'key-size _key-size)] -- the size of the output}
 ]
 
 The following parameters are recognized for the @racket['hkdf],
@@ -158,13 +160,9 @@ The following parameters are recognized for the @racket['hkdf],
 families of KDFs:
 
 @itemlist[
-
 @item{@racket[(list 'info _info-bytes)] --- additional contextual
 information; see @cite["HKDF" "SP800-56A" "SP800-108"] for
 recommendations regarding the contents and format of this field}
-
-@item{@racket[(list 'key-size _key-size)] --- the size of the output}
-
 ]
 
 @examples[#:eval the-eval
@@ -172,11 +170,13 @@ recommendations regarding the contents and format of this field}
 (kdf '(pbkdf2 hmac sha256)
      #"I am the eggman"
      (crypto-random-bytes 16)
-     '((iterations #e1e5) (key-size 32)))
+     '((iterations #e1e5))
+     #:key-size 32)
 (kdf 'argon2id
      #"I am the walrus"
      #"googoogjoob"
-     '((t 100) (m 2048) (p 1) (key-size 32)))
+     '((t 100) (m 2048) (p 1))
+     #:key-size 32)
 (eval:alts
  (define pre-key (.... #, @italic{do key agreement} ....))
  (define pre-key (crypto-random-bytes 16)))
@@ -185,6 +185,9 @@ recommendations regarding the contents and format of this field}
       (kdf '(hkdf sha256) pre-key #f
            '((info #"mac") (key-size 16))))
 ]
+
+@history[#:changed "2.0" @elem{Added @racket[#:key-size] argument.
+Previously, @racket[key-size] was always passed in @racket[params].}]
 }
 
 @defproc[(pwhash [k (or/c kdf-spec? kdf-impl?)]

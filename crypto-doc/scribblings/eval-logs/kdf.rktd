@@ -11,7 +11,9 @@
   '(pbkdf2 hmac sha256)
   #"I am the eggman"
   (crypto-random-bytes 16)
-  '((iterations 100000) (key-size 32)))
+  '((iterations 100000))
+  #:key-size
+  32)
  ((3)
   0
   ()
@@ -23,14 +25,16 @@
    c
    (u
     .
-    #"\232v\203P':(h\373\222\265\16#\374\373\20\317Rz\26vS\360\200\6\355UPm\17\352\6")))
+    #"J\373h\310mfmh\266\345JWde\227\225\313Ub\201\332\1O\367f\201{\232\256\363z\330")))
  #""
  #"")
 ((kdf
   'argon2id
   #"I am the walrus"
   #"googoogjoob"
-  '((t 100) (m 2048) (p 1) (key-size 32)))
+  '((t 100) (m 2048) (p 1))
+  #:key-size
+  32)
  ((3)
   0
   ()
@@ -62,9 +66,9 @@
    values
    c
    (c
-    (u . #" Fq\223L\36\16T\331\214\4\253\272\202\356\r")
+    (u . #"\36>\376\334H\331^\6\370\25\302gC2\362\26")
     c
-    (u . #"\376_\21\202\320i\203\20\251\363\373\222'#\371\310"))))
+    (u . #"t\4\236=\200\225\334\344\375\262&\374\267\225?b"))))
  #""
  #"")
 ((define pwcred (pwhash 'argon2id #"mypassword" '((m 4096) (t 10) (p 1))))
@@ -83,7 +87,7 @@
    c
    (u
     .
-    "$argon2id$v=19$m=4096,t=10,p=1$+IVbyVp7GvrbCxetj1N0Hg$2ySdH3AeiBWVr8pcmWA9WVUW+QLn3ejZrPPq+zFxR7I")))
+    "$argon2id$v=19$m=4096,t=10,p=1$dJPZCOuOJa3Foy6xCdYVLQ$1B/cNol5YfOkUKg3txiDzxR8gyyq9pyV4g6NP1x0krA")))
  #""
  #"")
 ((pwhash-verify #f #"mypassword" pwcred)
