@@ -148,26 +148,26 @@ may support different operations; for example, DSA supports signing
 but not encryption, and DH only supports key agreement.
 
 PK signature algorithms are limited in the amount of data they can
-sign directly, so the message is first processed with a digest
+sign directly, so the message is usually first processed with a digest
 function, then the digest is signed. The @racket[digest/sign] and
 @racket[digest/verify] functions compute the digest automatically. The
 private key signs, and the public key verifies.
 
 @interaction[#:eval the-eval
-(define sig (digest/sign privkey 'sha1 "Hello world!"))
-(digest/verify pubkey 'sha1 "Hello world!" sig)
-(digest/verify pubkey 'sha1 "Transfer $100" sig)
+(define sig (digest/sign privkey 'sha1 "Hello world!" #:pad 'pss))
+(digest/verify pubkey 'sha1 "Hello world!" sig #:pad 'pss)
+(digest/verify pubkey 'sha1 "Transfer $100" sig #:pad 'pss)
 ]
 
 It is also possible to sign a precomputed digest. The digest algorithm
-is still required as an argument, because some signature schemes include a
+is still required as an argument, because RSA signature schemes include a
 digest algorithm identifier.
 
 @interaction[#:eval the-eval
 (define dgst (digest 'sha1 "Hello world!"))
-(define sig (pk-sign-digest privkey 'sha1 dgst))
-(pk-verify-digest pubkey 'sha1 (digest 'sha1 "Hello world!") sig)
-(pk-verify-digest pubkey 'sha1 (digest 'sha1 "Transfer $100") sig)
+(define sig (pk-sign privkey dgst #:pad 'pss #:digest 'sha1))
+(pk-verify pubkey (digest 'sha1 "Hello world!") sig #:pad 'pss #:digest 'sha1)
+(pk-verify pubkey (digest 'sha1 "Transfer $100") sig #:pad 'pss #:digest 'sha1)
 ]
 
 Encryption is similar, except that the public key encrypts, and the
@@ -175,8 +175,8 @@ private key decrypts.
 
 @interaction[#:eval the-eval
 (define skey #"VeryVerySecr3t!!")
-(define e-skey (pk-encrypt pubkey skey))
-(pk-decrypt privkey e-skey)
+(define e-skey (pk-encrypt pubkey skey #:pad 'oaep))
+(pk-decrypt privkey e-skey #:pad 'oaep)
 ]
 
 The other PK operation is key agreement, or shared secret

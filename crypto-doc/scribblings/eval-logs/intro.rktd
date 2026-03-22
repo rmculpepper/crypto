@@ -56,7 +56,7 @@
   0
   ()
   ()
-  (c values c (u . #"\351\256\17\\f\3505l\227\235\17\0007\376\vu")))
+  (c values c (u . #"\273\0030\334\"\300\365E\214`\237b\0\0\22\226")))
  #""
  #"")
 ((cipher-iv-size '(aes ctr)) ((3) 0 () 0 () () (q values 16)) #"" #"")
@@ -114,15 +114,15 @@
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((define sig (digest/sign privkey 'sha1 "Hello world!"))
+((define sig (digest/sign privkey 'sha1 "Hello world!" #:pad 'pss))
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((digest/verify pubkey 'sha1 "Hello world!" sig)
+((digest/verify pubkey 'sha1 "Hello world!" sig #:pad 'pss)
  ((3) 0 () 0 () () (q values #t))
  #""
  #"")
-((digest/verify pubkey 'sha1 "Transfer $100" sig)
+((digest/verify pubkey 'sha1 "Transfer $100" sig #:pad 'pss)
  ((3) 0 () 0 () () (q values #f))
  #""
  #"")
@@ -130,15 +130,22 @@
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((define sig (pk-sign-digest privkey 'sha1 dgst))
+((define sig (pk-sign privkey dgst #:pad 'pss #:digest 'sha1))
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((pk-verify-digest pubkey 'sha1 (digest 'sha1 "Hello world!") sig)
+((pk-verify pubkey (digest 'sha1 "Hello world!") sig #:pad 'pss #:digest 'sha1)
  ((3) 0 () 0 () () (q values #t))
  #""
  #"")
-((pk-verify-digest pubkey 'sha1 (digest 'sha1 "Transfer $100") sig)
+((pk-verify
+  pubkey
+  (digest 'sha1 "Transfer $100")
+  sig
+  #:pad
+  'pss
+  #:digest
+  'sha1)
  ((3) 0 () 0 () () (q values #f))
  #""
  #"")
@@ -146,67 +153,11 @@
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((define e-skey (pk-encrypt pubkey skey))
+((define e-skey (pk-encrypt pubkey skey #:pad 'oaep))
  ((3) 0 () 0 () () (c values c (void)))
  #""
  #"")
-((pk-decrypt privkey e-skey)
+((pk-decrypt privkey e-skey #:pad 'oaep)
  ((3) 0 () 0 () () (c values c (u . #"VeryVerySecr3t!!")))
- #""
- #"")
-((define dhparams (generate-pk-parameters 'dh '((nbits 128))))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define priv1 (generate-private-key dhparams))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define priv2 (generate-private-key dhparams))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define pub1 (pk-key->public-only-key priv1))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define pub2 (pk-key->public-only-key priv2))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define shared-secret (pk-derive-secret priv1 pub2))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((equal? shared-secret (pk-derive-secret priv2 pub1))
- ((3) 0 () 0 () () (q values #t))
- #""
- #"")
-((define ecparams (generate-pk-parameters 'ec '((curve "NIST P-192"))))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define priv1 (generate-private-key ecparams))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define priv2 (generate-private-key ecparams))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define pub1 (pk-key->public-only-key priv1))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define pub2 (pk-key->public-only-key priv2))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((define shared-secret (pk-derive-secret priv1 pub2))
- ((3) 0 () 0 () () (c values c (void)))
- #""
- #"")
-((equal? shared-secret (pk-derive-secret priv2 pub1))
- ((3) 0 () 0 () () (q values #t))
  #""
  #"")
