@@ -19,7 +19,7 @@
 (define (new-mpz) (mpz))
 (define (integer->mpz n) (mpz n))
 (define (mpz->integer z) (mpz->number z))
-(define (mpz->bin z) (mpz->bytes z #f #f #t))
+(define (mpz->bin z len) (mpz->bytes z len #f #t))
 (define (bin->mpz buf) (bytes->mpz buf #f #t))
 
 ;; ============================================================
@@ -102,6 +102,9 @@
 
     (define/override (is-private?) (and priv #t))
 
+    (define/private (get-nbytes)
+      (mpz-bytes-length (rsa_public_key_struct-n pub) #f))
+
     (define/override (-write-key fmt)
       (define n (mpz->integer (rsa_public_key_struct-n pub)))
       (define e (mpz->integer (rsa_public_key_struct-e pub)))
@@ -138,7 +141,7 @@
              [else (nosupport/digest+pad "signing" digest-spec pad)])]
           [else (err/bad-signature-pad impl pad)]))
       (unless signed-ok? (crypto-error "signing failed\n  key: ~a" (about)))
-      (mpz->bin sigz))
+      (mpz->bin sigz (get-nbytes)))
 
     (define/private (nosupport/digest+pad op digest-spec pad)
       (impl-limit-error (string-append "unsupported digest and padding combination for ~a"
@@ -173,7 +176,7 @@
          (define enc-z (new-mpz))
          (or (nettle_rsa_encrypt pub (send impl get-random-ctx) buf enc-z)
              (crypto-error "encryption failed"))
-         (mpz->bin enc-z)]
+         (mpz->bin enc-z (get-nbytes))]
         [else (err/bad-encrypt-pad impl pad)]))
 
     (define/override (-decrypt buf pad)
