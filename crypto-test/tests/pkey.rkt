@@ -74,6 +74,14 @@
 
 (define (test-pk-datum pkname pk privss)
   (define factory (send pk get-factory))
+  (test #:name "equality"
+    (for ([privs (in-list privss)])
+      (match-define (list priv1 priv2) privs)
+      (check (public-key=? priv1 priv1) #:is #t)
+      (check (public-key=? priv2 priv2) #:is #t)
+      (check (public-key=? priv1 (pk-key->public-only-key priv1)) #:is #t)
+      (check (public-key=? priv2 (pk-key->public-only-key priv2)) #:is #t)
+      (check (public-key=? priv1 priv2) #:is #f)))
   (test #:name "import/export"
     (define-values (privformats paramformats)
       (case pkname
