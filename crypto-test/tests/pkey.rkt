@@ -152,6 +152,11 @@
        (test #:name "ecdh"
          (kat-for-each "ecdh.rktd"
                        (lambda (datum) (test-ecdh-kat pk datum))))]
+      [(eddsa)
+       (when (memq 'ed25519 (send (send pk get-factory) info 'all-eddsa-curves))
+         (test #:name "ed25519"
+           (kat-for-each "ed25519.rktd"
+                         (lambda (datum) (test-ed25519-kat pk datum)))))]
       [(ecx)
        (test #:name "ecx"
          (kat-for-each "ecx.rktd"
@@ -265,6 +270,26 @@
               (check (digest/verify pub di Msg sig) #:is expect-verify?)
               (check (pk-verify pub (digest di Msg) sig #:digest dspec)
                      #:is expect-verify?)]))))]))
+
+(define (test-ed25519-kat pk datum)
+  (define factory (send pk get-factory))
+  (define factory-name (send factory get-name))
+  (match datum
+    [`(ed25519 (sk ,(app hex->bytes skd)) (pk ,(app hex->bytes pkd))
+               (msg ,(app hex->bytes msg)) (sig ,(app hex->bytes sig)))
+     (define priv
+       (check (datum->pk-key `(eddsa private ed25519 ,pkd ,skd) 'rkt-private pk)
+              #:values))
+     (define pub
+       (check (datum->pk-key `(eddsa public ed25519 ,pkd) 'rkt-public pk)
+              #:values))
+     ;; gcrypt cannot sign zero-length messages
+     (unless (and (= (bytes-length msg) 0) (eq? factory-name 'gcrypt))
+       (check (pk-sign priv msg) #:is sig)
+       (check (pk-verify pub msg sig) #:is #t)
+       (define msg* (semirandom-bytes (bytes-length msg)))
+       (unless (equal? msg msg*)
+         (check (pk-verify pub msg* sig) #:is #f)))]))
 
 (define (test-ecdh-kat pk datum)
   (define factory (send pk get-factory))
