@@ -4,6 +4,7 @@
 #lang racket/base
 (require (for-syntax racket/base)
          racket/match
+         scramble/inject-syntax
          ffi/unsafe
          ffi/unsafe/alloc
          ffi/unsafe/define
@@ -20,6 +21,13 @@
 
 (define-ffi-definer define-crypto libcrypto
   #:default-make-fail make-not-available)
+
+(begin/inject-syntax
+  (if (identifier-binding #'start-uninterruptible)
+      #'(begin)
+      #'(begin
+          (define start-uninterruptible start-atomic)
+          (define end-uninterruptible end-atomic))))
 
 ;; ----------------------------------------
 ;; Version
