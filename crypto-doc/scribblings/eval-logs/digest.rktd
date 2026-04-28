@@ -9,6 +9,7 @@
  #"")
 ((digest-size 'sha1) ((3) 0 () 0 () () (q values 20)) #"" #"")
 ((digest-size 'sha256) ((3) 0 () 0 () () (q values 32)) #"" #"")
+((digest-size 'shake128) ((3) 0 () 0 () () (q values #f)) #"" #"")
 ((digest-block-size 'sha1) ((3) 0 () 0 () () (q values 64)) #"" #"")
 ((digest-security-strength 'sha1 #t) ((3) 0 () 0 () () (q values 0)) #"" #"")
 ((digest-security-strength 'sha1 #f) ((3) 0 () 0 () () (q values 128)) #"" #"")
@@ -39,6 +40,21 @@
    (u
     .
     #"\300S^K\342\267\237\375\223)\23\5Ck\370\2111NJ?\256\300^\317\374\273}\363\32\331\345\32")))
+ #""
+ #"")
+((digest 'shake128 "Hello world!" #:size 57)
+ ((3)
+  0
+  ()
+  0
+  ()
+  ()
+  (c
+   values
+   c
+   (u
+    .
+    #"\356\216\343\255\240y\231k\200\331&\356\3649\245\2/\257z\213\234\366\221T\346\356F\2\16\242\352\375\36\230\357\322\331D\262\245*\263+\1zC\t\eaW\344\316\243\252[p\371")))
  #""
  #"")
 ((define dctx (make-digest-ctx 'sha1))

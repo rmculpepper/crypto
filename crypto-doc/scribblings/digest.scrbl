@@ -60,7 +60,7 @@ digest. The following table lists valid digest names:
      (list @elem[(add-between (for/list ([di (in-list (sort group string<? #:key get-sort-string))])
                                 (rktquote (send di get-spec)))
                               ", ")]
-           @elem[(format "~a" (or (send (car group) get-size) "varies"))]))))
+           @elem[(format "~a" (or (send (car group) get-size) "XOF"))]))))
 ]
 Not every digest name above necessarily has an available implementation,
 depending on the cryptography providers installed.
@@ -86,15 +86,26 @@ Returns an implementation of digest @racket[di] from the given
 }
 
 @defproc[(digest-size [di (or/c digest-spec? digest-impl? digest-ctx?)])
-         exact-positive-integer?]{
+         (or/c exact-positive-integer? #f)]{
 
-Returns the size in bytes of the digest computed by the algorithm
-represented by @racket[di].
+Returns the size in bytes of the digest computed by the algorithm represented by
+@racket[di]. If @racket[di] is an XOF, @racket[#f] is returned.
 
 @examples[#:eval the-eval
 (digest-size 'sha1)
 (digest-size 'sha256)
+(digest-size 'shake128)
 ]
+
+@history[#:changed "2.1" @elem{Added @racket[#f] result value for XOFs.}]}
+
+@defproc[(digest-xof? [di (or/c digest-spec? digest-impl? digest-ctx?)])
+         boolean?]{
+
+Returns @racket[#t] is @racket[di] is an XOF (Extendable Output Function),
+@racket[#f] otherwise. Equivalent to @racket[(not (digest-size di))].
+
+@history[#:added "2.1"]
 }
 
 @defproc[(digest-block-size [di (or/c digest-spec? digest-impl? digest-ctx?)])
@@ -135,9 +146,8 @@ assuming collision resistance is not required (such as with HMAC).
 @defproc[(generate-hmac-key [di (or/c digest-spec? digest-impl?)])
          bytes?]{
 
-Generate a random secret key appropriate for HMAC using digest
-@racket[di]. The length of the key is @racket[(digest-size di)].
-
+Generate a random secret key appropriate for HMAC using digest @racket[di]. The
+length of the key is @racket[(digest-size di)]; @racket[di] must not be an XOF.
 The random bytes are generated with @racket[crypto-random-bytes].
 }
 
@@ -146,23 +156,30 @@ The random bytes are generated with @racket[crypto-random-bytes].
 
 @defproc[(digest [di (or/c digest-spec? digest-impl?)]
                  [input input/c]
-                 [#:key key (or/c bytes? #f) #f])
+                 [#:key key (or/c bytes? #f) #f]
+                 [#:size size (or/c exact-positive-integer? #f) #f])
          bytes?]{
 
 Computes the digest of @racket[input] using the digest function
 represented by @racket[di]. See @racket[input/c] for accepted values
-and their conversion rules to bytes.
+and their conversions to bytes.
 
 If @racket[di] supports keys (eg, the BLAKE2 family of digests), then
-@racket[key] is used as the digest key if it is a byte string; if
-@racket[key] is @racket[#f], the digest is used in unkeyed mode. If
-@racket[di] does not support keys (this is true for most digests),
-then @racket[key] must be @racket[#f] or else an error is raised.
+@racket[key] is used as the digest key if it is a byte string; if @racket[key]
+is @racket[#f], the digest is used in unkeyed mode. If @racket[di] does not
+support keys, then @racket[key] must be @racket[#f] or else an error is raised.
+
+If @racket[di] is an XOF, then @racket[size] must be an integer, and the
+resulting byte string has @racket[size] bytes. If @racket[di] is not an XOF,
+then @racket[size] must be @racket[#f] or @racket[(digest-size di)].
 
 @examples[#:eval the-eval
 (digest 'sha1 "Hello world!")
 (digest 'sha256 "Hello world!")
+(digest 'shake128 "Hello world!" #:size 57)
 ]
+
+@history[#:changed "2.1" @elem{Added @racket[#:size] argument to support XOFs.}]
 }
 
 @defproc[(hmac [di (or/c digest-spec? digest-impl?)]
@@ -174,6 +191,8 @@ Like @racket[digest], but computes the HMAC of @racket[input] using
 digest @racket[di] and the secret key @racket[key]. The @racket[key]
 may be of any length, but @racket[(digest-size di)] is a typical
 key length @cite{HMAC}.
+
+The digest @racket[di] must not be an XOF.
 }
 
 @section{Low-level Digest Functions}
@@ -210,12 +229,19 @@ multiple times, in which case @racket[dctx] computes the digest of the
 concatenated inputs.
 }
 
-@defproc[(digest-final [dctx digest-ctx?])
+@defproc[(digest-final [dctx digest-ctx?]
+                       [#:size size (or/c exact-positive-integer? #f) #f])
          bytes?]{
 
 Returns the digest of the message accumulated in @racket[dctx] so far
 and closes @racket[dctx]. Once @racket[dctx] is closed, any further
 operation performed on it will raise an exception.
+
+If @racket[dctx] belongs to an XOF, then size must be an integer, and the
+resulting byte string has @racket[size] bytes; otherwise, @racket[size] must be
+@racket[#f] or @racket[(digest-size dctx)].
+
+@history[#:changed "2.1" @elem{Added @racket[#:size] argument to support XOFs.}]
 }
 
 @defproc[(digest-copy [dctx digest-ctx?])
@@ -227,11 +253,14 @@ does not support copying. Use @racket[digest-copy] (or
 messages with a common prefix.
 }
 
-@defproc[(digest-peek-final [dctx digest-ctx?])
+@defproc[(digest-peek-final [dctx digest-ctx?]
+                            [#:size size (or/c exact-positive-integer? #f) #f])
          bytes?]{
 
 Returns the digest without closing @racket[dctx], or @racket[#f] if
 @racket[dctx] does not support copying.
+
+@history[#:changed "2.1" @elem{Added @racket[#:size] argument to support XOFs.}]
 }
 
 @defproc[(make-hmac-ctx [di (or/c digest-spec? digest-impl?)]
