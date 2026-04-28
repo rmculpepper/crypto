@@ -73,7 +73,7 @@
 
 (define libcrypto3-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest get-cipher get-pk get-kdf)
+    (inherit get-digest get-normal-digest get-cipher get-pk get-kdf)
     (super-new [ok? libcrypto3-ok?]
                [load-error #f])
 
@@ -165,7 +165,7 @@
         (new libcrypto3-kdf-impl% (factory this) (spec spec) (evp evp)
              (params0 params0)))
       (define (check/get-digest-name dspec)
-        (define di (get-digest dspec)) ;; check availability
+        (define di (get-normal-digest dspec)) ;; check availability
         (and di (get-digest-lcname dspec)))
       (or (match spec
             [(or 'argon2d 'argon2i 'argon2id) ;; added in v3.2

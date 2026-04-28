@@ -124,7 +124,7 @@
 
 (define gcrypt-factory%
   (class* factory-base% (factory<%>)
-    (inherit print-avail get-digest get-cipher)
+    (inherit print-avail get-digest get-normal-digest get-cipher)
     (super-new [ok? gcrypt-ok?] [load-error gcrypt-load-error])
 
     (define/override (get-name) 'gcrypt)
@@ -185,7 +185,7 @@
     (define/override (-get-kdf spec)
       (or (match spec
             [(list 'pbkdf2 'hmac di-spec)
-             (let ([di (get-digest di-spec)])
+             (let ([di (get-normal-digest di-spec)])
                (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
             ['scrypt
              (new gcrypt-scrypt-impl% (spec spec) (factory this))]

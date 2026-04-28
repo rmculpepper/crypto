@@ -77,7 +77,7 @@
 
 (define nettle-factory%
   (class* factory-base% (factory<%>)
-    (inherit get-digest get-cipher get-pk get-kdf)
+    (inherit get-digest get-normal-digest get-cipher get-pk get-kdf)
     (super-new [ok? nettle-ok?] [load-error (or nettle-load-error hogweed-load-error)])
 
     (define/override (get-name) 'nettle)

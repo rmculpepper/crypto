@@ -120,8 +120,9 @@
           (define all-digests (info 'all-digests))
           (define (show-complex label dspec->kdfspec)
             (cond [(null? all-digests) (void)]
-                  [(for/and ([di (in-list all-digests)]) (get-kdf (dspec->kdfspec di)))
-                   (printf " ~a  for all available digests\n" label)]
+                  [(for/and ([di (in-list all-digests)] #:when (digest-spec-size di))
+                     (get-kdf (dspec->kdfspec di)))
+                   (printf " ~a  for all available fixed-size digests\n" label)]
                   [else
                    (for ([di (in-list all-digests)] #:when (get-kdf (dspec->kdfspec di)))
                      (printf " ~v\n" (dspec->kdfspec di)))]))
@@ -171,6 +172,9 @@
     (define/public (get-kdf spec)
       (get/table spec values -get-kdf))
 
+    (define/public (get-normal-digest dspec)
+      (let ([di (get-digest dspec)]) (and di (send di get-size) di)))
+
     (define/public (import-pk parsed)
       (match parsed
         [(cons pkspec _)
@@ -198,25 +202,25 @@
     (define/public (-get-kdf spec)
       (match spec
         [(list 'hkdf (? symbol? dspec))
-         (define di (get-digest dspec))
+         (define di (get-normal-digest dspec))
          (and di (new hkdf-impl% (spec spec) (factory this) (di di)))]
         [(list 'concat (? symbol? dspec))
-         (define di (get-digest dspec))
+         (define di (get-normal-digest dspec))
          (and di (new concat-kdf-impl% (spec spec) (factory this) (di di) (hmac? #f)))]
         [(list 'concat 'hmac (? symbol? dspec))
-         (define di (get-digest dspec))
+         (define di (get-normal-digest dspec))
          (and di (new concat-kdf-impl% (spec spec) (factory this) (di di) (hmac? #t)))]
         [(list 'ans-x9.63 (? symbol? dspec))
-         (define di (get-digest dspec))
+         (define di (get-normal-digest dspec))
          (and di (new ans-x9.63-kdf-impl% (spec spec) (factory this) (di di)))]
         [(list 'sp800-108-counter 'hmac (? symbol? dspec))
-         (define di (get-digest dspec))
+         (define di (get-normal-digest dspec))
          (and di (new sp800-108-counter-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
         [(list 'sp800-108-feedback 'hmac (? symbol? dspec))
-         (define di (get-digest dspec))
+         (define di (get-normal-digest dspec))
          (and di (new sp800-108-feedback-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
         [(list 'sp800-108-double-pipeline 'hmac (? symbol? dspec))
-         (define di (get-digest dspec))
+         (define di (get-normal-digest dspec))
          (and di (new sp800-108-double-pipeline-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
         [_ #f]))
     ))
