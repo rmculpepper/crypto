@@ -42,6 +42,7 @@
     (cond [(memq dspec '(sha1
                          sha224 sha256 sha384 sha512
                          sha3-224 sha3-256 sha3-384 sha3-512
+                         shake128 shake256
                          blake2b-512 blake2s-256))
            (build-path kat-dir (format "digest-~a.rktd" dspec))]
           [(eq? dspec 'sha512/224)

@@ -13,7 +13,7 @@
 
 ;; Len = 0
 (shake256
- "00"
+ ""
  "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f")
 
 ;; Len = 8
@@ -1376,13 +1376,13 @@
  "104fefe89f08d15d36a2233f42a7defa917c5ad2642e06cac56d5cc51ad914ecfb7d984f4199b9cf5fa5a03bf69207b9a353a9681c9cf6437bea0c49d9c3e3db1f3fc76519c70c40cc1dfdd70a9c150943c272cf9eeb861f485f10100c8f4a3e259c6470501932782512225ba64d70b219cf9d5013a21d25d6d65062dcc6b3deb49d58b90d18933f118df70ff42c807ccc851233a34a221eca56b38971ef858475488988794a975d3894633a19c1ae2f05e9b9c0756affd3cfe823ccf29228f60fa7e025bc39a79943325126409460926b057a3fb28a1b098b938872883804fd2bc245d7fd6d29bcda6ca6198f2eff6ea7e03ef78133de8ba65fc8c45a688160719fa1e7646d878ea44c4b5c2e16f48b"
  "46293a63c235750d58a24edca5ba637b96cae74325c6c8122c4155c0d15805e6")
 
-#  CAVS 19.0
-#  "SHAKE256 LongMsg" information for "SHAKE3AllBytesGT"
-#  SHAKE256 tests are configured for BYTE oriented implementations
-#  Length values represented in bits
-#  Generated on Thu Jan 28 14:46:47 2016
+;; #  CAVS 19.0
+;; #  "SHAKE256 LongMsg" information for "SHAKE3AllBytesGT"
+;; #  SHAKE256 tests are configured for BYTE oriented implementations
+;; #  Length values represented in bits
+;; #  Generated on Thu Jan 28 14:46:47 2016
 
-[Outputlen = 256]
+;; [Outputlen = 256]
 
 ;; Len = 2184
 (shake256
