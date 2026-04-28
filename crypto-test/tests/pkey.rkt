@@ -349,17 +349,16 @@
 
 (define (test-pk-sign/digest pk privss pad)
   (define factory (send pk get-factory))
-  (for ([dspec (in-list all-digest-specs)]
-        #:when (and (get-digest dspec factory)
-                    (pk-can-sign? pk pad dspec)))
-    (test #:name (format "w/ digest=~e" dspec)
-      (define di (get-digest dspec factory))
-      (for ([privs (in-list privss)])
-        ;; Assume priv1 != priv2
-        (match-define (list priv1 priv2) privs)
-        (define pub1 (pk-key->public-only-key priv1))
-        (define pub2 (pk-key->public-only-key priv2))
-        (test-pk-sign/digest1 priv1 pub1 priv2 pub2 pad dspec di)))))
+  (for ([dspec (in-list all-digest-specs)])
+    (define di (get-digest dspec factory))
+    (when (and di (digest-size di) (pk-can-sign? pk pad dspec))
+      (test #:name (format "w/ digest=~e" dspec)
+        (for ([privs (in-list privss)])
+          ;; Assume priv1 != priv2
+          (match-define (list priv1 priv2) privs)
+          (define pub1 (pk-key->public-only-key priv1))
+          (define pub2 (pk-key->public-only-key priv2))
+          (test-pk-sign/digest1 priv1 pub1 priv2 pub2 pad dspec di))))))
 
 (define (test-pk-sign/digest1 priv1 pub1 priv2 pub2 pad dspec di)
   (for ([msg (in-list sign-digest-messages)])
@@ -581,8 +580,8 @@
 (define (xtest-pk-sign/digest pkspec pks privsss pad)
   (for ([dspec (in-list all-digest-specs)])
     (define (ok-pk? pk)
-      (and (get-digest dspec (send pk get-factory))
-           (pk-can-sign? pk pad dspec)))
+      (define di (get-digest dspec (send pk get-factory)))
+      (and di (digest-size di) (pk-can-sign? pk pad dspec)))
     (test #:name (format "w/ digest=~e" dspec)
       (call/cross-test
        pks privsss ok-pk?
