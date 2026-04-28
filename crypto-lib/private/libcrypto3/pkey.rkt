@@ -216,12 +216,8 @@
 
     (define/override (get-key-class) libcrypto3-rsa-key%)
 
-    (define/override (can-encrypt? pad)
-      (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
-    (define/override (can-sign pad) 'depends)
-    (define/override (can-sign2? pad dspec)
-      (and (memq pad '(#f pkcs1-v1.5 pss pss*))
-           (or (memq dspec signing-digests)
+    (define/override (can-sign2 pad dspec)
+      (and (or (memq dspec signing-digests)
                (memq dspec '(md5 md4 md2)))
            (and (send factory get-digest dspec) #t)))
 
@@ -319,9 +315,6 @@
     (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'dsa))
 
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-    (define/override (has-params?) #t)
-
     (define/override (get-params-class) libcrypto3-dsa-params%)
     (define/override (get-key-class) libcrypto3-dsa-key%)
 
@@ -411,9 +404,6 @@
   (class libcrypto3-pk-impl%
     (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'dh))
-
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
 
     (define/override (get-params-class) libcrypto3-dh-params%)
     (define/override (get-key-class) libcrypto3-dh-key%)
@@ -514,10 +504,6 @@
     (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'ec))
 
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
-
     (define/override (get-params-class) libcrypto3-ec-params%)
     (define/override (get-key-class) libcrypto3-ec-key%)
 
@@ -604,9 +590,6 @@
   (class libcrypto3-pk-impl%
     (inherit evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'eddsa))
-
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
-    (define/override (has-params?) #t)
 
     (define/override (get-key-class) libcrypto3-eddsa-key%)
 
@@ -696,9 +679,6 @@
   (class libcrypto3-pk-impl%
     (inherit evp->public-key evp->private-key fromdata get-libctx)
     (super-new (spec 'ecx))
-
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
 
     (define/override (get-key-class) libcrypto3-ecx-key%)
 

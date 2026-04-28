@@ -39,24 +39,52 @@
       (cond [(has-params?) (err/no-impl this)]
             [else (crypto-error "key parameters not supported\n  algorithm: ~a" (about))]))
 
-    ;; can-encrypt? : Padding -> Boolean; pad=#f means "at all?"
-    (define/public (can-encrypt? pad) #f)
+    ;; can-encrypt? : (U Pad #f) -> Boolean
+    ;; pad=#f means "for some padding?" ("at all?")
+    (define/public (can-encrypt? pad)
+      (case (get-spec)
+        [(rsa)
+         ;; Override if not all padding modes supported.
+         (case pad
+           [(#f pkcs1-v1.5 oaep) #t]
+           [else #f])]
+        [else #f]))
 
-    ;; can-sign : Pad -> Result; pad=#f means "at all?"
-    ;; Result = #f        -- not supported (eg DH)
-    ;;        | 'depends  -- call can-sign2? to check specific digest arg (eg RSA)
-    ;;        | 'nodigest -- supported, but digest must be 'none (eg EdDSA)
-    ;;        | 'ignoredg -- supported, digest arg ignored (eg DSA, EC, for backwards-compat)
-    ;; For backwards compat, want to ignore digest arg for DSA and EC; but want to forbid
-    ;; for EdDSA, so that in the future giving a digest argument can mean use EdDSAph.
-    (define/public (can-sign pad) #f)
+    ;; can-sign? : (U Pad #f) (U DigestSpec 'none #f) -> Boolean
+    ;; pad=#f means "for some padding?"; dspec=#f means "for some digest?" ("at all?")
+    (define/public (can-sign? [pad #f] [dspec #f])
+      (case (get-spec)
+        [(rsa)
+         (and (can-sign1 pad)
+              (if dspec (can-sign2 pad dspec) #t))]
+        [(dsa ec)
+         ;; Pad must be #f. Ignore digest arg for backwards compat
+         (eq? pad #f)]
+        [(eddsa)
+         ;; Pad must be #f. Digest must be 'none.
+         ;; (Future version might use digest to mean EdDSAph.)
+         (and (eq? pad #f) (memq dspec '(#f none)) #t)]
+        [else #;(dh ecx) #f]))
 
-    ;; can-sign2? : Pad (U DigestSpec 'none) -> Boolean
-    ;; Only overridden if can-sign returned 'depends.
-    (define/public (can-sign2? pad dspec) #t)
+    ;; can-sign1 : (U Pad #f) -> Boolean
+    ;; Currently only applies to RSA.
+    (define/public (can-sign1 pad) #f)
 
-    (define/public (can-key-agree?) #f)
-    (define/public (has-params?) #f)
+    ;; can-sign2 : (U Pad #f) DigestSpec -> Boolean
+    ;; Currently only applies to RSA.
+    (define/public (can-sign2 pad dspec) #f)
+
+    ;; can-key-agree? : -> Boolean
+    (define/public (can-key-agree?)
+      (case (get-spec)
+        [(dh ec ecx) #t]
+        [else #f]))
+
+    ;; has-params? : -> Boolean
+    (define/public (has-params?)
+      (case (get-spec)
+        [(dsa dh ec eddsa ecx) #t]
+        [else #f]))
 
     ;; Called by datum->pk-{key,parameters}%, signature depends on spec
     (define/public (import-pk parsed)
@@ -172,21 +200,14 @@
       (-verify msg dspec pad sig))
 
     (define/private (-check-sign pad dspec)
-      (case (send impl can-sign pad)
-        [(#f)
-         (unless (send impl can-sign #f)
-           (crypto-error "sign/verify not supported\n  key: ~a" (about)))
-         (crypto-error "sign/verify padding not supported\n  padding: ~e\n  key: ~a"
-                       pad (about))]
-        [(depends)
-         (unless (send impl can-sign2? pad dspec)
-           (crypto-error "sign/verify options not supported\n  padding: ~e\n  digest: ~e\n  key: ~a"
-                         pad dspec (about)))]
-        [(nodigest)
-         (unless (memq dspec '(none))
-           (crypto-error "sign/verify digest not supported\n  digest: ~e\n  key: ~a"
-                         dspec (about)))]
-        [else (void)]))
+      (unless (send impl can-sign? pad dspec)
+        (unless (send impl can-sign? #f #f)
+          (crypto-error "sign/verify not supported" #:for this))
+        (unless (send impl can-sign? pad #f)
+          (crypto-error "sign/verify padding not supported\n  padding: ~e"
+                        pad #:for this))
+        (crypto-error "sign/verify digest not supported\n  padding: ~e\n  digest: ~e"
+                      pad dspec #:for this)))
 
     (define/private (-check-msg-size msg dspec)
       (check-bytes-length "digest" (digest-spec-size dspec) msg

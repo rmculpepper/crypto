@@ -90,9 +90,9 @@
     (inherit -generate-keypair)
     (super-new (spec 'rsa))
 
-    (define/override (can-encrypt? pad) (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
-    (define/override (can-sign pad) (and (memq pad '(#f pkcs1-v1.5 pss)) 'ignoredg))
-    (define/override (can-sign2? pad dspec)
+    (define/override (can-sign1 pad)
+      (and (memq pad '(#f pkcs1-v1.5 pss)) (super can-sign1 pad)))
+    (define/override (can-sign2 pad dspec)
       ;; Sign/verify fails on some digests (eg, blake2*, sha512/256), not clear
       ;; how to pre-check (gcry_md_get_asnoid not helpful).
       (and (or (memq dspec '(sha1 sha224 sha256 sha384 md5))
@@ -256,9 +256,6 @@
     (inherit -generate-keypair)
     (super-new (spec 'dsa))
 
-    (define/override (has-params?) #t)
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-
     (define/override (generate-params config)
       ;; gcrypt has no separate paramgen operation,
       ;; so generate private key and extract params
@@ -389,10 +386,6 @@
     (inherit-field spec factory)
     (inherit -generate-keypair)
     (super-new (spec 'ec))
-
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
 
     (define/override (generate-params config)
       (check-config config config:ec-paramgen "EC parameter generation")
@@ -555,9 +548,6 @@
     (inherit -generate-keypair)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
-    (define/override (has-params?) #t)
-
     (define/override (generate-params config)
       (check-config config config:eddsa-keygen "EdDSA parameter generation")
       (curve->params (config-ref config 'curve)))
@@ -669,9 +659,6 @@
     (inherit-field spec factory)
     (inherit -generate-keypair)
     (super-new (spec 'ecx))
-
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
 
     (define/override (generate-params config)
       (check-config config config:ecx-keygen "EC/X parameter generation")

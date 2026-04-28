@@ -593,13 +593,8 @@
 
 (define (pk-can-sign? pki [pad #f] [dspec #f])
   (with-crypto-entry 'pk-can-sign?
-    (cond [(pk-spec? pki) (pk-spec-can-sign? pki pad)] ;; no dspec!
-          [else (let ([impl (to-impl pki)])
-                  (case (send impl can-sign pad)
-                    [(depends) (and (send impl can-sign2? pad dspec) #t)]
-                    [(nodigest) (and (memq dspec '(#f none)) #t)]
-                    [(#f) #f]
-                    [else #t]))])))
+    (cond [(pk-spec? pki) (pk-spec-can-sign? pki pad)]
+          [else (and (send (to-impl pki) can-sign? pad dspec) #t)])))
 (define (pk-can-encrypt? pki [pad #f])
   (with-crypto-entry 'pk-can-encrypt?
     (cond [(pk-spec? pki) (pk-spec-can-encrypt? pki)]

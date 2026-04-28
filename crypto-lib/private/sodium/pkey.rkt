@@ -20,9 +20,6 @@
     (inherit-field spec factory)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
-    (define/override (has-params?) #t)
-
     (define/override (generate-params config)
       (check-config config config:eddsa-keygen "EdDSA parameters generation")
       (curve->params (config-ref config 'curve)))
@@ -104,9 +101,6 @@
   (class pk-impl-base%
     (inherit-field spec factory)
     (super-new (spec 'ecx))
-
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
 
     (define/override (generate-params config)
       (check-config config config:ecx-keygen "EC/X parameters generation")

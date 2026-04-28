@@ -44,9 +44,10 @@
     (inherit get-random-ctx)
     (super-new (spec 'rsa))
 
-    (define/override (can-encrypt? pad) (and (memq pad '(#f pkcs1-v1.5)) #t))
-    (define/override (can-sign pad) 'depends)
-    (define/override (can-sign2? pad dspec)
+    (define/override (can-encrypt? pad)
+      (and (memq pad '(#f pkcs1-v1.5)) (super can-encrypt? pad)))
+
+    (define/override (can-sign2 pad dspec)
       (case pad
         [(pkcs1-v1.5 #f) (and (memq dspec '(#f md5 sha1 sha256 sha512)) #t)]
         [(pss) (and (memq dspec '(#f sha256 sha384 sha512)) #t)]
@@ -217,9 +218,6 @@
     (inherit get-random-ctx)
     (super-new (spec 'dsa))
 
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-    (define/override (has-params?) #t)
-
     (define/override (generate-params config)
       (define-values (nbits qbits)
         (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA parameters generation"))
@@ -321,10 +319,6 @@
     (inherit-field spec factory)
     (inherit get-random-ctx)
     (super-new (spec 'ec))
-
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'ignoredg))
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
 
     (define/override (generate-params config)
       (check-config config config:ec-paramgen "EC parameter generation")
@@ -487,9 +481,6 @@
     (inherit get-random-ctx)
     (super-new (spec 'eddsa))
 
-    (define/override (can-sign pad) (and (memq pad '(#f)) 'nodigest))
-    (define/override (has-params?) #t)
-
     (define/override (generate-params config)
       (check-config config config:eddsa-keygen "EdDSA parameter generation")
       (curve->params (config-ref config 'curve)))
@@ -614,9 +605,6 @@
     (inherit-field spec factory)
     (inherit get-random-ctx)
     (super-new (spec 'ecx))
-
-    (define/override (can-key-agree?) #t)
-    (define/override (has-params?) #t)
 
     (define/override (generate-params config)
       (check-config config config:ecx-keygen "EC/X parameter generation")
