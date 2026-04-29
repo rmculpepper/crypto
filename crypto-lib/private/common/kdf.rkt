@@ -95,7 +95,7 @@
 
     (define/override (-derive key-size params pass _salt)
       (define info (check/ref-config '(info) params config:info-kdf "ANS X9.63 KDF"))
-      (define (H msg) (send di digest msg #f #f))
+      (define (H msg) (send di digest msg #f #f null))
       (rkt:ans-x9.63-kdf H info key-size pass))
     ))
 
@@ -111,7 +111,7 @@
                           "NIST SP 800-56 One-Step KDF"))
       (define H
         (cond [hmac? (lambda (msg) (send di hmac salt msg))]
-              [else  (lambda (msg) (send di digest msg #f #f))]))
+              [else  (lambda (msg) (send di digest msg #f #f null))]))
       (rkt:concat-kdf H info key-size pass))
     ))
 

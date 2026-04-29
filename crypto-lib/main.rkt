@@ -151,12 +151,14 @@
    (-> (or/c digest-spec? digest-impl? digest-ctx?) boolean? (or/c #f security-strength/c))]
   [digest
    (->* [digest/c input/c]
-        [#:key (or/c bytes? #f) #:size (or/c exact-nonnegative-integer? #f)]
+        [#:key (or/c bytes? #f)
+         #:size (or/c exact-nonnegative-integer? #f)
+         #:config config/c]
         bytes?)]
   [hmac
    (-> digest/c bytes? input/c bytes?)]
   [make-digest-ctx
-   (->* [digest/c] [#:key (or/c bytes? #f)] digest-ctx?)]
+   (->* [digest/c] [#:key (or/c bytes? #f) #:config config/c] digest-ctx?)]
   [digest-update
    (-> digest-ctx? input/c void?)]
   [digest-final
@@ -194,9 +196,9 @@
 
 ;; ----
 
-(define (make-digest-ctx di #:key [key #f])
+(define (make-digest-ctx di #:key [key #f] #:config [config null])
   (with-crypto-entry 'make-digest-ctx
-    (send (-get-digest-impl di) new-ctx key)))
+    (send (-get-digest-impl di) new-ctx key config)))
 
 (define (digest-update dg src)
   (with-crypto-entry 'digest-update
@@ -216,10 +218,10 @@
 
 ;; ----
 
-(define (digest di inp #:key [key #f] #:size [size #f])
+(define (digest di inp #:key [key #f] #:size [size #f] #:config [config null])
   (with-crypto-entry 'digest
     (let ([di (-get-digest-impl di)])
-      (send di digest inp key size))))
+      (send di digest inp key size config))))
 
 ;; ----
 

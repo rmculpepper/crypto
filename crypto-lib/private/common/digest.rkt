@@ -9,14 +9,18 @@
          "error.rkt")
 (provide digest-impl%
          digest-ctx%
-         rkt-hmac-ctx%)
+         rkt-hmac-ctx%
+         config:blake2s
+         config:blake2b
+         config:cshake)
 
 ;; ============================================================
 ;; Digest
 
 (define digest-impl%
   (class* info-impl-base% (digest-impl<%>)
-    (inherit-field info)
+    (inherit-field info factory)
+    (inherit get-spec)
     (super-new)
 
     (define/override (about) (format "~a digest" (super about)))
@@ -29,6 +33,7 @@
     (define/public (has-config?) (send info has-config?))
     (define/public (get-key-sizes) (send info get-key-sizes))
     (define/public (key-size-ok? keysize) (send info key-size-ok? keysize))
+    (define/public (get-config-family) (send info get-config-family))
     (define/public (get-security-strength cr?) (send info get-security-strength cr?))
 
     (define/public (sanity-check #:size [size #f] #:block-size [block-size #f])
@@ -45,16 +50,26 @@
           (internal-error "block size: expected ~s but got ~s\n  digest: ~a"
                           (send info get-block-size) block-size (about)))))
 
-    (define/public (new-ctx key)
+    ;; new-ctx : Bytes/#f Config -> DigestCtx
+    (define/public (new-ctx key config)
       (when key (check-key-size (bytes-length key)))
-      (-new-ctx key))
+      (cond [(null? config) (-new-ctx key)]
+            [else (-new-ctx2 key config)]))
+
+    ;; -new-ctx : Bytes/#f -> DigestCtx
+    (define/public (-new-ctx key)
+      (-new-ctx2 key null))
+
+    ;; -new-ctx2 : Bytes/#f Config -> DigestCtx
+    (define/public (-new-ctx2 key config)
+      (define factory-name (send factory get-name))
+      (check-null-config config (get-spec) #:in this)
+      (internal-error "unimplemented" #:in this))
 
     (define/public (check-key-size keysize)
       (unless (key-size-ok? keysize)
         (crypto-error "bad key size\n  given: ~s bytes\n  digest: ~a"
                       keysize (about))))
-
-    (abstract -new-ctx)       ;; Bytes/#f -> digest-ctx<%>
 
     (define/public (new-hmac-ctx key)
       (unless (get-size) (err/not-fixed-digest this))
@@ -63,18 +78,18 @@
     (define/public (-new-hmac-ctx key)
       (new rkt-hmac-ctx% (impl this) (key key)))
 
-    (define/public (digest src key size)
-      (define (fallback) (send (new-ctx key) digest src size))
-      (when key (check-key-size (bytes-length key)))
+    (define/public (digest src key size config)
+      (when (and (not (null? config)) (not (send info has-config?)))
+        ;; non-empty config but no config expected; report error
+        (check-null-config config (get-spec) #:in #f))
       (define dsize (get-size))
-      (cond [(or key (not dsize) (and size (not (eqv? size dsize))))
-             (fallback)]
-            [else
-             (or (match src
-                   [(? bytes?) (-digest-buffer src 0 (bytes-length src) dsize)]
-                   [(bytes-range buf start end) (-digest-buffer buf start end dsize)]
-                   [_ #f])
-                 (fallback))]))
+      (or (cond [(or key (not dsize) (and size (not (eqv? size dsize)))) #f]
+                [(not (null? config)) #f]
+                [else (match src
+                        [(? bytes?) (-digest-buffer src 0 (bytes-length src) dsize)]
+                        [(bytes-range buf start end) (-digest-buffer buf start end dsize)]
+                        [_ #f])])
+          (send (new-ctx key config) digest src size)))
 
     (define/public (hmac key src)
       (or (match src
@@ -164,7 +179,7 @@
     (xor-with-key! opad)
 
     (unless ctx
-      (set! ctx (send impl new-ctx #f))
+      (set! ctx (send impl new-ctx #f null))
       (send ctx update ipad))
 
     (define/override (-update buf start end)
@@ -174,7 +189,7 @@
 
     (define/override (-final! buf)
       (define mdbuf (send ctx final #f))
-      (define ctx2 (send impl new-ctx #f))
+      (define ctx2 (send impl new-ctx #f null))
       (send ctx2 update (list opad mdbuf))
       (bytes-copy! buf 0 (send ctx2 final #f)))
 
@@ -182,3 +197,21 @@
       (let ([ctx (send ctx copy)])
         (and ctx (new this% (impl impl) (key key) (ctx ctx)))))
     ))
+
+;; ------------------------------------------------------------
+
+(define config:blake2s
+  (let ([ok-bytes? (lambda (v) (and (bytes? v) (<= (bytes-length v) 8)))]
+        [desc "bytes with length <= 8"])
+    `((salt   ,ok-bytes? ,desc #:opt #"")
+      (custom ,ok-bytes? ,desc #:opt #""))))
+
+(define config:blake2b
+  (let ([ok-bytes? (lambda (v) (and (bytes? v) (<= (bytes-length v) 16)))]
+        [desc "bytes with length <= 16"])
+    `((salt   ,ok-bytes? ,desc #:opt #"")
+      (custom ,ok-bytes? ,desc #:opt #""))))
+
+(define config:cshake
+  `((function ,bytes? #f #:opt #"")
+    (custom   ,bytes? #f #:opt #"")))

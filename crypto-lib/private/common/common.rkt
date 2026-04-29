@@ -22,6 +22,7 @@
          check-config
          config-ref
          check/ref-config
+         check-null-config
          version->list
          version->string
          version>=?
@@ -142,9 +143,6 @@
 
 ;; ============================================================
 
-;; A Config is (listof (list Symbol Any))
-(define config/c (listof (list/c symbol? any/c)))
-
 ;; A ConfigSpec is (listof ConfigSpecEntry)
 ;; A ConfigSpecEntry is one of
 ;; - (list Symbol Predicate String/#f '#:req)     -- required
@@ -193,6 +191,12 @@
 (define (check/ref-config keys config spec what)
   (define config* (check-config config spec what))
   (apply values (for/list ([key (in-list keys)]) (config-ref config* key))))
+
+(define (check-null-config config what #:in [impl #f])
+  (unless (null? config)
+    (define impl-note (if impl ";\n implementation limitation" ""))
+    (crypto-error "no options supported for ~a~a\n  given: ~e"
+                  what impl-note config #:in impl)))
 
 ;; ----------------------------------------
 

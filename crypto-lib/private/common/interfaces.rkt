@@ -22,6 +22,7 @@
          simple-write<%>
 
          input/c
+         config/c
          (struct-out bytes-range)
 
          crypto-factory?
@@ -142,6 +143,9 @@
   (flat-rec-contract input/c
     (or/c bytes? string? input-port? bytes-range? (listof input/c))))
 
+;; A Config is (listof (list Symbol Any))
+(define config/c (listof (list/c symbol? any/c)))
+
 ;; ============================================================
 ;; Implementation Factories
 
@@ -163,9 +167,10 @@
 
 (define digest-impl<%>
   (interface (impl<%> digest-info<%>)
-    [new-ctx        (->m (or/c #f bytes?) digest-ctx?)]
+    [new-ctx        (->m (or/c #f bytes?) config/c digest-ctx?)]
     [new-hmac-ctx   (->m bytes? digest-ctx?)]
-    [digest         (->m input/c (or/c #f bytes?) (or/c #f exact-nonnegative-integer?) bytes?)]
+    [digest         (->m input/c (or/c #f bytes?) (or/c #f exact-nonnegative-integer?) config/c
+                         bytes?)]
     [hmac           (->m bytes? input/c bytes?)]
     ))
 

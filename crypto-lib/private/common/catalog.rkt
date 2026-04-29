@@ -51,6 +51,15 @@
     (define/public (key-size-ok? keysize)
       (size-set-contains? key-sizes keysize))
 
+    ;; get-config-family : -> (U Symbol #f)
+    ;; Recognize families of digests with same configuration options.
+    (define/public (get-config-family)
+      (case spec
+        [(cshake128 cshake256) 'cshake]
+        [(blake2b blake2b-512 blake2b-384 blake2b-256 blake2b-160) 'blake2b]
+        [(blake2s blake2s-256 blake2s-224 blake2s-160 blake2s-128) 'blake2s]
+        [else #f]))
+
     ;; get-security-strength : Boolean -> (U #f Nat)
     ;; cr? indicates whether collision-resistance is needed
     (define/public (get-security-strength cr?)
