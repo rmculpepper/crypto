@@ -168,7 +168,7 @@
                (crypto-error "cannot set authentication tag for decryption context with attached tag"))]
             [else ;; decrypt w/ detached tag
              (let ([tag (or tag #"")])
-               (check-bytes-length "authentication tag" auth-len tag this))])
+               (check-bytes "authentication tag" tag auth-len #:for this))])
       (with-state #:ok '(1 2) #:post 3
         (lambda ()
           (when (member state '(1)) (-finish-aad))

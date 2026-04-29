@@ -12,7 +12,7 @@
          internal-error
          impl-limit-error
 
-         check-bytes-length
+         check-bytes
          err/no-impl
          err/bad-signature-pad
          err/bad-encrypt-pad
@@ -56,8 +56,9 @@
                        #:for [forvalue #f]
                        #:in [invalue #f])
   (define (line label val)
-    (cond [(aboutable? val) (format "\n  ~a: ~a" label (send val about))]
-          [val (format "\n  ~a: ~a" label val)]
+    (cond [(string? val) (format "\n  ~a: ~a" label val)]
+          [(aboutable? val) (format "\n  ~a: ~a" label (send val about))]
+          [val (format "\n  ~a: ~e" label val)]
           [else ""]))
   (error (crypto-who) "~a~a~a~a"
          prefix
@@ -70,12 +71,15 @@
 
 ;; ----
 
-(define (check-bytes-length what wantlen buf [obj #f] #:fmt [fmt ""] #:args [args null])
-  (unless (= (bytes-length buf) wantlen)
-    (crypto-error "wrong size for ~a\n  expected: ~s bytes\n  given: ~s bytes~a"
-                  what wantlen (bytes-length buf)
-                  (apply format fmt (if (list? args) args (list args)))
-                  #:for obj)))
+(define (check-bytes what v len [hilen len] #:for [forobj #f] #:in [inobj #f])
+  (unless (<= len (bytes-length v) hilen)
+    (define wanted
+      (cond [(= len hilen) (format "~s bytes" len)]
+            [else (format "between ~s and ~s bytes (inclusive)" len hilen)]))
+    (define impl-note (if inobj " (implementation limit)" ""))
+    (crypto-error "wrong size for ~a~a\n  expected: ~a\n  given: ~s bytes"
+                  what impl-note wanted (bytes-length v)
+                  #:for forobj #:in inobj)))
 
 (define (err/no-impl [obj #f])
   (internal-error "unimplemented" #:in obj))

@@ -182,8 +182,7 @@
                       pad dspec #:for this)))
 
     (define/private (-check-msg-size msg dspec)
-      (check-bytes-length "digest" (digest-spec-size dspec) msg
-                          #:fmt "\n  digest: ~e" #:args dspec))
+      (check-bytes "digest" msg (digest-spec-size dspec) #:for dspec #:in this))
 
     (define/public (-sign msg dspec pad) (err/no-impl this))
     (define/public (-verify msg dspec pad sig) (err/no-impl this))
