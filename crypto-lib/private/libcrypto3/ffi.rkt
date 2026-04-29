@@ -10,14 +10,19 @@
          ffi/unsafe/define
          ffi/unsafe/atomic
          racket/runtime-path
-         (only-in openssl/libcrypto
-                  libcrypto
-                  libcrypto-load-fail-reason)
+         (only-in openssl/libcrypto [libcrypto rkt:libcrypto])
          "../common/ffi.rkt"
          "../common/base256.rkt"
          "../common/error.rkt")
 (provide (protect-out (all-defined-out))
          libcrypto)
+
+(define-runtime-path libcrypto4-so
+  '(so "libcrypto" ("4" "3" #f)))
+
+(define libcrypto
+  (ffi-lib libcrypto4-so '("4")
+           #:fail (lambda () rkt:libcrypto)))
 
 (define-ffi-definer define-crypto libcrypto
   #:default-make-fail make-not-available)
@@ -63,7 +68,8 @@
 (define OPENSSL_INFO_SEED_SOURCE               1007)
 (define OPENSSL_INFO_CPU_SETTINGS              1008)
 
-(define libcrypto3-ok? (and libcrypto (= (OPENSSL_version_major) 3)))
+(define libcrypto3-ok?
+  (and libcrypto (memv (OPENSSL_version_major) '(3 4))))
 
 (define (get-ok? fun-name)
   (and libcrypto3-ok? (get-ffi-obj fun-name libcrypto _fpointer (lambda () #f)) #t))
