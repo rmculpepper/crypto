@@ -5,6 +5,7 @@
 (require racket/class
          ffi/unsafe
          "../common/digest.rkt"
+         "../common/common.rkt"
          "ffi.rkt")
 (provide b2s-digest-impl%
          b2b-digest-impl%)
@@ -17,11 +18,18 @@
       (define outbuf (make-bytes size))
       (blake2s outbuf (ptr-add inbuf instart) (- inend instart) #f 0)
       outbuf)
-    (define/override (-new-ctx key)
+    (define/override (-new-ctx2 key0 config)
+      (define key (or key0 #""))
       (define ctx (new-blake2s-state))
-      (if key
-          (blake2s_init_key ctx (get-size) key)
-          (blake2s_init ctx (get-size)))
+      (define-values (salt custom)
+        (check/ref-config '(salt custom) config config:blake2s "blake2s"))
+      (define p (make-blake2s-param (get-size) (bytes-length key) salt custom))
+      (blake2s_init_param ctx p)
+      (unless (zero? (bytes-length key))
+        (define blocklen 64)
+        (define keyblock (make-bytes blocklen #x00))
+        (bytes-copy! keyblock 0 key 0 (bytes-length key))
+        (blake2s_update ctx keyblock blocklen))
       (new b2s-digest-ctx% (impl this) (ctx ctx)))
     ))
 
@@ -33,11 +41,18 @@
       (define outbuf (make-bytes size))
       (blake2b outbuf (ptr-add inbuf instart) (- inend instart) #f 0)
       outbuf)
-    (define/override (-new-ctx key)
+    (define/override (-new-ctx2 key0 config)
+      (define key (or key0 #""))
       (define ctx (new-blake2b-state))
-      (if key
-          (blake2b_init_key ctx (get-size) key)
-          (blake2b_init ctx (get-size)))
+      (define-values (salt custom)
+        (check/ref-config '(salt custom) config config:blake2b "blake2b"))
+      (define p (make-blake2b-param (get-size) (bytes-length key) salt custom))
+      (blake2b_init_param ctx p)
+      (unless (zero? (bytes-length key))
+        (define blocklen 128)
+        (define keyblock (make-bytes blocklen #x00))
+        (bytes-copy! keyblock 0 key 0 (bytes-length key))
+        (blake2b_update ctx keyblock blocklen))
       (new b2b-digest-ctx% (impl this) (ctx ctx)))
     ))
 

@@ -78,10 +78,15 @@
 
 ;; ----
 
+(define _blake2s_param _pointer)
+(define _blake2b_param _pointer)
+
 (define-b2 blake2s_init
   (_fun _blake2s_state _size ->  _int))
 (define-b2 blake2s_init_key
   (_fun _blake2s_state _size (key : _bytes) (_size = (bytes-length key)) -> _int))
+(define-b2 blake2s_init_param
+  (_fun _blake2s_state _blake2s_param -> _int))
 (define-b2 blake2s_update
   (_fun _blake2s_state _pointer _size -> _int))
 (define-b2 blake2s_final
@@ -91,6 +96,8 @@
   (_fun _blake2b_state _size -> _int))
 (define-b2 blake2b_init_key
   (_fun _blake2b_state _size (key : _bytes) (_size = (bytes-length key)) -> _int))
+(define-b2 blake2b_init_param
+  (_fun _blake2b_state _blake2b_param -> _int))
 (define-b2 blake2b_update
   (_fun _blake2b_state _pointer _size -> _int))
 (define-b2 blake2b_final
@@ -115,3 +122,23 @@
         (inlen : _size)
         (keylen : _size)
         -> _int))
+
+(define (make-blake2s-param outlen keylen salt personal)
+  (define p (make-bytes 32 #x00))
+  (bytes-set! p 0 outlen)
+  (bytes-set! p 1 keylen)
+  (bytes-set! p 2 #x01) ;; fanout
+  (bytes-set! p 3 #x01) ;; depth
+  (bytes-copy! p 16 salt     0 (min 8 (bytes-length salt)))
+  (bytes-copy! p 32 personal 0 (min 8 (bytes-length personal)))
+  p)
+
+(define (make-blake2b-param outlen keylen salt personal)
+  (define p (make-bytes 64 #x00))
+  (bytes-set! p 0 outlen)
+  (bytes-set! p 1 keylen)
+  (bytes-set! p 2 #x01) ;; fanout
+  (bytes-set! p 3 #x01) ;; depth
+  (bytes-copy! p 32 salt     0 (min 16 (bytes-length salt)))
+  (bytes-copy! p 48 personal 0 (min 16 (bytes-length personal)))
+  p)
