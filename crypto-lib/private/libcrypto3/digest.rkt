@@ -5,6 +5,7 @@
 (require racket/class
          ffi/unsafe
          "../common/digest.rkt"
+         "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt")
 (provide libcrypto3-digest-impl%)
@@ -13,7 +14,7 @@
   (class digest-impl%
     (init-field md [size #f] [mac #f])
     (super-new)
-    (inherit about sanity-check)
+    (inherit about get-spec get-config-family sanity-check)
     (inherit-field factory)
 
     (define/override (get-size) (or size (super get-size)))
@@ -28,20 +29,56 @@
                     (HANDLEp (EVP_Digest (ptr-add src start) (- end start) dbuf md))
                     dbuf)]))
 
-    (define/override (-new-ctx key)
-      (cond [(and key mac)
+    (define/override (-new-ctx2 key0 config)
+      (define key (or key0 #""))
+      (define key? (not (zero? (bytes-length key))))
+      (define (config-params)
+        (if (null? config) null (get-config-params key? config)))
+      (cond [(and key? mac)
              (define ctx (HANDLEp (EVP_MAC_CTX_new mac)))
-             (define params (make-param-array `((#"size" uint ,size #:?))))
-             (HANDLEp (EVP_MAC_init ctx (or key #"") params))
+             (define params (make-param-array
+                             `((#"size" uint ,size #:?)
+                               ,@(config-params))))
+             (HANDLEp (EVP_MAC_init ctx key params))
              (new libcrypto3-mac-ctx% (impl this) (ctx ctx))]
-            [key
-             ;; should be impossible
-             (internal-error "keys not supported" #:for this)]
+            [key?  ;; should be impossible
+             (internal-error "key not supported (no MAC impl)" #:for this)]
             [else
              (define ctx (HANDLEp (EVP_MD_CTX_new)))
-             (define params (make-param-array `((#"size" uint ,size #:?))))
+             (define params (make-param-array
+                             `((#"size" uint ,size #:?)
+                               ,@(config-params))))
              (HANDLEp (EVP_DigestInit_ex2 ctx md params))
              (new libcrypto3-digest-ctx% (impl this) (ctx ctx))]))
+
+    (define/private (get-config-params key? config)
+      (define config-family (get-config-family))
+      (case config-family
+        [(cshake)
+         (define-values (function custom)
+           (check/ref-config '(function custom) config config:cshake "cshake"))
+         (check-bytes "custom" custom 0 512 #:for "cshake" #:in this)
+         `((#"function-name" octet-string ,function #:?)
+           (#"customization" octet-string ,custom #:?))]
+        [(blake2b blake2s)
+         (define-values (salt custom)
+           (case config-family
+             [(blake2b) (check/ref-config '(salt custom) config config:blake2b "blake2b")]
+             [(blake2s) (check/ref-config '(salt custom) config config:blake2s "blake2s")]))
+         (cond [key?
+                `((#"salt"   octet-string ,salt #:?)
+                  (#"custom" octet-string ,custom #:?))]
+               [else
+                ;; digest impl doesn't support salt, custom; MAC impl requires non-empty key
+                (define (bad what)
+                  (crypto-error "~a not supported with empty key" what #:in this))
+                (unless (equal? salt #"") (bad "salt"))
+                (unless (equal? custom #"") (bad "custom option"))
+                '()])]
+        [else
+         (unless (null? config)
+           (check-null-config config (get-spec) #:in this))
+         null]))
 
     (define/override (-new-hmac-ctx key)
       (cond [size
