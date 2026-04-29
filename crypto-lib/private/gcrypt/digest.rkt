@@ -5,6 +5,8 @@
 (require racket/class
          ffi/unsafe
          "../common/digest.rkt"
+         "../common/common.rkt"
+         "../common/error.rkt"
          "ffi.rkt")
 (provide gcrypt-digest-impl%)
 
@@ -13,12 +15,23 @@
     (init-field md) ;; int
     (init blocksize)
     (super-new)
-    (inherit get-size sanity-check)
+    (inherit get-spec get-config-family get-size sanity-check)
 
     (sanity-check #:size (gcry_md_get_algo_dlen md) #:block-size blocksize)
 
-    (define/override (-new-ctx key)
+    (define/override (-new-ctx2 key config)
       (let ([ctx (gcry_md_open md 0)])
+        (case (get-config-family)
+          [(cshake)
+           (define-values (function custom)
+             (check/ref-config '(function custom) config config:cshake "cshake"))
+           (unless (and (zero? (bytes-length function)) (zero? (bytes-length custom)))
+             (check-bytes 'function function 0 255 #:for "cshake" #:in this)
+             (check-bytes 'custom   custom   0 255 #:for "cshake" #:in this)
+             (gcry_md_cshake_customize ctx (new-cshake_customization function custom)))]
+          [else
+           (unless (null? config) ;; includes blake2; gcrypt does not support options
+             (check-null-config config (get-spec) #:in this))])
         (when key (gcry_md_setkey ctx key (bytes-length key)))
         (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 

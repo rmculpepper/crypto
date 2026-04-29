@@ -196,6 +196,33 @@
         -> (and (= r GPG_ERR_NO_ERROR) (subbytes buf 0 buflen)))
   #:c-id gcry_md_algo_info)
 
+(define-gcrypt gcry_md_cshake_customize
+  (_fun [md : _gcry_md_hd]
+        [cmd : _int = GCRYCTL_MD_CUSTOMIZE]
+        [p : _pointer]
+        [plen : _size = (ctype-sizeof _cshake_customization)]
+        -> _gcry_error)
+  #:c-id gcry_md_ctl
+  #:wrap check)
+
+(define-cstruct _cshake_customization
+  ([n _pointer]
+   [nlen _uint]
+   [s _pointer]
+   [slen _uint]))
+
+(define (new-cshake_customization function custom)
+  (define cslen (ctype-sizeof _cshake_customization))
+  (define nlen (bytes-length function))
+  (define slen (bytes-length custom))
+  (define cs (malloc (+ cslen nlen slen) 'atomic-interior))
+  (cpointer-push-tag! cs cshake_customization-tag)
+  (set-cshake_customization-n! cs (ptr-add cs cslen))
+  (set-cshake_customization-s! cs (ptr-add cs (+ cslen nlen)))
+  (set-cshake_customization-nlen! cs nlen)
+  (set-cshake_customization-slen! cs slen)
+  cs)
+
 (define GCRY_MAC_HMAC_SHA256        101)
 (define GCRY_MAC_HMAC_SHA224        102)
 (define GCRY_MAC_HMAC_SHA512        103)
