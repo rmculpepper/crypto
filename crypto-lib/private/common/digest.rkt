@@ -12,6 +12,8 @@
          rkt-hmac-ctx%
          config:blake2s
          config:blake2b
+         config:blake2s+size
+         config:blake2b+size
          config:cshake)
 
 ;; ============================================================
@@ -211,6 +213,16 @@
         [desc "bytes with length <= 16"])
     `((salt   ,ok-bytes? ,desc #:opt #"")
       (custom ,ok-bytes? ,desc #:opt #""))))
+
+(define config:blake2s+size
+  (let ([ok-size? (lambda (v) (and (exact-integer? v) (<= 0 v 32)))]
+        [desc "integer between 0 and 32"])
+    `((size ,ok-size? ,desc #:req) ,@config:blake2s)))
+
+(define config:blake2b+size
+  (let ([ok-size? (lambda (v) (and (exact-integer? v) (<= 0 v 64)))]
+        [desc "integer between 0 and 64"])
+    `((size ,ok-size? ,desc #:req) ,@config:blake2b)))
 
 (define config:cshake
   `((function ,bytes? #f #:opt #"")
