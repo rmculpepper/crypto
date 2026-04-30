@@ -111,7 +111,12 @@
   (class* (state-mixin ctx-base%) (digest-ctx<%>)
     (inherit with-state)
     (inherit-field impl)
+    (init-field [digest-size #f]) ;; Nat/#f, #f means XOF (once initialized)
     (super-new [state 'open])
+
+    ;; var-sized digests (eg, blake2b) should set digest-size based on config
+    ;; fixed-size digests and XOFs get size from impl
+    (unless digest-size (set! digest-size (send impl get-size)))
 
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "digest-ctx:")))
@@ -129,14 +134,13 @@
     (define/public (final size)
       (with-state #:ok '(open) #:post 'closed
         (lambda ()
-          (define dsize (send impl get-size))
-          (cond [dsize
-                 (when (and size (not (= size dsize)))
+          (cond [digest-size
+                 (when (and size (not (= size digest-size)))
                    (crypto-error (string-append
                                   "wrong size given for non-XOF digest"
                                   "\n  given: ~e\n  expected: ~s")
-                                 size dsize #:in this))
-                 (define dest (make-bytes dsize))
+                                 size digest-size #:in this))
+                 (define dest (make-bytes digest-size))
                  (-final! dest)
                  dest]
                 [else
