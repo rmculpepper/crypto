@@ -19,8 +19,10 @@
 
     (define/override (get-size) (or size (super get-size)))
 
-    (sanity-check #:size (or size (let ([size (EVP_MD_get_size md)])
-                                    (and (> size 0) size)))
+    (sanity-check #:size (or size
+                             (and (get-size) ;; not XOF or var-sized
+                                  (let ([size (EVP_MD_get_size md)])
+                                    (and (> size 0) size))))
                   #:block-size (EVP_MD_get_block_size md))
 
     (define/override (-digest-buffer src start end osize)
@@ -32,25 +34,20 @@
     (define/override (-new-ctx2 key0 config)
       (define key (or key0 #""))
       (define key? (not (zero? (bytes-length key))))
-      (define (config-params)
-        (if (null? config) null (get-config-params key? config)))
+      (define-values (dsize params) (get-config-params key? config))
       (cond [(and key? mac)
              (define ctx (HANDLEp (EVP_MAC_CTX_new mac)))
-             (define params (make-param-array
-                             `((#"size" uint ,size #:?)
-                               ,@(config-params))))
-             (HANDLEp (EVP_MAC_init ctx key params))
-             (new libcrypto3-mac-ctx% (impl this) (ctx ctx))]
+             (HANDLEp (EVP_MAC_init ctx key (make-param-array params)))
+             (new libcrypto3-mac-ctx% (impl this) (ctx ctx) (digest-size dsize))]
             [key?  ;; should be impossible
              (internal-error "key not supported (no MAC impl)" #:for this)]
             [else
              (define ctx (HANDLEp (EVP_MD_CTX_new)))
-             (define params (make-param-array
-                             `((#"size" uint ,size #:?)
-                               ,@(config-params))))
-             (HANDLEp (EVP_DigestInit_ex2 ctx md params))
-             (new libcrypto3-digest-ctx% (impl this) (ctx ctx))]))
+             (HANDLEp (EVP_DigestInit_ex2 ctx md (make-param-array params)))
+             (new libcrypto3-digest-ctx% (impl this) (ctx ctx) (digest-size dsize))]))
 
+    ;; get-config-params : Boolean Config -> (values Nat/#f ParamAlist)
+    ;; Return size only if set by config, but use size field in params.
     (define/private (get-config-params key? config)
       (define config-family (get-config-family))
       (case config-family
@@ -58,27 +55,34 @@
          (define-values (function custom)
            (check/ref-config '(function custom) config config:cshake "cshake"))
          (check-bytes "custom" custom 0 512 #:for "cshake" #:in this)
-         `((#"function-name" octet-string ,function #:?)
-           (#"customization" octet-string ,custom #:?))]
+         (values #f
+                 `((#"function-name" octet-string ,function #:?)
+                   (#"customization" octet-string ,custom #:?)))]
         [(blake2b blake2s)
-         (define-values (salt custom)
+         (define varsize? (and (memq (get-spec) '(blake2b blake2s)) #t))
+         (define config-spec
            (case config-family
-             [(blake2b) (check/ref-config '(salt custom) config config:blake2b "blake2b")]
-             [(blake2s) (check/ref-config '(salt custom) config config:blake2s "blake2s")]))
+             [(blake2b) (if varsize? config:blake2b+size config:blake2b)]
+             [(blake2s) (if varsize? config:blake2s+size config:blake2s)]))
+         (define-values (csize salt custom)
+           (check/ref-config '(size salt custom) config config-spec config-family))
          (cond [key?
-                `((#"salt"   octet-string ,salt #:?)
-                  (#"custom" octet-string ,custom #:?))]
+                (values csize
+                        `((#"size"   uint         ,(or csize size) #:?)
+                          (#"salt"   octet-string ,salt #:?)
+                          (#"custom" octet-string ,custom #:?)))]
                [else
                 ;; digest impl doesn't support salt, custom; MAC impl requires non-empty key
                 (define (bad what)
                   (crypto-error "~a not supported with empty key" what #:in this))
                 (unless (equal? salt #"") (bad "salt"))
                 (unless (equal? custom #"") (bad "custom option"))
-                '()])]
+                (values csize
+                        `((#"size" uint ,(or csize size) #:?)))])]
         [else
          (unless (null? config)
            (check-null-config config (get-spec) #:in this))
-         null]))
+         (values #f `((#"size" uint ,size #:?)))]))
 
     (define/override (-new-hmac-ctx key)
       (cond [size

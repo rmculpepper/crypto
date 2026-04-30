@@ -43,6 +43,7 @@
 ;; Support for blake2b "size" param added in v3.2
 (define digests-3.2
   (hash-set* digests-3.0
+             'blake2b     '("blake2b-512" "blake2bmac" #f)
              'blake2b-384 '("blake2b-512" "blake2bmac" 48)
              'blake2b-256 '("blake2b-512" "blake2bmac" 32)
              'blake2b-160 '("blake2b-512" "blake2bmac" 20)))
@@ -50,6 +51,7 @@
 ;; Support for blake2s "size" param added in v3.3
 (define digests-3.3
   (hash-set* digests-3.2
+             'blake2s     '("blake2s-256" "blake2smac" #f)
              'blake2s-224 '("blake2s-256" "blake2smac" 28)
              'blake2s-160 '("blake2s-256" "blake2smac" 20)
              'blake2s-128 '("blake2s-256" "blake2smac" 16)))
