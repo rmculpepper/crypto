@@ -16,11 +16,19 @@
 ;; - "size" is number of bytes
 
 ;; ============================================================
+;; Info
+
+(define info<%>
+  (interface ()
+    get-spec
+    ))
+
+;; ============================================================
 ;; Digests
 
 (define digest-info<%>
-  (interface ()
-    get-spec        ;; -> DigestSpec
+  (interface (info<%>)
+    ;; get-spec     ;; -> DigestSpec
     get-size        ;; -> (U Nat #f) -- #f for XOF
     get-block-size  ;; -> Nat
     get-security-strength ;; Boolean -> (U #f Nat)
@@ -138,10 +146,10 @@
 ;; Cipher Info
 
 (define cipher-info<%>
-  (interface ()
+  (interface (info<%>)
+    ;; get-spec     ;; -> CipherSpec
     get-cipher-name ;; -> Symbol
     get-mode        ;; -> (U BlockMode 'stream)
-    get-spec        ;; -> CipherSpec
     get-type        ;; -> (U 'block 'stream)
     aead?           ;; -> Boolean
     get-block-size  ;; -> Nat  -- 1 for stream cipher
@@ -372,37 +380,51 @@
 ;; ============================================================
 ;; PK
 
-(define known-pk
-  '#hasheq([rsa . (sign encrypt)]
-           [dsa . (sign params)]
-           [dh  . (key-agree params)]
-           [ec  . (sign key-agree params)]
-           [eddsa . (sign)]
-           [ecx . (key-agree)]))
+(define pk-info<%>
+  (interface (info<%>)
+    ;; get-spec     ;; -> PKSpec
+    can-sign?       ;; (U Pad #f) (U DigestSpec #f) -> Boolean
+    can-encrypt?    ;; (U Pad #f) -> Boolean
+    can-key-agree?  ;; -> Boolean
+    has-params?     ;; -> Boolean
+    ;; for can-{sign,encrypt}?: pad=#f means "at all?"
+    ))
+
+(define pk-info%
+  (class* object% (pk-info<%>)
+    (init-field spec)
+    (super-new)
+    (define/public (get-spec) spec)
+    (define/public (can-sign? pad dspec)
+      (case spec
+        [(rsa) (and (memq pad rsa-sign-pads) #t)]
+        [(dsa ec) (and memq pad '(#f) #t)]
+        [else #f]))
+    (define/public (can-encrypt? pad)
+      (case spec
+        [(rsa) (and (memq pad rsa-enc-pads) #t)]
+        [else #f]))
+    (define/public (can-key-agree?)
+      (and (memq spec '(dh ec ecx)) #t))
+    (define/public (has-params?)
+      (and (memq spec '(dsa dh ec eddsa ecx)) #t))
+    ))
+
 (define rsa-sign-pads '(pkcs1-v1.5 pss pss* #f))
 (define rsa-enc-pads '(pkcs1-v1.5 oeap #f))
 
-(define (pk-spec? x)
-  (and (hash-ref known-pk x #f) #t))
-
-;; for can-sign?, can-encrypt?: pad=#f means "at all?"
-(define (pk-spec-can-sign? pk pad)
-  (case pk
-    [(rsa)    (and (memq pad rsa-sign-pads) #t)]
-    [(dsa ec) (and (memq pad '(#f)) #t)]
-    [else #f]))
-(define (pk-spec-can-encrypt? pk pad)
-  (case pk
-    [(rsa) (and (memq pad rsa-enc-pads) #t)]
-    [else #f]))
-
-(define (pk-spec-can-key-agree? pk)
-  (and (memq 'key-agree (hash-ref known-pk pk '())) #t))
-(define (pk-spec-has-parameters? pk)
-  (and (memq 'params (hash-ref known-pk pk '())) #t))
-
 (define (list-known-pks)
   '(rsa dsa dh ec eddsa ecx))
+
+(define known-pk
+  (for/hasheq ([pk (in-list (list-known-pks))])
+    (values pk (new pk-info% (spec pk)))))
+
+(define (pk-spec? x)
+  (and (memq x (list-known-pks)) #t))
+
+(define (pk-spec->info pk)
+  (hash-ref known-pk pk #f))
 
 ;; ----------------------------------------
 ;; Elliptic Curve information

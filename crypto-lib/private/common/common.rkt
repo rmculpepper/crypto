@@ -15,9 +15,6 @@
          state-mixin
          state-ctx%
          process-input
-         to-impl
-         to-info
-         to-spec
          shrink-bytes
          make-sized-copy
          ceil/
@@ -123,29 +120,6 @@
     (unless (eof-object? len)
       (process buf 0 len)
       (loop))))
-
-;; ============================================================
-
-(define (to-impl src0 [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
-  (let loop ([src src0])
-    (cond [(is-a? src impl<%>) src]
-          [(is-a? src ctx<%>) (loop (send src get-impl))]
-          [(and lookup (lookup src)) => values]
-          [fail-ok? #f]
-          [else (crypto-error "could not get implementation\n  ~a: ~e"
-                              (or what "given") src0)])))
-
-(define (to-info src [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
-  ;; assumes impl<%> is also info<%>
-  (cond [(to-impl src #t) => values]
-        [(and lookup (lookup src)) => values]
-        [fail-ok? #f]
-        [else (crypto-error "could not get info\n  ~a: ~e" (or what "given") src)]))
-
-(define (to-spec src)
-  ;; Assumes src is Spec | Impl | Ctx
-  (cond [(to-impl src #t) => (lambda (impl) (send impl get-spec))]
-        [else src]))
 
 ;; ============================================================
 

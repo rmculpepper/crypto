@@ -50,6 +50,25 @@
 (define iv/c (or/c bytes? #f))
 (define pad-mode/c boolean?)
 
+;; ============================================================
+
+(define (to-impl src0 [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
+  (let loop ([src src0])
+    (cond [(is-a? src impl<%>) src]
+          [(is-a? src ctx<%>) (loop (send src get-impl))]
+          [(and lookup (lookup src)) => values]
+          [fail-ok? #f]
+          [else (crypto-error "could not get implementation\n  ~a: ~e"
+                              (or what "given") src0)])))
+
+(define (to-info src0 [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
+  (let loop ([src src0])
+    (cond [(is-a? src info<%>) src]
+          [(is-a? src impl<%>) (send src get-info)]
+          [(is-a? src ctx<%>) (loop (send src get-impl))]
+          [(and lookup (lookup src)) => values]
+          [fail-ok? #f]
+          [else (crypto-error "could not get info\n  ~a: ~e" (or what "given") src0)])))
 
 ;; ============================================================
 ;; Factories
@@ -151,6 +170,7 @@
 (define digest/c (or/c digest-spec? digest-impl?))
 (define (-get-digest-impl o) (to-impl o #:what "digest" #:lookup get-digest))
 (define (-get-digest-info o) (to-info o #:what "digest" #:lookup digest-spec->info))
+(define (-get-digest-spec o) (let ([di (-get-digest-info o)]) (and di (send di get-spec))))
 
 ;; ----
 
@@ -593,19 +613,19 @@
 
 (define (pk-can-sign? pki [pad #f] [dspec #f])
   (with-crypto-entry 'pk-can-sign?
-    (cond [(pk-spec? pki) (pk-spec-can-sign? pki pad)]
+    (cond [(pk-spec? pki) (send (pk-spec->info pki) can-sign? pad dspec)]
           [else (and (send (to-impl pki) can-sign? pad dspec) #t)])))
 (define (pk-can-encrypt? pki [pad #f])
   (with-crypto-entry 'pk-can-encrypt?
-    (cond [(pk-spec? pki) (pk-spec-can-encrypt? pki)]
+    (cond [(pk-spec? pki) (send (pk-spec->info pki) can-encrypt? pad)]
           [else (and (send (to-impl pki) can-encrypt? pad) #t)])))
 (define (pk-can-key-agree? pki)
   (with-crypto-entry 'pk-can-key-agree?
-    (cond [(pk-spec? pki) (pk-spec-can-key-agree? pki)]
+    (cond [(pk-spec? pki) (send (pk-spec->info pki) can-key-agree?)]
           [else (and (send (to-impl pki) can-key-agree?) #t)])))
 (define (pk-has-parameters? pki)
   (with-crypto-entry 'pk-has-parameters?
-    (cond [(pk-spec? pki) (pk-spec-has-parameters? pki)]
+    (cond [(pk-spec? pki) (send (pk-spec->info pki) has-params?)]
           [else (and (send (to-impl pki) has-params?) #t)])))
 
 (define (pk-security-strength pk)
@@ -659,22 +679,22 @@
 
 (define (pk-sign-digest pk di dbuf #:pad [pad #f])
   (with-crypto-entry 'pk-sign-digest
-    (let ([di (to-spec di)])
+    (let ([di (-get-digest-spec di)])
       (send pk sign dbuf di pad))))
 (define (pk-verify-digest pk di dbuf sig #:pad [pad #f])
   (with-crypto-entry 'pk-verify-digest
-    (let ([di (to-spec di)])
+    (let ([di (-get-digest-spec di)])
       (send pk verify dbuf di pad sig))))
 
 (define (digest/sign pk di inp #:pad [pad #f])
   (with-crypto-entry 'digest/sign
-    (let* ([di (to-spec di)]
+    (let* ([di (-get-digest-spec di)]
            [di* (get-digest di (get-factory pk))])
       (send pk sign (digest di* inp) di pad))))
 
 (define (digest/verify pk di inp sig #:pad [pad #f])
   (with-crypto-entry 'digest/verify
-    (let* ([di (to-spec di)]
+    (let* ([di (-get-digest-spec di)]
            [di* (get-digest di (get-factory pk))])
       (send pk verify (digest di* inp) di pad sig))))
 

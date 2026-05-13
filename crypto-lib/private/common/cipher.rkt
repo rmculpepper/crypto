@@ -17,14 +17,13 @@
 (define cipher-impl-base%
   (class* info-impl-base% (cipher-impl<%>)
     (inherit-field info)
-    (inherit get-spec get-factory)
     (super-new)
 
+    (define/override (about) (format "~a cipher" (super about)))
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "cipher:")))
 
     ;; Info methods
-    (define/override (about) (format "~a cipher" (super about)))
     (define/public (get-cipher-name) (send info get-cipher-name))
     (define/public (get-mode) (send info get-mode))
     (define/public (get-type) (send info get-type))
@@ -92,8 +91,7 @@
 (define multikeylen-cipher-impl%
   (class cipher-impl-base%
     (init-field impls) ;; (nonempty-listof (cons nat cipher-impl%))
-    (inherit-field info)
-    (inherit about get-spec check-key-size)
+    (inherit about check-key-size)
     (super-new)
 
     (define/override (get-key-size) (caar impls))

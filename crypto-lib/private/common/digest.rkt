@@ -17,16 +17,16 @@
 (define digest-impl%
   (class* info-impl-base% (digest-impl<%>)
     (inherit-field info)
-    (inherit get-factory get-spec)
     (super-new)
 
-    ;; Info methods
     (define/override (about) (format "~a digest" (super about)))
     (define/override (to-write-string prefix) (super to-write-string (or prefix "digest:")))
+
+    ;; Info methods
     (define/public (get-size) (send info get-size))
     (define/public (get-block-size) (send info get-block-size))
-    (define/public (get-security-strength cr?) (send info get-security-strength cr?))
     (define/public (key-size-ok? keysize) (send info key-size-ok? keysize))
+    (define/public (get-security-strength cr?) (send info get-security-strength cr?))
 
     (define/public (sanity-check #:size [size #f] #:block-size [block-size #f])
       ;; Use info::get-{block-,}size directly so that subclasses can
@@ -80,8 +80,9 @@
 
 (define digest-ctx%
   (class* (state-mixin ctx-base%) (digest-ctx<%>)
+    (inherit-field impl)
     (super-new [state 'open])
-    (inherit get-impl with-state)
+    (inherit with-state)
 
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "digest-ctx:")))
@@ -92,12 +93,14 @@
 
     (define/public (update src)
       (with-state #:ok '(open)
-        (lambda () (void (process-input src (lambda (buf start end) (-update buf start end)))))))
+        (lambda ()
+          (process-input src (lambda (buf start end) (-update buf start end)))
+          (void))))
 
     (define/public (final)
       (with-state #:ok '(open) #:post 'closed
         (lambda ()
-          (define dest (make-bytes (send (get-impl) get-size)))
+          (define dest (make-bytes (send impl get-size)))
           (-final! dest)
           dest)))
 
