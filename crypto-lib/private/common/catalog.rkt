@@ -31,6 +31,7 @@
     ;; get-spec     ;; -> DigestSpec
     get-size        ;; -> (U Nat #f) -- #f for XOF
     get-block-size  ;; -> Nat
+    key-size-ok?    ;; Nat -> Boolean
     get-security-strength ;; Boolean -> (U #f Nat)
     ))
 
