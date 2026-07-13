@@ -15,8 +15,7 @@
 
 (define sodium-argon2-impl%
   (class kdf-impl-base%
-    (inherit-field spec)
-    (inherit about)
+    (inherit about get-spec)
     (super-new)
 
     (define/override (-derive key-size config pass salt)
@@ -50,13 +49,13 @@
       (cast out _bytes _string/latin-1))
 
     (define/override (pwhash-verify pass cred)
-      (check-pwhash/kdf-spec cred spec)
+      (check-pwhash/kdf-spec cred (get-spec))
       (define alg (get-alg))
       (define status (crypto_pwhash_str_verify cred pass (bytes-length pass)))
       (zero? status))
 
     (define/private (get-alg)
-      (case spec
+      (case (get-spec)
         [(argon2i) crypto_pwhash_ALG_ARGON2I13]
         [(argon2id) crypto_pwhash_ALG_ARGON2ID13]))
     ))
@@ -79,9 +78,4 @@
       (unless (zero? status)
         (crypto-error "key derivation failed\n  kdf: ~a" (about)))
       out)
-
-    (define/override (pwhash config pass)
-      (kdf-pwhash-scrypt this config pass))
-    (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify this pass cred))
     ))

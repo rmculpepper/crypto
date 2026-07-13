@@ -19,10 +19,6 @@
          sp800-108-counter-hmac-kdf-impl%
          sp800-108-feedback-hmac-kdf-impl%
          sp800-108-double-pipeline-hmac-kdf-impl%
-         kdf-pwhash-argon2
-         kdf-pwhash-scrypt
-         kdf-pwhash-pbkdf2
-         kdf-pwhash-verify
          check-pwhash/kdf-spec
          parse-pwhash
          encode-pwhash
@@ -38,28 +34,47 @@
 ;; KDF and Password Hashing
 
 (define kdf-impl-base%
-  (class* impl-base% (kdf-impl<%>)
+  (class* info-impl-base% (kdf-impl<%>)
+    (init spec)
+    (inherit-field info)
     (inherit about get-spec get-factory)
-    (super-new)
+    (super-new [info (kdf-spec->info spec)])
+
+    ;; Info methods
+    (define/public (get-salt-mode)
+      (send info get-salt-mode))
+    (define/public (get-salt-default)
+      (send info get-salt-default))
+
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "kdf:")))
+
     (define/public (derive key-size params pass salt)
       (let ([key-size (or key-size (config-ref params 'key-size #f))])
         (unless key-size (crypto-error "missing key-size"))
         (-derive key-size params pass (check-salt salt))))
+
     (define/public (-derive key-size params pass salt)
       (err/no-impl this))
-    (define/public (pwhash params pass)
-      (err/no-impl this))
-    (define/public (pwhash-verify pass cred)
-      (err/no-impl this))
-    (define/public (salt-mode)
-      (kdf-spec-salt-mode (get-spec)))
+
     (define/public (check-salt salt)
-      (case (salt-mode)
+      (case (get-salt-mode)
         [(req) (or salt (crypto-error "salt required for KDF\n  KDF: ~a" (about)))]
-        [(opt) (or salt (kdf-spec-default-salt (get-spec)))]
+        [(opt) (or salt (get-salt-default))]
         [else (if salt (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)) #f)]))
+
+    (define/public (pwhash config pass)
+      (match (get-spec)
+        [(or 'argon2id 'argon2i 'argon2d)
+         (kdf-pwhash-argon2 this config pass)]
+        ['scrypt
+         (kdf-pwhash-scrypt this config pass)]
+        [(list 'pbkdf2 'hmac dspec)
+         (kdf-pwhash-pbkdf2-hmac this dspec config pass)]
+        [_ (err/no-impl this)]))
+
+    (define/public (pwhash-verify pass cred)
+      (kdf-pwhash-verify this pass cred))
     ))
 
 (define hkdf-impl%
@@ -160,24 +175,23 @@
   (define pwh (send ki derive 32 `((N ,(expt 2 ln)) (r ,r) (p ,p)) pass salt))
   (encode-pwhash (hash '$id 'scrypt 'ln ln 'r r 'p p 'salt salt 'pwhash pwh)))
 
-(define (kdf-pwhash-pbkdf2 ki spec config pass)
-  (define id (or (hash-ref pbkdf2-spec=>id spec #f)
-                 (crypto-error "PBKDF2 variant unsupported for password hashing")))
+(define (kdf-pwhash-pbkdf2-hmac ki dspec config pass)
+  (define id
+    (case dspec
+      [(sha1) 'pbkdf2]
+      [(sha256) 'pbkdf2-sha256]
+      [(sha512) 'pbkdf2-sha512]
+      [else (crypto-error "PBKDF2 variant unsupported for password hashing" #:in ki)]))
   (define-values (iters)
     (check/ref-config '(iterations) config config:pbkdf2-base "PBKDF2"))
   (define salt (crypto-random-bytes 16))
   (define pwh (send ki derive 32 `((iterations ,iters)) pass salt))
   (encode-pwhash (hash '$id id 'rounds iters 'salt salt 'pwhash pwh)))
 
-(define pbkdf2-spec=>id
-  (hash '(pbkdf2 hmac sha1)   'pbkdf2
-        '(pbkdf2 hmac sha256) 'pbkdf2-sha256
-        '(pbkdf2 hmac sha512) 'pbkdf2-sha512))
-
 (define (check-pwhash/kdf-spec cred spec)
   (define id (peek-id cred))
   (unless (equal? spec (id->kdf-spec id))
-    (crypto-error "KDF algorithm does not match given password hash algorithm\n  given: ~a"
+    (crypto-error "KDF implementation does not match given password hash algorithm\n  given: ~a"
                   (format "$~.a$ password hash" id))))
 
 (define (kdf-pwhash-verify ki pass cred)

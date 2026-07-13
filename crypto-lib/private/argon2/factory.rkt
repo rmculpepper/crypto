@@ -15,15 +15,14 @@
 
 (define argon2-kdf-impl%
   (class kdf-impl-base%
-    (inherit about)
-    (inherit-field spec)
+    (inherit about get-spec)
     (super-new)
 
     (define/override (-derive key-size config pass salt)
       (define-values (t m p v)
         (check/ref-config '(t m p v) config config:argon2-kdf "argon2"))
       (check-version v)
-      (case spec
+      (case (get-spec)
         [(argon2d)  (argon2d_hash_raw  t m p pass salt key-size)]
         [(argon2i)  (argon2i_hash_raw  t m p pass salt key-size)]
         [(argon2id) (argon2id_hash_raw t m p pass salt key-size)]))
@@ -35,7 +34,7 @@
       (define key-size 32)
       (define salt (crypto-random-bytes 16))
       (define cred
-        (case spec
+        (case (get-spec)
           [(argon2d)  (argon2d_hash_encoded  t m p pass salt key-size)]
           [(argon2i)  (argon2i_hash_encoded  t m p pass salt key-size)]
           [(argon2id) (argon2id_hash_encoded t m p pass salt key-size)]))
@@ -48,6 +47,7 @@
                       v (about))))
 
     (define/override (pwhash-verify pass cred)
+      (define spec (get-spec))
       (check-pwhash/kdf-spec cred spec)
       (case spec
         [(argon2d)  (argon2d_verify  cred pass)]

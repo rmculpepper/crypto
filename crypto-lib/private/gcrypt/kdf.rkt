@@ -12,18 +12,12 @@
 (define gcrypt-pbkdf2-impl%
   (class kdf-impl-base%
     (init-field di)
-    (inherit-field spec)
     (super-new)
 
     (define/override (-derive key-size config pass salt)
       (define iters (check/ref-config '(iterations) config config:pbkdf2-kdf "PBKDF2"))
       (define md (get-field md di))
       (gcry_kdf_derive pass GCRY_KDF_PBKDF2 md salt iters key-size))
-
-    (define/override (pwhash config pass)
-      (kdf-pwhash-pbkdf2 this spec config pass))
-    (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify this pass cred))
     ))
 
 (define gcrypt-scrypt-impl%
@@ -38,11 +32,6 @@
       (unless (equal? r 8)
         (impl-limit-error "r parameter must be 8\n  given: ~e\n  in: ~a" r (about)))
       (gcry_kdf_derive pass GCRY_KDF_SCRYPT N* salt p key-size))
-
-    (define/override (pwhash config pass)
-      (kdf-pwhash-scrypt this config pass))
-    (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify this pass cred))
     ))
 
 ;; ----------------------------------------
@@ -74,7 +63,7 @@
 (define gcrypt-argon2-impl%
   (class gcrypt-kdf-impl-base%
     (inherit about do-kdf)
-    (inherit-field spec)
+    (inherit get-spec)
     (super-new)
 
     (define/override (-derive key-size config pass salt)
@@ -85,7 +74,7 @@
                       v (about)))
       ;; Note: requires non-empty salt
       (do-kdf GCRY_KDF_ARGON2
-              (case spec
+              (case (get-spec)
                 [(argon2d) GCRY_KDF_ARGON2D]
                 [(argon2i) GCRY_KDF_ARGON2I]
                 [(argon2id) GCRY_KDF_ARGON2ID])
@@ -95,11 +84,6 @@
               #:salt salt
               #:key #""
               #:ad #""))
-
-    (define/override (pwhash config pass)
-      (kdf-pwhash-argon2 this config pass))
-    (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify this pass cred))
     ))
 
 (define gcrypt-hkdf-impl%

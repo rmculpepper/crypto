@@ -24,7 +24,7 @@
         (test #:name (format "~s" name)
           (test #:name "as kdf"
             (define config (get-config name))
-            (let ([salt (case (send impl salt-mode) [(req opt) salt] [else #f])])
+            (let ([salt (case (send impl get-salt-mode) [(req opt) salt] [else #f])])
               (check (kdf impl key salt config) #:with bytes?)))
           (match name
             [(list 'pbkdf2 'hmac di)
@@ -41,9 +41,9 @@
               (check (pwhash-verify impl key cred) #:is #t)
               (check (pwhash-verify impl badkey cred) #:is #f)
               (check (pwhash-verify impl key bad-pwh)
-                     #:error #rx"algorithm does not match")
+                     #:error #rx"implementation does not match")
               (check (pwhash-verify impl key unsupported-pwh)
-                     #:error #rx"algorithm does not match"))))))))
+                     #:error #rx"implementation does not match"))))))))
 
 ;; ----------------------------------------
 
@@ -168,7 +168,7 @@
         (define cred0 (and pwconfig (pwhash kdfi0 key pwconfig)))
         (for ([kdfi (in-list (cdr kdfis))])
           (test #:name (format "~s (~s)" spec (length kdfis))
-            (let ([salt (case (send kdfi0 salt-mode) [(req opt) salt] [else #f])])
+            (let ([salt (case (send kdfi0 get-salt-mode) [(req opt) salt] [else #f])])
               (define out (kdf kdfi0 key salt config))
               (for ([kdfi (in-list (cdr kdfis))])
                 (check (kdf kdfi key salt config) #:is out)))

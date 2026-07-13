@@ -256,7 +256,7 @@
 (define kdf-params/c (listof (list/c symbol? any/c)))
 
 (define kdf-impl<%>
-  (interface (impl<%>)
+  (interface (impl<%> kdf-info<%>)
     [derive (->m (or/c #f exact-nonnegative-integer?) kdf-params/c bytes? (or/c #f bytes?)
                  bytes?)]
     ))

@@ -12,14 +12,13 @@
 
 (define libcrypto3-kdf-impl%
   (class kdf-impl-base%
-    (inherit about)
+    (inherit about get-spec)
     (init-field evp params0)
-    (inherit-field spec)
     (super-new)
 
     (define/override (-derive key-size config pass salt)
       (define params1
-        (match spec
+        (match (get-spec)
           [(or 'argon2d 'argon2i 'argon2id)
            ;; params0 is empty
            (define-values (t m p v)
@@ -75,17 +74,4 @@
       (define params (make-param-array (append params0 params1)))
       (HANDLEp (EVP_KDF_derive ctx key key-size params))
       key)
-
-    (define/override (pwhash config pass)
-      (match spec
-        ['scrypt
-         (kdf-pwhash-scrypt this config pass)]
-        [(list 'pbkdf2 'hmac _)
-         (kdf-pwhash-pbkdf2 this spec config pass)]
-        [(or 'argon2d 'argon2i 'argon2id)
-         (kdf-pwhash-argon2 this config pass)]
-        [_ (super pwhash config pass)]))
-
-    (define/override (pwhash-verify pass cred)
-      (kdf-pwhash-verify this pass cred))
     ))

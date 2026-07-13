@@ -135,11 +135,13 @@
         [else #f]))
 
     (define/override (-get-kdf spec)
+      (define (make-pbkdf2 dspec)
+        (new nettle-pbkdf2-impl% (spec spec) (factory this) (dspec dspec)))
       (match spec
-        [(list 'pbkdf2 'hmac di-spec)
-         (let ([di (get-digest di-spec)])
-           (and di (memq di-spec '(sha1 sha256))
-                (new nettle-pbkdf2-impl% (spec spec) (factory this) (di di))))]
+        ['(pbkdf2 hmac sha1)   (make-pbkdf2 'sha1)]
+        ['(pbkdf2 hmac sha256) (make-pbkdf2 'sha256)]
+        ['(pbkdf2 hmac sha384) (and nettle_pbkdf2_hmac_sha384 (make-pbkdf2 'sha384))]
+        ['(pbkdf2 hmac sha512) (and nettle_pbkdf2_hmac_sha512 (make-pbkdf2 'sha512))]
         [_ (super -get-kdf spec)]))
 
     ;; ----

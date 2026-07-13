@@ -381,6 +381,7 @@
 
 ;; ----
 
+#;
 (define-nettle nettle_pbkdf2
   (_fun (mac_ctx update_func digest_func digest_size iterations salt out) ::
         (mac_ctx : _HASH_CTX) ;; 3 * digest_size !
@@ -415,6 +416,30 @@
         (outlen : _size)
         (out : _bytes = (make-bytes outlen))
         -> _void -> out))
+
+(define-nettle nettle_pbkdf2_hmac_sha384
+  (_fun (key salt iters outlen) ::
+        (_size = (bytes-length key))
+        (key : _bytes)
+        (iters : _uint)
+        (_size = (bytes-length salt))
+        (salt : _bytes)
+        (outlen : _size)
+        (out : _bytes = (make-bytes outlen))
+        -> _void -> out)
+  #:fail (lambda () #f))
+
+(define-nettle nettle_pbkdf2_hmac_sha512
+  (_fun (key salt iters outlen) ::
+        (_size = (bytes-length key))
+        (key : _bytes)
+        (iters : _uint)
+        (_size = (bytes-length salt))
+        (salt : _bytes)
+        (outlen : _size)
+        (out : _bytes = (make-bytes outlen))
+        -> _void -> out)
+  #:fail (lambda () #f))
 
 ;; ----
 
