@@ -29,21 +29,27 @@
 (define digest-info<%>
   (interface (info<%>)
     ;; get-spec     ;; -> DigestSpec
-    get-size        ;; -> (U Nat #f) -- #f for XOF
+    get-size        ;; -> (U Nat #f) -- #f for var/XOF
+    get-size*       ;; -> (U Nat 'var 'xof)
     get-block-size  ;; -> Nat
+    has-config?     ;; -> Boolean
+    get-key-sizes   ;; -> SizeSet
     key-size-ok?    ;; Nat -> Boolean
     get-security-strength ;; Boolean -> (U #f Nat)
     ))
 
 (define digest-info%
   (class* object% (digest-info<%>)
-    (init-field spec size block-size max-key-len ci-secbits cr-secbits)
+    (init-field spec size block-size config? key-sizes ci-secbits cr-secbits)
     (super-new)
     (define/public (get-spec) spec)
-    (define/public (get-size) size)
+    (define/public (get-size) (and (exact-integer? size) size))
+    (define/public (get-size*) size)
     (define/public (get-block-size) block-size)
-    (define/public (get-max-key-size) max-key-len)
-    (define/public (key-size-ok? keysize) (<= 1 keysize (get-max-key-size)))
+    (define/public (has-config?) config?)
+    (define/public (get-key-sizes) key-sizes)
+    (define/public (key-size-ok? keysize)
+      (size-set-contains? key-sizes keysize))
 
     ;; get-security-strength : Boolean -> (U #f Nat)
     ;; cr? indicates whether collision-resistance is needed
@@ -51,47 +57,57 @@
       (cond [cr? cr-secbits] [else ci-secbits]))
     ))
 
+(define (dinfo spec size block-size
+               [ci-secbits #f]
+               [cr-secbits (and ci-secbits (quotient ci-secbits 2))]
+               #:k [key-size #f] #:ks [key-sizes '(0)] #:c? [config? #f])
+  ;; FIXME: key-size unused
+  (new digest-info% (spec spec) (size size) (block-size block-size) (config? config?)
+       (cr-secbits cr-secbits) (ci-secbits ci-secbits) (key-sizes key-sizes)))
+
+(define (get-simple-digest-infos)
+  (list (dinfo 'md2         16  16   0)
+        (dinfo 'md4         16  64   0)
+        (dinfo 'md5         16  64   0)
+        (dinfo 'ripemd160   20  64   #f)
+        (dinfo 'tiger1      24  64   #f)
+        (dinfo 'tiger2      24  64   #f)
+        (dinfo 'whirlpool   64  64   #f) ;; Note: 3 versions, W-0 (2000), W-T (2001), W (2003)
+        (dinfo 'sha0        20  64   0)
+        (dinfo 'sha1        20  64   128 0)
+        (dinfo 'sha224      28  64   224)
+        (dinfo 'sha256      32  64   256)
+        (dinfo 'sha384      48  128  384)
+        (dinfo 'sha512      64  128  512)
+        (dinfo 'sha512/224  28  128  224)
+        (dinfo 'sha512/256  32  128  256)
+        (dinfo 'sha3-224    28  144  224)
+        (dinfo 'sha3-256    32  136  256)
+        (dinfo 'sha3-384    48  104  384)
+        (dinfo 'sha3-512    64  72   512)
+        ;; blake2b: out[1..64], key[0..64], salt[16], personalization[16]
+        ;; blake2s: out[1..32], key[0..32], salt[8], personalization[8]
+        (dinfo 'blake2b   'var  128  #f  #:c? #t #:ks '#s(varsize 0 64 1))
+        (dinfo 'blake2b-512 64  128  512 #:c? #t #:ks '#s(varsize 0 64 1))
+        (dinfo 'blake2b-384 48  128  384 #:c? #t #:ks '#s(varsize 0 64 1))
+        (dinfo 'blake2b-256 32  128  256 #:c? #t #:ks '#s(varsize 0 64 1))
+        (dinfo 'blake2b-160 20  128  160 #:c? #t #:ks '#s(varsize 0 64 1))
+        (dinfo 'blake2s   'var  64   #f  #:c? #t #:ks '#s(varsize 0 32 1))
+        (dinfo 'blake2s-256 32  64   256 #:c? #t #:ks '#s(varsize 0 32 1))
+        (dinfo 'blake2s-224 28  64   224 #:c? #t #:ks '#s(varsize 0 32 1))
+        (dinfo 'blake2s-160 20  64   160 #:c? #t #:ks '#s(varsize 0 32 1))
+        (dinfo 'blake2s-128 16  64   128 #:c? #t #:ks '#s(varsize 0 32 1))
+        ;; the following are XOFs (extensible output functions)
+        (dinfo 'shake128  'xof  168  128 128)
+        (dinfo 'shake256  'xof  136  256 256)
+        ;; cshake: out[0..], N=function[0..], S=customization[0..]
+        (dinfo 'cshake128 'xof  168  128 128 #:c? #t)
+        (dinfo 'cshake256 'xof  136  256 256 #:c? #t)
+        ))
+
 (define known-digests
-  (let ()
-    (define (info spec size block-size ci-secbits
-                  [cr-secbits (and ci-secbits (/ ci-secbits 2))]
-                  #:mkl [max-key-len 0])
-      (new digest-info% (spec spec) (size size) (block-size block-size)
-           (cr-secbits cr-secbits) (ci-secbits ci-secbits) (max-key-len max-key-len)))
-    (define all
-      (list (info 'md2         16  16   0)
-            (info 'md4         16  64   0)
-            (info 'md5         16  64   0)
-            (info 'ripemd160   20  64   #f)
-            (info 'tiger1      24  64   #f)
-            (info 'tiger2      24  64   #f)
-            (info 'whirlpool   64  64   #f) ;; Note: 3 versions, W-0 (2000), W-T (2001), W (2003)
-            (info 'sha0        20  64   0)
-            (info 'sha1        20  64   128 0)
-            (info 'sha224      28  64   224)
-            (info 'sha256      32  64   256)
-            (info 'sha384      48  128  384)
-            (info 'sha512      64  128  512)
-            (info 'sha512/224  28  128  224)
-            (info 'sha512/256  32  128  256)
-            (info 'sha3-224    28  144  224)
-            (info 'sha3-256    32  136  256)
-            (info 'sha3-384    48  104  384)
-            (info 'sha3-512    64  72   512)
-            ;; the following take keys
-            (info 'blake2b-512 64  128  512 #:mkl 64) ;; blake2b up to 64 bytes
-            (info 'blake2b-384 48  128  384 #:mkl 64)
-            (info 'blake2b-256 32  128  256 #:mkl 64)
-            (info 'blake2b-160 20  128  160 #:mkl 64)
-            (info 'blake2s-256 32  64   256 #:mkl 32) ;; blake2s up to 32 bytes
-            (info 'blake2s-224 28  64   224 #:mkl 32)
-            (info 'blake2s-160 20  64   160 #:mkl 32)
-            (info 'blake2s-128 16  64   128 #:mkl 32)
-            ;; the following are XOFs (extensible output functions) -- put #f for output size
-            (info 'shake128    #f  168  #f)
-            (info 'shake256    #f  136  #f)))
-    (for/hasheq ([di (in-list all)])
-      (values (send di get-spec) di))))
+  (for/hasheq ([di (in-list (get-simple-digest-infos))])
+    (values (send di get-spec) di)))
 
 ;; A DigestSpec is a symbol in domain of known-digests.
 
@@ -112,11 +128,80 @@
 (define (list-known-digests)
   (sort (hash-keys known-digests) symbol<?))
 
+;; ----------------------------------------
+;; MACs
+
+;; MAC specs are distinct from digest-spec, except overlap for blake2[bs].
+;; MAC info represented using digest-info%, but not interned.
+
+(define (mac-spec? x)
+  (match x
+    [(? symbol?) (and (memq x '(blake2b blake2s kmac128 kmac256 poly1305)) #t)]
+    [(list 'hmac (? digest-spec?)) #t]
+    [(list 'cmac (? block-cipher-name?)) #t]
+    [(list 'gmac (? block-cipher-name? bcname))
+     (let ([bci (block-cipher-name->info bcname)])
+       (and bci (= (send bci get-block-size) 16)))]
+    [_ #f]))
+
+(define (mac-spec->info spec)
+  (match spec
+    [(or 'blake2b 'blake2s)
+     (digest-spec->info spec)]
+    ['kmac128
+     (dinfo spec 16 168 #:ks '#s(varsize 0 +inf.0 1))]
+    ['kmac256
+     (dinfo spec 32 136 #:ks '#s(varsize 0 +inf.0 1))]
+    ['poly1305
+     (dinfo spec 32 16 #:ks '(32))]
+    [(list 'hmac (? digest-spec? dspec))
+     (define di (digest-spec->info dspec))
+     (define any-sizes '#s(varsize 1 +inf.0 1))
+     (define dsize (send di get-size))
+     (dinfo spec dsize (send di get-block-size) #:k dsize #:ks any-sizes)]
+    [(list 'cmac (? block-cipher-name? bcname))
+     (define bci (block-cipher-name->info bcname))
+     (define block-size (send bci get-block-size))
+     (define key-sizes (send bci get-key-sizes))
+     (define key-size (size-set-default key-sizes DEFAULT-KEY-SIZE))
+     (dinfo spec block-size block-size #:k key-size #:ks key-sizes)]
+    [(list 'gmac (? block-cipher-name? bcname))
+     (define bci (block-cipher-name->info bcname))
+     (cond [(= (send bci get-block-size) 16)
+            (define key-sizes (send bci get-key-sizes))
+            (define key-size (size-set-default key-sizes DEFAULT-KEY-SIZE))
+            (dinfo spec 16 16 #:k key-size #:ks key-sizes)]
+           [else #f])]
+    [_ #f]))
+
+(define (list-known-mac-specs)
+  (define (mspec<? a b)
+    (cond [(and (symbol? a) (symbol? b))
+           (symbol<? a b)]
+          [(symbol? a) #t]
+          [(symbol? b) #f]
+          [(symbol<? (car a) (car b)) #t]
+          [(eq? (car a) (car b))
+           (symbol<? (cadr a) (cadr b))]
+          [else #f]))
+  (define specs
+    (append
+     '(blake2b blake2s kmac128 kmac256 poly1305)
+     ;; exclude UMAC -- only one impl (nettle)
+     (for/list ([(dspec di) (in-hash known-digests)]
+                #:when (send di get-size))
+       `(hmac ,dspec))
+     (for/list ([(bcname bci) (in-hash known-block-ciphers)])
+       `(cmac ,bcname))
+     (for/list ([(bcname bci) (in-hash known-block-ciphers)]
+                #:when (= (send bci get-block-size) 16))
+       `(gmac ,bcname))))
+  (sort specs mspec<?))
+
 ;; ============================================================
 
-;; SizeSet is one of
-;;  - (list nat ...+)
-;;  - #s(varsize min-nat max-nat step-nat)
+;; SizeSet is either (Listof Nat) or VarSizeSet
+;; VarSizeSet is (varsize Nat Nat Nat)
 (struct varsize (min max step) #:prefab)
 
 (define (size-set-contains? ss n)

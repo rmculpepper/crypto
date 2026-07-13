@@ -24,7 +24,10 @@
 
     ;; Info methods
     (define/public (get-size) (send info get-size))
+    (define/public (get-size*) (send info get-size*))
     (define/public (get-block-size) (send info get-block-size))
+    (define/public (has-config?) (send info has-config?))
+    (define/public (get-key-sizes) (send info get-key-sizes))
     (define/public (key-size-ok? keysize) (send info key-size-ok? keysize))
     (define/public (get-security-strength cr?) (send info get-security-strength cr?))
 
