@@ -600,7 +600,8 @@
 (define key-format/c
   (or/c symbol? #f))
 
-(define (-get-impl pki) (to-impl pki #:what "algorithm" #:lookup get-pk))
+(define (-get-pk-impl pki) (to-impl pki #:what "algorithm" #:lookup get-pk))
+(define (-get-pk-info pk) (to-info pk #:what "algorithm" #:lookup pk-spec->info))
 
 ;; ----------------------------------------
 
@@ -611,22 +612,18 @@
 (define (public-only-key? x)
   (and (is-a? x pk-key<%>) (not (send x is-private?))))
 
-(define (pk-can-sign? pki [pad #f] [dspec #f])
+(define (pk-can-sign? pk [pad #f] [dspec #f])
   (with-crypto-entry 'pk-can-sign?
-    (cond [(pk-spec? pki) (send (pk-spec->info pki) can-sign? pad dspec)]
-          [else (and (send (to-impl pki) can-sign? pad dspec) #t)])))
-(define (pk-can-encrypt? pki [pad #f])
+    (and (send (-get-pk-info pk) can-sign? pad dspec) #t)))
+(define (pk-can-encrypt? pk [pad #f])
   (with-crypto-entry 'pk-can-encrypt?
-    (cond [(pk-spec? pki) (send (pk-spec->info pki) can-encrypt? pad)]
-          [else (and (send (to-impl pki) can-encrypt? pad) #t)])))
-(define (pk-can-key-agree? pki)
+    (and (send (-get-pk-info pk) can-encrypt? pad) #t)))
+(define (pk-can-key-agree? pk)
   (with-crypto-entry 'pk-can-key-agree?
-    (cond [(pk-spec? pki) (send (pk-spec->info pki) can-key-agree?)]
-          [else (and (send (to-impl pki) can-key-agree?) #t)])))
-(define (pk-has-parameters? pki)
+    (and (send (-get-pk-info pk) can-key-agree?) #t)))
+(define (pk-has-parameters? pk)
   (with-crypto-entry 'pk-has-parameters?
-    (cond [(pk-spec? pki) (send (pk-spec->info pki) has-params?)]
-          [else (and (send (to-impl pki) has-params?) #t)])))
+    (and (send (-get-pk-info pk) has-params?) #t)))
 
 (define (pk-security-strength pk)
   (with-crypto-entry 'pk-security-strength
@@ -720,12 +717,12 @@
   (with-crypto-entry 'generate-private-key
     (if (is-a? pki pk-params<%>)
         (send pki generate-key config)
-        (let ([pki (-get-impl pki)])
+        (let ([pki (-get-pk-impl pki)])
           (send pki generate-key config)))))
 
 (define (generate-pk-parameters pki [config '()])
   (with-crypto-entry 'generate-pk-parameters
-    (let ([pki (-get-impl pki)])
+    (let ([pki (-get-pk-impl pki)])
       (send pki generate-params config))))
 
 ;; ============================================================

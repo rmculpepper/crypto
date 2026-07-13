@@ -40,18 +40,18 @@
 
 (define nettle-rsa-impl%
   (class nettle-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit get-random-ctx)
     (super-new (spec 'rsa))
 
-    (define/override (can-encrypt? pad)
-      (and (memq pad '(#f pkcs1-v1.5)) (super can-encrypt? pad)))
-
-    (define/override (can-sign2 pad dspec)
+    (define/override (rsa-can-sign? pad dspec)
       (case pad
         [(pkcs1-v1.5 #f) (and (memq dspec '(#f md5 sha1 sha256 sha512)) #t)]
         [(pss) (and (memq dspec '(#f sha256 sha384 sha512)) #t)]
         [else #f]))
+
+    (define/override (rsa-can-encrypt? pad)
+      (and (memq pad '(pkcs1-v1.5 #f)) #t))
 
     (define/override (generate-key config)
       (define-values (nbits e)
@@ -214,7 +214,7 @@
 
 (define nettle-dsa-impl%
   (class nettle-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit get-random-ctx)
     (super-new (spec 'dsa))
 
@@ -316,7 +316,7 @@
 
 (define nettle-ec-impl%
   (class nettle-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit get-random-ctx)
     (super-new (spec 'ec))
 
@@ -477,7 +477,7 @@
 
 (define nettle-eddsa-impl%
   (class nettle-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit get-random-ctx)
     (super-new (spec 'eddsa))
 
@@ -602,7 +602,7 @@
 
 (define nettle-ecx-impl%
   (class nettle-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit get-random-ctx)
     (super-new (spec 'ecx))
 

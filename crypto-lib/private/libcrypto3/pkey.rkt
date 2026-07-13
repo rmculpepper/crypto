@@ -216,10 +216,13 @@
 
     (define/override (get-key-class) libcrypto3-rsa-key%)
 
-    (define/override (can-sign2 pad dspec)
-      (and (or (memq dspec signing-digests)
+    (define/override (rsa-can-sign? pad dspec)
+      (and (memq pad '(#f pkcs1-v1.5 pss pss*))
+           (or (memq dspec signing-digests)
                (memq dspec '(md5 md4 md2)))
            (and (send factory get-digest dspec) #t)))
+    (define/override (rsa-can-encrypt? pad)
+      (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
 
     (define/override (make-public-key n e)
       (evp->public-key (fromdata #"RSA" 'public

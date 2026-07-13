@@ -397,21 +397,22 @@
     (define/public (get-spec) spec)
     (define/public (can-sign? pad dspec)
       (case spec
-        [(rsa) (and (memq pad rsa-sign-pads) #t)]
-        [(dsa ec) (and memq pad '(#f) #t)]
+        [(rsa)      ;; impl must check digest
+         (and (memq pad '(pkcs1-v1.5 pss pss* #f)) #t)]
+        [(dsa ec)   ;; digest ignored for backwards compatibility
+         (and (memq pad '(#f)) #t)]
+        [(eddsa)    ;; digest must be 'none (future might use digest to mean EdDSAph)
+         (and (memq pad '(#f)) (memq dspec '(#f none)) #t)]
         [else #f]))
     (define/public (can-encrypt? pad)
       (case spec
-        [(rsa) (and (memq pad rsa-enc-pads) #t)]
+        [(rsa) (and (memq pad '(pkcs1-v1.5 oaep #f)) #t)]
         [else #f]))
     (define/public (can-key-agree?)
       (and (memq spec '(dh ec ecx)) #t))
     (define/public (has-params?)
       (and (memq spec '(dsa dh ec eddsa ecx)) #t))
     ))
-
-(define rsa-sign-pads '(pkcs1-v1.5 pss pss* #f))
-(define rsa-enc-pads '(pkcs1-v1.5 oeap #f))
 
 (define (list-known-pks)
   '(rsa dsa dh ec eddsa ecx))

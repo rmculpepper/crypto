@@ -86,20 +86,24 @@
 
 (define gcrypt-rsa-impl%
   (class gcrypt-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit -generate-keypair)
     (super-new (spec 'rsa))
 
-    (define/override (can-sign1 pad)
-      (and (memq pad '(#f pkcs1-v1.5 pss)) (super can-sign1 pad)))
-    (define/override (can-sign2 pad dspec)
-      ;; Sign/verify fails on some digests (eg, blake2*, sha512/256), not clear
-      ;; how to pre-check (gcry_md_get_asnoid not helpful).
-      (and (or (memq dspec '(sha1 sha224 sha256 sha384 md5))
-               (and v1.11/later?
-                    ;; Unavailable or broken for signing in earlier versions (1.9.4).
-                    (memq dspec '(sha512 sha3-224 sha3-256 sha3-384 sha3-512))))
-           (send factory get-digest dspec) #t))
+    (define/override (rsa-can-sign? pad dspec)
+      (and
+       (memq pad '(#f pkcs1-v1.5 pss))
+       ;; Sign/verify fails on some digests (eg, blake2*, sha512/256), not clear
+       ;; how to pre-check (gcry_md_get_asnoid not helpful).
+       (cond [(memq dspec '(#f)) #t]
+             [(memq dspec '(sha1 sha224 sha256 sha384 md5))
+              (and (send factory get-digest dspec) #t)]
+             [(memq dspec '(sha512 sha3-224 sha3-256 sha3-384 sha3-512))
+              ;; Unavailable or broken for signing in earlier versions (1.9.4).
+              (and v1.11/later? (send factory get-digest dspec) #t)]
+             [else #f])))
+    (define/override (rsa-can-encrypt? pad)
+      (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
 
     (define/override (generate-key config)
       (define-values (nbits e)
@@ -252,7 +256,7 @@
 
 (define gcrypt-dsa-impl%
   (class gcrypt-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit -generate-keypair)
     (super-new (spec 'dsa))
 
@@ -383,7 +387,7 @@
 
 (define gcrypt-ec-impl%
   (class gcrypt-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit -generate-keypair)
     (super-new (spec 'ec))
 
@@ -544,7 +548,7 @@
 
 (define gcrypt-eddsa-impl%
   (class gcrypt-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit -generate-keypair)
     (super-new (spec 'eddsa))
 
@@ -656,7 +660,7 @@
 
 (define gcrypt-ecx-impl%
   (class gcrypt-pk-impl%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (inherit -generate-keypair)
     (super-new (spec 'ecx))
 

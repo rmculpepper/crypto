@@ -23,12 +23,31 @@
 ;; Base classes
 
 (define pk-impl-base%
-  (class* impl-base% (pk-impl<%>)
-    (inherit about get-spec get-factory)
-    (super-new)
+  (class* info-impl-base% (pk-impl<%>)
+    (init spec)
+    (inherit-field info)
+    (inherit about get-spec)
+    (super-new (info (pk-spec->info spec)))
 
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "pk:")))
+
+    ;; Info methods
+    ;; Override if not all padding modes or digests are supported.
+    (define/public (can-sign? pad dspec)
+      (case (get-spec)
+        [(rsa) (rsa-can-sign? pad dspec)]
+        [else (send info can-sign? pad dspec)]))
+    (define/public (can-encrypt? pad)
+      (case (get-spec)
+        [(rsa) (rsa-can-encrypt? pad)]
+        [else (send info can-encrypt? pad)]))
+    (define/public (can-key-agree?) (send info can-key-agree?))
+    (define/public (has-params?) (send info has-params?))
+
+    ;; RSA implementations vary so much, add hooks for override:
+    (define/public (rsa-can-sign? pad dspec) #f)
+    (define/public (rsa-can-encrypt? pad) #f)
 
     (define/public (generate-key config)
       (cond [(has-params?)
@@ -38,53 +57,6 @@
     (define/public (generate-params config)
       (cond [(has-params?) (err/no-impl this)]
             [else (crypto-error "key parameters not supported\n  algorithm: ~a" (about))]))
-
-    ;; can-encrypt? : (U Pad #f) -> Boolean
-    ;; pad=#f means "for some padding?" ("at all?")
-    (define/public (can-encrypt? pad)
-      (case (get-spec)
-        [(rsa)
-         ;; Override if not all padding modes supported.
-         (case pad
-           [(#f pkcs1-v1.5 oaep) #t]
-           [else #f])]
-        [else #f]))
-
-    ;; can-sign? : (U Pad #f) (U DigestSpec 'none #f) -> Boolean
-    ;; pad=#f means "for some padding?"; dspec=#f means "for some digest?" ("at all?")
-    (define/public (can-sign? [pad #f] [dspec #f])
-      (case (get-spec)
-        [(rsa)
-         (and (can-sign1 pad)
-              (if dspec (can-sign2 pad dspec) #t))]
-        [(dsa ec)
-         ;; Pad must be #f. Ignore digest arg for backwards compat
-         (eq? pad #f)]
-        [(eddsa)
-         ;; Pad must be #f. Digest must be 'none.
-         ;; (Future version might use digest to mean EdDSAph.)
-         (and (eq? pad #f) (memq dspec '(#f none)) #t)]
-        [else #;(dh ecx) #f]))
-
-    ;; can-sign1 : (U Pad #f) -> Boolean
-    ;; Currently only applies to RSA.
-    (define/public (can-sign1 pad) #f)
-
-    ;; can-sign2 : (U Pad #f) DigestSpec -> Boolean
-    ;; Currently only applies to RSA.
-    (define/public (can-sign2 pad dspec) #f)
-
-    ;; can-key-agree? : -> Boolean
-    (define/public (can-key-agree?)
-      (case (get-spec)
-        [(dh ec ecx) #t]
-        [else #f]))
-
-    ;; has-params? : -> Boolean
-    (define/public (has-params?)
-      (case (get-spec)
-        [(dsa dh ec eddsa ecx) #t]
-        [else #f]))
 
     ;; Called by datum->pk-{key,parameters}%, signature depends on spec
     (define/public (import-pk parsed)

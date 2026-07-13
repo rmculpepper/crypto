@@ -17,7 +17,7 @@
 
 (define sodium-eddsa-impl%
   (class pk-impl-base%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (super-new (spec 'eddsa))
 
     (define/override (generate-params config)
@@ -99,7 +99,7 @@
 
 (define sodium-ecx-impl%
   (class pk-impl-base%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (super-new (spec 'ecx))
 
     (define/override (generate-params config)

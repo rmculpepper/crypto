@@ -212,13 +212,9 @@
 (define pk-enc-pad/c (or/c #f 'pkcs1-v1.5 'oaep))
 
 (define pk-impl<%>
-  (interface (impl<%>)
+  (interface (impl<%> pk-info<%>)
     [generate-key    (->m pk-config/c pk-key?)]
     [generate-params (->m pk-config/c pk-parameters?)]
-    [can-encrypt?    (->m pk-enc-pad/c boolean?)]
-    [can-key-agree?  (->m boolean?)]
-    [can-sign?       (->m pk-sign-pad/c (or/c digest-spec? 'none #f) boolean?)]
-    [has-params?     (->m boolean?)]
     [import-pk       (->m any/c (or/c #f pk-key? pk-parameters?))]
     ))
 

@@ -14,7 +14,7 @@
 
 (define decaf-eddsa-impl%
   (class pk-impl-base%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (super-new (spec 'eddsa))
 
     (define/override (generate-params config)
@@ -113,7 +113,7 @@
 
 (define decaf-ecx-impl%
   (class pk-impl-base%
-    (inherit-field spec factory)
+    (inherit-field factory)
     (super-new (spec 'ecx))
 
     (define/override (generate-params config)

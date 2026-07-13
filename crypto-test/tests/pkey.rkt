@@ -126,7 +126,7 @@
   (test #:name "KAT"
     (case pkname
       [(rsa)
-       (when (send pk can-sign 'pkcs1-v1.5)
+       (when (pk-can-sign? pk 'pkcs1-v1.5)
          #;
          (test #:name "signpkcs1"
            (kat-for-each "rsa-sign-pkcs1.rktd"
@@ -134,7 +134,7 @@
          (test #:name "verify pkcs1 (pass/fail)"
            (kat-for-each "rsa-verify-pkcs1.rktd"
                          (lambda (datum) (test-rsa-verify-pkcs1-kat pk datum)))))
-       (when (send pk can-sign 'pss*)
+       (when (pk-can-sign? pk 'pss*)
          (test #:name "verify pss (pass/fail)"
            (kat-for-each "rsa-verify-pss.rktd"
                          (lambda (datum) (test-rsa-verify-pss-kat pk datum)))))]
@@ -178,7 +178,7 @@
           (define Msg (hex->bytes* MsgH))
           (define S (hex->bytes* SH))
           (define expect-verify? (regexp-match? #rx"^P" Result))
-          (when (send pk can-sign2? 'pkcs1-v1.5 dspec)
+          (when (pk-can-sign? pk 'pkcs1-v1.5 dspec)
             (check (digest/verify pub di Msg S #:pad 'pkcs1-v1.5)
                    #:is expect-verify?)
             (check (let ([dgst (digest di Msg)])
@@ -203,10 +203,10 @@
                 #:is expect-verify?))
        (match test-datum
          [`(,dspec (e ,e) (d ,d) (Msg ,MsgH) (S ,SH) (SaltVal ,saltH) (Result ,Result))
-          (when (send pk can-sign2? 'pss* dspec)
+          (when (pk-can-sign? pk 'pss* dspec)
             (pss-test dspec e MsgH SH Result))]
          [`(,dspec (e ,e) (Msg ,MsgH) (S ,SH) (Result ,Result))
-          (when (send pk can-sign2? 'pss* dspec)
+          (when (pk-can-sign? pk 'pss* dspec)
             (pss-test dspec e MsgH SH Result))]))]))
 
 (define (test-dsa1-kat pk datum)
@@ -335,7 +335,7 @@
     [(rsa)
      ;; pkcs1, pss both need digest
      (for ([pad (in-list '(pkcs1-v1.5 pss pss*))])
-       (when (send pk can-sign pad)
+       (when (pk-can-sign? pk pad)
          (test #:name (format "sign w/ pad=~e" pad)
            (test-pk-sign/digest pk privss pad))))]
     [(dsa ec)
@@ -351,7 +351,7 @@
   (define factory (send pk get-factory))
   (for ([dspec (in-list all-digest-specs)]
         #:when (and (get-digest dspec factory)
-                    (send pk can-sign2? pad dspec)))
+                    (pk-can-sign? pk pad dspec)))
     (test #:name (format "w/ digest=~e" dspec)
       (define di (get-digest dspec factory))
       (for ([privs (in-list privss)])
@@ -565,7 +565,7 @@
     [(rsa)
      (for ([pad (in-list '(pkcs1-v1.5 pss pss*))])
        (define-values (ok-pks ok-privsss)
-         (filter2 pks privsss (lambda (pk) (send pk can-sign pad))))
+         (filter2 pks privsss (lambda (pk) (pk-can-sign? pk pad))))
        (when (> (length ok-pks))
          (test #:name (format "sign w/ pad=~e" pad)
            (xtest-pk-sign/digest pkspec ok-pks ok-privsss pad))))]
@@ -582,8 +582,7 @@
   (for ([dspec (in-list all-digest-specs)])
     (define (ok-pk? pk)
       (and (get-digest dspec (send pk get-factory))
-           (send pk can-sign pad)
-           (send pk can-sign2? pad dspec)))
+           (pk-can-sign? pk pad dspec)))
     (test #:name (format "w/ digest=~e" dspec)
       (call/cross-test
        pks privsss ok-pk?
@@ -595,7 +594,7 @@
 
 (define (xtest-pk-sign/nodigest pkspec pks privsss)
   (define (ok-pk? pk)
-    (send pk can-sign #f))
+    (pk-can-sign? pk #f))
   (call/cross-test
    pks privsss ok-pk?
    (lambda (pkA privA1 privA2 pkB privB1 privB2)
