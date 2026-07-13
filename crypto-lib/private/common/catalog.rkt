@@ -114,16 +114,16 @@
 (define (digest-spec? x)
   (and (symbol? x) (hash-ref known-digests x #f) #t))
 
-(define (digest-spec->info di)
-  (hash-ref known-digests di #f))
+(define (digest-spec->info dspec [err? #f])
+  (or (hash-ref known-digests dspec #f)
+      (if err? (crypto-error "bad digest spec: ~e" dspec) #f)))
 
 (define (digest-spec-size ds)
-  (send (digest-spec->info ds) get-size))
+  (send (digest-spec->info ds #t) get-size))
 (define (digest-spec-block-size ds)
-  (send (digest-spec->info ds) get-block-size))
-
+  (send (digest-spec->info ds #t) get-block-size))
 (define (digest-spec-security-strength ds [cr? #t])
-  (send (digest-spec->info ds) get-security-strength cr?))
+  (send (digest-spec->info ds #t) get-security-strength cr?))
 
 (define (list-known-digests)
   (sort (hash-keys known-digests) symbol<?))
