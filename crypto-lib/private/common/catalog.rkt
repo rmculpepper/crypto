@@ -26,6 +26,13 @@
 ;; ============================================================
 ;; Digests
 
+;; This library's "digest" support encompasses classic fixed-sized digests
+;; (hashes), variable-sized digests, XOFs, and MACs. The difference between a
+;; "variable-sized" digest and an XOF is that a variable-sized digest requires
+;; committing to the output size before processing the message, and an XOF
+;; accepts the output size after processing and uses it to trucate a
+;; (conceptually, nearly) infinite result.
+
 (define digest-info<%>
   (interface (info<%>)
     ;; get-spec     ;; -> DigestSpec
