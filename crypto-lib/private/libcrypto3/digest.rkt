@@ -42,7 +42,7 @@
              (HANDLEp (EVP_DigestInit_ex2 ctx md params))
              (new libcrypto3-digest-ctx% (impl this) (ctx ctx))]))
 
-    (define/override (new-hmac-ctx key)
+    (define/override (-new-hmac-ctx key)
       (cond [size
              ;; No way to propagate nonstandard size to HMAC digest,
              ;; so fall back to Racket impl.

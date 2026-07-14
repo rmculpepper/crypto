@@ -22,7 +22,7 @@
         (when key (gcry_md_setkey ctx key (bytes-length key)))
         (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
 
-    (define/override (new-hmac-ctx key)
+    (define/override (-new-hmac-ctx key)
       (let ([ctx (gcry_md_open md GCRY_MD_FLAG_HMAC)])
         (gcry_md_setkey ctx key (bytes-length key))
         (new gcrypt-digest-ctx% (impl this) (ctx ctx))))

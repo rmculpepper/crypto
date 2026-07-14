@@ -29,7 +29,7 @@
         ((nettle_hash-init nh) ctx)
         (new nettle-digest-ctx% (impl this) (nh nh) (ctx ctx))))
 
-    (define/override (new-hmac-ctx key)
+    (define/override (-new-hmac-ctx key)
       (let* ([size (nettle_hash-context_size nh)]
              [outer (make-ctx size)]
              [inner (make-ctx size)]

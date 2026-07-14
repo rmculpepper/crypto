@@ -11,13 +11,10 @@
 (define decaf-sha512-impl%
   (class digest-impl%
     (super-new)
-    (inherit sanity-check get-size)
     (define/override (-new-ctx key)
       (define ctx (new-decaf_sha512_ctx))
       (decaf_sha512_init ctx)
       (new decaf-sha512-ctx% (impl this) (ctx ctx)))
-    (define/override (new-hmac-ctx key)
-      (new rkt-hmac-ctx% (impl this) (key key)))
     ))
 
 (define decaf-sha512-ctx%

@@ -26,9 +26,6 @@
       (define ctx (make-ctx (crypto_generichash_blake2b_statebytes)))
       (crypto_generichash_blake2b_init ctx (or key #"") (get-size))
       (new sodium-blake2b-digest-ctx% (impl this) (ctx ctx)))
-
-    (define/override (new-hmac-ctx key)
-      (new rkt-hmac-ctx% (impl this) (key key)))
     ))
 
 (define sodium-blake2b-digest-ctx%

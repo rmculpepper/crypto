@@ -23,8 +23,7 @@
           (blake2s_init_key ctx (get-size) key)
           (blake2s_init ctx (get-size)))
       (new b2s-digest-ctx% (impl this) (ctx ctx)))
-    (define/override (new-hmac-ctx key)
-      (new rkt-hmac-ctx% (impl this) (key key)))))
+    ))
 
 (define b2b-digest-impl%
   (class digest-impl%
@@ -40,8 +39,7 @@
           (blake2b_init_key ctx (get-size) key)
           (blake2b_init ctx (get-size)))
       (new b2b-digest-ctx% (impl this) (ctx ctx)))
-    (define/override (new-hmac-ctx key)
-      (new rkt-hmac-ctx% (impl this) (key key)))))
+    ))
 
 ;; ----
 
