@@ -16,10 +16,11 @@
     (inherit about sanity-check)
     (inherit-field factory)
 
-    (define/override (get-size) (or size (EVP_MD_get_size md)))
-    (define/override (get-block-size) (EVP_MD_get_block_size md))
+    (define/override (get-size) (or size (super get-size)))
 
-    (sanity-check #:size (get-size) #:block-size (get-block-size))
+    (sanity-check #:size (or size (let ([size (EVP_MD_get_size md)])
+                                    (and (> size 0) size)))
+                  #:block-size (EVP_MD_get_block_size md))
 
     (define/override (-digest-buffer src start end)
       (cond [size #f]
