@@ -55,8 +55,7 @@
                        #:for [forvalue #f]
                        #:in [invalue #f])
   (define (line label val)
-    (cond [(and (object? val) (object-method-arity-includes? val 'about 0))
-           (format "\n  ~a: ~a" label (send val about))]
+    (cond [(aboutable? val) (format "\n  ~a: ~a" label (send val about))]
           [val (format "\n  ~a: ~a" label val)]
           [else ""]))
   (error (crypto-who) "~a~a~a~a"
@@ -64,6 +63,9 @@
          (apply format fmt args)
          (line "for" forvalue)
          (line "in" invalue)))
+
+(define (aboutable? v)
+  (and (object? v) (object-method-arity-includes? v 'about 0)))
 
 ;; ----
 
