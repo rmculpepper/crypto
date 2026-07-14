@@ -16,24 +16,45 @@
 @(the-eval '(require crypto crypto/libcrypto))
 @(the-eval '(crypto-factories (list libcrypto-factory)))
 
-@title[#:tag "digest"]{Message Digests}
+@title[#:tag "digest"]{Message Digests and Authentication Codes}
 
-A message digest function (sometimes called a cryptographic hash
-function) maps variable-length, potentially long messages to
-fixed-length, relatively short digests. Different digest functions, or
-algorithms, compute digests of different sizes and have different
-characteristics that may affect their security.
+A @as-index{message digest function} (sometimes called a @as-index{cryptographic
+hash function}) maps a variable-length, potentially long message to a relatively
+short digest. Different digest functions, or algorithms, compute digests of
+different sizes and have different characteristics that may affect their
+security. Message digest functions may be divided into three groups according to
+their output size: @itemlist[
 
-The HMAC construction combines a digest function together with a
-secret key to form an authenticity and integrity mechanism
-@cite{HMAC}.
+@item{A fixed-length digest function always produces the same size
+output. Examples include SHA1 (20 bytes) and SHA512 (64 bytes).}
+
+@item{A variable-length digest function is parameterized by the output
+length. The output length must be committed to before a message can begin to be
+processed. Given the same message, a variable-length digest function produces
+unrelated outputs for different lengths. An example is BLAKE2B.}
+
+@item{An @as-index{extendable output function} (XOF) is like a variable-length
+digest function, except the output size may be selected after the message is
+fully processed. Given the same message and two different output lengths, an XOF
+always produces outputs where the shorter output is a prefix of the longer
+output. An example is SHAKE128.}
+
+]
+Some message digest functions are parameterized by a secret key. Such a digest
+is called a @as-index{message authentication code} (MAC). This library supports
+MACs using the same API as other digests. Examples include BLAKE2B and the HMAC
+construction @cite{HMAC}.
 
 This library provides both high-level, all-at-once digest operations
 and low-level, incremental operations.
 
 @(begin
    (define (rktquote s) @racket[(quote @#,(racketvalfont (format "~a" s)))])
-   (define (get-size di) (or (send di get-size) +inf.0))
+   (define (get-size di) (send di get-size*))
+   (define (size< a b)
+     (cond [(and (real? a) (real? b)) (< a b)]
+           [(real? b) #f] [(real? a) #t]
+           [else (symbol<? a b)]))
    (define (get-sort-string di)
      (define str (format "~a" (send di get-spec)))
      (string-append (cond [(regexp-match? #rx"^sha3-" str) "3"]
@@ -54,13 +75,17 @@ digest. The following table lists valid digest names:
 (cons
  (list @bold{Digests} @bold{Size})
  (let ()
-   (define all-infos (sort (hash-values known-digests) < #:key get-size))
+   (define all-infos (sort (hash-values known-digests) size< #:key get-size))
    (define by-size (group-by get-size all-infos))
    (for/list ([group (in-list by-size)])
      (list @elem[(add-between (for/list ([di (in-list (sort group string<? #:key get-sort-string))])
                                 (rktquote (send di get-spec)))
                               ", ")]
-           @elem[(format "~a" (or (send (car group) get-size) "XOF"))]))))
+           @(let ([size (send (car group) get-size*)])
+              (case size
+                [(xof) @elem{XOF}]
+                [(var) @elem{variable}]
+                [else @elem[(format "~a" size)]]))))))
 ]
 Not every digest name above necessarily has an available implementation,
 depending on the cryptography providers installed.
