@@ -114,9 +114,9 @@
     (define/override (-final-xof! buf)
       (HANDLEp (EVP_DigestFinalXOF ctx buf (bytes-length buf))))
 
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define ctx2 (HANDLEp (EVP_MD_CTX_dup ctx)))
-      (new libcrypto3-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
 
 (define libcrypto3-mac-ctx%
@@ -137,7 +137,7 @@
     (define/override (-final-xof! buf)
       (HANDLEp (EVP_MAC_finalXOF ctx buf (bytes-length buf))))
 
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define ctx2 (HANDLEp (EVP_MAC_CTX_dup ctx)))
-      (new libcrypto3-mac-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))

@@ -81,17 +81,34 @@
       (new rkt-hmac-ctx% (impl this) (key key)))
 
     (define/public (digest src key size config)
-      (when (and (not (null? config)) (not (send info has-config?)))
-        ;; non-empty config but no config expected; report error
-        (check-null-config config (get-spec) #:in #f))
-      (define dsize (get-size))
-      (or (cond [(or key (not dsize) (and size (not (eqv? size dsize)))) #f]
-                [(not (null? config)) #f]
-                [else (match src
-                        [(? bytes?) (-digest-buffer src 0 (bytes-length src) dsize)]
-                        [(bytes-range buf start end) (-digest-buffer buf start end dsize)]
-                        [_ #f])])
-          (send (new-ctx key config) digest src size)))
+      (define (fallback) (digest-fallback src key size config))
+      (define dsize (get-size*))
+      (cond [(exact-nonnegative-integer? dsize)
+             (cond [(and (eq? key #f)
+                         (or (eq? size #f) (eqv? size dsize))
+                         (null? config))
+                    (or (digest-src src key dsize) (fallback))]
+                   [else (fallback)])]
+            [(eq? dsize 'va)
+             (let-values ([(config size) (move-size-early config size)])
+               (digest-fallback src key size config))]
+            [else (fallback)]))
+
+    (define/private (move-size-early config size)
+      (cond [(and size (not (assq 'size config)))
+             (values (cons `(size ,size) config) #f)]
+            [else (values config size)]))
+
+    (define/private (digest-fallback src key size config)
+      (send (new-ctx key config) digest src size))
+
+    (define/private (digest-src src key dsize)
+      (match src
+        [(? bytes?)
+         (-digest-buffer src 0 (bytes-length src) dsize)]
+        [(bytes-range buf start end)
+         (-digest-buffer buf start end dsize)]
+        [_ #f]))
 
     (define/public (hmac key src)
       (or (match src
@@ -151,12 +168,20 @@
                  dest]))))
 
     (define/public (copy)
-      (with-state #:ok '(open) (lambda () (-copy))))
+      (with-state #:ok '(open)
+        (lambda () (-copy))))
+
+    (define/public (-copy)
+      (define inits (-copy-inits))
+      (and inits (clone `((impl ,impl) (digest-size ,digest-size) ,@inits))))
+
+    (define/private (clone inits)
+      (dynamic-instantiate this% null (map (lambda (l) (cons (car l) (cadr l))) inits)))
 
     (abstract -update) ;; Bytes Nat Nat -> Void
     (abstract -final!) ;; Bytes -> Void
     (define/public (-final-xof! buf) (-final! buf))
-    (define/public (-copy) #f) ;; -> digest-ctx<%> or #f
+    (define/public (-copy-inits) #f) ;; -> (Listof (list Symbol Any)) or #f
     ))
 
 ;; ============================================================
@@ -199,9 +224,9 @@
       (send ctx2 update (list opad mdbuf))
       (bytes-copy! buf 0 (send ctx2 final #f)))
 
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (let ([ctx (send ctx copy)])
-        (and ctx (new this% (impl impl) (key key) (ctx ctx)))))
+        (and ctx `((key ,key) (ctx ,ctx)))))
     ))
 
 ;; ------------------------------------------------------------

@@ -54,11 +54,11 @@
       ((nettle_hash-digest nh) ctx (bytes-length buf) buf)
       ((nettle_hash-init nh) ctx))
 
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (let* ([size (nettle_hash-context_size nh)]
              [ctx2 (make-ctx size)])
         (memmove ctx2 ctx size)
-        (new nettle-digest-ctx% (impl impl) (nh nh) (ctx ctx2))))
+        `((nh ,nh) (ctx ,ctx2))))
     ))
 
 (define nettle-hmac-ctx%
@@ -76,11 +76,11 @@
     (define/override (-final! buf)
       (nettle_hmac_digest outer inner ctx nh buf (bytes-length buf)))
 
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (let* ([size (nettle_hash-context_size nh)]
              [ctx2 (make-ctx size)])
         (memmove ctx2 ctx size)
-        (new nettle-hmac-ctx% (impl impl) (nh nh) (outer outer) (inner inner) (ctx ctx2))))
+        `((nh ,nh) (outer ,outer) (inner ,inner) (ctx ,ctx2))))
     ))
 
 ;; ----------------------------------------
@@ -119,10 +119,10 @@
       (define/override (-final-xof! buf)
         (ctx_final ctx (bytes-length buf) buf))
 
-      (define/override (-copy)
+      (define/override (-copy-inits)
         (define ctx2 (make-ctx ctx_size))
         (memmove ctx2 ctx ctx_size)
-        (new this% (impl impl) (ctx ctx2)))
+        `((ctx ,ctx2)))
       ))
   nettle-shake-impl%)
 

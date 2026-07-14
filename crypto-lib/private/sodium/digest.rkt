@@ -43,11 +43,11 @@
     (define/override (-final! buf)
       (crypto_generichash_blake2b_final ctx buf))
 
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define size (crypto_generichash_blake2b_statebytes))
       (define ctx2 (make-ctx size))
       (memmove ctx2 ctx size)
-      (new sodium-blake2b-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
 
 ;; ----
@@ -75,11 +75,11 @@
       (crypto_hash_sha256_update ctx (ptr-add buf start) (- end start)))
     (define/override (-final! buf)
       (crypto_hash_sha256_final ctx buf))
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define size (crypto_hash_sha256_statebytes))
       (define ctx2 (make-ctx size))
       (memmove ctx2 ctx size)
-      (new sodium-sha256-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
 
 (define sodium-hmac-sha256-digest-ctx%
@@ -91,11 +91,11 @@
       (crypto_auth_hmacsha256_update ctx (ptr-add buf start) (- end start)))
     (define/override (-final! buf)
       (crypto_auth_hmacsha256_final ctx buf))
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define size (crypto_auth_hmacsha256_statebytes))
       (define ctx2 (make-ctx size))
       (memmove ctx2 ctx size)
-      (new sodium-hmac-sha256-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
 
 ;; ----
@@ -123,11 +123,11 @@
       (crypto_hash_sha512_update ctx (ptr-add buf start) (- end start)))
     (define/override (-final! buf)
       (crypto_hash_sha512_final ctx buf))
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define size (crypto_hash_sha512_statebytes))
       (define ctx2 (make-ctx size))
       (memmove ctx2 ctx size)
-      (new sodium-sha512-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
 
 (define sodium-hmac-sha512-digest-ctx%
@@ -139,11 +139,11 @@
       (crypto_auth_hmacsha512_update ctx (ptr-add buf start) (- end start)))
     (define/override (-final! buf)
       (crypto_auth_hmacsha512_final ctx buf))
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define size (crypto_auth_hmacsha512_statebytes))
       (define ctx2 (make-ctx size))
       (memmove ctx2 ctx size)
-      (new sodium-hmac-sha512-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
 
 ;; ----
@@ -177,11 +177,11 @@
       (define/override (-final-xof! buf)
         (ctx_final ctx buf (bytes-length buf)))
 
-      (define/override (-copy)
+      (define/override (-copy-inits)
         (define size (ctx_size))
         (define ctx2 (make-ctx size))
         (memmove ctx2 ctx size)
-        (new this% (impl impl) (ctx ctx2)))
+        `((ctx ,ctx2)))
       ))
 
   sodium-shake-impl%)

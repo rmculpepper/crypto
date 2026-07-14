@@ -71,10 +71,10 @@
       (blake2s_update ctx (ptr-add buf start) (- end start)))
     (define/override (-final! buf)
       (blake2s_final ctx buf))
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define ctx2 (new-blake2s-state))
       (memmove ctx2 ctx blake2s-state-size)
-      (new b2s-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
 
 (define b2b-digest-ctx%
@@ -86,8 +86,8 @@
       (blake2b_update ctx (ptr-add buf start) (- end start)))
     (define/override (-final! buf)
       (blake2b_final ctx buf))
-    (define/override (-copy)
+    (define/override (-copy-inits)
       (define ctx2 (new-blake2b-state))
       (memmove ctx2 ctx blake2b-state-size)
-      (new b2b-digest-ctx% (impl impl) (ctx ctx2)))
+      `((ctx ,ctx2)))
     ))
