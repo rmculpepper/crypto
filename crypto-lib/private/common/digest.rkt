@@ -63,10 +63,10 @@
     (define/public (-new-hmac-ctx key)
       (new rkt-hmac-ctx% (impl this) (key key)))
 
-    (define/public (digest src key)
-      (define (fallback) (send (new-ctx key) digest src))
+    (define/public (digest src key size)
+      (define (fallback) (send (new-ctx key) digest src size))
       (when key (check-key-size (bytes-length key)))
-      (cond [key (fallback)]
+      (cond [(or key size) (fallback)]
             [else
              (match src
                [(? bytes?) (or (-digest-buffer src 0 (bytes-length src)) (fallback))]
@@ -74,7 +74,7 @@
                [_ (fallback)])]))
 
     (define/public (hmac key src)
-      (define (fallback) (send (new-hmac-ctx key) digest src))
+      (define (fallback) (send (new-hmac-ctx key) digest src #f))
       (match src
         [(? bytes?) (or (-hmac-buffer key src 0 (bytes-length src)) (fallback))]
         [(bytes-range buf start end) (or (-hmac-buffer key buf start end) (fallback))]
@@ -89,16 +89,16 @@
 
 (define digest-ctx%
   (class* (state-mixin ctx-base%) (digest-ctx<%>)
+    (inherit with-state)
     (inherit-field impl)
     (super-new [state 'open])
-    (inherit with-state)
 
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "digest-ctx:")))
 
-    (define/public (digest src)
+    (define/public (digest src size)
       (update src)
-      (final))
+      (final size))
 
     (define/public (update src)
       (with-state #:ok '(open)
@@ -106,18 +106,32 @@
           (process-input src (lambda (buf start end) (-update buf start end)))
           (void))))
 
-    (define/public (final)
+    (define/public (final size)
       (with-state #:ok '(open) #:post 'closed
         (lambda ()
-          (define dest (make-bytes (send impl get-size)))
-          (-final! dest)
-          dest)))
+          (define dsize (send impl get-size))
+          (cond [dsize
+                 (when (and size (not (= size dsize)))
+                   (crypto-error (string-append
+                                  "wrong size given for non-XOF digest"
+                                  "\n  given: ~e\n  expected: ~s")
+                                 size dsize #:in this))
+                 (define dest (make-bytes dsize))
+                 (-final! dest)
+                 dest]
+                [else
+                 (unless size
+                   (crypto-error "no output size given for XOF" #:in this))
+                 (define dest (make-bytes size))
+                 (-final-xof! dest)
+                 dest]))))
 
     (define/public (copy)
       (with-state #:ok '(open) (lambda () (-copy))))
 
     (abstract -update) ;; Bytes Nat Nat -> Void
     (abstract -final!) ;; Bytes -> Void
+    (define/public (-final-xof! buf) (-final! buf))
     (define/public (-copy) #f) ;; -> digest-ctx<%> or #f
     ))
 
@@ -139,7 +153,7 @@
     (define ipad (make-bytes block-size #x36))
     (define opad (make-bytes block-size #x5c))
     (when (> (bytes-length key) block-size)
-      (set! key (send impl digest key #f)))
+      (set! key (send impl digest key #f #f)))
     (define (xor-with-key! pad)
       (for ([i (in-range (bytes-length key))])
         (bytes-set! pad i (bitwise-xor (bytes-ref pad i) (bytes-ref key i)))))
@@ -156,11 +170,12 @@
           (send ctx update (bytes-range buf start end))))
 
     (define/override (-final! buf)
-      (define mdbuf (send ctx final))
+      (define mdbuf (send ctx final #f))
       (define ctx2 (send impl new-ctx #f))
       (send ctx2 update (list opad mdbuf))
-      (bytes-copy! buf 0 (send ctx2 final)))
+      (bytes-copy! buf 0 (send ctx2 final #f)))
 
     (define/override (-copy)
-      (new rkt-hmac-ctx% (key key) (impl impl) (ctx (send ctx copy))))
+      (let ([ctx (send ctx copy)])
+        (and ctx (new this% (impl impl) (key key) (ctx ctx)))))
     ))

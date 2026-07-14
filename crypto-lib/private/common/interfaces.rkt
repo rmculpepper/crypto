@@ -165,15 +165,15 @@
   (interface (impl<%> digest-info<%>)
     [new-ctx        (->m (or/c #f bytes?) digest-ctx?)]
     [new-hmac-ctx   (->m bytes? digest-ctx?)]
-    [digest         (->m input/c (or/c #f bytes?) bytes?)]
+    [digest         (->m input/c (or/c #f bytes?) (or/c #f exact-nonnegative-integer?) bytes?)]
     [hmac           (->m bytes? input/c bytes?)]
     ))
 
 (define digest-ctx<%>
   (interface (ctx<%>)
-    [digest     (->m input/c bytes?)]
+    [digest     (->m input/c (or/c #f exact-nonnegative-integer?) bytes?)]
     [update     (->m input/c void?)]
-    [final      (->m bytes?)]
+    [final      (->m (or/c #f exact-nonnegative-integer?) bytes?)]
     [copy       (->m (or/c #f digest-ctx?))]
     ))
 

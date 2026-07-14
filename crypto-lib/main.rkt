@@ -143,13 +143,16 @@
 (provide
  (contract-out
   [digest-size
-   (-> (or/c digest-spec? digest-impl? digest-ctx?) exact-nonnegative-integer?)]
+   (-> (or/c digest-spec? digest-impl? digest-ctx?)
+       (or/c exact-nonnegative-integer? #f))]
   [digest-block-size
    (-> (or/c digest-spec? digest-impl? digest-ctx?) exact-nonnegative-integer?)]
   [digest-security-strength
    (-> (or/c digest-spec? digest-impl? digest-ctx?) boolean? (or/c #f security-strength/c))]
   [digest
-   (->* [digest/c input/c] [#:key (or/c bytes? #f)] bytes?)]
+   (->* [digest/c input/c]
+        [#:key (or/c bytes? #f) #:size (or/c exact-nonnegative-integer? #f)]
+        bytes?)]
   [hmac
    (-> digest/c bytes? input/c bytes?)]
   [make-digest-ctx
@@ -157,11 +160,15 @@
   [digest-update
    (-> digest-ctx? input/c void?)]
   [digest-final
-   (-> digest-ctx? bytes?)]
+   (->* [digest-ctx?]
+        [#:size (or/c exact-nonnegative-integer? #f)]
+        bytes?)]
   [digest-copy
    (-> digest-ctx? (or/c digest-ctx? #f))]
   [digest-peek-final
-   (-> digest-ctx? (or/c bytes? #f))]
+   (->* [digest-ctx?]
+        [#:size (or/c exact-nonnegative-integer? #f)]
+        (or/c bytes? #f))]
   [make-hmac-ctx
    (-> digest/c bytes? digest-ctx?)]
   [generate-hmac-key
@@ -195,24 +202,24 @@
   (with-crypto-entry 'digest-update
     (send dg update src)))
 
-(define (digest-final dg)
+(define (digest-final dg #:size [size #f])
   (with-crypto-entry 'digest-final
-    (send dg final)))
+    (send dg final size)))
 
 (define (digest-copy dg)
   (with-crypto-entry 'digest-copy
     (send dg copy)))
 
-(define (digest-peek-final dg)
+(define (digest-peek-final dg #:size [size #f])
   (with-crypto-entry 'digest-peek-final
-    (let ([dg2 (send dg copy)]) (and dg2 (send dg2 final)))))
+    (let ([dg2 (send dg copy)]) (and dg2 (send dg2 final size)))))
 
 ;; ----
 
-(define (digest di inp #:key [key #f])
+(define (digest di inp #:key [key #f] #:size [size #f])
   (with-crypto-entry 'digest
     (let ([di (-get-digest-impl di)])
-      (send di digest inp key))))
+      (send di digest inp key size))))
 
 ;; ----
 
