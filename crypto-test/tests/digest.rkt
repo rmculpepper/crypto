@@ -70,18 +70,21 @@
 
 ;; test-digest-methods-agree : DigestSpec DigestImpl -> Void
 (define (test-digest-methods-agree dspec di)
-  (define outlen (if (digest-size di) #f XOFLEN))
+  (define-values (outlen config) (get-outlen+config di))
   (test #:name "agree"
     (for* ([key (in-list (digest-make-keys di))]
            [msg (in-list messages)])
       ;; One-shot digest
-      (define dgst (digest di msg #:key key #:size outlen))
+      (define dgst (digest di msg #:key key #:size outlen #:config config))
+      (when (eq? (send di get-size*) 'va)
+        ;; One-shot early-var-length digest can use #:size argument.
+        (check (digest di msg #:key key #:size VARLEN) #:is dgst))
       ;; Ctx with one update
-      (let ([ctx (make-digest-ctx di #:key key)])
+      (let ([ctx (make-digest-ctx di #:key key #:config config)])
         (digest-update ctx msg)
         (check (digest-final ctx #:size outlen) #:is dgst))
       ;; Ctx with one update per byte; copy
-      (let ([ctx (make-digest-ctx di #:key key)])
+      (let ([ctx (make-digest-ctx di #:key key #:config config)])
         (for ([msgb (in-bytes msg)])
           (define ctx2 (digest-copy ctx))
           (when ctx2
@@ -92,7 +95,7 @@
         (when peeked (check peeked #:is dgst))
         (check (digest-final ctx #:size outlen) #:is dgst))
       ;; Ctx with random-sized updates; peek-final
-      (let ([ctx (make-digest-ctx di #:key key)])
+      (let ([ctx (make-digest-ctx di #:key key #:config config)])
         (define msglen (bytes-length msg))
         (let loop ([start 0])
           (void (digest-peek-final ctx #:size outlen))
@@ -130,9 +133,9 @@
   (test #:name "misc"
     ;; Check digest treats NUL byte as data, not terminator.
     (for ([key (digest-make-keys di)])
-      (define outlen (if (digest-size di) #f XOFLEN))
-      (check (digest di #"abc" #:key key #:size outlen)
-             #:is-not (digest di #"abc\0" #:key key #:size outlen)))))
+      (define-values (outlen config) (get-outlen+config di))
+      (check (digest di #"abc" #:key key #:size outlen #:config config)
+             #:is-not (digest di #"abc\0" #:key key #:size outlen #:config config)))))
 
 ;; digest-make-keys : DigestImpl -> (Listof Bytes/#f)
 (define (digest-make-keys di)
@@ -140,7 +143,13 @@
           (for/list ([keylen '(16 32)] #:when (send di key-size-ok? keylen))
             (semirandom-bytes keylen))))
 
-(define XOFLEN 57)
+(define VARLEN 24)
+
+(define (get-outlen+config di)
+  (case (send di get-size*)
+    [(va) (values #f `((size ,VARLEN)))]
+    [(vz) (values VARLEN null)]
+    [else (values #f null)]))
 
 ;; ============================================================
 
@@ -152,7 +161,7 @@
       (define dis (filter values (map get-di factories)))
       (when (> (length dis) 1)
         (define di0 (car dis))
-        (define outlen (if (digest-size di0) #f XOFLEN))
+        (define outlen (if (digest-size di0) #f VARLEN))
         (test #:name (format "~s (~s)" dspec (length dis))
           (for ([msg (in-list messages)])
             (define dgst (check (digest di0 msg #:size outlen) #:values))
