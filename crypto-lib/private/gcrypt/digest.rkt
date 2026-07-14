@@ -48,6 +48,10 @@
       (gcry_md_read ctx buf (bytes-length buf))
       (gcry_md_close ctx))
 
+    (define/override (-final-xof! buf)
+      (gcry_md_extract ctx buf (bytes-length buf))
+      (gcry_md_close ctx))
+
     (define/override (-copy)
       (let ([ctx2 (gcry_md_copy ctx)])
         (new gcrypt-digest-ctx% (impl impl) (ctx ctx2))))

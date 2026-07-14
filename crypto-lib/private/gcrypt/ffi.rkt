@@ -166,6 +166,14 @@
         -> (result : _pointer)
         -> (memmove buf result len)))
 
+(define-gcrypt gcry_md_extract
+  (_fun [handle : _gcry_md_hd]
+        [algo : _int = 0]
+        [buf : _pointer]
+        [buflen : _size]
+        -> _gcry_error)
+  #:wrap check)
+
 (define-gcrypt gcry_md_hash_buffer (_fun _int _pointer _pointer _size -> _void))
 (define-gcrypt gcry_md_algo_name (_fun _int -> _string))
 (define-gcrypt gcry_md_map_name (_fun _string -> _int))

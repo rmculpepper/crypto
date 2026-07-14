@@ -34,9 +34,8 @@
     (sha3-256   ,GCRY_MD_SHA3_256   136   ,GCRY_MAC_HMAC_SHA3_256)
     (sha3-384   ,GCRY_MD_SHA3_384   104   ,GCRY_MAC_HMAC_SHA3_384)
     (sha3-512   ,GCRY_MD_SHA3_512   72    ,GCRY_MAC_HMAC_SHA3_512)
-    ;; Fail on gcry_md_hash_buffer; need ctx and gcry_md_extract
-    ;; (shake128   ,GCRY_MD_SHAKE128   168)
-    ;; (shake256   ,GCRY_MD_SHAKE256   136)
+    (shake128   ,GCRY_MD_SHAKE128   168   #f)
+    (shake256   ,GCRY_MD_SHAKE256   136   #f)
     (blake2b-512 ,GCRY_MD_BLAKE2B_512 128 ,GCRY_MAC_HMAC_BLAKE2B_512)
     (blake2b-384 ,GCRY_MD_BLAKE2B_384 128 ,GCRY_MAC_HMAC_BLAKE2B_384)
     (blake2b-256 ,GCRY_MD_BLAKE2B_256 128 ,GCRY_MAC_HMAC_BLAKE2B_256)
