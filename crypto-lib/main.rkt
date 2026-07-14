@@ -230,7 +230,9 @@
 
 (define (generate-hmac-key di)
   (with-crypto-entry 'generate-hmac-key
-    (crypto-random-bytes (digest-size di))))
+    (define dsize (digest-size di))
+    (unless dsize (err/not-fixed-digest di))
+    (crypto-random-bytes dsize)))
 
 ;; ============================================================
 ;; Ciphers
