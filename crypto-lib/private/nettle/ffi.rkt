@@ -86,6 +86,23 @@
                                        #"nettle_sha3_512")))))]
           [else null])))
 
+(define sha3_state_size 200) ;; uint64[5*5], 1600 bits
+(define sha3_128_block_size 168)
+(define sha3_128_ctx_size (+ sha3_state_size sha3_128_block_size 16))
+(define sha3_256_block_size 136)
+(define sha3_256_ctx_size (+ sha3_state_size sha3_256_block_size 16))
+
+(define-nettle nettle_sha3_128_init _nettle_hash_init_func #:fail (lambda () #f))
+(define-nettle nettle_sha3_128_update _nettle_hash_update_func)
+(define-nettle nettle_sha3_128_shake _nettle_hash_digest_func)
+
+(define-nettle nettle_sha3_256_init _nettle_hash_init_func #:fail (lambda () #f))
+(define-nettle nettle_sha3_256_update _nettle_hash_update_func)
+(define-nettle nettle_sha3_256_shake _nettle_hash_digest_func)
+
+(define shake128-ok? (and nettle_sha3_128_init #t))
+(define shake256-ok? (and nettle_sha3_256_init #t))
+
 ;; ----
 
 (define-nettle nettle_hmac_set_key

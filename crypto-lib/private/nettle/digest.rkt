@@ -5,8 +5,11 @@
 (require racket/class
          ffi/unsafe
          "../common/digest.rkt"
+         "../common/error.rkt"
          "ffi.rkt")
-(provide nettle-digest-impl%)
+(provide nettle-digest-impl%
+         nettle-shake128-impl%
+         nettle-shake256-impl%)
 
 (define (make-ctx size)
   (let ([ctx (malloc size 'atomic-interior)])
@@ -79,3 +82,60 @@
         (memmove ctx2 ctx size)
         (new nettle-hmac-ctx% (impl impl) (nh nh) (outer outer) (inner inner) (ctx ctx2))))
     ))
+
+;; ----------------------------------------
+
+(define (make-shake-impl block_size
+                         ctx_size
+                         ctx_init
+                         ctx_update
+                         ctx_final)
+  (define nettle-shake-impl%
+    (class digest-impl%
+      (super-new)
+      (inherit sanity-check)
+
+      (define/override (get-block-size) block_size)
+      (sanity-check #:block-size (get-block-size))
+
+      (define/override (-new-ctx key)
+        (define ctx (make-ctx ctx_size))
+        (ctx_init ctx)
+        (new nettle-shake-ctx% (impl this) (ctx ctx)))
+      ))
+
+  (define nettle-shake-ctx%
+    (class digest-ctx%
+      (init-field ctx)
+      (inherit-field impl)
+      (super-new)
+
+      (define/override (-update buf start end)
+        (ctx_update ctx (- end start) (ptr-add buf start)))
+
+      (define/override (-final! buf)
+        (internal-error "wrong method for XOF"))
+
+      (define/override (-final-xof! buf)
+        (ctx_final ctx (bytes-length buf) buf))
+
+      (define/override (-copy)
+        (define ctx2 (make-ctx ctx_size))
+        (memmove ctx2 ctx ctx_size)
+        (new this% (impl impl) (ctx ctx2)))
+      ))
+  nettle-shake-impl%)
+
+(define nettle-shake128-impl%
+  (make-shake-impl sha3_128_block_size
+                   sha3_128_ctx_size
+                   nettle_sha3_128_init
+                   nettle_sha3_128_update
+                   nettle_sha3_128_shake))
+
+(define nettle-shake256-impl%
+  (make-shake-impl sha3_256_block_size
+                   sha3_256_ctx_size
+                   nettle_sha3_256_init
+                   nettle_sha3_256_update
+                   nettle_sha3_256_shake))

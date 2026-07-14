@@ -97,6 +97,10 @@
                                        (factory this)
                                        (nh nh))))]
                           [else #f])))]
+            [(and (eq? spec 'shake128) shake128-ok?)
+             (new nettle-shake128-impl% (info info) (factory this))]
+            [(and (eq? spec 'shake256) shake256-ok?)
+             (new nettle-shake256-impl% (info info) (factory this))]
             [else #f]))
 
     (define/override (-get-cipher info)
