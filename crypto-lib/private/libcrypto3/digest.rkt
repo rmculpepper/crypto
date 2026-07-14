@@ -68,9 +68,10 @@
       (HANDLEp (EVP_DigestUpdate ctx (ptr-add buf start) (- end start))))
 
     (define/override (-final! buf)
-      ;; FIXME: DigestFinalXOF when necessary
-      (HANDLEp (EVP_DigestFinal_ex ctx buf))
-      (void))
+      (HANDLEp (EVP_DigestFinal_ex ctx buf)))
+
+    (define/override (-final-xof! buf)
+      (HANDLEp (EVP_DigestFinalXOF ctx buf (bytes-length buf))))
 
     (define/override (-copy)
       (define ctx2 (HANDLEp (EVP_MD_CTX_dup ctx)))
@@ -91,6 +92,9 @@
 
     (define/override (-final! buf)
       (HANDLEp (EVP_MAC_final ctx buf (bytes-length buf))))
+
+    (define/override (-final-xof! buf)
+      (HANDLEp (EVP_MAC_finalXOF ctx buf (bytes-length buf))))
 
     (define/override (-copy)
       (define ctx2 (HANDLEp (EVP_MAC_CTX_dup ctx)))

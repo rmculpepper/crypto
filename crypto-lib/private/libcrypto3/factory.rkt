@@ -36,6 +36,8 @@
           [sha3-512  . "sha3-512"]
           [blake2b-512 . ("blake2b-512" "blake2bmac" #f)]
           [blake2s-256 . ("blake2s-256" "blake2smac" #f)]
+          [shake128 . "shake128"]
+          [shake256 . "shake256"]
           ))
 
 ;; Support for blake2b "size" param added in v3.2
