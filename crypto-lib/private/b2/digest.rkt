@@ -13,8 +13,8 @@
   (class digest-impl%
     (inherit get-size)
     (super-new)
-    (define/override (-digest-buffer inbuf instart inend)
-      (define outbuf (make-bytes (get-size)))
+    (define/override (-digest-buffer inbuf instart inend size)
+      (define outbuf (make-bytes size))
       (blake2s outbuf (ptr-add inbuf instart) (- inend instart) #f 0)
       outbuf)
     (define/override (-new-ctx key)
@@ -29,8 +29,8 @@
   (class digest-impl%
     (inherit get-size)
     (super-new)
-    (define/override (-digest-buffer inbuf instart inend)
-      (define outbuf (make-bytes (get-size)))
+    (define/override (-digest-buffer inbuf instart inend size)
+      (define outbuf (make-bytes size))
       (blake2b outbuf (ptr-add inbuf instart) (- inend instart) #f 0)
       outbuf)
     (define/override (-new-ctx key)

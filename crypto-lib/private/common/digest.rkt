@@ -66,24 +66,27 @@
     (define/public (digest src key size)
       (define (fallback) (send (new-ctx key) digest src size))
       (when key (check-key-size (bytes-length key)))
-      (cond [(or key size) (fallback)]
+      (define dsize (get-size))
+      (cond [(or key (not dsize) (and size (not (eqv? size dsize))))
+             (fallback)]
             [else
-             (match src
-               [(? bytes?) (or (-digest-buffer src 0 (bytes-length src)) (fallback))]
-               [(bytes-range buf start end) (or (-digest-buffer buf start end) (fallback))]
-               [_ (fallback)])]))
+             (or (match src
+                   [(? bytes?) (-digest-buffer src 0 (bytes-length src) dsize)]
+                   [(bytes-range buf start end) (-digest-buffer buf start end dsize)]
+                   [_ #f])
+                 (fallback))]))
 
     (define/public (hmac key src)
-      (define (fallback) (send (new-hmac-ctx key) digest src #f))
-      (match src
-        [(? bytes?) (or (-hmac-buffer key src 0 (bytes-length src)) (fallback))]
-        [(bytes-range buf start end) (or (-hmac-buffer key buf start end) (fallback))]
-        [_ (fallback)]))
+      (or (match src
+            [(? bytes?) (-hmac-buffer key src 0 (bytes-length src))]
+            [(bytes-range buf start end) (-hmac-buffer key buf start end)]
+            [_ #f])
+          (send (new-hmac-ctx key) digest src #f)))
 
     ;; {-digest,-hmac}-buffer : ... -> Bytes/#f
     ;; Return bytes if can compute digest/hmac directly, #f to fall back
     ;; to default ctx code.
-    (define/public (-digest-buffer src src-start src-end) #f)
+    (define/public (-digest-buffer src src-start src-end size) #f)
     (define/public (-hmac-buffer key src src-start src-end) #f)
     ))
 

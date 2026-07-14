@@ -22,9 +22,9 @@
                                     (and (> size 0) size)))
                   #:block-size (EVP_MD_get_block_size md))
 
-    (define/override (-digest-buffer src start end)
+    (define/override (-digest-buffer src start end osize)
       (cond [size #f]
-            [else (let ([dbuf (make-bytes (get-size))])
+            [else (let ([dbuf (make-bytes osize)])
                     (HANDLEp (EVP_Digest (ptr-add src start) (- end start) dbuf md))
                     dbuf)]))
 
@@ -47,7 +47,7 @@
       (cond [size
              ;; No way to propagate nonstandard size to HMAC digest,
              ;; so fall back to Racket impl.
-             (new rkt-hmac-ctx% (impl this) (key key))]
+             (super -new-hmac-ctx key)]
             [else
              (define libctx (get-field libctx factory))
              (define hmac (HANDLEp (EVP_MAC_fetch libctx "HMAC" #f)))
