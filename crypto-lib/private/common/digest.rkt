@@ -55,7 +55,13 @@
                       keysize (about))))
 
     (abstract -new-ctx)       ;; Bytes/#f -> digest-ctx<%>
-    (abstract new-hmac-ctx)   ;; Bytes -> digest-ctx<%>
+
+    (define/public (new-hmac-ctx key)
+      (unless (get-size) (err/not-fixed-digest this))
+      (-new-hmac-ctx key))
+
+    (define/public (-new-hmac-ctx key)
+      (new rkt-hmac-ctx% (impl this) (key key)))
 
     (define/public (digest src key)
       (define (fallback) (send (new-ctx key) digest src))

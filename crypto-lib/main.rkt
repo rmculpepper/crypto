@@ -676,24 +676,28 @@
 
 (define (pk-sign-digest pk di dbuf #:pad [pad #f])
   (with-crypto-entry 'pk-sign-digest
-    (let ([di (-get-digest-spec di)])
-      (send pk sign dbuf di pad))))
+    (define dspec (-get-digest-spec di))
+    (send pk sign dbuf di pad)))
 (define (pk-verify-digest pk di dbuf sig #:pad [pad #f])
   (with-crypto-entry 'pk-verify-digest
-    (let ([di (-get-digest-spec di)])
-      (send pk verify dbuf di pad sig))))
+    (define dspec (-get-digest-spec di))
+    (send pk verify dbuf di pad sig)))
 
-(define (digest/sign pk di inp #:pad [pad #f])
+(define (digest/sign pk di0 inp #:pad [pad #f])
   (with-crypto-entry 'digest/sign
-    (let* ([di (-get-digest-spec di)]
-           [di* (get-digest di (get-factory pk))])
-      (send pk sign (digest di* inp) di pad))))
+    (define dspec (-get-digest-spec di0))
+    (define di (get-digest dspec (get-factory pk)))
+    (unless di (err/missing-digest dspec))
+    (unless (digest-size di) (err/not-fixed-digest di #:in pk))
+    (send pk sign (digest di inp) dspec pad)))
 
-(define (digest/verify pk di inp sig #:pad [pad #f])
+(define (digest/verify pk di0 inp sig #:pad [pad #f])
   (with-crypto-entry 'digest/verify
-    (let* ([di (-get-digest-spec di)]
-           [di* (get-digest di (get-factory pk))])
-      (send pk verify (digest di* inp) di pad sig))))
+    (define dspec (-get-digest-spec di0))
+    (define di (get-digest dspec (get-factory pk)))
+    (unless di (err/missing-digest dspec))
+    (unless (digest-size di) (err/not-fixed-digest di #:in pk))
+    (send pk verify (digest di inp) dspec pad sig)))
 
 ;; ----------------------------------------
 

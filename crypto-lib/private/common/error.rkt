@@ -17,6 +17,7 @@
          err/bad-signature-pad
          err/bad-encrypt-pad
          err/missing-digest
+         err/not-fixed-digest
          err/crypt-failed
          err/auth-decrypt-failed
          err/no-curve
@@ -86,6 +87,11 @@
 
 (define (err/missing-digest spec)
   (crypto-error "could not get digest implementation\n  digest: ~e" spec))
+
+(define (err/not-fixed-digest di #:in [impl #f])
+  (crypto-error "variable-sized digest or XOF not allowed\n  digest: ~a"
+                (if (aboutable? di) (send di about) (format "~e" di))
+                #:in impl))
 
 (define (err/crypt-failed enc? auth?)
   (crypto-error "~a~a failed"
