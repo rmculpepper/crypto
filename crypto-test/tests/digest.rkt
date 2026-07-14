@@ -32,7 +32,8 @@
           (test-digest-kat dspec di)
           (test-digest-misc dspec di)
           (test-digest-methods-agree dspec di)
-          (test-hmac-methods-agree dspec di)))
+          (when (digest-size di)
+            (test-hmac-methods-agree dspec di))))
       (void))))
 
 ;; test-digest-kat : DigestSpec DigestImpl -> Void
@@ -63,19 +64,21 @@
 
 ;; check-digest-value : DigestImpl Bytes Bytes/#f Bytes -> Void
 (define (check-digest-value di in key out)
-  (check (digest di in #:key key) #:is out))
+  (define outlen (if (digest-size di) #f (bytes-length out)))
+  (check (digest di in #:key key #:size outlen) #:is out))
 
 ;; test-digest-methods-agree : DigestSpec DigestImpl -> Void
 (define (test-digest-methods-agree dspec di)
+  (define outlen (if (digest-size di) #f XOFLEN))
   (test #:name "agree"
     (for* ([key (in-list (digest-make-keys di))]
            [msg (in-list messages)])
       ;; One-shot digest
-      (define dgst (digest di msg #:key key))
+      (define dgst (digest di msg #:key key #:size outlen))
       ;; Ctx with one update
       (let ([ctx (make-digest-ctx di #:key key)])
         (digest-update ctx msg)
-        (check (digest-final ctx) #:is dgst))
+        (check (digest-final ctx #:size outlen) #:is dgst))
       ;; Ctx with one update per byte; copy
       (let ([ctx (make-digest-ctx di #:key key)])
         (for ([msgb (in-bytes msg)])
@@ -84,19 +87,19 @@
             ;; Check update to ctx2 doesn't affect ctx.
             (digest-update ctx2 (semirandom-bytes (digest-block-size di))))
           (digest-update ctx (bytes msgb)))
-        (define peeked (digest-peek-final ctx))
+        (define peeked (digest-peek-final ctx #:size outlen))
         (when peeked (check peeked #:is dgst))
-        (check (digest-final ctx) #:is dgst))
+        (check (digest-final ctx #:size outlen) #:is dgst))
       ;; Ctx with random-sized updates; peek-final
       (let ([ctx (make-digest-ctx di #:key key)])
         (define msglen (bytes-length msg))
         (let loop ([start 0])
-          (void (digest-peek-final ctx))
+          (void (digest-peek-final ctx #:size outlen))
           (when (< start msglen)
             (define end (+ start 1 (random (- msglen start))))
             (digest-update ctx (subbytes msg start end))
             (loop end)))
-        (check (digest-final ctx) #:is dgst)))))
+        (check (digest-final ctx #:size outlen) #:is dgst)))))
 
 ;; test-hmac-methods-agree : DigestSpec DigestImpl -> Void
 (define (test-hmac-methods-agree dspec di)
@@ -126,14 +129,17 @@
   (test #:name "misc"
     ;; Check digest treats NUL byte as data, not terminator.
     (for ([key (digest-make-keys di)])
-      (check (digest di #"abc" #:key key)
-             #:is-not (digest di #"abc\0" #:key key)))))
+      (define outlen (if (digest-size di) #f XOFLEN))
+      (check (digest di #"abc" #:key key #:size outlen)
+             #:is-not (digest di #"abc\0" #:key key #:size outlen)))))
 
 ;; digest-make-keys : DigestImpl -> (Listof Bytes/#f)
 (define (digest-make-keys di)
   (append (if (send di key-size-ok? 0) (list #f) '())
           (for/list ([keylen '(16 32)] #:when (send di key-size-ok? keylen))
             (semirandom-bytes keylen))))
+
+(define XOFLEN 57)
 
 ;; ============================================================
 
@@ -145,15 +151,17 @@
       (define dis (filter values (map get-di factories)))
       (when (> (length dis) 1)
         (define di0 (car dis))
+        (define outlen (if (digest-size di0) #f XOFLEN))
         (test #:name (format "~s (~s)" dspec (length dis))
           (for ([msg (in-list messages)])
-            (define dgst (check (digest di0 msg) #:values))
+            (define dgst (check (digest di0 msg #:size outlen) #:values))
             (for ([di (in-list dis)])
-              (check (digest di msg) #:is dgst))
-            (define key (generate-hmac-key di0))
-            (define tag (check (hmac di0 key msg) #:values))
-            (for ([di (in-list dis)])
-              (check (hmac di key msg) #:is tag))))))))
+              (check (digest di msg #:size outlen) #:is dgst))
+            (when (digest-size di0)
+              (define key (generate-hmac-key di0))
+              (define tag (check (hmac di0 key msg) #:values))
+              (for ([di (in-list dis)])
+                (check (hmac di key msg) #:is tag)))))))))
 
 ;; ============================================================
 
