@@ -32,6 +32,10 @@
              (new sodium-sha256-digest-impl% (info info) (factory this))]
             [(and (eq? spec 'sha512) sha512-ok?)
              (new sodium-sha512-digest-impl% (info info) (factory this))]
+            [(and (eq? spec 'shake128) shake128-ok?)
+             (new sodium-shake128-impl% (info info) (factory this))]
+            [(and (eq? spec 'shake256) shake256-ok?)
+             (new sodium-shake256-impl% (info info) (factory this))]
             [else #f]))
 
     (define/override (-get-cipher info)

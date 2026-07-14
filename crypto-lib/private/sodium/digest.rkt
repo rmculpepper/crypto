@@ -5,10 +5,13 @@
 (require racket/class
          ffi/unsafe
          "../common/digest.rkt"
+         "../common/error.rkt"
          "ffi.rkt")
 (provide sodium-blake2-digest-impl%
          sodium-sha256-digest-impl%
-         sodium-sha512-digest-impl%)
+         sodium-sha512-digest-impl%
+         sodium-shake128-impl%
+         sodium-shake256-impl%)
 
 (define (make-ctx size) (malloc size 'atomic-interior))
 
@@ -142,3 +145,55 @@
       (memmove ctx2 ctx size)
       (new sodium-hmac-sha512-digest-ctx% (impl impl) (ctx ctx2)))
     ))
+
+;; ----
+
+(define (make-shake-impl ctx_size
+                         ctx_init
+                         ctx_update
+                         ctx_final)
+  (define sodium-shake-impl%
+    (class digest-impl%
+      (super-new)
+
+      (define/override (-new-ctx key)
+        (define ctx (make-ctx (ctx_size)))
+        (ctx_init ctx)
+        (new sodium-shake-ctx% (impl this) (ctx ctx)))
+      ))
+
+  (define sodium-shake-ctx%
+    (class digest-ctx%
+      (init-field ctx)
+      (inherit-field impl)
+      (super-new)
+
+      (define/override (-update buf start end)
+        (ctx_update ctx (ptr-add buf start) (- end start)))
+
+      (define/override (-final! buf)
+        (internal-error "wrong method for XOF"))
+
+      (define/override (-final-xof! buf)
+        (ctx_final ctx buf (bytes-length buf)))
+
+      (define/override (-copy)
+        (define size (ctx_size))
+        (define ctx2 (make-ctx size))
+        (memmove ctx2 ctx size)
+        (new this% (impl impl) (ctx ctx2)))
+      ))
+
+  sodium-shake-impl%)
+
+(define sodium-shake128-impl%
+  (make-shake-impl crypto_xof_shake128_statebytes
+                   crypto_xof_shake128_init
+                   crypto_xof_shake128_update
+                   crypto_xof_shake128_squeeze))
+
+(define sodium-shake256-impl%
+  (make-shake-impl crypto_xof_shake128_statebytes
+                   crypto_xof_shake128_init
+                   crypto_xof_shake128_update
+                   crypto_xof_shake128_squeeze))

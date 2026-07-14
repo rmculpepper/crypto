@@ -13,10 +13,10 @@
 
 ;; Cooperate with `raco distribute`.
 (define-runtime-path libsodium-so
-  '(so "libsodium" ("23" "18" #f)))
+  '(so "libsodium" ("26" "23" "18" #f)))
 
 (define-values (libsodium sodium-load-error)
-  (ffi-lib-or-why-not libsodium-so '("23" "18" #f)))
+  (ffi-lib-or-why-not libsodium-so '("26" "23" "18" #f)))
 
 (define-ffi-definer define-na libsodium
   #:default-make-fail make-not-available)
@@ -182,6 +182,59 @@
 
 (define sha512-ok? (and crypto_hash_sha512_final #t))
 
+;; ----------------------------------------
+;; SHAKE (since 1.0.21)
+
+(define _crypto_xof_shake128_state _pointer)
+(define _crypto_xof_shake256_state _pointer)
+
+(define-na crypto_xof_shake256
+  (_fun [out : _pointer]
+        [outlen : _size]
+        [in : #;const _pointer]
+        [inlen : _ullong]
+        -> _int))
+
+(define-na crypto_xof_shake128
+  (_fun [out : _pointer]
+        [outlen : _size]
+        [in : #;const _pointer]
+        [inlen : _ullong]
+        -> _int))
+
+(define-na crypto_xof_shake128_init
+  (_fun [state : _crypto_xof_shake128_state]
+        -> _int))
+(define-na crypto_xof_shake128_update
+  (_fun [state : _crypto_xof_shake128_state]
+        [in : #;const _pointer]
+        [inlen : _ullong]
+        -> _int))
+(define-na crypto_xof_shake128_squeeze
+  (_fun [state : _crypto_xof_shake128_state]
+        [out : _pointer]
+        [outlen : _size]
+        -> _int))
+
+(define-na crypto_xof_shake256_init
+  (_fun [state : _crypto_xof_shake256_state]
+        -> _int))
+(define-na crypto_xof_shake256_update
+  (_fun [state : _crypto_xof_shake256_state]
+        [in : #;const _pointer]
+        [inlen : _ullong]
+        -> _int))
+(define-na crypto_xof_shake256_squeeze
+  (_fun [state : _crypto_xof_shake256_state]
+        [out : _pointer]
+        [outlen : _size]
+        -> _int))
+
+(define-na crypto_xof_shake128_statebytes (_fun -> _size) #:fail (lambda () #f))
+(define-na crypto_xof_shake256_statebytes (_fun -> _size) #:fail (lambda () #f))
+
+(define shake128-ok? (and crypto_xof_shake128_statebytes #t))
+(define shake256-ok? (and crypto_xof_shake256_statebytes #t))
 
 ;; ============================================================
 ;; AEAD Ciphers
