@@ -30,7 +30,7 @@
   (interface (info<%>)
     ;; get-spec     ;; -> DigestSpec
     get-size        ;; -> (U Nat #f) -- #f for var/XOF
-    get-size*       ;; -> (U Nat 'var 'xof)
+    get-size*       ;; -> (U Nat 'va 'vz) -- 'va = size required early, 'vz = size late
     get-block-size  ;; -> Nat
     has-config?     ;; -> Boolean
     get-key-sizes   ;; -> SizeSet
@@ -87,22 +87,22 @@
         (dinfo 'sha3-512    64  72   512)
         ;; blake2b: out[1..64], key[0..64], salt[16], personalization[16]
         ;; blake2s: out[1..32], key[0..32], salt[8], personalization[8]
-        (dinfo 'blake2b   'var  128  #f  #:c? #t #:ks '#s(varsize 0 64 1))
+        (dinfo 'blake2b    'va  128  #f  #:c? #t #:ks '#s(varsize 0 64 1))
         (dinfo 'blake2b-512 64  128  512 #:c? #t #:ks '#s(varsize 0 64 1))
         (dinfo 'blake2b-384 48  128  384 #:c? #t #:ks '#s(varsize 0 64 1))
         (dinfo 'blake2b-256 32  128  256 #:c? #t #:ks '#s(varsize 0 64 1))
         (dinfo 'blake2b-160 20  128  160 #:c? #t #:ks '#s(varsize 0 64 1))
-        (dinfo 'blake2s   'var  64   #f  #:c? #t #:ks '#s(varsize 0 32 1))
+        (dinfo 'blake2s    'va  64   #f  #:c? #t #:ks '#s(varsize 0 32 1))
         (dinfo 'blake2s-256 32  64   256 #:c? #t #:ks '#s(varsize 0 32 1))
         (dinfo 'blake2s-224 28  64   224 #:c? #t #:ks '#s(varsize 0 32 1))
         (dinfo 'blake2s-160 20  64   160 #:c? #t #:ks '#s(varsize 0 32 1))
         (dinfo 'blake2s-128 16  64   128 #:c? #t #:ks '#s(varsize 0 32 1))
         ;; the following are XOFs (extensible output functions)
-        (dinfo 'shake128  'xof  168  128 128)
-        (dinfo 'shake256  'xof  136  256 256)
+        (dinfo 'shake128   'vz  168  128 128)
+        (dinfo 'shake256   'vz  136  256 256)
         ;; cshake: out[0..], N=function[0..], S=customization[0..]
-        (dinfo 'cshake128 'xof  168  128 128 #:c? #t)
-        (dinfo 'cshake256 'xof  136  256 256 #:c? #t)
+        (dinfo 'cshake128  'vz  168  128 128 #:c? #t)
+        (dinfo 'cshake256  'vz  136  256 256 #:c? #t)
         ))
 
 (define known-digests
