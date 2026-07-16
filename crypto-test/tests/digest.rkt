@@ -17,8 +17,7 @@
 
 (define-runtime-path kat-dir "data/")
 
-(define all-digest-specs
-  (sort (hash-keys known-digests) symbol<?))
+(define all-digest-specs (list-known-digests))
 
 ;; test-factory-digests : Factory -> Void
 (define (test-factory-digests factory)
