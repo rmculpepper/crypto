@@ -112,20 +112,23 @@
           (for ([curve (in-list all-curves)])
             (printf " ~v\n" curve))))
       ;; == KDFs ==
-      (let ([all-kdfs (info 'all-kdfs)])
+      (let ([all-kdfs (info 'all-kdfs)]
+            [all-digests (info 'all-digests)])
         (when (pair? all-kdfs)
           (printf "Available KDFs:\n")
           (for ([kdf (in-list all-kdfs)] #:when (symbol? kdf))
             (printf " ~v\n" kdf))
-          (define all-digests (info 'all-digests))
           (define (show-complex label dspec->kdfspec)
             (cond [(null? all-digests) (void)]
-                  [(for/and ([di (in-list all-digests)] #:when (digest-spec-size di))
-                     (get-kdf (dspec->kdfspec di)))
-                   (printf " ~a  for all available fixed-size digests\n" label)]
+                  [(for/and ([dspec (in-list all-digests)]
+                             #:when (basic-digest-spec? dspec))
+                     (member (dspec->kdfspec dspec) all-kdfs))
+                   (printf " ~a  for all available basic digests\n" label)]
                   [else
-                   (for ([di (in-list all-digests)] #:when (get-kdf (dspec->kdfspec di)))
-                     (printf " ~v\n" (dspec->kdfspec di)))]))
+                   (for ([dspec (in-list all-digests)])
+                     (define kdfspec (dspec->kdfspec dspec))
+                     (when (member kdfspec all-kdfs)
+                       (printf " ~v\n" (dspec->kdfspec dspec))))]))
           (show-complex "`(pbkdf2 hmac ,digest)                   "
                         (lambda (ds) `(pbkdf2 hmac ,ds)))
           (show-complex "`(hkdf ,digest)                          "

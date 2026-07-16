@@ -74,6 +74,52 @@
   (new digest-info% (spec spec) (size size) (block-size block-size) (config? config?)
        (cr-secbits cr-secbits) (ci-secbits ci-secbits) (key-sizes key-sizes)))
 
+;; A DigestSpec is one of
+;; - SimpleDigestSpec
+;; - (list 'cmac BlockCipherName)
+;; - (list 'gmac BlockCipherName)   -- where cipher block size is 16
+;; - (list 'hmac SimpleDigestSpec)  -- where inner is fixed-size, no key req
+
+(define (digest-spec? x)
+  (if (symbol? x)
+      (simple-digest-spec? x)
+      (complex-digest-spec? x)))
+
+(define (digest-spec->info dspec [err? #f])
+  (if (symbol? dspec)
+      (simple-digest-spec->info dspec err?)
+      (complex-digest-spec->info dspec err?)))
+
+(define (list-known-digests)
+  (append (list-simple-digest-specs)
+          (list-complex-digest-specs)))
+
+;; ----------------------------------------
+
+;; A BasicDigestSpec is a Symbol in the list below. A "basic" digest is a
+;; fixed-size, no-key digest that can be used in HMAC etc.
+
+(define (list-basic-digest-specs)
+  '(sha0
+    sha1
+    sha224 sha256 sha384 sha512 sha512/224 sha512/256
+    sha3-224 sha3-256 sha3-384 sha3-512
+    blake2b-512 blake2b-384 blake2b-256 blake2b-160
+    blake2s-256 blake2s-224 blake2s-160 blake2s-128
+    md2 md4 md5 ripemd160 tiger1 tiger2 whirlpool))
+
+(define (basic-digest-spec? x)
+  (and (symbol? x) (memq x (list-basic-digest-specs))))
+
+;; A SimpleDigestSpec is a Symbol in domain of known-simple-digests.
+
+(define (simple-digest-spec? x)
+  (and (symbol? x) (hash-ref known-simple-digests x #f) #t))
+
+(define (simple-digest-spec->info dspec [err? #f])
+  (or (hash-ref known-simple-digests dspec #f)
+      (if err? (crypto-error "bad digest spec: ~e" dspec) #f)))
+
 (define (get-simple-digest-infos)
   (list (dinfo 'md2         16  16   0)
         (dinfo 'md4         16  64   0)
@@ -112,20 +158,15 @@
         ;; cshake: out[0..], N=function[0..], S=customization[0..]
         (dinfo 'cshake128  'vz  168  128 128 #:c? #t)
         (dinfo 'cshake256  'vz  136  256 256 #:c? #t)
+        ;; MAC algorithms
+        (dinfo 'kmac128    'vz  168  128 128 #:c? #t #:ks '#s(varsize 0 +inf.0 1))
+        (dinfo 'kmac256    'vz  136  256 256 #:c? #t #:ks '#s(varsize 0 +inf.0 1))
+        (dinfo 'poly1305    32  16   #f      #:ks '(32))
         ))
 
-(define known-digests
+(define known-simple-digests
   (for/hasheq ([di (in-list (get-simple-digest-infos))])
     (values (send di get-spec) di)))
-
-;; A DigestSpec is a symbol in domain of known-digests.
-
-(define (digest-spec? x)
-  (and (symbol? x) (hash-ref known-digests x #f) #t))
-
-(define (digest-spec->info dspec [err? #f])
-  (or (hash-ref known-digests dspec #f)
-      (if err? (crypto-error "bad digest spec: ~e" dspec) #f)))
 
 (define (digest-spec-size ds)
   (send (digest-spec->info ds #t) get-size))
@@ -134,46 +175,34 @@
 (define (digest-spec-security-strength ds [cr? #t])
   (send (digest-spec->info ds #t) get-security-strength cr?))
 
-(define (list-known-digests)
-  (sort (hash-keys known-digests) symbol<?))
+(define (list-simple-digest-specs)
+  (sort (hash-keys known-simple-digests) symbol<?))
 
 ;; ----------------------------------------
-;; MACs
 
-;; MAC specs are distinct from digest-spec, except overlap for blake2[bs].
-;; MAC info represented using digest-info%, but not interned.
-
-(define (mac-spec? x)
+(define (complex-digest-spec? x)
   (match x
-    [(? symbol?) (and (memq x '(blake2b blake2s kmac128 kmac256 poly1305)) #t)]
-    [(list 'hmac (? digest-spec?)) #t]
+    [(list 'hmac (? basic-digest-spec?)) #t]
     [(list 'cmac (? block-cipher-name?)) #t]
     [(list 'gmac (? block-cipher-name? bcname))
      (let ([bci (block-cipher-name->info bcname)])
        (and bci (= (send bci get-block-size) 16)))]
     [_ #f]))
 
-(define (mac-spec->info spec)
+(define (complex-digest-spec->info spec [err? #f])
   (match spec
-    [(or 'blake2b 'blake2s)
-     (digest-spec->info spec)]
-    ['kmac128
-     (dinfo spec 16 168 #:ks '#s(varsize 0 +inf.0 1))]
-    ['kmac256
-     (dinfo spec 32 136 #:ks '#s(varsize 0 +inf.0 1))]
-    ['poly1305
-     (dinfo spec 32 16 #:ks '(32))]
-    [(list 'hmac (? digest-spec? dspec))
-     (define di (digest-spec->info dspec))
+    [(list 'hmac (? basic-digest-spec? dspec))
+     (define di (simple-digest-spec->info dspec))
      (define any-sizes '#s(varsize 1 +inf.0 1))
      (define dsize (send di get-size))
-     (dinfo spec dsize (send di get-block-size) #:k dsize #:ks any-sizes)]
+     (define bsize (send di get-block-size))
+     (dinfo spec dsize bsize #:k dsize #:ks any-sizes)]
     [(list 'cmac (? block-cipher-name? bcname))
      (define bci (block-cipher-name->info bcname))
-     (define block-size (send bci get-block-size))
+     (define bsize (send bci get-block-size))
      (define key-sizes (send bci get-key-sizes))
      (define key-size (size-set-default key-sizes DEFAULT-KEY-SIZE))
-     (dinfo spec block-size block-size #:k key-size #:ks key-sizes)]
+     (dinfo spec bsize bsize #:k key-size #:ks key-sizes)]
     [(list 'gmac (? block-cipher-name? bcname))
      (define bci (block-cipher-name->info bcname))
      (cond [(= (send bci get-block-size) 16)
@@ -181,31 +210,23 @@
             (define key-size (size-set-default key-sizes DEFAULT-KEY-SIZE))
             (dinfo spec 16 16 #:k key-size #:ks key-sizes)]
            [else #f])]
-    [_ #f]))
+    [_ (if err? (crypto-error "bad digest spec: ~e" spec) #f)]))
 
-(define (list-known-mac-specs)
-  (define (mspec<? a b)
-    (cond [(and (symbol? a) (symbol? b))
-           (symbol<? a b)]
-          [(symbol? a) #t]
-          [(symbol? b) #f]
-          [(symbol<? (car a) (car b)) #t]
-          [(eq? (car a) (car b))
-           (symbol<? (cadr a) (cadr b))]
-          [else #f]))
+(define (list-complex-digest-specs)
+  (define (spec<? a b)
+    (or (symbol<? (car a) (car b))
+        (and (eq? (car a) (car b)) (symbol<? (cadr a) (cadr b)))))
   (define specs
     (append
-     '(blake2b blake2s kmac128 kmac256 poly1305)
      ;; exclude UMAC -- only one impl (nettle)
-     (for/list ([(dspec di) (in-hash known-digests)]
-                #:when (send di get-size))
+     (for/list ([dspec (in-list (list-basic-digest-specs))])
        `(hmac ,dspec))
      (for/list ([(bcname bci) (in-hash known-block-ciphers)])
        `(cmac ,bcname))
      (for/list ([(bcname bci) (in-hash known-block-ciphers)]
                 #:when (= (send bci get-block-size) 16))
        `(gmac ,bcname))))
-  (sort specs mspec<?))
+  (sort specs spec<?))
 
 ;; ============================================================
 
@@ -613,21 +634,21 @@
     [(? symbol?)
      (and (memq x (list-known-simple-kdfs)) #t)]
     [(list 'pbkdf2 'hmac di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [(list 'hkdf di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [(list 'concat di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [(list 'concat 'hmac di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [(list 'ans-x9.63 di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [(list 'sp800-108-counter 'hmac di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [(list 'sp800-108-feedback 'hmac di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [(list 'sp800-108-double-pipeline 'hmac di)
-     (digest-spec? di)]
+     (basic-digest-spec? di)]
     [_ #f]))
 
 (define (kdf-spec->info spec)
@@ -636,47 +657,47 @@
   (match spec
     [(? symbol?)
      (and (memq spec (list-known-simple-kdfs)) (make-info 'req))]
-    [`(pbkdf2 hmac ,(? digest-spec? dspec))
+    [`(pbkdf2 hmac ,(? basic-digest-spec? dspec))
      (make-info 'req)]
-    [`(hkdf ,(? digest-spec? dspec))
+    [`(hkdf ,(? basic-digest-spec? dspec))
      ;; HKDF RFC says if salt absent, set to zeros of length hash *output*
      (define salt (make-bytes (digest-spec-size dspec) 0))
      (make-info 'opt (bytes->immutable-bytes salt))]
-    [`(concat ,(? digest-spec? dspec))
+    [`(concat ,(? basic-digest-spec? dspec))
      (make-info #f)]
-    [`(concat hmac ,(? digest-spec? dspec))
+    [`(concat hmac ,(? basic-digest-spec? dspec))
      ;; SP800-56Cr2 says if salt absent, set to zeros of length hash *block*
      (define salt (make-bytes (digest-spec-block-size dspec) 0))
      (make-info 'opt (bytes->immutable-bytes salt))]
-    [`(ans-x9.63 ,(? digest-spec? dspec))
+    [`(ans-x9.63 ,(? basic-digest-spec? dspec))
      (make-info #f)]
-    [`(sp800-108-counter hmac ,(? digest-spec? dspec))
+    [`(sp800-108-counter hmac ,(? basic-digest-spec? dspec))
      (make-info #f)]
-    [`(sp800-108-feedback hmac ,(? digest-spec? dspec))
+    [`(sp800-108-feedback hmac ,(? basic-digest-spec? dspec))
      (make-info 'req)]
-    [`(sp800-108-double-pipeline hmac ,(? digest-spec? dspec))
+    [`(sp800-108-double-pipeline hmac ,(? basic-digest-spec? dspec))
      (make-info #f)]
     [_ #f]))
 
 ;; list-known-kdfs : -> (Listof KDFSpec)
 (define (list-known-kdfs)
   (append (list-known-simple-kdfs)
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(pbkdf2 hmac ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(hkdf ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(concat ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(concat hmac ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(concat hmac ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(ans-x9.63 ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(sp800-108-counter hmac ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(sp800-108-feedback hmac ,di))
-          (for/list ([di (in-list (list-known-digests))])
+          (for/list ([di (in-list (list-basic-digest-specs))])
             `(sp800-108-double-pipeline hmac ,di))
           ))
