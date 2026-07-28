@@ -12,6 +12,7 @@
 ;; - add ordering constraints, eg import with #:prereq
 ;; - add inspector, add reflective operations
 ;; - add no-generics option
+;; - add option to override interface predicate name
 
 #lang racket/base
 (require (for-syntax racket/base
@@ -224,6 +225,8 @@
      (define decl-asts
        (for/list ([make-ast (in-list (datum (d.make-ast ...)))])
          (make-ast (datum all-public?))))
+     (define/with-syntax iname?
+       (format-id #'iname "~a?" #'iname))
      (define/with-syntax (vname ...) (map car decl-asts))
      (define/with-syntax (pubname ...) (map car (filter cadr decl-asts)))
      (define/with-syntax (gname ...)
@@ -238,6 +241,9 @@
          (define rtname
            (create-rtif-from-ctif iname (quote (pubname ...)) (~? fallbacks (hasheq))
                                   (list (cons dc.prop (lambda (v) dc.prop-value)) ...)))
+         (define iname?
+           (let ([vprop? (rtif-vprop? rtname)])
+             (lambda (v) (vprop? v))))
          (define gname (make-method* rtname (quote vname) (quote gname) #t)) ...)]))
 
 ;; ============================================================
