@@ -18,6 +18,7 @@
 (require (for-syntax racket/base
                      racket/match
                      racket/syntax
+                     racket/struct-info
                      syntax/parse
                      syntax/datum
                      syntax/id-table
@@ -31,7 +32,8 @@
          compound-bundle
          make-bundle
          bundle
-         bundles->properties)
+         bundles->properties
+         define-struct-abbrevs)
 
 (module util racket/base
   (require racket/match racket/list)
@@ -733,3 +735,28 @@
           (lambda (super-stype)
             (initialize! super-stype)
             (unbox (hash-ref linkage (cons uid '())))))))
+
+;; ============================================================
+
+(define-syntax (define-struct-abbrevs stx)
+  (syntax-parse stx
+    [(_ (~var sname (static struct-info? "name defined as struct type")))
+     (define info (datum sname.value))
+     (define infolist (extract-struct-info (datum sname.value)))
+     (define accessors (list-ref infolist 3))
+     (define mutators (list-ref infolist 4))
+     (define fields (if (struct-field-info? info) (struct-field-info-list info) null))
+     (define/with-syntax ((getter accessor) ...)
+       (for/list ([accessor (in-list accessors)]
+                  [field (in-list fields)]
+                  #:when (identifier? accessor))
+         (list (format-id stx ".~a" field) accessor)))
+     (define/with-syntax ((setter mutator) ...)
+       (for/list ([mutator (in-list mutators)]
+                  [field (in-list fields)]
+                  #:when (identifier? mutator))
+         (list (format-id stx ".~a-set!" field) mutator)))
+     #'(begin
+         (define-syntax getter
+           (make-rename-transformer (quote-syntax accessor)))
+         ...)]))
