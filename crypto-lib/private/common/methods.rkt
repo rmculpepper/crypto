@@ -11,6 +11,7 @@
 ;; TODO:
 ;; - add ordering constraints, eg import with #:prereq
 ;; - add inspector, add reflective operations
+;;   - util to check no unimplemented methods (except given list)
 ;; - add no-generics option
 ;; - add option to override interface predicate name
 
@@ -28,11 +29,15 @@
 (provide define-interface
          interface?
          unimplemented?
+         interface->predicate
          make-method
          compound-bundle
          make-bundle
          bundle
          bundles->properties
+         method-properties
+         equal+hash$
+         custom-write$
          define-struct-abbrevs)
 
 (module util racket/base
@@ -144,6 +149,22 @@
      (match-define (unimplemented iname vname) self)
      (error vname "not implemented\n  interface: ~a" iname))))
 
+(define (interface->predicate ifc [vname #f])
+  (define vprop? (rtif-vprop? ifc))
+  (cond [vname
+         (define difc (rtif-lookup-definer ifc vname))
+         (unless difc
+           (error 'interface->predicate
+                  "~a\n  interface: ~e\n  name: ~e"
+                  "name not found in interface" ifc vname))
+         (define dvprop-ref (rtif-vprop-ref difc))
+         (define (interface-predicate v)
+           (and (vprop? v)
+                (let ([vh (vector-ref (dvprop-ref v) 0)])
+                  (not (unimplemented? (hash-ref vh vname #f))))))
+         interface-predicate]
+        [else vprop?]))
+
 ;; ----------------------------------------
 ;; Compile time
 
@@ -222,6 +243,8 @@
                     #:name "fallbacks clause")
          (~optional (~seq #:generics-prefix gprefix:id)
                     #:name "generics prefix clause")
+         (~optional (~seq #:no-generics (~bind [no-generics? #t]))
+                    #:name "no-generics clause")
          dc:derive-clause)
         ...)
      (define decl-asts
@@ -237,6 +260,13 @@
                 (format-id vname "~a~a" #'gprefix vname))]
              [else #'(vname ...)]))
      (define/with-syntax (rtname rtvlname) (generate-temporaries #'(iname iname)))
+     (define/with-syntax generics-defs
+       (cond [(datum no-generics?)
+              #'(begin)]
+             [else
+              #'(begin
+                  (define gname (make-method* rtname (quote vname) (quote gname) #t))
+                  ...)]))
      #'(begin
          (define-syntax iname
            (create-ctif (quote-syntax (iname rtname (s.super ...) (vname ...)))))
@@ -246,7 +276,7 @@
          (define iname?
            (let ([vprop? (rtif-vprop? rtname)])
              (lambda (v) (vprop? v))))
-         (define gname (make-method* rtname (quote vname) (quote gname) #t)) ...)]))
+         generics-defs)]))
 
 ;; ============================================================
 ;; Methods
@@ -534,7 +564,7 @@
        [(define-values ~! (var:id ...) rhs:expr)
         (bctx-add-seen! ctx (syntax->list (syntax-local-introduce #'(var ...))))
         #'(define-values (var ...) (bundle-expr-wrap ctx-id rhs))]
-       [(define-syntaxes ~! _) ee]
+       [(define-syntaxes ~! . _) ee]
        [_ #`(#%expression (bundle-expr-wrap ctx-id #,ee))])]))
 
 (define-syntax (bundle-expr-wrap stx)
@@ -738,6 +768,27 @@
 
 ;; ============================================================
 
+(define-interface equal+hash$
+  (equal-to?    ;; X X (X X -> Boolean) Boolean -> Boolean
+   hashcode     ;; X (X -> Integer) Boolean -> Boolean
+   ;; final arg = whether to consider mutable data's current value
+   )
+  #:derive-property prop:equal+hash
+  (list (lambda (self other recur mut-mode?)
+          ($equal-to? self other recur mut-mode?))
+        (lambda (self recur mut-mode?)
+          ($hashcode self recur mut-mode?)))
+  #:generics-prefix $)
+
+(define-interface custom-write$
+  (custom-write ;; X OutputPort Mode -> Void
+   )
+  #:derive-property prop:custom-write
+  (lambda (self out mode) ($custom-write self out mode))
+  #:generics-prefix $)
+
+;; ============================================================
+
 (define-syntax (define-struct-abbrevs stx)
   (syntax-parse stx
     [(_ (~var sname (static struct-info? "name defined as struct type")))
@@ -756,7 +807,6 @@
                   [field (in-list fields)]
                   #:when (identifier? mutator))
          (list (format-id stx ".~a-set!" field) mutator)))
-     #'(begin
-         (define-syntax getter
-           (make-rename-transformer (quote-syntax accessor)))
-         ...)]))
+     #'(begin (define-syntax getter
+                (make-rename-transformer (quote-syntax accessor)))
+              ...)]))
