@@ -4,7 +4,7 @@
 #lang racket/base
 (require racket/match
          racket/list
-         racket/class
+         "methods.rkt"
          "error.rkt")
 (provide (all-defined-out))
 
@@ -15,64 +15,70 @@
 ;; Conventions:
 ;; - "size" is number of bytes
 
-;; ============================================================
-;; Info
-
-(define info<%>
-  (interface ()
-    get-spec
-    ))
 
 ;; ============================================================
 ;; Digests
 
-(define digest-info<%>
-  (interface (info<%>)
-    ;; get-spec     ;; -> DigestSpec
-    get-size        ;; -> (U Nat #f) -- #f for var/XOF
-    get-size*       ;; -> (U Nat 'va 'vz) -- 'va = size required early, 'vz = size late
-    get-block-size  ;; -> Nat
-    has-config?     ;; -> Boolean
-    get-key-sizes   ;; -> SizeSet
-    key-size-ok?    ;; Nat -> Boolean
-    get-security-strength ;; Boolean -> (U #f Nat)
-    ))
-
-(define digest-info%
-  (class* object% (digest-info<%>)
-    (init-field spec size block-size config? key-sizes ci-secbits cr-secbits)
-    (super-new)
-    (define/public (get-spec) spec)
-    (define/public (get-size) (and (exact-integer? size) size))
-    (define/public (get-size*) size)
-    (define/public (get-block-size) block-size)
-    (define/public (has-config?) config?)
-    (define/public (get-key-sizes) key-sizes)
-    (define/public (key-size-ok? keysize)
-      (size-set-contains? key-sizes keysize))
-
-    ;; get-config-family : -> (U Symbol #f)
-    ;; Recognize families of digests with same configuration options.
-    (define/public (get-config-family)
-      (case spec
+(define-interface digest-info$
+  (di-spec          ;; -> DigestSpec
+   di-size          ;; -> (U Nat #f)  -- #f for var/xof
+   di-size*         ;; -> (U Nat 'va 'vz) -- 'va = size required early, 'vz = size late
+   di-block-size    ;; -> Nat
+   di-has-config?   ;; -> Boolean
+   di-config-family ;; -> (U Symbol #f)
+   di-key-sizes     ;; -> SizeSet
+   di-key-size-ok?  ;; Nat -> Boolean
+   di-security-strength ;; Boolean -> (U #f Nat)
+   )
+  #:fallbacks
+  (let ()
+    (define (di-size self)
+      (let ([size ($di-size self)])
+        (and (exact-integer? size) size)))
+    (define (di-config-family self)
+      (case ($di-spec self)
         [(cshake128 cshake256) 'cshake]
         [(blake2b blake2b-512 blake2b-384 blake2b-256 blake2b-160) 'blake2b]
         [(blake2s blake2s-256 blake2s-224 blake2s-160 blake2s-128) 'blake2s]
         [else #f]))
+    (define (di-key-size-ok? self keysize)
+      (size-set-contains? ($di-key-sizes self) keysize))
+    (hasheq 'di-size di-size
+            'di-config-family di-config-family
+            'di-key-size-ok? di-key-size-ok?))
+  #:generics-prefix $)
 
-    ;; get-security-strength : Boolean -> (U #f Nat)
-    ;; cr? indicates whether collision-resistance is needed
-    (define/public (get-security-strength cr?)
-      (cond [cr? cr-secbits] [else ci-secbits]))
-    ))
+(struct info:digest
+  (spec size block-size config? key-sizes ci-secbits cr-secbits)
+  #:properties
+  (method-properties
+   #:export ([digest-info$ #:prefix %]
+             [equal+hash$ #:prefix %]
+             [custom-write$ #:prefix %])
+   (define-struct-abbrevs info:digest)
+   ;; ----
+   (define (%di-spec self) (.spec self))
+   (define (%di-size* self) (.size self))
+   (define (%di-block-size self) (.block-size self))
+   (define (%di-has-config? self) (.config? self))
+   (define (%di-key-sizes self) (.key-sizes self))
+   (define (%di-security-strength self cr?)
+     (cond [cr? (.cr-secbits self)]
+           [else (.ci-secbits self)]))
+   ;; ----
+   (define (%equal-to? self other recur mut-mode?)
+     (recur (.spec self) (.spec other)))
+   (define (%hashcode self recur mut-mode?)
+     (recur (.spec self)))
+   ;; ----
+   (define (%custom-write self out mode)
+     (fprintf out "#<info:digest:~s>" (.spec self)))))
 
 (define (dinfo spec size block-size
                [ci-secbits #f]
                [cr-secbits (and ci-secbits (quotient ci-secbits 2))]
                #:k [key-size #f] #:ks [key-sizes '(0)] #:c? [config? #f])
-  ;; FIXME: key-size unused
-  (new digest-info% (spec spec) (size size) (block-size block-size) (config? config?)
-       (cr-secbits cr-secbits) (ci-secbits ci-secbits) (key-sizes key-sizes)))
+  (info:digest spec size block-size config? key-sizes cr-secbits ci-secbits))
 
 ;; A DigestSpec is one of
 ;; - SimpleDigestSpec
@@ -166,14 +172,15 @@
 
 (define known-simple-digests
   (for/hasheq ([di (in-list (get-simple-digest-infos))])
-    (values (send di get-spec) di)))
+    (values ($di-spec di) di)))
 
-(define (digest-spec-size ds)
-  (send (digest-spec->info ds #t) get-size))
-(define (digest-spec-block-size ds)
-  (send (digest-spec->info ds #t) get-block-size))
-(define (digest-spec-security-strength ds [cr? #t])
-  (send (digest-spec->info ds #t) get-security-strength cr?))
+(begin
+  (define (digest-spec-size ds)
+    ($di-size (digest-spec->info ds #t)))
+  (define (digest-spec-block-size ds)
+    ($di-block-size (digest-spec->info ds #t)))
+  (define (digest-spec-security-strength ds [cr? #t])
+    ($di-security-strength (digest-spec->info ds #t) cr?)))
 
 (define (list-simple-digest-specs)
   (sort (hash-keys known-simple-digests) symbol<?))
@@ -186,7 +193,7 @@
     [(list 'cmac (? block-cipher-name?)) #t]
     [(list 'gmac (? block-cipher-name? bcname))
      (let ([bci (block-cipher-name->info bcname)])
-       (and bci (= (send bci get-block-size) 16)))]
+       (and bci (= ($bci-block-size bci) 16)))]
     [_ #f]))
 
 (define (complex-digest-spec->info spec [err? #f])
@@ -194,19 +201,19 @@
     [(list 'hmac (? basic-digest-spec? dspec))
      (define di (simple-digest-spec->info dspec))
      (define any-sizes '#s(varsize 1 +inf.0 1))
-     (define dsize (send di get-size))
-     (define bsize (send di get-block-size))
+     (define dsize ($di-size di))
+     (define bsize ($di-block-size di))
      (dinfo spec dsize bsize #:k dsize #:ks any-sizes)]
     [(list 'cmac (? block-cipher-name? bcname))
      (define bci (block-cipher-name->info bcname))
-     (define bsize (send bci get-block-size))
-     (define key-sizes (send bci get-key-sizes))
+     (define bsize ($bci-block-size bci))
+     (define key-sizes ($bci-key-sizes bci))
      (define key-size (size-set-default key-sizes DEFAULT-KEY-SIZE))
      (dinfo spec bsize bsize #:k key-size #:ks key-sizes)]
     [(list 'gmac (? block-cipher-name? bcname))
      (define bci (block-cipher-name->info bcname))
-     (cond [(= (send bci get-block-size) 16)
-            (define key-sizes (send bci get-key-sizes))
+     (cond [(= ($bci-block-size bci) 16)
+            (define key-sizes ($bci-key-sizes bci))
             (define key-size (size-set-default key-sizes DEFAULT-KEY-SIZE))
             (dinfo spec 16 16 #:k key-size #:ks key-sizes)]
            [else #f])]
@@ -224,9 +231,10 @@
      (for/list ([(bcname bci) (in-hash known-block-ciphers)])
        `(cmac ,bcname))
      (for/list ([(bcname bci) (in-hash known-block-ciphers)]
-                #:when (= (send bci get-block-size) 16))
+                #:when (= ($bci-block-size bci) 16))
        `(gmac ,bcname))))
   (sort specs spec<?))
+
 
 ;; ============================================================
 
@@ -258,103 +266,146 @@
          (or (for/or ([n (in-range min (add1 max) step)] #:when (>= n dmin)) n)
              max)])))
 
+
 ;; ============================================================
 ;; Cipher Info
+;; describes cipher, like AES-GCM or Salsa20
 
-(define cipher-info<%>
-  (interface (info<%>)
-    ;; get-spec     ;; -> CipherSpec
-    get-cipher-name ;; -> Symbol
-    get-mode        ;; -> (U BlockMode 'stream)
-    get-type        ;; -> (U 'block 'stream)
-    aead?           ;; -> Boolean
-    get-block-size  ;; -> Nat  -- 1 for stream cipher
-    get-chunk-size  ;; -> Nat  -- natural processing unit (eg, underlying block size)
-    get-key-size    ;; -> Nat
-    get-key-sizes   ;; -> SizeSet
-    key-size-ok?    ;; Nat -> Boolean
-    get-iv-size     ;; -> Nat
-    iv-size-ok?     ;; Nat -> Boolean
-    get-auth-size   ;; -> Nat  -- 0 if not AEAD
-    auth-size-ok?   ;; Nat -> Boolean
-    uses-padding?   ;; -> Boolean
-    ))
+(define-interface cipher-info$
+  (ci-spec          ;; -> CipherSpec
+   ci-cipher-name   ;; -> Symbol
+   ci-mode          ;; -> (U BlockMode 'stream)
+   ci-type          ;; -> (U 'block 'stream)
+   ci-aead?         ;; -> Boolean
+   ci-block-size    ;; -> Nat  -- 1 for stream cipher
+   ci-chunk-size    ;; -> Nat  -- natural processing unit (eg, underlying block size)
+   ci-key-size      ;; -> Nat
+   ci-key-sizes     ;; -> SizeSet
+   ci-key-size-ok?  ;; Nat -> Boolean
+   ci-iv-size       ;; -> Nat
+   ci-iv-size-ok?   ;; Nat -> Boolean
+   ci-auth-size     ;; -> Nat
+   ci-auth-size-ok? ;; Nat -> Boolean
+   ci-uses-padding? ;; -> Boolean
+   )
+  #:fallbacks
+  (let ()
+    (define (ci-key-size-ok? self keysize)
+      (size-set-contains? ($ci-key-sizes self) keysize))
+    (hasheq 'ci-key-size-ok? ci-key-size-ok?))
+  #:generics-prefix $)
 
 (define DEFAULT-KEY-SIZE 16) ;; 128 bits
 
-;; ============================================================
-;; Block Ciphers and Modes
+;; ------------------------------------------------------------
+;; Block Ciphers
 
-(define block-cipher-info%
-  (class* object% (cipher-info<%>)
-    (init-field bci mode)
-    (super-new)
-    (define spec (list (get-cipher-name) (get-mode)))
-    (define/public (get-cipher-name) (send bci get-name))
-    (define/public (get-mode) mode)
-    (define/public (get-spec) spec)
-    (define/public (get-type)
-      (case mode
-        [(ecb cbc) 'block]
-        [(ofb cfb ctr gcm ocb eax) 'stream]))
-    (define/public (aead?)
-      (positive? (get-auth-size)))
-    (define/public (get-block-size)
-      (case (get-type) [(stream) 1] [else (send bci get-block-size)]))
-    (define/public (get-chunk-size) (send bci get-block-size))
-    (define/public (get-key-size) (size-set-default (get-key-sizes) DEFAULT-KEY-SIZE))
-    (define/public (get-key-sizes) (send bci get-key-sizes))
-    (define/public (key-size-ok? size) (send bci key-size-ok? size))
-    (define/public (get-iv-size)
-      (case mode
-        [(ecb)             0]
-        [(cbc ofb cfb ctr) (get-chunk-size)]
-        [(gcm ocb eax)     12]
-        [else (internal-error "unknown block mode: ~e" mode)]))
-    (define/public (iv-size-ok? size)
-      (case mode
-        [(ecb)         (= size 0)]
-        [(cbc ofb cfb) (= size (get-chunk-size))]
-        [(ctr)         (= size (get-chunk-size))]
-        [(gcm)         (<= 1 size 16)] ;; actual upper bound much higher
-        [(ocb)         (<= 0 size 15)] ;; "no more than 120 bits"
-        [(eax)         (<= 0 size 16)] ;; actually unrestricted
-        [else #f]))
-    (define/public (get-auth-size)
-      (case mode [(gcm ocb eax) 16] [else 0]))
-    (define/public (auth-size-ok? size)
-      (case mode
-        [(gcm) (or (<= 12 size 16) (= size 8) (= size 4))]
-        [(ocb eax) (<= 1 size 16)]
-        [else (= size 0)]))
-    (define/public (uses-padding?) (eq? (get-type) 'block))
-    ))
+(struct info:cipher:block
+  (spec bci mode)
+  #:properties
+  (method-properties
+   #:export ([cipher-info$ #:prefix %]
+             [equal+hash$ #:prefix %]
+             [custom-write$ #:prefix %])
+   (define-struct-abbrevs info:cipher:block)
+   ;; ----
+   (define (%ci-spec self) (.spec self))
+   (define (%ci-cipher-name self)
+     #;($bci-name (.bci self))
+     (car (.spec self)))
+   (define (%ci-mode self) (.mode self))
+   (define (%ci-type self)
+     (case (.mode self)
+       [(ecb cbc) 'block]
+       [(ofb cfb ctr gcm ocb eax) 'stream]))
+   (define (%ci-aead? self)
+     (positive? ($ci-auth-size self)))
+   (define (%ci-block-size self)
+     (case ($ci-type self)
+       [(stream) 1] [else ($bci-block-size (.bci self))]))
+   (define (%ci-chunk-size self)
+     ($bci-block-size (.bci self)))
+   (define (%ci-key-size self)
+     (size-set-default ($ci-key-sizes self) DEFAULT-KEY-SIZE))
+   (define (%ci-key-sizes self)
+     ($bci-key-sizes (.bci self)))
+   (define (%ci-iv-size self)
+     (case (.mode self)
+       [(ecb)             0]
+       [(cbc ofb cfb ctr) ($ci-chunk-size self)]
+       [(gcm ocb eax)     12]
+       [else (internal-error "unknown block mode: ~e" (.mode self))]))
+   (define (%iv-size-ok? self size)
+     (case (.mode self)
+       [(ecb)         (= size 0)]
+       [(cbc ofb cfb) (= size ($ci-chunk-size self))]
+       [(ctr)         (= size ($ci-chunk-size self))]
+       [(gcm)         (<= 1 size 16)] ;; actual upper bound much higher
+       [(ocb)         (<= 0 size 15)] ;; "no more than 120 bits"
+       [(eax)         (<= 0 size 16)] ;; actually unrestricted
+       [else #f]))
+   (define (%ci-auth-size self)
+     (case (.mode self) [(gcm ocb eax) 16] [else 0]))
+   (define (%ci-auth-size-ok? self size)
+     (case (.mode self)
+       [(gcm) (or (<= 12 size 16) (= size 8) (= size 4))]
+       [(ocb eax) (<= 1 size 16)]
+       [else (= size 0)]))
+   (define (%ci-uses-padding? self)
+     (eq? ($ci-type self) 'block))
+   ;; ----
+   (define (%equal-to? self other recur mut-mode?)
+     (recur (.spec self) (.spec other)))
+   (define (%hashcode self recur mut-mode?)
+     (recur (.spec self)))
+   ;; ----
+   (define (%custom-write self out mode)
+     (fprintf out "#<info:cipher:~s>" (.spec self)))))
 
-;; ----------------------------------------
+;; BlockCipherInfo
+;; describes block permutation algorithm, like AES
 
-(define block-algo-info<%>
-  (interface ()
-    get-name        ;; -> Symbol
-    get-block-size  ;; -> Nat
-    get-key-sizes   ;; -> SizeSet
-    key-size-ok?    ;; Nat -> Boolean
-    mode-ok?        ;; BlockMode -> Boolean
-    ))
+(define-interface block-cipher-info$
+  (bci-name         ;; -> Symbol
+   bci-block-size   ;; -> Nat
+   bci-key-sizes    ;; -> SizeSet
+   bci-key-size-ok? ;; Nat -> Boolean
+   bci-mode-ok?     ;; BlockMode -> Boolean
+   )
+  #:fallbacks
+  (let ()
+    (define (bci-key-size-ok? self keysize)
+      (size-set-contains? ($bci-key-sizes self) keysize))
+    (hasheq 'bci-key-size-ok? bci-key-size-ok?))
+  #:generics-prefix $)
 
-(define block-algo-info%
-  (class* object% (block-algo-info<%>)
-    (init-field name block-size key-sizes)
-    (super-new)
-    (define/public (get-name) name)
-    (define/public (get-block-size) block-size)
-    (define/public (get-key-sizes) key-sizes)
-    (define/public (key-size-ok? size) (size-set-contains? key-sizes size))
-    (define/public (mode-ok? mode) (block-mode-block-size-ok? mode block-size))))
+(struct info:block-cipher
+  (name block-size key-sizes)
+  #:properties
+  (method-properties
+   #:export ([block-cipher-info$ #:prefix %]
+             [equal+hash$ #:prefix %]
+             [custom-write$ #:prefix %])
+   (define-struct-abbrevs info:block-cipher)
+   ;; ----
+   (define (%bci-name self) (.name self))
+   (define (%bci-block-size self) (.block-size self))
+   (define (%bci-key-sizes self) (.key-sizes self))
+   (define (%bci-mode-ok? self mode)
+     (block-mode-block-size-ok? mode (.block-size self)))
+   ;; ----
+   (define (%equal-to? self other recur mut-mode?)
+     (recur (.name self) (.name other)))
+   (define (%hashcode self recur mut-mode?)
+     (recur (.name self)))
+   ;; ----
+   (define (%custom-write self out mode)
+     (fprintf out "#<info:block-cipher:~s>" (.name self)))))
 
 (define known-block-ciphers
   (let ()
     (define (info name block-size key-sizes)
-      (new block-algo-info% (name name) (block-size block-size) (key-sizes key-sizes)))
+      (info:block-cipher name block-size key-sizes))
     (define all
       (list (info 'aes      16   '(16 24 32))
             (info 'des       8   '(8))      ;; key 8 bytes w/ parity bits
@@ -375,16 +426,17 @@
             (info 'mars     16   '#s(varsize 16 56 4)) ;; aka Mars-2 ???
             |#))
     (for/hasheq ([bci (in-list all)])
-      (values (send bci get-name) bci))))
+      (values (info:block-cipher-name bci) bci))))
 
 ;; block-cipher-name? : Any -> Boolean
 (define (block-cipher-name? x)
   (and (hash-ref known-block-ciphers x #f) #t))
 
+;; block-cipher-name->info : Symbol -> (U BlockCipherInfo #f)
 (define (block-cipher-name->info name)
   (hash-ref known-block-ciphers name #f))
 
-;; ----------------------------------------
+;; BlockMode
 
 ;; Block modes are complicated; some modes are defined only for
 ;; 128-bit block ciphers; others have variable-length IVs/nonces or
@@ -404,34 +456,46 @@
     [(gcm ocb eax) (= block-size 16)]
     [else #t]))
 
-;; ============================================================
+;; ------------------------------------------------------------
 ;; Stream Ciphers
 
-(define stream-cipher-info%
-  (class* object% (cipher-info<%>)
-    (init-field name chunk-size ivlen key-sizes auth-len)
-    (super-new)
-    (define/public (get-cipher-name) name)
-    (define/public (get-mode) 'stream)
-    (define/public (get-spec) (list (get-cipher-name) 'stream))
-    (define/public (get-type) 'stream)
-    (define/public (aead?) (positive? (get-auth-size)))
-    (define/public (get-block-size) 1)
-    (define/public (get-chunk-size) chunk-size)
-    (define/public (get-key-size) (size-set-default key-sizes DEFAULT-KEY-SIZE))
-    (define/public (get-key-sizes) key-sizes)
-    (define/public (key-size-ok? size) (size-set-contains? key-sizes size))
-    (define/public (get-iv-size) ivlen)
-    (define/public (iv-size-ok? size) (= size ivlen))
-    (define/public (get-auth-size) auth-len)
-    (define/public (auth-size-ok? size) (= size (get-auth-size)))
-    (define/public (uses-padding?) #f)))
+(struct info:cipher:stream (spec chunk-size ivlen key-sizes auth-len)
+  #:properties
+  (method-properties
+   #:export ([cipher-info$ #:prefix %]
+             [equal+hash$ #:prefix %]
+             [custom-write$ #:prefix %])
+   (define-struct-abbrevs info:cipher:stream)
+   ;; ----
+   (define (%ci-cipher-name self) (car (.spec self)))
+   (define (%ci-mode self) 'stream)
+   (define (%ci-spec self) (.spec self))
+   (define (%ci-type self) 'stream)
+   (define (%ci-aead? self) (positive? ($ci-auth-size self)))
+   (define (%ci-block-size self) 1)
+   (define (%ci-chunk-size self) (.chunk-size self))
+   (define (%ci-key-size self)
+     (size-set-default (.key-sizes self) DEFAULT-KEY-SIZE))
+   (define (%ci-key-sizes self) (.key-sizes self))
+   (define (%ci-iv-size self) (.ivlen self))
+   (define (%iv-size-ok? self size) (= size (.ivlen self)))
+   (define (%ci-auth-size self) (.auth-len self))
+   (define (%auth-size-ok? self size) (= size (.auth-len self)))
+   (define (%uses-padding? self) #f)
+   ;; ----
+   (define (%equal-to? self other recur mut-mode?)
+     (recur (.spec self) (.spec other)))
+   (define (%hashcode self recur mut-mode?)
+     (recur (.spec self)))
+   ;; ----
+   (define (%custom-write self out mode)
+     (fprintf out "#<info:cipher:~s>" (.spec self)))))
 
 (define known-stream-ciphers
   (let ()
     (define (info name chunk-size ivlen key-sizes auth-len)
-      (new stream-cipher-info% (name name) (chunk-size chunk-size) (ivlen ivlen)
-           (key-sizes key-sizes) (auth-len auth-len)))
+      (let ([spec (list name 'stream)])
+        (info:cipher:stream spec chunk-size ivlen key-sizes auth-len)))
     (define all
       (list (info 'rc4                    1  0  '#s(varsize 5 256 1) 0)
             ;; original Salsa20 uses 64-bit nonce + 64-bit counter; IETF version uses 96/32 split instead
@@ -443,7 +507,7 @@
             (info 'chacha20-poly1305/iv8 64  8  '(32) 16) ;; 64-bit nonce (original)
             (info 'xchacha20-poly1305    64 24  '(32) 16)))
     (for/hasheq ([sci (in-list all)])
-      (values (send sci get-cipher-name) sci))))
+      (values ($ci-cipher-name sci) sci))))
 
 ;; stream-cipher-name? : Any -> Boolean
 (define (stream-cipher-name? x)
@@ -451,6 +515,7 @@
 
 (define (stream-cipher-name->info x)
   (hash-ref known-stream-ciphers x #f))
+
 
 ;; ============================================================
 ;; Cipher Specs
@@ -464,25 +529,16 @@
 (define (cipher-spec? x)
   (and (pair? x) (cipher-spec->info x) #t))
 
-(define (cipher-spec-mode x) (cadr x))
-(define (cipher-spec-algo x) (car x))
-
-;; cipher-spec-table : Hash[ CipherSpec => CipherInfo ]
-(define cipher-spec-table (make-weak-hash))
-
 (define (cipher-spec->info spec)
-  (define (get-info)
-    (match spec
-      [(list (? symbol? cipher) 'stream)
-       (stream-cipher-name->info cipher)]
-      [(list (? symbol? cipher) (? block-mode? mode))
-       (define bci (block-cipher-name->info cipher))
-       (and bci (send bci mode-ok? mode)
-            (new block-cipher-info% (bci bci) (mode mode)))]
-      [_ #f]))
-  (cond [(hash-ref cipher-spec-table spec #f) => values]
-        [(get-info) => (lambda (ci) (hash-set! cipher-spec-table (send ci get-spec) ci) ci)]
-        [else #f]))
+  (match spec
+    [(list (? symbol? cipher) 'stream)
+     (stream-cipher-name->info cipher)]
+    [(list (? symbol? cipher) (? block-mode? mode))
+     (define bci (block-cipher-name->info cipher))
+     (and bci ($bci-mode-ok? bci mode)
+          (let ([spec (list ($bci-name bci) mode)])
+            (info:cipher:block spec bci mode)))]
+    [else #f]))
 
 (define (list-known-ciphers)
   (append (for*/list ([cipher (in-list (sort (hash-keys known-block-ciphers) symbol<?))]
@@ -493,49 +549,61 @@
           (for/list ([cipher (in-list (sort (hash-keys known-stream-ciphers) symbol<?))])
             (list cipher 'stream))))
 
+
 ;; ============================================================
 ;; PK
 
-(define pk-info<%>
-  (interface (info<%>)
-    ;; get-spec     ;; -> PKSpec
-    can-sign?       ;; (U Pad #f) (U DigestSpec #f) -> Boolean
-    can-encrypt?    ;; (U Pad #f) -> Boolean
-    can-key-agree?  ;; -> Boolean
-    has-params?     ;; -> Boolean
-    ;; for can-{sign,encrypt}?: pad=#f means "at all?"
-    ))
+(define-interface pk-info$
+  (pk-spec            ;; -> PKSpec
+   pk-can-sign?       ;; (U Pad #f) (U DigestSpec #f) -> Boolean
+   pk-can-encrypt?    ;; (U Pad #f) -> Boolean
+   pk-can-key-agree?  ;; -> Boolean
+   pk-has-params?     ;; -> Boolean
+   ;; for can-{sign,encrypt}?: pad=#f means "at all?"
+   )
+  #:generics-prefix $)
 
-(define pk-info%
-  (class* object% (pk-info<%>)
-    (init-field spec)
-    (super-new)
-    (define/public (get-spec) spec)
-    (define/public (can-sign? pad dspec)
-      (case spec
-        [(rsa)      ;; impl must check digest
-         (and (memq pad '(pkcs1-v1.5 pss pss* #f)) #t)]
-        [(dsa ec)   ;; digest ignored for backwards compatibility
-         (and (memq pad '(#f)) #t)]
-        [(eddsa)    ;; digest must be 'none (future might use digest to mean EdDSAph)
-         (and (memq pad '(#f)) (memq dspec '(#f none)) #t)]
-        [else #f]))
-    (define/public (can-encrypt? pad)
-      (case spec
-        [(rsa) (and (memq pad '(pkcs1-v1.5 oaep #f)) #t)]
-        [else #f]))
-    (define/public (can-key-agree?)
-      (and (memq spec '(dh ec ecx)) #t))
-    (define/public (has-params?)
-      (and (memq spec '(dsa dh ec eddsa ecx)) #t))
-    ))
+(struct info:pk (spec)
+  #:properties
+  (method-properties
+   #:export ([pk-info$ #:prefix %]
+             [equal+hash$ #:prefix %]
+             [custom-write$ #:prefix %])
+   (define-struct-abbrevs info:pk)
+   ;; ----
+   (define (%pk-spec self) (.spec self))
+   (define (%pk-can-sign? self pad dspec)
+     (case (.spec self)
+       [(rsa)      ;; impl must check digest
+        (and (memq pad '(pkcs1-v1.5 pss pss* #f)) #t)]
+       [(dsa ec)   ;; digest ignored for backwards compatibility
+        (and (memq pad '(#f)) #t)]
+       [(eddsa)    ;; digest must be 'none (future might use digest to mean EdDSAph)
+        (and (memq pad '(#f)) (memq dspec '(#f none)) #t)]
+       [else #f]))
+   (define (%pk-can-encrypt? self pad)
+     (case (.spec self)
+       [(rsa) (and (memq pad '(pkcs1-v1.5 oaep #f)) #t)]
+       [else #f]))
+   (define (%pk-can-key-agree? self)
+     (and (memq (.spec self) '(dh ec ecx)) #t))
+   (define (%pk-has-params? self)
+     (and (memq (.spec self) '(dsa dh ec eddsa ecx)) #t))
+   ;; ----
+   (define (%equal-to? self other recur mut-mode?)
+     (recur (.spec self) (.spec other)))
+   (define (%hashcode self recur mut-mode?)
+     (recur (.spec self)))
+   ;; ----
+   (define (%custom-write self out mode)
+     (fprintf out "#<info:pk:~s>" (.spec self)))))
 
 (define (list-known-pks)
   '(rsa dsa dh ec eddsa ecx))
 
 (define known-pk
   (for/hasheq ([pk (in-list (list-known-pks))])
-    (values pk (new pk-info% (spec pk)))))
+    (values pk (info:pk pk))))
 
 (define (pk-spec? x)
   (and (memq x (list-known-pks)) #t))
@@ -605,26 +673,36 @@
     [(x448)   56]
     [else 0]))
 
+
 ;; ============================================================
 ;; KDF
 
 ;; KDF info objects are not interned.
 
-(define kdf-info<%>
-  (interface (info<%>)
-    get-salt-mode     ;; -> (U 'req 'opt #f)
-    get-salt-default  ;; -> (U Bytes #f), only if mode='opt
-    ))
+(define-interface kdf-spec$
+  (kdf-spec         ;; -> KDFSpec
+   kdf-salt-mode    ;; -> (U 'req 'opt #f)
+   kdf-salt-default ;; -> (U Bytes #f), only if mode='opt
+   )
+  #:generics-prefix $)
 
-(define kdf-info%
-  (class* object% (kdf-info<%>)
-    (init-field spec salt-mode salt-default)
-    (super-new)
-
-    (define/public (get-spec) spec)
-    (define/public (get-salt-mode) salt-mode)
-    (define/public (get-salt-default) salt-default)
-    ))
+(struct info:kdf
+  (spec salt-mode salt-default)
+  #:properties
+  (method-properties
+   (define-struct-abbrevs info:kdf)
+   ;; ----
+   (define (%kdf-spec self) (.spec self))
+   (define (%kdf-salt-mode self) (.salt-mode self))
+   (define (%kdf-salt-default self) (.salt-default self))
+   ;; ----
+   (define (%equal-to self other recur mut-mode?)
+     (recur (.spec self) (.spec other)))
+   (define (%hashcode self recur mut-mode?)
+     (recur (.spec self)))
+   ;; ----
+   (define (%custom-write self out mode)
+     (fprintf out "#<info:kdf:~s>" (.spec self)))))
 
 (define (list-known-simple-kdfs)
   '(argon2d argon2i argon2id scrypt))
@@ -653,7 +731,7 @@
 
 (define (kdf-spec->info spec)
   (define (make-info salt-mode [salt-default #f])
-    (new kdf-info% (spec spec) (salt-mode salt-mode) (salt-default salt-default)))
+    (info:kdf spec salt-mode salt-default))
   (match spec
     [(? symbol?)
      (and (memq spec (list-known-simple-kdfs)) (make-info 'req))]
