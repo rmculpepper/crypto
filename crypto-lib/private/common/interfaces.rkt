@@ -20,14 +20,23 @@
 ;; ============================================================
 ;; Predicates
 
-(define (crypto-factory? x) (factory$? x))
-(define (digest-impl? x) (digest-impl$? x))
-(define (cipher-impl? x) (cipher-impl$? x))
-(define (pk-impl? x) (pk-impl$? x))
-(define (kdf-impl? x) (kdf-impl$? x))
-(define (info? x) (info$? x))
+(define (crypto-factory? x) (factory? x))
+;; (define (digest-impl? x) (digest-impl$? x))
+;; (define (cipher-impl? x) (cipher-impl$? x))
+;; (define (pk-impl? x) (pk-impl$? x))
+;; (define (kdf-impl? x) (kdf-impl$? x))
 
-(struct ctx (impl ctx))
+(struct ctx (impl ctx)
+  #:properties
+  (method-properties
+   #:export ([simple-write$ #:prefix %])
+   (define-struct-abbrevs ctx)
+   ;; ----
+   (define (%to-write-string self)
+     ($to-write-string (.impl self)))
+   (define (%to-write-prefixes self)
+     (cons "ctx:" (cdr ($to-write-prefixes (.impl self)))))))
+
 (struct digest-ctx ctx ())
 (struct cipher-ctx ctx ())
 (struct pk-parameters ctx ())
@@ -37,7 +46,7 @@
 ;; General Implementation & Contexts
 
 (define-interface impl$
-  #:super (info$)
+  #:super (info$ simple-write$)
   ([impl-info     (-> impl$? info?)]
    [impl-factory  (-> impl$? crypto-factory?)])
   #:generics-prefix $)
@@ -104,31 +113,17 @@
 
 
 ;; ============================================================
-;; Implementation Factories
-
-(define-interface factory$
-  ([factory-print     (-> factory$? void?)]
-   [factory-info      (-> factory$? symbol? any)]
-   [factory-name      (-> factory$? symbol?)]
-   [factory-version   (-> factory$? (or/c (listof exact-nonnegative-integer?) #f))]
-   [fetch-digest      (-> factory$? digest-spec? (or/c digest-impl? #f))]
-   [fetch-cipher      (-> factory$? cipher-spec? (or/c cipher-impl? #f))]
-   [fetch-pk          (-> factory$? pk-spec?     (or/c pk-impl? #f))]
-   [fetch-kdf         (-> factory$? kdf-spec?    (or/c kdf-impl? #f))]
-   [factory-import-pk (-> factory$? any/c        (or/c pk-key? pk-parameters? #f))])
-  #:generics-prefix $)
-
-;; ============================================================
 ;; Digests
 
 (define-interface digest-impl$
   #:super (impl$ digest-info$)
-  ([digest      (-> digest-impl$? input/c (or/c bytes? #f) (or/c nat? #f) config/c
+  #:predicate digest-impl?
+  ([digest      (-> digest-impl? input/c (or/c bytes? #f) (or/c nat? #f) config/c
                     bytes?)]
-   [di-new-ctx  (-> digest-impl$? (or/c bytes? #f) config/c any/c)]
-   [di-update   (-> digest-impl$? intctx/c input/c void?)]
-   [di-final    (-> digest-impl$? intctx/c (or/c nat? #f) bytes?)]
-   [di-copy     (-> digest-impl$? intctx/c (or/c intctx/c #f))])
+   [di-new-ctx  (-> digest-impl? (or/c bytes? #f) config/c any/c)]
+   [di-update   (-> digest-impl? intctx/c input/c void?)]
+   [di-final    (-> digest-impl? intctx/c (or/c nat? #f) bytes?)]
+   [di-copy     (-> digest-impl? intctx/c (or/c intctx/c #f))])
   #:generics-prefix $)
 
 
@@ -142,14 +137,15 @@
 
 (define-interface cipher-impl$
   #:super (impl$ cipher-info$)
-  ([ci-new-ctx      (-> cipher-impl$? bytes? (or/c bytes? #f) boolean?
+  #:predicate cipher-impl?
+  ([ci-new-ctx      (-> cipher-impl? bytes? (or/c bytes? #f) boolean?
                         cipher-pad/c (or/c nat? #f) boolean?
                         intctx/c)]
-   [ci-get-encrypt? (-> cipher-impl$? intctx/c boolean?)]
-   [ci-update-aad   (-> cipher-impl$? intctx/c input/c void?)]
-   [ci-update       (-> cipher-impl$? intctx/c input/c void?)]
-   [ci-final        (-> cipher-impl$? intctx/c (or/c bytes? #f) any)] ;; FIXME
-   [ci-auth-tag     (-> cipher-impl$? intctx/c (or/c bytes? #f))])
+   [ci-get-encrypt? (-> cipher-impl? intctx/c boolean?)]
+   [ci-update-aad   (-> cipher-impl? intctx/c input/c void?)]
+   [ci-update       (-> cipher-impl? intctx/c input/c void?)]
+   [ci-final        (-> cipher-impl? intctx/c (or/c bytes? #f) any)] ;; FIXME
+   [ci-auth-tag     (-> cipher-impl? intctx/c (or/c bytes? #f))])
   #:generics-prefix $)
 
 ;; Sends {ciper,plain}text to given output port.
@@ -165,34 +161,35 @@
 
 (define-interface pk-impl$
   #:super (impl$ pk-info$)
-  ([pk-generate-key     (-> pk-impl$? config/c pk-key?)]
-   [pk-generate-params  (-> pk-impl$? config/c pk-parameters?)]
-   [pk-import-pk        (-> pk-impl$? any/c (or/c pk-key? pk-parameters? #f))]
+  #:predicate pk-impl?
+  ([pk-generate-key     (-> pk-impl? config/c pk-key?)]
+   [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
+   [pk-import-pk        (-> pk-impl? any/c (or/c pk-key? pk-parameters? #f))]
 
-   [pkp-generate-key    (-> pk-impl$? pk-parameters? config/c pk-key?)]
-   [pkp-write-params    (-> pk-impl$? pk-parameters? symbol? any/c)]
-   [pkp-security-bits   (-> pk-impl$? pk-parameters? (or/c nat? #f))]
-   [pkp-curve           (-> pk-impl$? pk-parameters? (or/c symbol? #f))]
+   [pkp-generate-key    (-> pk-impl? pk-parameters? config/c pk-key?)]
+   [pkp-write-params    (-> pk-impl? pk-parameters? symbol? any/c)]
+   [pkp-security-bits   (-> pk-impl? pk-parameters? (or/c nat? #f))]
+   [pkp-curve           (-> pk-impl? pk-parameters? (or/c symbol? #f))]
 
-   [pkk-is-private?     (-> pk-impl$? pk-key? boolean?)]
-   [pkk-public-key      (-> pk-impl$? pk-key? pk-key?)]
-   [pkk-params          (-> pk-impl$? pk-key? (or/c pk-parameters? #f))]
-   [pkk-security-bits   (-> pk-impl$? pk-key? (or/c nat? #f))]
-   [pkk-write-key       (-> pk-impl$? pk-key? symbol? any/c)]
-   [pkk-public-equal?   (-> pk-impl$? pk-key? pk-key? boolean?)]
+   [pkk-is-private?     (-> pk-impl? pk-key? boolean?)]
+   [pkk-public-key      (-> pk-impl? pk-key? pk-key?)]
+   [pkk-params          (-> pk-impl? pk-key? (or/c pk-parameters? #f))]
+   [pkk-security-bits   (-> pk-impl? pk-key? (or/c nat? #f))]
+   [pkk-write-key       (-> pk-impl? pk-key? symbol? any/c)]
+   [pkk-public-equal?   (-> pk-impl? pk-key? pk-key? boolean?)]
 
-   [pkk-sign            (-> pk-impl$? pk-key? bytes?
+   [pkk-sign            (-> pk-impl? pk-key? bytes?
                             (or/c digest-spec? #f) pk-sign-pad/c
                             bytes?)]
-   [pkk-verify          (-> pk-impl$? pk-key? bytes?
+   [pkk-verify          (-> pk-impl? pk-key? bytes?
                             (or/c digest-spec? #f) pk-sign-pad/c bytes?
                             boolean?)]
    ;; In verify, if sig is not well-formed then just return #f, no error.
 
-   [pkk-encrypt         (-> pk-impl$? pk-key? bytes? pk-enc-pad/c bytes?)]
-   [pkk-decrypt         (-> pk-impl$? pk-key? bytes? pk-enc-pad/c bytes?)]
+   [pkk-encrypt         (-> pk-impl? pk-key? bytes? pk-enc-pad/c bytes?)]
+   [pkk-decrypt         (-> pk-impl? pk-key? bytes? pk-enc-pad/c bytes?)]
 
-   [pkk-compute-secret  (-> pk-impl$? pk-key? (or/c bytes? pk-key?) bytes?)])
+   [pkk-compute-secret  (-> pk-impl? pk-key? (or/c bytes? pk-key?) bytes?)])
   #:generics-prefix $)
 
 
@@ -201,6 +198,24 @@
 
 (define-interface kdf-impl$
   #:super (impl$ kdf-info$)
-  ([kdf-derive  (-> kdf-impl$? (or/c nat? #f) config/c bytes? (or/c bytes? #f)
+  #:predicate kdf-impl?
+  ([kdf-derive  (-> kdf-impl? (or/c nat? #f) config/c bytes? (or/c bytes? #f)
                     bytes?)])
+  #:generics-prefix $)
+
+;; ============================================================
+;; Implementation Factories
+
+(define-interface factory$
+  #:super (simple-write$)
+  #:predicate factory?
+  ([factory-print     (-> factory? void?)]
+   [factory-info      (-> factory? symbol? any)]
+   [factory-name      (-> factory? symbol?)]
+   [factory-version   (-> factory? (or/c (listof exact-nonnegative-integer?) #f))]
+   [fetch-digest      (-> factory? digest-spec? (or/c digest-impl? #f))]
+   [fetch-cipher      (-> factory? cipher-spec? (or/c cipher-impl? #f))]
+   [fetch-pk          (-> factory? pk-spec?     (or/c pk-impl? #f))]
+   [fetch-kdf         (-> factory? kdf-spec?    (or/c kdf-impl? #f))]
+   [factory-import-pk (-> factory? any/c        (or/c pk-key? pk-parameters? #f))])
   #:generics-prefix $)

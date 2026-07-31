@@ -8,9 +8,7 @@
          scramble/bundle
          scramble/struct
          "error.rkt")
-(provide (all-defined-out)
-         simple-write$
-         custom-write$)
+(provide (all-defined-out))
 
 ;; Security Strength
 ;; Reference: NIST 800-57 Part 1 Section 5.6
@@ -23,27 +21,24 @@
 
 (define nat? exact-nonnegative-integer?)
 
-(module interface-util racket/base
-  (require racket/contract/base
-           scramble/bundle)
-  (provide simple-write$
-           custom-write$)
+(define-interface simple-write$
+  ([to-write-string (-> simple-write$? string?)]
+   [to-write-prefixes (-> simple-write$? (listof string?))])
+  #:fallbacks
+  (hasheq 'to-write-prefixes (lambda (self) null))
+  #:derive-property prop:custom-write
+  (lambda (self out mode)
+    (define prefix (apply string-append ($to-write-prefixes self)))
+    (fprintf out "#<~a~a>" prefix ($to-write-string self)))
+  #:generics-prefix $)
 
-  (define-interface simple-write$
-    ([to-write-string (-> simple-write$? string?)])
-    #:derive-property prop:custom-write
-    (lambda (self out mode)
-      (fprintf out "#<~a>" ($to-write-string self)))
-    #:generics-prefix $)
-
-  (define-interface custom-write$
-    (custom-write ;; X OutputPort Mode -> Void
-     )
-    #:derive-property prop:custom-write
-    (lambda (self out mode) ($custom-write self out mode))
-    #:generics-prefix $))
-
-(require (submod "." interface-util))
+#;
+(define-interface custom-write$
+  (custom-write ;; X OutputPort Mode -> Void
+   )
+  #:derive-property prop:custom-write
+  (lambda (self out mode) ($custom-write self out mode))
+  #:generics-prefix $)
 
 ;; ============================================================
 
@@ -81,22 +76,25 @@
 ;; Info
 
 (define-interface info$
+  #:predicate info?
   (get-spec)
   #:generics-prefix $)
 
 ;; ============================================================
 ;; Digests
 
-(define-interface digest-info$ #:super (info$)
+(define-interface digest-info$
+  #:super (info$)
+  #:predicate digest-info?
   (;; get-spec        ;; -> digest-spec?
-   [di-size           (-> digest-info$? (or/c nat? #f))] ;; #f for var/xof
-   [di-size*          (-> digest-info$? (or/c nat? 'va 'vz))]
-   [di-block-size     (-> digest-info$? nat?)]
-   [di-has-config?    (-> digest-info$? boolean?)]
-   [di-config-family  (-> digest-info$? (or/c symbol? #f))]
-   [di-key-sizes      (-> digest-info$? size-set/c)]
-   [di-key-size-ok?   (-> digest-info$? nat? boolean?)]
-   [di-security-strength  (-> digest-info$? boolean? (or/c #f nat?))])
+   [di-size           (-> digest-info? (or/c nat? #f))] ;; #f for var/xof
+   [di-size*          (-> digest-info? (or/c nat? 'va 'vz))]
+   [di-block-size     (-> digest-info? nat?)]
+   [di-has-config?    (-> digest-info? boolean?)]
+   [di-config-family  (-> digest-info? (or/c symbol? #f))]
+   [di-key-sizes      (-> digest-info? size-set/c)]
+   [di-key-size-ok?   (-> digest-info? nat? boolean?)]
+   [di-security-strength  (-> digest-info? boolean? (or/c #f nat?))])
   ;; size 'va = variable, required early (before processing); 'vz = required late
   #:fallbacks
   (let ()
@@ -307,22 +305,24 @@
 (define (block-mode? x)
   (and (memq x known-block-modes) #t))
 
-(define-interface cipher-info$ #:super (info$)
+(define-interface cipher-info$
+  #:super (info$)
+  #:predicate cipher-info?
   (;; get-spec        ;; -> cipher-spec?
-   [ci-cipher-name    (-> cipher-info$? symbol?)]
-   [ci-mode           (-> cipher-info$? (or/c block-mode? 'stream))]
-   [ci-type           (-> cipher-info$? (or/c 'block 'stream))]
-   [ci-aead?          (-> cipher-info$? boolean?)]
-   [ci-block-size     (-> cipher-info$? nat?)] ;; 1 for stream cipher
-   [ci-chunk-size     (-> cipher-info$? nat?)] ;; natural processing unit (eg, underlying block size)
-   [ci-key-size       (-> cipher-info$? nat?)]
-   [ci-key-sizes      (-> cipher-info$? size-set/c)]
-   [ci-key-size-ok?   (-> cipher-info$? nat? boolean?)]
-   [ci-iv-size        (-> cipher-info$? nat?)]
-   [ci-iv-size-ok?    (-> cipher-info$? nat? boolean?)]
-   [ci-auth-size      (-> cipher-info$? nat?)]
-   [ci-auth-size-ok?  (-> cipher-info$? nat? boolean?)]
-   [ci-uses-padding?  (-> cipher-info$? boolean?)])
+   [ci-cipher-name    (-> cipher-info? symbol?)]
+   [ci-mode           (-> cipher-info? (or/c block-mode? 'stream))]
+   [ci-type           (-> cipher-info? (or/c 'block 'stream))]
+   [ci-aead?          (-> cipher-info? boolean?)]
+   [ci-block-size     (-> cipher-info? nat?)] ;; 1 for stream cipher
+   [ci-chunk-size     (-> cipher-info? nat?)] ;; natural processing unit (eg, underlying block size)
+   [ci-key-size       (-> cipher-info? nat?)]
+   [ci-key-sizes      (-> cipher-info? size-set/c)]
+   [ci-key-size-ok?   (-> cipher-info? nat? boolean?)]
+   [ci-iv-size        (-> cipher-info? nat?)]
+   [ci-iv-size-ok?    (-> cipher-info? nat? boolean?)]
+   [ci-auth-size      (-> cipher-info? nat?)]
+   [ci-auth-size-ok?  (-> cipher-info? nat? boolean?)]
+   [ci-uses-padding?  (-> cipher-info? boolean?)])
   #:fallbacks
   (let ()
     (define (ci-key-size-ok? self keysize)
@@ -415,11 +415,12 @@
 ;; describes block permutation algorithm, like AES
 
 (define-interface block-cipher-info$
-  ([bci-name          (-> block-cipher-info$? symbol?)]
-   [bci-block-size    (-> block-cipher-info$? nat?)]
-   [bci-key-sizes     (-> block-cipher-info$? size-set/c)]
-   [bci-key-size-ok?  (-> block-cipher-info$? nat? boolean?)]
-   [bci-mode-ok?      (-> block-cipher-info$? block-mode? boolean?)])
+  #:predicate block-cipher-info?
+  ([bci-name          (-> block-cipher-info? symbol?)]
+   [bci-block-size    (-> block-cipher-info? nat?)]
+   [bci-key-sizes     (-> block-cipher-info? size-set/c)]
+   [bci-key-size-ok?  (-> block-cipher-info? nat? boolean?)]
+   [bci-mode-ok?      (-> block-cipher-info? block-mode? boolean?)])
   #:fallbacks
   (let ()
     (define (bci-key-size-ok? self keysize)
@@ -575,12 +576,14 @@
 ;; ============================================================
 ;; PK
 
-(define-interface pk-info$ #:super (info$)
+(define-interface pk-info$
+  #:super (info$)
+  #:predicate pk-info?
   (;; get-spec          ;; -> pk-spec?
-   [pk-can-sign?        (-> pk-info$? any/c (or/c digest-spec? #f) boolean?)]
-   [pk-can-encrypt?     (-> pk-info$? any/c boolean?)]
-   [pk-can-key-agree?   (-> pk-info$? boolean?)]
-   [pk-has-params?      (-> pk-info$? boolean?)])
+   [pk-can-sign?        (-> pk-info? any/c (or/c digest-spec? #f) boolean?)]
+   [pk-can-encrypt?     (-> pk-info? any/c boolean?)]
+   [pk-can-key-agree?   (-> pk-info? boolean?)]
+   [pk-has-params?      (-> pk-info? boolean?)])
   ;; for can-{sign,encrypt}?: pad=#f means "at all?"
   #:generics-prefix $)
 
@@ -695,10 +698,12 @@
 
 ;; KDF info objects are not interned.
 
-(define-interface kdf-info$ #:super (info$)
+(define-interface kdf-info$
+  #:super (info$)
+  #:predicate kdf-info?
   (;; get-spec        ;; -> kdf-spec?
-   [kdf-salt-mode     (-> kdf-info$? (or/c 'req 'opt #f))]
-   [kdf-salt-default  (-> kdf-info$? (or/c bytes? #f))]) ;; only if mode='opt
+   [kdf-salt-mode     (-> kdf-info? (or/c 'req 'opt #f))]
+   [kdf-salt-default  (-> kdf-info? (or/c bytes? #f))]) ;; only if mode='opt
   #:generics-prefix $)
 
 (struct info:kdf
