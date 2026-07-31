@@ -3,6 +3,7 @@
 
 #lang racket/base
 (require racket/match
+         racket/contract/base
          racket/list
          "methods.rkt"
          "error.rkt")
@@ -15,13 +16,46 @@
 ;; Conventions:
 ;; - "size" is number of bytes
 
+(define nat? exact-nonnegative-integer?)
+
+;; ============================================================
+
+;; SizeSet is either (Listof Nat) or VarSizeSet
+;; VarSizeSet is (varsize Nat Nat Nat)
+(struct varsize (min max step) #:prefab)
+
+(define size-set/c (or/c varsize? (listof nat?)))
+
+(define (size-set-contains? ss n)
+  (match ss
+    [(? list? ss)
+     (and (member n ss) #t)]
+    [(varsize min max step)
+     (and (<= min n max) (zero? (remainder (- n min) step)))]
+    [#f #f]))
+
+(define (size-set->list ss)
+  (match ss
+    [(? list? sizes) sizes]
+    [(varsize min max step) (range min (add1 max) step)]))
+
+(define (size-set-default ss dmin)
+  (if (size-set-contains? ss dmin)
+      dmin
+      (match ss
+        [(? list? ss)
+         (or (for/or ([n (in-list ss)] #:when (>= n dmin)) n)
+             (apply max ss))]
+        [(varsize min max step)
+         (or (for/or ([n (in-range min (add1 max) step)] #:when (>= n dmin)) n)
+             max)])))
+
 
 ;; ============================================================
 ;; Info
 
 (define-interface info$
-  (get-spec    ;; -> Spec
-   )
+  (get-spec)
   #:generics-prefix $)
 
 
@@ -29,16 +63,16 @@
 ;; Digests
 
 (define-interface digest-info$ #:super (info$)
-  (;; get-spec      ;; -> DigestSpec
-   di-size          ;; -> (U Nat #f)  -- #f for var/xof
-   di-size*         ;; -> (U Nat 'va 'vz) -- 'va = size required early, 'vz = size late
-   di-block-size    ;; -> Nat
-   di-has-config?   ;; -> Boolean
-   di-config-family ;; -> (U Symbol #f)
-   di-key-sizes     ;; -> SizeSet
-   di-key-size-ok?  ;; Nat -> Boolean
-   di-security-strength ;; Boolean -> (U #f Nat)
-   )
+  (;; get-spec        ;; -> digest-spec?
+   [di-size           (-> digest-info$? (or/c nat? #f))] ;; #f for var/xof
+   [di-size*          (-> digest-info$? (or/c nat? 'va 'vz))]
+   [di-block-size     (-> digest-info$? nat?)]
+   [di-has-config?    (-> digest-info$? boolean?)]
+   [di-config-family  (-> digest-info$? (or/c symbol? #f))]
+   [di-key-sizes      (-> digest-info$? size-set/c)]
+   [di-key-size-ok?   (-> digest-info$? nat? boolean?)]
+   [di-security-strength  (-> digest-info$? boolean? (or/c #f nat?))])
+  ;; size 'va = variable, required early (before processing); 'vz = required late
   #:fallbacks
   (let ()
     (define (di-size self)
@@ -247,57 +281,29 @@
 
 
 ;; ============================================================
-
-;; SizeSet is either (Listof Nat) or VarSizeSet
-;; VarSizeSet is (varsize Nat Nat Nat)
-(struct varsize (min max step) #:prefab)
-
-(define (size-set-contains? ss n)
-  (match ss
-    [(? list? ss)
-     (and (member n ss) #t)]
-    [(varsize min max step)
-     (and (<= min n max) (zero? (remainder (- n min) step)))]
-    [#f #f]))
-
-(define (size-set->list ss)
-  (match ss
-    [(? list? sizes) sizes]
-    [(varsize min max step) (range min (add1 max) step)]))
-
-(define (size-set-default ss dmin)
-  (if (size-set-contains? ss dmin)
-      dmin
-      (match ss
-        [(? list? ss)
-         (or (for/or ([n (in-list ss)] #:when (>= n dmin)) n)
-             (apply max ss))]
-        [(varsize min max step)
-         (or (for/or ([n (in-range min (add1 max) step)] #:when (>= n dmin)) n)
-             max)])))
-
-
-;; ============================================================
 ;; Cipher Info
 ;; describes cipher, like AES-GCM or Salsa20
 
+;; block-mode? : Any -> Boolean
+(define (block-mode? x)
+  (and (memq x known-block-modes) #t))
+
 (define-interface cipher-info$ #:super (info$)
-  (;; get-spec      ;; -> CipherSpec
-   ci-cipher-name   ;; -> Symbol
-   ci-mode          ;; -> (U BlockMode 'stream)
-   ci-type          ;; -> (U 'block 'stream)
-   ci-aead?         ;; -> Boolean
-   ci-block-size    ;; -> Nat  -- 1 for stream cipher
-   ci-chunk-size    ;; -> Nat  -- natural processing unit (eg, underlying block size)
-   ci-key-size      ;; -> Nat
-   ci-key-sizes     ;; -> SizeSet
-   ci-key-size-ok?  ;; Nat -> Boolean
-   ci-iv-size       ;; -> Nat
-   ci-iv-size-ok?   ;; Nat -> Boolean
-   ci-auth-size     ;; -> Nat
-   ci-auth-size-ok? ;; Nat -> Boolean
-   ci-uses-padding? ;; -> Boolean
-   )
+  (;; get-spec        ;; -> cipher-spec?
+   [ci-cipher-name    (-> cipher-info$? symbol?)]
+   [ci-mode           (-> cipher-info$? (or/c block-mode? 'stream))]
+   [ci-type           (-> cipher-info$? (or/c 'block 'stream))]
+   [ci-aead?          (-> cipher-info$? boolean?)]
+   [ci-block-size     (-> cipher-info$? nat?)] ;; 1 for stream cipher
+   [ci-chunk-size     (-> cipher-info$? nat?)] ;; natural processing unit (eg, underlying block size)
+   [ci-key-size       (-> cipher-info$? nat?)]
+   [ci-key-sizes      (-> cipher-info$? size-set/c)]
+   [ci-key-size-ok?   (-> cipher-info$? nat? boolean?)]
+   [ci-iv-size        (-> cipher-info$? nat?)]
+   [ci-iv-size-ok?    (-> cipher-info$? nat? boolean?)]
+   [ci-auth-size      (-> cipher-info$? nat?)]
+   [ci-auth-size-ok?  (-> cipher-info$? nat? boolean?)]
+   [ci-uses-padding?  (-> cipher-info$? boolean?)])
   #:fallbacks
   (let ()
     (define (ci-key-size-ok? self keysize)
@@ -373,16 +379,33 @@
    (define (%custom-write self out mode)
      (fprintf out "#<info:cipher:~s>" (.spec self)))))
 
+;; ----------------------------------------
+;; BlockMode
+
+;; Block modes are complicated; some modes are defined only for
+;; 128-bit block ciphers; others have variable-length IVs/nonces or
+;; authentication tags.
+
+(define known-block-modes '(ecb cbc ofb cfb ctr gcm ocb eax))
+
+;; block-mode-block-size-ok? : Symbol Nat -> Boolean
+;; Is the block mode compatible with ciphers of the given block size?
+(define (block-mode-block-size-ok? mode block-size)
+  (case mode
+    ;; EAX claims to be block-size agnostic, but nettle restricts to 128-bit block ciphers
+    [(gcm ocb eax) (= block-size 16)]
+    [else #t]))
+
+;; ----------------------------------------
 ;; BlockCipherInfo
 ;; describes block permutation algorithm, like AES
 
 (define-interface block-cipher-info$
-  (bci-name         ;; -> Symbol
-   bci-block-size   ;; -> Nat
-   bci-key-sizes    ;; -> SizeSet
-   bci-key-size-ok? ;; Nat -> Boolean
-   bci-mode-ok?     ;; BlockMode -> Boolean
-   )
+  ([bci-name          (-> block-cipher-info$? symbol?)]
+   [bci-block-size    (-> block-cipher-info$? nat?)]
+   [bci-key-sizes     (-> block-cipher-info$? size-set/c)]
+   [bci-key-size-ok?  (-> block-cipher-info$? nat? boolean?)]
+   [bci-mode-ok?      (-> block-cipher-info$? block-mode? boolean?)])
   #:fallbacks
   (let ()
     (define (bci-key-size-ok? self keysize)
@@ -446,26 +469,6 @@
 ;; block-cipher-name->info : Symbol -> (U BlockCipherInfo #f)
 (define (block-cipher-name->info name)
   (hash-ref known-block-ciphers name #f))
-
-;; BlockMode
-
-;; Block modes are complicated; some modes are defined only for
-;; 128-bit block ciphers; others have variable-length IVs/nonces or
-;; authentication tags.
-
-(define known-block-modes '(ecb cbc ofb cfb ctr gcm ocb eax))
-
-;; block-mode? : Any -> Boolean
-(define (block-mode? x)
-  (and (memq x known-block-modes) #t))
-
-;; block-mode-block-size-ok? : Symbol Nat -> Boolean
-;; Is the block mode compatible with ciphers of the given block size?
-(define (block-mode-block-size-ok? mode block-size)
-  (case mode
-    ;; EAX claims to be block-size agnostic, but nettle restricts to 128-bit block ciphers
-    [(gcm ocb eax) (= block-size 16)]
-    [else #t]))
 
 ;; ------------------------------------------------------------
 ;; Stream Ciphers
@@ -566,13 +569,12 @@
 ;; PK
 
 (define-interface pk-info$ #:super (info$)
-  (;; get-spec        ;; -> PKSpec
-   pk-can-sign?       ;; (U Pad #f) (U DigestSpec #f) -> Boolean
-   pk-can-encrypt?    ;; (U Pad #f) -> Boolean
-   pk-can-key-agree?  ;; -> Boolean
-   pk-has-params?     ;; -> Boolean
-   ;; for can-{sign,encrypt}?: pad=#f means "at all?"
-   )
+  (;; get-spec          ;; -> pk-spec?
+   [pk-can-sign?        (-> pk-info$? any/c (or/c digest-spec? #f) boolean?)]
+   [pk-can-encrypt?     (-> pk-info$? any/c boolean?)]
+   [pk-can-key-agree?   (-> pk-info$? boolean?)]
+   [pk-has-params?      (-> pk-info$? boolean?)])
+  ;; for can-{sign,encrypt}?: pad=#f means "at all?"
   #:generics-prefix $)
 
 (struct info:pk (spec)
@@ -693,10 +695,9 @@
 ;; KDF info objects are not interned.
 
 (define-interface kdf-info$ #:super (info$)
-  (;; get-spec      ;; -> KDFSpec
-   kdf-salt-mode    ;; -> (U 'req 'opt #f)
-   kdf-salt-default ;; -> (U Bytes #f), only if mode='opt
-   )
+  (;; get-spec        ;; -> kdf-spec?
+   [kdf-salt-mode     (-> kdf-info$? (or/c 'req 'opt #f))]
+   [kdf-salt-default  (-> kdf-info$? (or/c bytes? #f))]) ;; only if mode='opt
   #:generics-prefix $)
 
 (struct info:kdf

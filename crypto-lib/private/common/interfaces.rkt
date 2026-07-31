@@ -3,7 +3,6 @@
 
 #lang racket/base
 (require racket/contract/base
-         (only-in racket/base [exact-nonnegative-integer? nat?])
          "methods.rkt"
          "catalog.rkt")
 (provide (all-defined-out))
@@ -32,8 +31,6 @@
 (struct pk-parameters ctx ())
 (struct pk-key ctx ())
 
-(define info/c any/c)
-(define spec/c any/c)
 
 ;; ============================================================
 ;; Util
@@ -112,21 +109,23 @@
 ;; A Config is (listof (list Symbol Any))
 (define config/c (listof (list/c symbol? any/c)))
 
+;; InternalCtx is impl-specific type.
+(define intctx/c any/c)
+
 
 ;; ============================================================
 ;; Implementation Factories
 
 (define-interface factory$
-  (factory-version  ;; -> (U #f (Listof Nat))
-   factory-info     ;; Symbol -> Any
-   factory-print    ;; -> Void
-   factory-name     ;; -> Symbol
-   fetch-digest     ;; DigestSpec -> (U DigestImpl #f)
-   fetch-cipher     ;; CipherSpec -> (U CipherImpl #f)
-   fetch-pk         ;; PKSpec -> (U PKImpl #f)
-   fetch-kdf        ;; KDFSpec -> (U KDFImpl #f)
-   factory-import-pk    ;; Any -> (U PKKey PKParameters #f)
-   )
+  ([factory-print     (-> factory$? void?)]
+   [factory-info      (-> factory$? symbol? any)]
+   [factory-name      (-> factory$? symbol?)]
+   [factory-version   (-> factory$? (or/c (listof exact-nonnegative-integer?) #f))]
+   [fetch-digest      (-> factory$? digest-spec? (or/c digest-impl? #f))]
+   [fetch-cipher      (-> factory$? cipher-spec? (or/c cipher-impl? #f))]
+   [fetch-pk          (-> factory$? pk-spec?     (or/c pk-impl? #f))]
+   [fetch-kdf         (-> factory$? kdf-spec?    (or/c kdf-impl? #f))]
+   [factory-import-pk (-> factory$? any/c        (or/c pk-key? pk-parameters? #f))])
   #:generics-prefix $)
 
 
@@ -135,16 +134,13 @@
 
 (define-interface digest-impl$
   #:super (impl$ digest-info$)
-  (digest       ;; Input (U Bytes #f) (U Nat #f) Config -> Bytes
-   di-new-ctx   ;; (U Bytes #f) Config -> DigestIntCtx
-   di-update    ;; DigestIntCtx Input -> Void
-   di-final     ;; DigestIntCtx (U Nat #f) -> Bytes
-   di-copy      ;; DigestIntCtx -> (U DigestCtx #f)
-   )
+  ([digest      (-> digest-impl$? input/c (or/c bytes? #f) (or/c nat? #f) config/c
+                    bytes?)]
+   [di-new-ctx  (-> digest-impl$? (or/c bytes? #f) config/c any/c)]
+   [di-update   (-> digest-impl$? intctx/c input/c void?)]
+   [di-final    (-> digest-impl$? intctx/c (or/c nat? #f) bytes?)]
+   [di-copy     (-> digest-impl$? intctx/c (or/c intctx/c #f))])
   #:generics-prefix $)
-
-;; DigestIntCtx is private per-impl type.
-;; DigestCtx is public wrapper (see digest.rkt).
 
 
 ;; ============================================================
@@ -157,17 +153,15 @@
 
 (define-interface cipher-impl$
   #:super (impl$ cipher-info$)
-  (ci-new-ctx      ;; Bytes (U Bytes #f) Boolean PadMode (U Nat #f) Boolean -> CipherIntCtx
-   ci-get-encrypt? ;; CipherIntCtx -> Boolean
-   ci-update-aad   ;; CipherIntCtx Input -> ??
-   ci-update       ;; CipherIntCtx Input -> ??
-   ci-final        ;; CipherIntCtx (U Bytes #f) -> ??
-   ci-auth-tag     ;; CipherIntCtx -> (U Bytes #f)
-   )
+  ([ci-new-ctx      (-> cipher-impl$? bytes? (or/c bytes? #f) boolean?
+                        cipher-pad/c (or/c nat? #f) boolean?
+                        intctx/c)]
+   [ci-get-encrypt? (-> cipher-impl$? intctx/c boolean?)]
+   [ci-update-aad   (-> cipher-impl$? intctx/c input/c void?)]
+   [ci-update       (-> cipher-impl$? intctx/c input/c void?)]
+   [ci-final        (-> cipher-impl$? intctx/c (or/c bytes? #f) any)] ;; FIXME
+   [ci-auth-tag     (-> cipher-impl$? intctx/c (or/c bytes? #f))])
   #:generics-prefix $)
-
-;; CipherIntCtx is private per-impl type.
-;; CipherCtx is public wrapper (see cipher.rkt).
 
 ;; Sends {ciper,plain}text to given output port.
 ;; AEAD: auth tag length is set at ctx construction;
@@ -177,48 +171,47 @@
 ;; ============================================================
 ;; Public-Key Cryptography
 
-(define pk-config/c (listof (list/c symbol? any/c)))
 (define pk-sign-pad/c (or/c #f 'pkcs1-v1.5 'pss 'pss*))
 (define pk-enc-pad/c (or/c #f 'pkcs1-v1.5 'oaep))
 
 (define-interface pk-impl$
   #:super (impl$ pk-info$)
-  (pk-generate-key      ;; PKConfig -> PKKey
-   pk-generate-params   ;; PKConfig -> PKParameters
-   pk-import-pk         ;; Any -> (U PKKey PKParameters #f)
+  ([pk-generate-key     (-> pk-impl$? config/c pk-key?)]
+   [pk-generate-params  (-> pk-impl$? config/c pk-parameters?)]
+   [pk-import-pk        (-> pk-impl$? any/c (or/c pk-key? pk-parameters? #f))]
 
-   pkp-generate-key     ;; PKParameters PKConfig -> PKKey
-   pkp-write-params     ;; PKParameters Symbol -> Any
-   pkp-security-bits    ;; PKParameters -> (U Nat #f)
-   pkp-curve            ;; PKParameters -> (U Symbol #f)
+   [pkp-generate-key    (-> pk-impl$? pk-parameters? config/c pk-key?)]
+   [pkp-write-params    (-> pk-impl$? pk-parameters? symbol? any/c)]
+   [pkp-security-bits   (-> pk-impl$? pk-parameters? (or/c nat? #f))]
+   [pkp-curve           (-> pk-impl$? pk-parameters? (or/c symbol? #f))]
 
-   pkk-is-private?      ;; PKKey -> Boolean
-   pkk-public-key       ;; PKKey -> PKKey
-   pkk-params           ;; PKKey -> (U PKParameters #f)
-   pkk-security-bits    ;; PKKey -> (U Nat #f)
+   [pkk-is-private?     (-> pk-impl$? pk-key? boolean?)]
+   [pkk-public-key      (-> pk-impl$? pk-key? pk-key?)]
+   [pkk-params          (-> pk-impl$? pk-key? (or/c pk-parameters? #f))]
+   [pkk-security-bits   (-> pk-impl$? pk-key? (or/c nat? #f))]
+   [pkk-write-key       (-> pk-impl$? pk-key? symbol? any/c)]
+   [pkk-public-equal?   (-> pk-impl$? pk-key? pk-key? boolean?)]
 
-   pkk-write-key        ;; PKKey Symbol -> Any
-   pkk-public-equal?    ;; PKKey PKKey -> Boolean
-
-   pkk-sign             ;; PKKey Bytes (U DigestSpec #f) PKSignPad -> Bytes
-   pkk-verify           ;; PKKey Bytes (U DigestSpec #f) PKSignPad Bytes -> Boolean
+   [pkk-sign            (-> pk-impl$? pk-key? bytes?
+                            (or/c digest-spec? #f) pk-sign-pad/c
+                            bytes?)]
+   [pkk-verify          (-> pk-impl$? pk-key? bytes?
+                            (or/c digest-spec? #f) pk-sign-pad/c bytes?
+                            boolean?)]
    ;; In verify, if sig is not well-formed then just return #f, no error.
 
-   pkk-encrypt          ;; PKKey Bytes PKEncPad -> Bytes
-   pkk-decrypt          ;; PKKey Bytes PKEncPad -> Bytes
+   [pkk-encrypt         (-> pk-impl$? pk-key? bytes? pk-enc-pad/c bytes?)]
+   [pkk-decrypt         (-> pk-impl$? pk-key? bytes? pk-enc-pad/c bytes?)]
 
-   pkk-compute-secret   ;; PKKey (U Bytes PKKey) -> Bytes
-   )
+   [pkk-compute-secret  (-> pk-impl$? pk-key? (or/c bytes? pk-key?) bytes?)])
   #:generics-prefix $)
 
 
 ;; ============================================================
 ;; KDFs
 
-(define kdf-params/c (listof (list/c symbol? any/c)))
-
 (define-interface kdf-impl$
   #:super (impl$ kdf-info$)
-  (kdf-derive   ;; (U Nat #f) KDFParams Bytes (U Bytes #f) -> Bytes
-   )
+  ([kdf-derive  (-> kdf-impl$? (or/c nat? #f) config/c bytes? (or/c bytes? #f)
+                    bytes?)])
   #:generics-prefix $)
