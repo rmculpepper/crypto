@@ -9,7 +9,7 @@
          scramble/struct
          "error.rkt")
 (provide (all-defined-out)
-         equal+hash$
+         simple-write$
          custom-write$)
 
 ;; Security Strength
@@ -24,20 +24,16 @@
 (define nat? exact-nonnegative-integer?)
 
 (module interface-util racket/base
-  (require scramble/bundle)
-  (provide equal+hash$
+  (require racket/contract/base
+           scramble/bundle)
+  (provide simple-write$
            custom-write$)
 
-  (define-interface equal+hash$
-    (equal-to?    ;; X X (X X -> Boolean) Boolean -> Boolean
-     hashcode     ;; X (X -> Integer) Boolean -> Boolean
-     ;; final arg = whether to consider mutable data's current value
-     )
-    #:derive-property prop:equal+hash
-    (list (lambda (self other recur mut-mode?)
-            ($equal-to? self other recur mut-mode?))
-          (lambda (self recur mut-mode?)
-            ($hashcode self recur mut-mode?)))
+  (define-interface simple-write$
+    ([to-write-string (-> simple-write$? string?)])
+    #:derive-property prop:custom-write
+    (lambda (self out mode)
+      (fprintf out "#<~a>" ($to-write-string self)))
     #:generics-prefix $)
 
   (define-interface custom-write$
@@ -125,8 +121,7 @@
   #:properties
   (method-properties
    #:export ([digest-info$ #:prefix %]
-             [equal+hash$ #:prefix %]
-             [custom-write$ #:prefix %])
+             [simple-write$ #:prefix %])
    (define-struct-abbrevs info:digest)
    ;; ----
    (define (%get-spec self) (.spec self))
@@ -139,13 +134,9 @@
      (cond [cr? (.cr-secbits self)]
            [else (.ci-secbits self)]))
    ;; ----
-   (define (%equal-to? self other recur mut-mode?)
-     (recur (.spec self) (.spec other)))
-   (define (%hashcode self recur mut-mode?)
-     (recur (.spec self)))
-   ;; ----
-   (define (%custom-write self out mode)
-     (fprintf out "#<info:digest:~s>" (.spec self)))))
+   (define (%to-write-string self)
+     (format "info:digest:~s" (.spec self))))
+  #:property prop:auto-equal+hash (list (struct-field-index spec)))
 
 (define (dinfo spec size block-size
                [ci-secbits #f]
@@ -349,8 +340,7 @@
   #:properties
   (method-properties
    #:export ([cipher-info$ #:prefix %]
-             [equal+hash$ #:prefix %]
-             [custom-write$ #:prefix %])
+             [simple-write$ #:prefix %])
    (define-struct-abbrevs info:cipher:block)
    ;; ----
    (define (%get-spec self) (.spec self))
@@ -399,13 +389,9 @@
    (define (%ci-uses-padding? self)
      (eq? ($ci-type self) 'block))
    ;; ----
-   (define (%equal-to? self other recur mut-mode?)
-     (recur (.spec self) (.spec other)))
-   (define (%hashcode self recur mut-mode?)
-     (recur (.spec self)))
-   ;; ----
-   (define (%custom-write self out mode)
-     (fprintf out "#<info:cipher:~s>" (.spec self)))))
+   (define (%to-write-string self)
+     (format "info:cipher:~s" (.spec self))))
+  #:property prop:auto-equal+hash (list (struct-field-index spec)))
 
 ;; ----------------------------------------
 ;; BlockMode
@@ -446,8 +432,7 @@
   #:properties
   (method-properties
    #:export ([block-cipher-info$ #:prefix %]
-             [equal+hash$ #:prefix %]
-             [custom-write$ #:prefix %])
+             [simple-write$ #:prefix %])
    (define-struct-abbrevs info:block-cipher)
    ;; ----
    (define (%bci-name self) (.name self))
@@ -461,8 +446,9 @@
    (define (%hashcode self recur mut-mode?)
      (recur (.name self)))
    ;; ----
-   (define (%custom-write self out mode)
-     (fprintf out "#<info:block-cipher:~s>" (.name self)))))
+   (define (%to-write-string self)
+     (format "info:block-cipher:~s" (.name self))))
+  #:property prop:auto-equal+hash (list (struct-field-index name)))
 
 (define known-block-ciphers
   (let ()
@@ -505,8 +491,7 @@
   #:properties
   (method-properties
    #:export ([cipher-info$ #:prefix %]
-             [equal+hash$ #:prefix %]
-             [custom-write$ #:prefix %])
+             [simple-write$ #:prefix %])
    (define-struct-abbrevs info:cipher:stream)
    ;; ----
    (define (%get-spec self) (.spec self))
@@ -526,13 +511,9 @@
    (define (%auth-size-ok? self size) (= size (.auth-len self)))
    (define (%uses-padding? self) #f)
    ;; ----
-   (define (%equal-to? self other recur mut-mode?)
-     (recur (.spec self) (.spec other)))
-   (define (%hashcode self recur mut-mode?)
-     (recur (.spec self)))
-   ;; ----
-   (define (%custom-write self out mode)
-     (fprintf out "#<info:cipher:~s>" (.spec self)))))
+   (define (%to-write-string self)
+     (format "info:cipher:~s" (.spec self))))
+  #:property prop:auto-equal+hash (list (struct-field-index spec)))
 
 (define known-stream-ciphers
   (let ()
@@ -607,8 +588,7 @@
   #:properties
   (method-properties
    #:export ([pk-info$ #:prefix %]
-             [equal+hash$ #:prefix %]
-             [custom-write$ #:prefix %])
+             [simple-write$ #:prefix %])
    (define-struct-abbrevs info:pk)
    ;; ----
    (define (%get-spec self) (.spec self))
@@ -631,13 +611,9 @@
    (define (%pk-has-params? self)
      (and (memq (.spec self) '(dsa dh ec eddsa ecx)) #t))
    ;; ----
-   (define (%equal-to? self other recur mut-mode?)
-     (recur (.spec self) (.spec other)))
-   (define (%hashcode self recur mut-mode?)
-     (recur (.spec self)))
-   ;; ----
-   (define (%custom-write self out mode)
-     (fprintf out "#<info:pk:~s>" (.spec self)))))
+   (define (%to-write-string self)
+     (format "info:pk:~s" (.spec self))))
+  #:property prop:auto-equal+hash (list (struct-field-index spec)))
 
 (define (list-known-pks)
   '(rsa dsa dh ec eddsa ecx))
@@ -730,8 +706,7 @@
   #:properties
   (method-properties
    #:export ([kdf-info$ #:prefix %]
-             [equal+hash$ #:prefix %]
-             [custom-write$ #:prefix %])
+             [simple-write$ #:prefix %])
    (define-struct-abbrevs info:kdf)
    ;; ----
    (define (%get-spec self) (.spec self))
@@ -739,13 +714,9 @@
    (define (%kdf-salt-mode self) (.salt-mode self))
    (define (%kdf-salt-default self) (.salt-default self))
    ;; ----
-   (define (%equal-to self other recur mut-mode?)
-     (recur (.spec self) (.spec other)))
-   (define (%hashcode self recur mut-mode?)
-     (recur (.spec self)))
-   ;; ----
-   (define (%custom-write self out mode)
-     (fprintf out "#<info:kdf:~s>" (.spec self)))))
+   (define (%to-write-string self)
+     (format "info:kdf:~s" (.spec self))))
+  #:property prop:auto-equal+hash (list (struct-field-index spec)))
 
 (define (list-known-simple-kdfs)
   '(argon2d argon2i argon2id scrypt))
