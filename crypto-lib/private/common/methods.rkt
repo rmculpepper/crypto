@@ -1025,7 +1025,6 @@
                 (append immediate-fields
                         (loop super-info super-infolist))]
                [else null])))
-     (eprintf "fields = ~s\n" fields)
      (define/with-syntax ((getter accessor) ...)
        (for/list ([accessor (in-list accessors)]
                   [field (in-list fields)]
@@ -1040,7 +1039,11 @@
                 (make-rename-transformer (quote-syntax accessor)))
               ...)]))
 
+
 ;; ============================================================
+
+(provide equal+hash$
+         custom-write$)
 
 (define-interface equal+hash$
   (equal-to?    ;; X X (X X -> Boolean) Boolean -> Boolean
