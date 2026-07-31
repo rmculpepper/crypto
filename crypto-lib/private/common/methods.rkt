@@ -13,16 +13,17 @@
 ;; - add ordering constraints, eg import with #:prereq
 ;; - add inspector, add reflective operations
 ;;   - util to check no unimplemented methods (except given list)
-;; - add provide expander?
 ;; - make impl/c collapsible?
 
 #lang racket/base
 (require (for-syntax racket/base
                      racket/match
+                     racket/list
                      racket/syntax
                      racket/struct-info
                      syntax/parse
                      syntax/datum
+                     syntax/stx
                      syntax/id-table
                      syntax/transformer)
          racket/contract
@@ -32,6 +33,7 @@
          interface?
          unimplemented?
          interface->predicate
+         interface-out
          make-generic
          bundle
          make-bundle
@@ -209,17 +211,20 @@
   ;; CtInterface:
   (struct ctif
     (name       ;; Identifier
+     predicate  ;; Identifier
      uid        ;; InterfaceKey
      rt         ;; Id[RtInterface]
      supers     ;; (Listof CtInterface)
      vnames     ;; (Listof Symbol)
+     ginfo      ;; (Listof (list Identifier Identifier)) or #f
      )
     #:property prop:procedure
     (lambda (self stx)
       ((make-variable-like-transformer (ctif-rt self)) stx)))
 
   (define (create-ctif info-stx)
-    (define/with-syntax (iname rtname (super-id ...) (vname ...)) info-stx)
+    (define/with-syntax (iname iname? rtname (super-id ...) (vname ...) ginfo)
+      info-stx)
     (define uid (string->uninterned-symbol (symbol->string (syntax-e #'iname))))
     ;; FIXME: check no duplicate names
     (define supers (map syntax-local-value (datum (super-id ...))))
@@ -241,7 +246,11 @@
                     (raise-syntax-error
                      #f "duplicate name in interface" #'iname vname))]
               [else (hash-set! seen vname #t)])))
-    (ctif #'iname uid #'rtname supers (syntax->datum #'(vname ...))))
+    (define ginfo*
+      (syntax-parse #'ginfo
+        [(gname:id ...) (datum (gname ...))]
+        [#f #f]))
+    (ctif #'iname #'iname? uid #'rtname supers (syntax->datum #'(vname ...)) ginfo*))
 
   (define-syntax-class interface-ref
     #:attributes (value)
@@ -252,7 +261,7 @@
   (syntax-parse stx
     [(_ ifc:interface-ref pubnames:expr ctcv:expr fallbacks:expr derives:expr)
      (define ct (datum ifc.value))
-     (match-define (ctif iname uid _ supers vnames) (datum ifc.value))
+     (match-define (ctif iname _ uid _ supers vnames _) (datum ifc.value))
      (with-syntax ([iname iname] [uid uid] [vnames vnames])
        (with-syntax ([(super-ifcvar ...) (map ctif-rt supers)])
          #`(create-rtif (quote iname) (quote uid) (list super-ifcvar ...)
@@ -266,11 +275,8 @@
              #:attr ctc #f
              #:attr get-public? (lambda (all-public?) all-public?))
     (pattern [name:id
-              (~alt (~optional (~seq #:dynamic-public (~bind [public? #t]))
-                               #:name "dynamic-public clause")
-                    (~optional (~seq #:contract ctc:expr)
-                               #:name "contract clause"))
-              ...]
+              (~optional ctc:expr)
+              (~optional (~seq #:dynamic-public (~bind [public? #t])))]
              #:with src (datum->syntax #f (list #'name '....) this-syntax)
              #:attr get-public? (lambda (all-public?) (or all-public? (datum public?)))))
   (define-splicing-syntax-class maybe-super
@@ -311,50 +317,25 @@
                   [public? (in-list public?s)]
                   #:when public?)
          vname))
-     (define/with-syntax (gname ...)
-       (cond [(datum gprefix)
-              (for/list ([vname (in-list (datum (vname ...)))])
-                (format-id vname "~a~a" #'gprefix vname))]
-             [else #'(vname ...)]))
-     (define/with-syntax (generic-expr ...)
-       #'((make-generic* rtname (quote vname) (quote gname) #f #t) ...))
-     (define/with-syntax (ctcname ...) (generate-temporaries (datum (vname ...))))
-     (define/with-syntax generic-defs
-       (cond [(datum no-generics?)
-              #'(begin)]
-             [(not (ormap values (datum (d.ctc ...))))
-              #'(begin (define gname generic-expr) ...)]
-             [(eq? (syntax-local-context) 'module)
-              (define/with-syntax (gname* ...) (generate-temporaries #'(gname ...)))
-              (define/with-syntax (index ...)
-                (for/list ([i (in-naturals)] [gname (in-list (datum (gname ...)))]) i))
-              (define/with-syntax (blame-id ...)
-                #;(datum (gname ...))
-                (for/list ([gname (in-list (datum (gname ...)))])
-                  (define bsym (string->symbol (format "~a (generic)" (syntax-e gname))))
-                  (datum->syntax #f bsym gname)))
-              #'(begin
-                  (~? (begin (define gname* generic-expr)
-                             (define-module-boundary-contract gname
-                               gname* d.ctc
-                               #:pos-source (quote (interface iname))
-                               #:name-for-blame blame-id))
-                      (define gname generic-expr))
-                  ...)]
+     (define/with-syntax (ctcname ...)
+       (generate-temporaries (datum (vname ...))))
+     (define/with-syntax (generic-defs ginfo)
+       (cond [(datum no-generics?) #'[(begin) #f]]
              [else
-              (define/with-syntax ((ctc-gname ctc-expr) ...)
-                (for/list ([index (in-naturals 0)]
-                           [gname (in-list (datum (gname ...)))]
-                           [ctc (in-list (datum (d.ctc ...)))]
-                           #:when ctc)
-                  (with-syntax ([index index])
-                    (list gname #'(vector-ref (rtif-out-ctcv rtname) (quote index))))))
-              #'(with-contract #:region interface iname
-                  ([ctc-gname ctc-expr] ...)
-                  (define gname generic-expr) ...)]))
+              (define/with-syntax (gname ...)
+                (cond [(datum gprefix)
+                       (for/list ([vname (in-list (datum (vname ...)))])
+                         (format-id vname "~a~a" #'gprefix vname))]
+                      [else #'(vname ...)]))
+              (define/with-syntax (vctc? ...)
+                (map syntax? (datum ((~? d.ctc #f) ...))))
+              #'[(define-interface-generics iname ((vctc? gname vname) ...))
+                 (gname ...)]]))
      #'(begin
          (define-syntax iname
-           (create-ctif (quote-syntax (iname rtname (s.super ...) (vname ...)))))
+           (create-ctif
+            (quote-syntax
+             (iname iname? rtname (s.super ...) (vname ...) ginfo))))
          (define (iname? v) ;; define early, available for ctcs
            ((rtif-vprop? rtname) v))
          (define rtname
@@ -364,6 +345,102 @@
                                     (~? fallbacks.c (hasheq))
                                     (list dc.kvpair ...))))
          generic-defs)]))
+
+(define-syntax (define-interface-generics stx)
+  (syntax-parse stx
+    [(_ iname:interface-ref ((ctc? gname vname) ...))
+     (define ifc (datum iname.value))
+     (define/with-syntax rtname (ctif-rt ifc))
+     (define/with-syntax (uname ...) ;; unprotected
+       (generate-temporaries #'(gname ...)))
+     (define/with-syntax (lname ...) ;; w/ contract via with-contracts
+       ;; don't change symbolic name, since with-contract uses identifier
+       ;; in contract errors
+       (map (make-syntax-introducer) (datum (gname ...))))
+     (define/with-syntax (mname ...) ;; w/ module-boundary contracts
+       (generate-temporaries #'(gname ...)))
+     (define/with-syntax ((ctc-uname ctc-lname ctc-mname ctc-blame-name ctc-expr) ...)
+       (for/list ([index (in-naturals 0)]
+                  [uname (in-list (datum (uname ...)))]
+                  [gname (in-list (datum (gname ...)))]
+                  [lname (in-list (datum (lname ...)))]
+                  [mname (in-list (datum (mname ...)))]
+                  [ctc? (in-list (syntax->datum #'(ctc? ...)))]
+                  #:when ctc?)
+         (define blame-name
+           (let ([bsym (string->symbol (format "~a (generic)" (syntax-e gname)))])
+             (datum->syntax #f bsym gname)))
+         (with-syntax ([index index])
+           (list uname lname mname blame-name
+                 #'(vector-ref (rtif-out-ctcv rtname) (quote index))))))
+     (define/with-syntax (mbc-def ...)
+       (cond [(eq? (syntax-local-context) 'module)
+              #'((define-module-boundary-contract ctc-mname
+                   ;; defined name must not be used within defining module because
+                   ;; support might not be initialized yet; see generic-transformer
+                   ctc-uname ctc-expr
+                   #:name-for-blame ctc-blame-name
+                   #:pos-source (quote (interface iname)))
+                 ...)]
+             [else null]))
+     #'(begin
+         (define uname
+           (make-generic* rtname (quote vname) (quote gname) #f #t))
+         ...
+         (with-contract #:region interface iname
+           ([ctc-lname ctc-expr] ...)
+           (define ctc-lname ctc-uname) ...)
+         mbc-def
+         ...
+         (define-syntax gname
+           (generic-transformer
+            #'uname
+            (and (quote ctc?) (quote-syntax lname))
+            (and (quote ctc?) (quote-syntax mname))))
+         ...)]))
+
+(begin-for-syntax
+  ;; (generic-transformer Id (U Id #f) (U Id #f))
+  ;; Automatically selects between name bound by module-boundary contract vs
+  ;; name bound by with-contract vs unprotected name.
+  (struct generic-transformer (uname lname mname)
+    #:property prop:procedure
+    (lambda (self stx)
+      (case (syntax-local-context)
+        [(expression)
+         (define (can-use-mname?)
+           (define id (if (stx-pair? stx) (stx-car stx) stx))
+           (match (identifier-binding id)
+             [(list* def-mpi _ from-mpi _)
+              ;; Candidate criteria for when safe to use mname (if exists):
+              ;; 1. reference occurs in other module (def-mpi is not self-mpi)
+              ;; 2. reference originates in other modules (def-mpi != from-mpi)
+              ;; Second seems more consistent with module-boundary behavior.
+              (not (equal? def-mpi from-mpi))]
+             [_ #f]))
+         (match-define (generic-transformer uname lname mname) self)
+         (define replacement-id
+           (cond [(and mname (can-use-mname?)) mname]
+                 [lname lname]
+                 [else uname]))
+         ((make-variable-like-transformer replacement-id) stx)]
+        [else #`(#%expression #,stx)]))))
+
+(require (for-syntax racket/provide-transform))
+
+(define-syntax interface-out
+  (make-provide-transformer
+   (lambda (stx modes)
+     (syntax-parse stx
+       [(_ iname:interface-ref)
+        (define ifc (datum iname.value))
+        (define/with-syntax predicate (ctif-predicate ifc))
+        (define ginfo (ctif-ginfo ifc))
+        ;; FIXME: could store and just use mbc names here
+        (define/with-syntax (gname ...) (or ginfo null))
+        (expand-export
+         #'(combine-out iname predicate gname ...)
+         modes)]))))
 
 ;; ============================================================
 ;; Generic Functions
