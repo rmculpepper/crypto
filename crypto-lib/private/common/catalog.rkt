@@ -5,9 +5,12 @@
 (require racket/match
          racket/contract/base
          racket/list
-         "methods.rkt"
+         scramble/bundle
+         scramble/struct
          "error.rkt")
-(provide (all-defined-out))
+(provide (all-defined-out)
+         equal+hash$
+         custom-write$)
 
 ;; Security Strength
 ;; Reference: NIST 800-57 Part 1 Section 5.6
@@ -16,7 +19,35 @@
 ;; Conventions:
 ;; - "size" is number of bytes
 
+;; ============================================================
+
 (define nat? exact-nonnegative-integer?)
+
+(module interface-util racket/base
+  (require scramble/bundle)
+  (provide equal+hash$
+           custom-write$)
+
+  (define-interface equal+hash$
+    (equal-to?    ;; X X (X X -> Boolean) Boolean -> Boolean
+     hashcode     ;; X (X -> Integer) Boolean -> Boolean
+     ;; final arg = whether to consider mutable data's current value
+     )
+    #:derive-property prop:equal+hash
+    (list (lambda (self other recur mut-mode?)
+            ($equal-to? self other recur mut-mode?))
+          (lambda (self recur mut-mode?)
+            ($hashcode self recur mut-mode?)))
+    #:generics-prefix $)
+
+  (define-interface custom-write$
+    (custom-write ;; X OutputPort Mode -> Void
+     )
+    #:derive-property prop:custom-write
+    (lambda (self out mode) ($custom-write self out mode))
+    #:generics-prefix $))
+
+(require (submod "." interface-util))
 
 ;; ============================================================
 
@@ -50,14 +81,12 @@
          (or (for/or ([n (in-range min (add1 max) step)] #:when (>= n dmin)) n)
              max)])))
 
-
 ;; ============================================================
 ;; Info
 
 (define-interface info$
   (get-spec)
   #:generics-prefix $)
-
 
 ;; ============================================================
 ;; Digests
@@ -278,7 +307,6 @@
                 #:when (= ($bci-block-size bci) 16))
        `(gmac ,bcname))))
   (sort specs spec<?))
-
 
 ;; ============================================================
 ;; Cipher Info
@@ -531,7 +559,6 @@
 (define (stream-cipher-name->info x)
   (hash-ref known-stream-ciphers x #f))
 
-
 ;; ============================================================
 ;; Cipher Specs
 
@@ -563,7 +590,6 @@
             spec)
           (for/list ([cipher (in-list (sort (hash-keys known-stream-ciphers) symbol<?))])
             (list cipher 'stream))))
-
 
 ;; ============================================================
 ;; PK
@@ -687,7 +713,6 @@
     [(x25519) 32]
     [(x448)   56]
     [else 0]))
-
 
 ;; ============================================================
 ;; KDF

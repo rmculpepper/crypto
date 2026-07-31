@@ -3,7 +3,8 @@
 
 #lang racket/base
 (require racket/contract/base
-         "methods.rkt"
+         scramble/bundle
+         scramble/struct
          "catalog.rkt")
 (provide (all-defined-out))
 
