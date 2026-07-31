@@ -1,4 +1,4 @@
-;; Copyright 2013-2018 Ryan Culpepper
+;; Copyright 2013-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
@@ -17,10 +17,19 @@
 
 
 ;; ============================================================
+;; Info
+
+(define-interface info$
+  (get-spec    ;; -> Spec
+   )
+  #:generics-prefix $)
+
+
+;; ============================================================
 ;; Digests
 
-(define-interface digest-info$
-  (di-spec          ;; -> DigestSpec
+(define-interface digest-info$ #:super (info$)
+  (;; get-spec      ;; -> DigestSpec
    di-size          ;; -> (U Nat #f)  -- #f for var/xof
    di-size*         ;; -> (U Nat 'va 'vz) -- 'va = size required early, 'vz = size late
    di-block-size    ;; -> Nat
@@ -36,7 +45,7 @@
       (let ([size ($di-size self)])
         (and (exact-integer? size) size)))
     (define (di-config-family self)
-      (case ($di-spec self)
+      (case ($get-spec self)
         [(cshake128 cshake256) 'cshake]
         [(blake2b blake2b-512 blake2b-384 blake2b-256 blake2b-160) 'blake2b]
         [(blake2s blake2s-256 blake2s-224 blake2s-160 blake2s-128) 'blake2s]
@@ -57,7 +66,8 @@
              [custom-write$ #:prefix %])
    (define-struct-abbrevs info:digest)
    ;; ----
-   (define (%di-spec self) (.spec self))
+   (define (%get-spec self) (.spec self))
+   ;; ----
    (define (%di-size* self) (.size self))
    (define (%di-block-size self) (.block-size self))
    (define (%di-has-config? self) (.config? self))
@@ -172,7 +182,7 @@
 
 (define known-simple-digests
   (for/hasheq ([di (in-list (get-simple-digest-infos))])
-    (values ($di-spec di) di)))
+    (values ($get-spec di) di)))
 
 (begin
   (define (digest-spec-size ds)
@@ -271,8 +281,8 @@
 ;; Cipher Info
 ;; describes cipher, like AES-GCM or Salsa20
 
-(define-interface cipher-info$
-  (ci-spec          ;; -> CipherSpec
+(define-interface cipher-info$ #:super (info$)
+  (;; get-spec      ;; -> CipherSpec
    ci-cipher-name   ;; -> Symbol
    ci-mode          ;; -> (U BlockMode 'stream)
    ci-type          ;; -> (U 'block 'stream)
@@ -309,7 +319,8 @@
              [custom-write$ #:prefix %])
    (define-struct-abbrevs info:cipher:block)
    ;; ----
-   (define (%ci-spec self) (.spec self))
+   (define (%get-spec self) (.spec self))
+   ;; ----
    (define (%ci-cipher-name self)
      #;($bci-name (.bci self))
      (car (.spec self)))
@@ -467,9 +478,10 @@
              [custom-write$ #:prefix %])
    (define-struct-abbrevs info:cipher:stream)
    ;; ----
+   (define (%get-spec self) (.spec self))
+   ;; ----
    (define (%ci-cipher-name self) (car (.spec self)))
    (define (%ci-mode self) 'stream)
-   (define (%ci-spec self) (.spec self))
    (define (%ci-type self) 'stream)
    (define (%ci-aead? self) (positive? ($ci-auth-size self)))
    (define (%ci-block-size self) 1)
@@ -553,8 +565,8 @@
 ;; ============================================================
 ;; PK
 
-(define-interface pk-info$
-  (pk-spec            ;; -> PKSpec
+(define-interface pk-info$ #:super (info$)
+  (;; get-spec        ;; -> PKSpec
    pk-can-sign?       ;; (U Pad #f) (U DigestSpec #f) -> Boolean
    pk-can-encrypt?    ;; (U Pad #f) -> Boolean
    pk-can-key-agree?  ;; -> Boolean
@@ -571,7 +583,8 @@
              [custom-write$ #:prefix %])
    (define-struct-abbrevs info:pk)
    ;; ----
-   (define (%pk-spec self) (.spec self))
+   (define (%get-spec self) (.spec self))
+   ;; ----
    (define (%pk-can-sign? self pad dspec)
      (case (.spec self)
        [(rsa)      ;; impl must check digest
@@ -679,8 +692,8 @@
 
 ;; KDF info objects are not interned.
 
-(define-interface kdf-spec$
-  (kdf-spec         ;; -> KDFSpec
+(define-interface kdf-info$ #:super (info$)
+  (;; get-spec      ;; -> KDFSpec
    kdf-salt-mode    ;; -> (U 'req 'opt #f)
    kdf-salt-default ;; -> (U Bytes #f), only if mode='opt
    )
@@ -690,9 +703,13 @@
   (spec salt-mode salt-default)
   #:properties
   (method-properties
+   #:export ([kdf-info$ #:prefix %]
+             [equal+hash$ #:prefix %]
+             [custom-write$ #:prefix %])
    (define-struct-abbrevs info:kdf)
    ;; ----
-   (define (%kdf-spec self) (.spec self))
+   (define (%get-spec self) (.spec self))
+   ;; ----
    (define (%kdf-salt-mode self) (.salt-mode self))
    (define (%kdf-salt-default self) (.salt-default self))
    ;; ----
