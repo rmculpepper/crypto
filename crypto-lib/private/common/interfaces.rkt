@@ -25,6 +25,7 @@
 (define (cipher-impl? x) (cipher-impl$? x))
 (define (pk-impl? x) (pk-impl$? x))
 (define (kdf-impl? x) (kdf-impl$? x))
+(define (info? x) (info$? x))
 
 (struct ctx (impl ctx))
 (struct digest-ctx ctx ())
@@ -32,24 +33,13 @@
 (struct pk-parameters ctx ())
 (struct pk-key ctx ())
 
-
-;; ============================================================
-;; Util
-
-(define-interface about$
-  (about    ;; -> String
-   )
-  #:generics-prefix $)
-
-
 ;; ============================================================
 ;; General Implementation & Contexts
 
 (define-interface impl$
-  #:super (about$ info$)
-  (impl-info    ;; -> Info
-   impl-factory ;; -> Factory
-   )
+  #:super (info$)
+  ([impl-info     (-> impl$? info?)]
+   [impl-factory  (-> impl$? crypto-factory?)])
   #:generics-prefix $)
 
 (define-interface state$
@@ -57,7 +47,6 @@
    ;; Acquires mutex, checks state, and updates state before and after calling proc.
    )
   #:generics-prefix $)
-
 
 ;; ============================================================
 ;; Inputs
@@ -128,7 +117,6 @@
    [fetch-kdf         (-> factory$? kdf-spec?    (or/c kdf-impl? #f))]
    [factory-import-pk (-> factory$? any/c        (or/c pk-key? pk-parameters? #f))])
   #:generics-prefix $)
-
 
 ;; ============================================================
 ;; Digests
