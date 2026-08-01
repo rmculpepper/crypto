@@ -18,11 +18,10 @@
 ;; equivalent to (string->bytes/utf-8 S).
 
 ;; ============================================================
-;; Predicates
 
 (define (crypto-factory? x) (factory? x))
 
-(struct ctx (impl ctx)
+(struct ctx (impl ic)
   #:properties
   (method-properties
    #:export ([simple-write$ #:prefix %])
@@ -32,10 +31,6 @@
      ($to-write-string (.impl self)))
    (define (%to-write-prefixes self)
      (cons "ctx" (cdr ($to-write-prefixes (.impl self)))))))
-
-;; FIXME: prefix
-(struct pk-parameters ctx ())
-(struct pk-key ctx ())
 
 ;; ============================================================
 ;; General Implementation & Contexts
@@ -97,9 +92,6 @@
 ;; A Config is (listof (list Symbol Any))
 (define config/c (listof (list/c symbol? any/c)))
 
-;; InternalCtx is impl-specific type.
-(define intctx/c any/c)
-
 
 ;; ============================================================
 ;; Digests
@@ -109,11 +101,10 @@
   #:predicate digest-impl?
   ([digest      (-> digest-impl? input/c (or/c bytes? #f) (or/c nat? #f) config/c
                     bytes?)]
-   [di-new-ctx  (-> digest-impl? (or/c bytes? #f) config/c
-                    (values intctx/c (or/c nat? #f)))]
-   [di-update   (-> digest-impl? intctx/c bytes? nat? nat? void?)]
-   [di-final    (-> digest-impl? intctx/c bytes? void?)]
-   [di-copy     (-> digest-impl? intctx/c (or/c intctx/c #f))])
+   [di-new-ctx  (-> digest-impl? (or/c bytes? #f) config/c ctx?)]
+   [di-update   (-> digest-impl? ctx? bytes? nat? nat? void?)]
+   [di-final    (-> digest-impl? ctx? bytes?)]
+   [di-copy     (-> digest-impl? ctx? (or/c ctx? #f))])
   #:generics-prefix $)
 
 
@@ -130,12 +121,12 @@
   #:predicate cipher-impl?
   ([ci-new-ctx      (-> cipher-impl? bytes? (or/c bytes? #f) boolean?
                         cipher-pad/c (or/c nat? #f) boolean?
-                        intctx/c)]
-   [ci-get-encrypt? (-> cipher-impl? intctx/c boolean?)]
-   [ci-update-aad   (-> cipher-impl? intctx/c input/c void?)]
-   [ci-update       (-> cipher-impl? intctx/c input/c void?)]
-   [ci-final        (-> cipher-impl? intctx/c (or/c bytes? #f) any)] ;; FIXME
-   [ci-auth-tag     (-> cipher-impl? intctx/c (or/c bytes? #f))])
+                        ctx?)]
+   [ci-get-encrypt? (-> cipher-impl? ctx? boolean?)]
+   [ci-update-aad   (-> cipher-impl? ctx? input/c void?)]
+   [ci-update       (-> cipher-impl? ctx? input/c void?)]
+   [ci-final        (-> cipher-impl? ctx? (or/c bytes? #f) any)] ;; FIXME
+   [ci-auth-tag     (-> cipher-impl? ctx? (or/c bytes? #f))])
   #:generics-prefix $)
 
 ;; Sends {ciper,plain}text to given output port.
@@ -148,6 +139,27 @@
 
 (define pk-sign-pad/c (or/c #f 'pkcs1-v1.5 'pss 'pss*))
 (define pk-enc-pad/c (or/c #f 'pkcs1-v1.5 'oaep))
+
+(struct pk-parameters ctx ()
+  #:properties
+  (method-properties
+   #:export ([simple-write$ #:prefix %])
+   #:import ([simple-write$ #:super #:prefix super-])
+   (define-struct-abbrevs pk-parameters)
+   ;; ----
+   (define (%to-write-prefixes self)
+     (cons "pk-parameters" (cdr (super-to-write-prefixes self))))))
+
+(struct pk-key ctx ()
+  #:properties
+  (method-properties
+   #:export ([simple-write$ #:prefix %])
+   #:import ([simple-write$ #:super #:prefix super-])
+   (define-struct-abbrevs pk-key)
+   ;; ----
+   (define (%to-write-prefixes self)
+     (cons (if ($pkk-is-private? (.impl self)) "private-key" "public-key")
+           (cdr (super-to-write-prefixes self))))))
 
 (define-interface pk-impl$
   #:super (impl$ pk-info$)
