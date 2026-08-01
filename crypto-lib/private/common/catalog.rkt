@@ -370,7 +370,7 @@
        [(cbc ofb cfb ctr) ($ci-chunk-size self)]
        [(gcm ocb eax)     12]
        [else (internal-error "unknown block mode: ~e" (.mode self))]))
-   (define (%iv-size-ok? self size)
+   (define (%ci-iv-size-ok? self size)
      (case (.mode self)
        [(ecb)         (= size 0)]
        [(cbc ofb cfb) (= size ($ci-chunk-size self))]
@@ -442,11 +442,6 @@
    (define (%bci-mode-ok? self mode)
      (block-mode-block-size-ok? mode (.block-size self)))
    ;; ----
-   (define (%equal-to? self other recur mut-mode?)
-     (recur (.name self) (.name other)))
-   (define (%hashcode self recur mut-mode?)
-     (recur (.name self)))
-   ;; ----
    (define (%to-write-string self)
      (format "info:block-cipher:~s" (.name self))))
   #:property prop:auto-equal+hash (list (struct-field-index name)))
@@ -507,10 +502,10 @@
      (size-set-default (.key-sizes self) DEFAULT-KEY-SIZE))
    (define (%ci-key-sizes self) (.key-sizes self))
    (define (%ci-iv-size self) (.ivlen self))
-   (define (%iv-size-ok? self size) (= size (.ivlen self)))
+   (define (%ci-iv-size-ok? self size) (= size (.ivlen self)))
    (define (%ci-auth-size self) (.auth-len self))
-   (define (%auth-size-ok? self size) (= size (.auth-len self)))
-   (define (%uses-padding? self) #f)
+   (define (%ci-auth-size-ok? self size) (= size (.auth-len self)))
+   (define (%ci-uses-padding? self) #f)
    ;; ----
    (define (%to-write-string self)
      (format "info:cipher:~s" (.spec self))))
