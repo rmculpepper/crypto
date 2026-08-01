@@ -28,8 +28,12 @@
   (hasheq 'to-write-prefixes (lambda (self) null))
   #:derive-property prop:custom-write
   (lambda (self out mode)
-    (define prefix (apply string-append ($to-write-prefixes self)))
-    (fprintf out "#<~a~a>" prefix ($to-write-string self)))
+    (define prefixes ($to-write-prefixes self))
+    (fprintf out "#<~a~a>"
+             (apply string-append
+                    (for/list ([prefix (in-list prefixes)])
+                      (format "~a:" prefix)))
+             ($to-write-string self)))
   #:generics-prefix $)
 
 #;
