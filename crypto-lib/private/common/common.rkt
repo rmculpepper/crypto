@@ -43,9 +43,9 @@
    (define (%impl-info self) (.info self))
    (define (%impl-factory self) (.factory self))
    ;; ----
-   (define (%to-write-string)
+   (define (%to-write-string self)
      (format "~s" ($get-spec self)))
-   (define (%to-write-prefixes)
+   (define (%to-write-prefixes self)
      (list ($factory-name (.factory self))))))
 
 ;; ----------------------------------------

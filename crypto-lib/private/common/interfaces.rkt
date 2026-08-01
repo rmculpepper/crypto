@@ -21,7 +21,7 @@
 
 (define (crypto-factory? x) (factory? x))
 
-(struct ctx (impl ic)
+(struct ctx (impl inner)
   #:properties
   (method-properties
    #:export ([simple-write$ #:prefix %])
@@ -72,18 +72,6 @@
            (list #'bytes-range-end #'bytes-range-start #'bytes-range-bs)
            (list #f #f #f)
            #t))))
-#;
-(struct bytes-range (bs start end)
-  #:guard (lambda (buf start end _name)
-            (unless (bytes? buf)
-              (raise-argument-error 'bytes-range "bytes?" 0 buf start end))
-            (unless (exact-nonnegative-integer? start)
-              (raise-argument-error 'bytes-range "exact-nonnegative-integer?" 1 buf start end))
-            (unless (exact-nonnegative-integer? end)
-              (raise-argument-error 'bytes-range "exact-nonnegative-integer?" 2 buf start end))
-            (unless (<= start end (bytes-length buf))
-              (raise-range-error 'bytes-range "bytes" "ending " end buf start (bytes-length buf) 0))
-            (values buf start end)))
 
 (define input/c
   (flat-rec-contract input/c
@@ -92,6 +80,8 @@
 ;; A Config is (listof (list Symbol Any))
 (define config/c (listof (list/c symbol? any/c)))
 
+;; An InternalContext is an impl-specific type.
+(define ictx/c any/c)
 
 ;; ============================================================
 ;; Digests
@@ -102,8 +92,8 @@
   ([digest      (-> digest-impl? input/c (or/c bytes? #f) (or/c nat? #f) config/c
                     bytes?)]
    [di-new-ctx  (-> digest-impl? (or/c bytes? #f) config/c ctx?)]
-   [di-update   (-> digest-impl? ctx? bytes? nat? nat? void?)]
-   [di-final    (-> digest-impl? ctx? bytes?)]
+   [di-update   (-> digest-impl? ctx? input/c void?)]
+   [di-final    (-> digest-impl? ctx? (or/c nat? #f) bytes?)]
    [di-copy     (-> digest-impl? ctx? (or/c ctx? #f))])
   #:generics-prefix $)
 
