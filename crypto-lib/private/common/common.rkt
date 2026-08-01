@@ -1,19 +1,19 @@
-;; Copyright 2012-2018 Ryan Culpepper
+;; Copyright 2012-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
          racket/contract/base
          racket/random
          racket/string
+         scramble/bundle
+         scramble/struct
+         "catalog.rkt"
          "interfaces.rkt"
          "error.rkt")
-(provide impl-base%
-         info-impl-base%
-         ctx-base%
-         state-mixin
-         state-ctx%
+(provide (struct-out info-impl-base)
+         (interface-out state$)
+         (struct-out state-ctx)
          process-input
          shrink-bytes
          make-sized-copy
@@ -28,72 +28,85 @@
          version>=?
          crypto-random-bytes)
 
-;; Convention: methods starting with `-` (eg, `-digest-buffer`) are
-;; hooks for overrriding. They receive pre-checked arguments, and they
-;; are called within the appropriate mutex and state, if applicable.
-
 ;; ============================================================
 
-(define impl-base%
-  (class* object% (impl<%>)
-    (init-field spec factory)
-    (define/public (about) (format "~a ~a" (send (get-factory) get-name) (get-spec)))
-    (define/public (to-write-string prefix)
-      (format "~a~a:~s" (or prefix "impl:") (send (get-factory) get-name) (get-spec)))
-    (define/public (get-info) #f)
-    (define/public (get-spec) spec)
-    (define/public (get-factory) factory)
-    (super-new)))
-
-(define info-impl-base%
-  (class* object% (impl<%>)
-    (init-field info factory)
-    (define/public (about) (format "~a ~a" (send (get-factory) get-name) (get-spec)))
-    (define/public (to-write-string prefix)
-      (format "~a~a:~s" (or prefix "impl:") (send (get-factory) get-name) (get-spec)))
-    (define/public (get-info) info)
-    (define/public (get-spec) (send info get-spec))
-    (define/public (get-factory) factory)
-    (super-new)))
-
-(define ctx-base%
-  (class* object% (ctx<%>)
-    (init-field impl)
-    (define/public (about) (format "~a context" (send impl about)))
-    (define/public (to-write-string prefix) (send impl to-write-string (or prefix "ctx:")))
-    (define/public (get-impl) impl)
-    (super-new)))
+(struct info-impl-base (info factory)
+  #:properties
+  (method-properties
+   #:export ([info$ #:prefix %]
+             [impl$ #:prefix %]
+             [simple-write$ #:prefix %])
+   (define-struct-abbrevs info-impl-base)
+   ;; ----
+   (define (%get-spec self) ($get-spec (.info self)))
+   ;; ----
+   (define (%impl-info self) (.info self))
+   (define (%impl-factory self) (.factory self))
+   ;; ----
+   (define (%to-write-string)
+     (format "~s" ($get-spec self)))
+   (define (%to-write-prefixes)
+     (list ($factory-name (.factory self))))))
 
 ;; ----------------------------------------
 
-(define state-mixin
-  (mixin () (state<%>)
-    (init-field state)
-    (field [sema (make-semaphore 1)])
-    (super-new)
+(define-interface state$
+  ([call-with-state (->* [state$? (-> any)]
+                         [#:ok list? #:pre any/c #:post any/c #:msg (or/c string? #f)]
+                         any)]
+   ;; Acquires mutex, checks state, and updates state before and after calling proc.
+   [set-state       (-> state$? any/c void?)]
+   [describe-state  (-> state$? any/c string?)])
+  #:generics-prefix $)
 
-    (define/public (with-state #:ok [ok-states #f]
-                     #:pre  [pre-state #f]
-                     #:post [post-state #f]
-                     #:msg  [msg #f]
-                     proc)
-      (call-with-semaphore sema
-        (lambda ()
-          (when ok-states (unless (memq state ok-states) (bad-state state ok-states msg)))
-          (when pre-state (set-state pre-state))
-          (begin0 (proc)
-            (when post-state (set-state post-state))))))
+(struct state-ctx ctx
+  (sema [state #:mutable])
+  #:properties
+  (method-properties
+   #:export ([state$ #:prefix %])
+   (define-struct-abbrevs state-ctx)
+   ;; ----
+   (define (%call-with-state self proc
+                             #:ok   [ok-states #f]
+                             #:pre  [pre-state #f]
+                             #:post [post-state #f]
+                             #:msg  [msg #f])
+     (call-with-semaphore (.sema self)
+       (lambda ()
+         (when ok-states
+           (define now-state (.state self))
+           (unless (memq now-state ok-states)
+             (bad-state self now-state ok-states msg)))
+         (when pre-state ($set-state self pre-state))
+         (begin0 (proc)
+           (when post-state ($set-state self post-state))))))
+   (define (%set-state self new-state)
+     (unless (equal? (.state self) new-state)
+       (.state-set! self new-state)))
+   (define (%describe-state self state)
+     (format "~s" self state))
+   (define (bad-state self state ok-states msg)
+     (crypto-error "wrong state\n  state: ~a~a"
+                   ($describe-state (.state self))
+                   (or msg "")))))
 
-    (define/public (set-state new-state)
-      (unless (equal? state new-state) (set! state new-state)))
-
-    (define/public (bad-state state ok-states msg)
-      (crypto-error "wrong state\n  state: ~a~a" (describe-state state) (or msg "")))
-    (define/public (describe-state state)
-      (format "~s" state))
-    ))
-
-(define state-ctx% (state-mixin ctx-base%))
+#;
+(define-interface clone$
+  (clone
+   prepare-clone   ;; -> (values (X ... -> Self) (Listof X) (Self -> Void))
+   )
+  #:fallbacks
+  (let ()
+    (define (clone self)
+      (define-values (maker args patchup) ($prepare-clone self))
+      (define copy (apply maker args))
+      (patchup copy)
+      copy)
+    (define (prepare-clone self)
+      (define (invalid . args) (error 'clone "invalid constructor"))
+      (values invalid null void))
+    (hasheq 'clone clone 'prepare-clone prepare-clone))
+  #:generics-prefix $)
 
 ;; ============================================================
 ;; Input

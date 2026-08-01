@@ -21,10 +21,6 @@
 ;; Predicates
 
 (define (crypto-factory? x) (factory? x))
-;; (define (digest-impl? x) (digest-impl$? x))
-;; (define (cipher-impl? x) (cipher-impl$? x))
-;; (define (pk-impl? x) (pk-impl$? x))
-;; (define (kdf-impl? x) (kdf-impl$? x))
 
 (struct ctx (impl ctx)
   #:properties
@@ -35,10 +31,9 @@
    (define (%to-write-string self)
      ($to-write-string (.impl self)))
    (define (%to-write-prefixes self)
-     (cons "ctx:" (cdr ($to-write-prefixes (.impl self)))))))
+     (cons "ctx" (cdr ($to-write-prefixes (.impl self)))))))
 
-(struct digest-ctx ctx ())
-(struct cipher-ctx ctx ())
+;; FIXME: prefix
 (struct pk-parameters ctx ())
 (struct pk-key ctx ())
 
@@ -49,12 +44,6 @@
   #:super (info$ simple-write$)
   ([impl-info     (-> impl$? info?)]
    [impl-factory  (-> impl$? crypto-factory?)])
-  #:generics-prefix $)
-
-(define-interface state$
-  (call-with-state   ;; [#:ok States #:pre State #:post State #:msg Any] (-> Any) -> Any
-   ;; Acquires mutex, checks state, and updates state before and after calling proc.
-   )
   #:generics-prefix $)
 
 ;; ============================================================
@@ -120,9 +109,10 @@
   #:predicate digest-impl?
   ([digest      (-> digest-impl? input/c (or/c bytes? #f) (or/c nat? #f) config/c
                     bytes?)]
-   [di-new-ctx  (-> digest-impl? (or/c bytes? #f) config/c any/c)]
-   [di-update   (-> digest-impl? intctx/c input/c void?)]
-   [di-final    (-> digest-impl? intctx/c (or/c nat? #f) bytes?)]
+   [di-new-ctx  (-> digest-impl? (or/c bytes? #f) config/c
+                    (values intctx/c (or/c nat? #f)))]
+   [di-update   (-> digest-impl? intctx/c bytes? nat? nat? void?)]
+   [di-final    (-> digest-impl? intctx/c bytes? void?)]
    [di-copy     (-> digest-impl? intctx/c (or/c intctx/c #f))])
   #:generics-prefix $)
 
@@ -191,7 +181,6 @@
 
    [pkk-compute-secret  (-> pk-impl? pk-key? (or/c bytes? pk-key?) bytes?)])
   #:generics-prefix $)
-
 
 ;; ============================================================
 ;; KDFs

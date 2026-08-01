@@ -2,11 +2,14 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
+         scramble/bundle
+         scramble/struct
          "interfaces.rkt"
          "common.rkt"
          "error.rkt")
+
+#;
 (provide digest-impl%
          digest-ctx%
          rkt-hmac-ctx%
@@ -19,113 +22,163 @@
 ;; ============================================================
 ;; Digest
 
-(define digest-impl%
-  (class* info-impl-base% (digest-impl<%>)
-    (inherit-field info factory)
-    (inherit get-spec)
-    (super-new)
+(define-interface digest-impl-common$
+  ([sanity-check (->* [] [#:size (or/c nat? #f) #:block-size (or/c nat? #f)] void?)]
+   [digest-buffer (-> any/c bytes? nat? nat? nat? (or/c bytes? #f))]
+   [new-ctx1 (-> any/c (or/c bytes? #f) intctx/c)]
+   [new-ctx2 (-> any/c (or/c bytes? #f) config/c intctx/c)])
+  #:generic $$)
 
-    (define/override (about) (format "~a digest" (super about)))
-    (define/override (to-write-string prefix) (super to-write-string (or prefix "digest:")))
+(struct digest-impl info-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([digest-impl$ #:prefix %]
+             [simple-write$ #:prefix %]
+             [digest-impl-common #:prefix %%])
+   #:import ([simple-write$ #:super #:prefix super-])
+   (define-struct-abbrevs digest-impl)
+   (define (%to-write-prefixes self)
+     (list "impl" "digest" (super-to-write-prefixes self)))
 
-    ;; Info methods
-    (define/public (get-size) (send info get-size))
-    (define/public (get-size*) (send info get-size*))
-    (define/public (get-block-size) (send info get-block-size))
-    (define/public (has-config?) (send info has-config?))
-    (define/public (get-key-sizes) (send info get-key-sizes))
-    (define/public (key-size-ok? keysize) (send info key-size-ok? keysize))
-    (define/public (get-config-family) (send info get-config-family))
-    (define/public (get-security-strength cr?) (send info get-security-strength cr?))
+   ;; ---- digest-info
 
-    (define/public (sanity-check #:size [size #f] #:block-size [block-size #f])
-      ;; Use info::get-{block-,}size directly so that subclasses can
-      ;; override get-size and get-block-size.
-      (when size
-        (define info-size (send info get-size))
-        (when info-size
-          (unless (= size info-size)
-            (internal-error "digest size: expected ~s but got ~s\n  digest: ~a"
-                            (send info get-size) size (about)))))
-      (when block-size
-        (unless (= block-size (send info get-block-size))
-          (internal-error "block size: expected ~s but got ~s\n  digest: ~a"
-                          (send info get-block-size) block-size (about)))))
+   ;; use fallbacks for di-size, di-config-family, di-key-size-ok?
+   (define (%di-size* self) ($di-size* (.info self)))
+   (define (%di-block-size self) ($di-block-size (.info self)))
+   (define (%di-has-config? self) ($di-has-config? (.info self)))
+   (define (%di-key-sizes self) ($di-key-sizes (.info self)))
+   (define (%di-security-strength self cr?)
+     ($di-security-strength (.info self) cr?))
 
-    ;; new-ctx : Bytes/#f Config -> DigestCtx
-    (define/public (new-ctx key config)
-      (when key (check-key-size (bytes-length key)))
-      (cond [(null? config) (-new-ctx key)]
-            [else (-new-ctx2 key config)]))
+   ;; ---- digest-impl
 
-    ;; -new-ctx : Bytes/#f -> DigestCtx
-    (define/public (-new-ctx key)
-      (-new-ctx2 key null))
+   (define (%%sanity-check #:size [size #f] #:block-size [block-size #f])
+     ;; Use info's size and block-size directly so that subclasses can override
+     ;; $di-size, $di-block-size.
+     (when size
+       (define info-size ($di-size (.info self)))
+       (when info-size
+         (unless (= size info-size)
+           (internal-error "digest size: expected ~s but got ~s"
+                           info-size size #:in self))))
+     (when block-size
+       (define info-block-size ($di-block-size (.info self)))
+       (unless (= block-size info-block-size)
+         (internal-error "block size: expected ~s but got ~s"
+                         info-block-size block-size #:in self))))
 
-    ;; -new-ctx2 : Bytes/#f Config -> DigestCtx
-    (define/public (-new-ctx2 key config)
-      (define factory-name (send factory get-name))
+    (define (%di-new-ctx self key config)
+      (cond [(null? config) ($$new-ctx1 self key)]
+            [else ($$new-ctx2 self key config)]))
+
+    (define (%%new-ctx1 self key)
+      ($$new-ctx2 self key null))
+
+    (define (%%new-ctx2 self key config)
       (check-null-config config (get-spec) #:in this)
-      (internal-error "unimplemented" #:in this))
+      (internal-error "unimplemented" #:in self))
 
-    (define/public (check-key-size keysize)
-      (unless (key-size-ok? keysize)
-        (crypto-error "bad key size\n  given: ~s bytes\n  digest: ~a"
-                      keysize (about))))
-
-    (define/public (new-hmac-ctx key)
-      (unless (get-size) (err/not-fixed-digest this))
-      (-new-hmac-ctx key))
-
-    (define/public (-new-hmac-ctx key)
-      (new rkt-hmac-ctx% (impl this) (key key)))
-
-    (define/public (digest src key size config)
-      (define (fallback) (digest-fallback src key size config))
-      (define dsize (get-size*))
-      (cond [(exact-nonnegative-integer? dsize)
-             (cond [(and (eq? key #f)
-                         (or (eq? size #f) (eqv? size dsize))
-                         (null? config))
-                    (or (digest-src src key dsize) (fallback))]
-                   [else (fallback)])]
-            [(eq? dsize 'va)
-             (let-values ([(config size) (move-size-early config size)])
-               (digest-fallback src key size config))]
-            [else (fallback)]))
-
-    (define/private (move-size-early config size)
-      (cond [(and size (not (assq 'size config)))
-             (values (cons `(size ,size) config) #f)]
-            [else (values config size)]))
-
-    (define/private (digest-fallback src key size config)
-      (send (new-ctx key config) digest src size))
-
-    (define/private (digest-src src key dsize)
-      (match src
-        [(? bytes?)
-         (-digest-buffer src 0 (bytes-length src) dsize)]
-        [(bytes-range buf start end)
-         (-digest-buffer buf start end dsize)]
-        [_ #f]))
-
-    (define/public (hmac key src)
-      (or (match src
-            [(? bytes?) (-hmac-buffer key src 0 (bytes-length src))]
-            [(bytes-range buf start end) (-hmac-buffer key buf start end)]
-            [_ #f])
-          (send (new-hmac-ctx key) digest src #f)))
-
-    ;; {-digest,-hmac}-buffer : ... -> Bytes/#f
-    ;; Return bytes if can compute digest/hmac directly, #f to fall back
-    ;; to default ctx code.
-    (define/public (-digest-buffer src src-start src-end size) #f)
-    (define/public (-hmac-buffer key src src-start src-end) #f)
+    ;; abstract: di-update, di-final, di-copy
     ))
 
+
+(define (digest*-digest impl src key size config)
+  (define (move-size-early config size)
+    (cond [(and size (not (assq 'size config)))
+           (values (cons `(size ,size) config) #f)]
+          [else (values config size)]))
+  (define (digest-src impl src key dsize)
+    (match src
+      [(? bytes?)
+       ($$digest-buffer self src 0 (bytes-length src) dsize)]
+      [(bytes-range buf start end)
+       ($$digest-buffer self buf start end dsize)]
+      [_ #f]))
+  (define (fallback)
+    (digest*-digest-fallback self src key size config))
+  (define dsize ($di-size* self))
+  (cond [(exact-nonnegative-integer? dsize)
+         (cond [(and (eq? key #f)
+                     (or (eq? size #f) (eqv? size dsize))
+                     (null? config))
+                (or (digest-src self src key dsize) (fallback))]
+               [else (fallback)])]
+        [(eq? dsize 'va)
+         (let-values ([(config size) (move-size-early config size)])
+           (digest*-digest-fallback self src key size config))]
+        [else (fallback)]))
+
+(define (digest*-digest-fallback impl src key size config)
+  (define-values (ictx dsize) (digest*-new-ctx impl key config))
+  (digest*-update impl ictx src)
+  (digest*-final impl ictx dsize size))
+
+(define (digest*-new-ctx impl key config)
+  (define (check-key-size keysize)
+    (unless ($di-key-size-ok? impl keysize)
+      (crypto-error "bad key size\n  given: ~s bytes"
+                    keysize #:in impl)))
+  (when key (check-key-size (bytes-length key)))
+  ($di-new-ctx impl key config))
+
+(define (digest*-update impl ictx src)
+  (process-input src
+                 (lambda (buf start end)
+                   ($di-update impl ictx buf start end))))
+
+(define (digest*-final impl ictx dsize size)
+  (define dest
+    (cond [dsize
+           (when (and size (not (= size dsize)))
+             (crypto-error (string-append
+                            "wrong size given for non-XOF digest"
+                            "\n  given: ~e\n  expected: ~s")
+                           size dsize #:in this))
+           (make-bytes dsize)]
+          [else
+           (unless size
+             (crypto-error (string-append
+                            "no output size given for "
+                            "late variable-size digest")
+                           #:in this))
+           (make-bytes size)]))
+  ($di-final impl ictx dest)
+  dest)))
+
+;; ----
+
+(struct digest-ctx state-ctx (osize))
+
+(define (digest-new-ctx impl key config)
+  (define-values (ictx dsize) ($di-new-ctx impl key config))
+  (digest-ctx impl ictx 'open (make-semaphore 1) dsize))
+
+(define (digest-ctx-update dctx src)
+  ($call-with-state
+   dctx #:ok '(open) #:post 'closed
+   (lambda ()
+     (match (ctx impl ictx) dctx)
+     (digest*-update impl ictx src))))
+
+(define (digest-ctx-final dctx size)
+  ($call-with-state
+   dctx #:ok '(open) #:post 'closed
+   (lambda ()
+     (match (digest-ctx impl ictx _ _ dsize) dctx)
+     (digest*-final impl ictx dsize size))))
+
+(define (digest-ctx-copy dctx)
+  ($call-with-state
+   dctx #:ok '(open)
+   (lambda ()
+     (match (digest-ctx impl ictx _ state dsize) dctx)
+     (define ictx2 ($di-copy impl ictx))
+     (and ictx2 (digest-ctx impl ictx2 state (make-semaphore 1) dsize)))))
+
+
+
 (define digest-ctx%
-  (class* (state-mixin ctx-base%) (digest-ctx<%>)
+  (class* state-ctx% (digest-ctx<%>)
     (inherit with-state)
     (inherit-field impl)
     (init-field [digest-size #f]) ;; Nat/#f, #f means XOF (once initialized)
@@ -137,43 +190,6 @@
 
     (define/override (to-write-string prefix)
       (super to-write-string (or prefix "digest-ctx:")))
-
-    (define/public (digest src size)
-      (update src)
-      (final size))
-
-    (define/public (update src)
-      (with-state #:ok '(open)
-        (lambda ()
-          (process-input src (lambda (buf start end) (-update buf start end)))
-          (void))))
-
-    (define/public (final size)
-      (with-state #:ok '(open) #:post 'closed
-        (lambda ()
-          (cond [digest-size
-                 (when (and size (not (= size digest-size)))
-                   (crypto-error (string-append
-                                  "wrong size given for non-XOF digest"
-                                  "\n  given: ~e\n  expected: ~s")
-                                 size digest-size #:in this))
-                 (define dest (make-bytes digest-size))
-                 (-final! dest)
-                 dest]
-                [else
-                 (unless size
-                   (crypto-error "no output size given for XOF" #:in this))
-                 (define dest (make-bytes size))
-                 (-final-xof! dest)
-                 dest]))))
-
-    (define/public (copy)
-      (with-state #:ok '(open)
-        (lambda () (-copy))))
-
-    (define/public (-copy)
-      (define inits (-copy-inits))
-      (and inits (clone `((impl ,impl) (digest-size ,digest-size) ,@inits))))
 
     (define/private (clone inits)
       (dynamic-instantiate this% null (map (lambda (l) (cons (car l) (cadr l))) inits)))
