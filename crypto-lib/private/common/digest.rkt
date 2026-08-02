@@ -86,19 +86,19 @@
        (unless ($di-key-size-ok? self keysize)
          (crypto-error "bad key size\n  given: ~s bytes"
                        keysize #:in self)))
+     (define lock (make-statelock 'open))
      (cond [(null? config)
             (define ic ($dii-new-ctx1 (.inner self) key))
-            (digest-ctx self ic (make-semaphore 1) 'open ($di-size self))]
+            (digest-ctx self ic lock ($di-size self))]
            [else
             (define-values (ic csize)
               ($dii-new-ctx2 (.inner self) key config))
-            (digest-ctx self ic (make-semaphore 1) 'open csize)]))
+            (digest-ctx self ic lock csize)]))
 
    (define (%di-update self dctx src)
-     ($call-with-state
-      dctx #:ok '(open) #:post 'closed
-      (lambda ()
-        (di-update* self dctx src))))
+     (call-with-state
+      dctx #:ok '(open)
+      (lambda (s) (di-update* self dctx src))))
 
    (define (di-update* self dctx src)
      (define ic (ctx-inner dctx))
@@ -108,12 +108,12 @@
                       ($dii-update iimpl ic buf start end))))
 
    (define (%di-final self dctx size)
-     ($call-with-state
+     (call-with-state
       dctx #:ok '(open) #:post 'closed
-      (lambda () (di-final* self dctx size))))
+      (lambda (s) (di-final* self dctx size))))
 
    (define (di-final* self dctx size)
-     (match-define (digest-ctx _ ic _ _ csize) dctx)
+     (match-define (digest-ctx _ ic _ csize) dctx)
      (define outsize
        (cond [csize
               (when (and size (not (= size csize)))
@@ -132,14 +132,14 @@
      ($dii-final (.inner self) ic outsize))
 
    (define (%di-copy self dctx)
-     ($call-with-state
+     (call-with-state
       dctx #:ok '(open)
-      (lambda () (di-copy* self dctx))))
+      (lambda (s) (di-copy* self dctx))))
 
    (define (di-copy* self dctx)
-     (match-define (digest-ctx impl ic _ state csize) dctx)
+     (match-define (digest-ctx impl ic lock csize) dctx)
      (define ic2 ($dii-copy (.inner self) ic))
-     (and ic2 (digest-ctx impl ic2 (make-semaphore 1) state csize)))))
+     (and ic2 (digest-ctx impl ic2 (copy-statelock lock) csize)))))
 
 (define (digest-sanity-check impl #:size [size #f] #:block-size [block-size #f])
   ;; Use info's size and block-size directly so that subclasses can override

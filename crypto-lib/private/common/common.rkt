@@ -12,8 +12,11 @@
          "interfaces.rkt"
          "error.rkt")
 (provide (struct-out info-impl-base)
-         (interface-out state$)
          (struct-out state-ctx)
+         (struct-out statelock)
+         make-statelock
+         copy-statelock
+         call-with-state
          process-input
          shrink-bytes
          make-sized-copy
@@ -50,45 +53,47 @@
 
 ;; ----------------------------------------
 
-(define-interface state$
-  ([call-with-state (->* [state$? (-> any)]
-                         [#:ok list? #:pre any/c #:post any/c #:msg (or/c string? #f)]
-                         any)]
-   ;; Acquires mutex, checks state, and updates state before and after calling proc.
-   [set-state       (-> state$? any/c void?)]
-   [describe-state  (-> state$? any/c string?)])
-  #:generics-prefix $)
+(struct state-ctx ctx (lock))
 
-(struct state-ctx ctx
-  (sema [state #:mutable])
-  #:properties
-  (method-properties
-   #:export ([state$ #:prefix %])
-   (define-struct-abbrevs state-ctx)
-   ;; ----
-   (define (%call-with-state self proc
-                             #:ok   [ok-states #f]
-                             #:pre  [pre-state #f]
-                             #:post [post-state #f]
-                             #:msg  [msg #f])
-     (call-with-semaphore (.sema self)
-       (lambda ()
-         (when ok-states
-           (define now-state (.state self))
-           (unless (memq now-state ok-states)
-             (bad-state self now-state ok-states msg)))
-         (when pre-state ($set-state self pre-state))
-         (begin0 (proc)
-           (when post-state ($set-state self post-state))))))
-   (define (%set-state self new-state)
-     (unless (equal? (.state self) new-state)
-       (.state-set! self new-state)))
-   (define (%describe-state self state)
-     (format "~s" self state))
-   (define (bad-state self state ok-states msg)
-     (crypto-error "wrong state\n  state: ~a~a"
-                   ($describe-state (.state self))
-                   (or msg "")))))
+(struct statelock (sema [state #:mutable] desc))
+
+(define (call-with-state stctx proc
+                         #:ok   [ok-states #f]
+                         #:pre  [pre-state #f]
+                         #:post [post-state #f]
+                         #:msg  [msg #f])
+  (define self (state-ctx-lock stctx))
+  (define-struct-abbrevs statelock)
+  (define (set-state new-state)
+    (unless (equal? (.state self) new-state)
+      (.state-set! self new-state)))
+  (define (bad-state state ok-states msg)
+    (crypto-error "wrong state\n  state: ~a~a"
+                  (describe-state state)
+                  (or msg "")))
+  (define (describe-state state)
+    (cond [(.desc self)
+           (cond [(assoc state (.desc self))
+                  => cadr]
+                 [else (format "unknown (~s)" state)])]
+          [else (format "~s" state)]))
+  (call-with-semaphore (.sema self)
+    (lambda ()
+      (define now-state (.state self))
+      (when ok-states
+        (unless (memq now-state ok-states)
+          (bad-state now-state ok-states msg)))
+         (when pre-state
+           (set-state pre-state))
+         (begin0 (proc now-state)
+           (when post-state (set-state post-state))))))
+
+(define (make-statelock init-state [desc #f])
+  (statelock (make-semaphore 1) init-state desc))
+
+(define (copy-statelock stl)
+  (match-define (statelock _ state desc) stl)
+  (statelock (make-semaphore 1) state desc))
 
 #;
 (define-interface clone$
