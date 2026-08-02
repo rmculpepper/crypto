@@ -83,17 +83,22 @@
 ;; An InternalContext is an impl-specific type.
 (define ictx/c any/c)
 
+(define key/c bytes?)
+(define maybe-key/c (or/c bytes? #f))
+(define iv/c (or/c bytes? #f))
+(define maybe-size/c (or/c nat? #f))
+
 ;; ============================================================
 ;; Digests
 
 (define-interface digest-impl$
   #:super (impl$ digest-info$)
   #:predicate digest-impl?
-  ([digest      (-> digest-impl? input/c (or/c bytes? #f) (or/c nat? #f) config/c
+  ([digest      (-> digest-impl? input/c maybe-key/c maybe-size/c config/c
                     bytes?)]
-   [di-new-ctx  (-> digest-impl? (or/c bytes? #f) config/c ctx?)]
+   [di-new-ctx  (-> digest-impl? maybe-key/c config/c ctx?)]
    [di-update   (-> digest-impl? ctx? input/c void?)]
-   [di-final    (-> digest-impl? ctx? (or/c nat? #f) bytes?)]
+   [di-final    (-> digest-impl? ctx? maybe-size/c bytes?)]
    [di-copy     (-> digest-impl? ctx? (or/c ctx? #f))])
   #:generics-prefix $)
 
@@ -109,13 +114,13 @@
 (define-interface cipher-impl$
   #:super (impl$ cipher-info$)
   #:predicate cipher-impl?
-  ([ci-new-ctx      (-> cipher-impl? bytes? (or/c bytes? #f) boolean?
+  ([ci-new-ctx      (-> cipher-impl? key/c iv/c boolean?
                         cipher-pad/c (or/c nat? #f) boolean?
                         ctx?)]
-   [ci-get-encrypt? (-> cipher-impl? ctx? boolean?)]
+   [ci-encrypt?     (-> cipher-impl? ctx? boolean?)]
    [ci-update-aad   (-> cipher-impl? ctx? input/c void?)]
    [ci-update       (-> cipher-impl? ctx? input/c void?)]
-   [ci-final        (-> cipher-impl? ctx? (or/c bytes? #f) any)] ;; FIXME
+   [ci-final        (-> cipher-impl? ctx? (or/c bytes? #f) void?)]
    [ci-auth-tag     (-> cipher-impl? ctx? (or/c bytes? #f))])
   #:generics-prefix $)
 
