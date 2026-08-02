@@ -1,10 +1,12 @@
-;; Copyright 2012-2018 Ryan Culpepper
+;; Copyright 2012-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
          racket/string
+         racket/contract/base
+         scramble/bundle
+         scramble/struct
          "catalog.rkt"
          "interfaces.rkt"
          "common.rkt"
@@ -14,302 +16,421 @@
 ;; ============================================================
 ;; Cipher
 
-(define cipher-impl-base%
-  (class* info-impl-base% (cipher-impl<%>)
-    (inherit-field info)
-    (super-new)
+(struct cipher-impl-base info-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([cipher-impl$ #:prefix %]
+             [simple-write$ #:prefix %])
+   #:import ([simple-write$ #:super #:prefix super-])
+   (define-struct-abbrevs cipher-impl-base)
+   (define (%to-write-prefixes self)
+     (list "impl" "cipher" (super-to-write-prefixes self)))
 
-    (define/override (about) (format "~a cipher" (super about)))
-    (define/override (to-write-string prefix)
-      (super to-write-string (or prefix "cipher:")))
+   ;; ---- cipher-info
 
-    ;; Info methods
-    (define/public (get-cipher-name) (send info get-cipher-name))
-    (define/public (get-mode) (send info get-mode))
-    (define/public (get-type) (send info get-type))
-    (define/public (aead?) (send info aead?))
-    (define/public (get-block-size) (send info get-block-size))
-    (define/public (get-chunk-size) (send info get-chunk-size))
-    (define/public (get-key-size) (send info get-key-size))
-    (define/public (get-key-sizes) (send info get-key-sizes))
-    (define/public (key-size-ok? size) (size-set-contains? (get-key-sizes) size))
-    (define/public (get-iv-size) (send info get-iv-size))
-    (define/public (iv-size-ok? size) (send info iv-size-ok? size))
-    (define/public (get-auth-size) (send info get-auth-size))
-    (define/public (auth-size-ok? size) (send info auth-size-ok? size))
-    (define/public (uses-padding?) (send info uses-padding?))
-
-    (define/public (sanity-check #:block-size [block-size #f]
-                                 #:chunk-size [chunk-size #f]
-                                 #:iv-size [iv-size #f])
-      (when block-size
-        (unless (= block-size (send info get-block-size))
-          (internal-error "block-size expected ~s but got ~s\n  cipher: ~a"
-                          (send info get-block-size) block-size (about))))
-      (when chunk-size
-        (unless (= chunk-size (send info get-chunk-size))
-          (internal-error "chunk-size expected ~s but got ~s\n  cipher: ~a"
-                          (send info get-chunk-size) chunk-size (about))))
-      (when iv-size
-        (unless (iv-size-ok? iv-size)
-          (internal-error "iv-size ~s not ok\n  cipher: ~a" iv-size (about))))
-      (void))
-
-    (define/public (new-ctx key iv enc? pad? auth-len0 attached-tag?)
-      (check-key-size (bytes-length key))
-      (check-iv-size (bytes-length (or iv #"")))
-      (define auth-len (or auth-len0 (get-auth-size)))
-      (check-auth-size auth-len)
-      (let ([pad? (and pad? (uses-padding?))])
-        (-new-ctx key iv enc? pad? auth-len attached-tag?)))
-
-    (abstract -new-ctx)
-
-    (define/public (check-key-size size)
-      (unless (key-size-ok? size)
-        (crypto-error
-         "bad key size for cipher\n  expected: ~s bytes\n  given: ~s bytes\n  cipher: ~a"
-         (match (get-key-sizes)
-           [(? list? allowed)
-            (string-join (map number->string allowed) ", ")]
-           [(varsize min max step)
-            (format "from ~a to ~a in multiples of ~a" min max step)])
-         size (about))))
-
-    (define/public (check-iv-size iv-size)
-      (unless (iv-size-ok? iv-size)
-        (crypto-error
-         "bad IV size for cipher\n  expected: ~s bytes\n  given: ~s bytes\n  cipher: ~a"
-         (get-iv-size) iv-size (about))))
-
-    (define/public (check-auth-size auth-size)
-      (unless (auth-size-ok? auth-size)
-        (crypto-error "bad authentication tag size\n  given: ~a bytes\n  cipher: ~a"
-                      auth-size (about))))
-    ))
-
-(define multikeylen-cipher-impl%
-  (class cipher-impl-base%
-    (init-field impls) ;; (nonempty-listof (cons nat cipher-impl%))
-    (inherit about check-key-size)
-    (super-new)
-
-    (define/override (get-key-size) (caar impls))
-    (define/override (get-key-sizes) (map car impls))
-
-    (define/override (new-ctx key . args)
-      (cond [(assoc (bytes-length key) impls)
-             => (lambda (keylen+impl)
-                  (send/apply (cdr keylen+impl) new-ctx key args))]
-            [else
-             (check-key-size (bytes-length key)) ;; <- should raise error
-             (internal-error "no implementation for given key size\n  cipher: ~a" (about))]))
-    (define/override (-new-ctx . args) (internal-error "unreachable"))
-    ))
+   ;; use fallbacks for ci-key-size-ok?
+   (define (%ci-cipher-name self) ($ci-cipher-name (.info self)))
+   (define (%ci-mode self) ($ci-mode (.info self)))
+   (define (%ci-type self) ($ci-type (.info self)))
+   (define (%ci-aead? self) ($ci-aead? (.info self)))
+   (define (%ci-block-size self) ($ci-block-size (.info self)))
+   (define (%ci-chunk-size self) ($ci-chunk-size (.info self)))
+   (define (%ci-key-size self) ($ci-key-size (.info self)))
+   (define (%ci-key-sizes self) ($ci-key-sizes (.info self)))
+   (define (%ci-iv-size self) ($ci-iv-size (.info self)))
+   (define (%ci-iv-size-ok? self size) ($ci-iv-size-ok? (.info self) size))
+   (define (%ci-auth-size self) ($ci-auth-size (.info self)))
+   (define (%ci-auth-size-ok? self size) ($ci-auth-size-ok? (.info self) size))
+   (define (%ci-uses-padding? self) ($ci-uses-padding? (.info self)))
+   ))
 
 ;; ----------------------------------------
 
-;; cipher-ctx%
-;; - enforces update-aad -> update -> final state machine
-;; - accepts data from varied input in varied sizes, passes to underlying
-;;   crypt routines in multiples of chunk-size (except last call)
-;; - handles PKCS7 padding
-;; - handles attached authentication tags
+(struct multikeylen-cipher-impl cipher-impl-base
+  (impls    ;; (Listof (cons Nat CipherImpl))
+   )
+  #:properties
+  (method-properties
+   #:export ([cipher-impl$ #:prefix %])
+   (define-struct-abbrevs multikeylen-cipher-impl)
 
-(define cipher-ctx%
-  (class* state-ctx% (cipher-ctx<%>)
-    (init-field encrypt? pad? auth-len attached-tag?)
-    ;; auth-len : Nat -- 0 means no tag
-    (inherit-field impl state)
-    (field [auth-tag-out #f]
-           [out (open-output-bytes)])
-    (inherit with-state set-state about)
-    (super-new [state 1])
+   ;; ---- cipher-info
 
-    (define/override (to-write-string prefix)
-      (super to-write-string (or prefix "cipher-ctx:")))
+   (define (%ci-key-size self) (caar (.impls self)))
+   (define (%ci-key-sizes self) (map car (.impls self)))
 
-    (set-state (if (send impl aead?) 1 2))
+   ;; ---- cipher-impl
 
-    ;; State is Nat
-    ;; 1 - ready for AAD
-    ;; 2 - AAD done, ready for {plain,cipher}text
-    ;; 3 - closed (but can read auth tag)
-    (define/override (describe-state state)
-      (case state
-        [(1) "ready for AAD or input"]
-        [(2) "ready for input"]
-        [(3) "closed"]))
+   (define (%ci-new-ctx self key iv enc? pad? auth-len attached-tag?)
+     (match (assoc (bytes-length key) (.impls self))
+       [(cons _ impl)
+        ($ci-new-ctx impl key iv enc? pad? auth-len attached-tag?)]
+       [#f (internal-error "no implementation for given key size" #:in self)]))
+   ))
 
-    (define/public (get-encrypt?) encrypt?)
-    (define/public (get-block-size) (send impl get-block-size))
-    (define/public (get-chunk-size) (send impl get-chunk-size))
-    (define/public (get-output) (get-output-bytes out #t))
+;; ----------------------------------------
 
-    (define/public (update-aad src)
-      (unless (null? src)
-        (with-state #:ok '(1) #:pre 1
-          (lambda ()
-            (process-input src (lambda (buf start end) (-update-aad buf start end)))))))
+(struct cipher-ctx state-ctx
+  (encrypt?       ;; Boolean
+   pad?           ;; Boolean
+   auth-len       ;; Nat -- 0 means no tag
+   attached-tag?  ;; Boolean
+   out            ;; BytesOutputPort
+   auth-tag-box   ;; (Box (U Bytes #f))
+   )
+  #:properties
+  (method-properties
+   #:export ([simple-write$ #:prefix %])
+   (define-struct-abbrevs cipher-ctx)
+   (define (%to-write-prefixes self)
+     (list* "ctx" (if (.encrypt? self) "encrypt" "decrypt")
+            (cdr ($to-write-prefixes (.impl self)))))))
 
-    (define/public (update src)
-      (with-state #:ok '(1 2) #:post 2
-        (lambda ()
-          (when (member state '(1)) (-finish-aad))
-          (set-state 3)
-          (process-input src (lambda (buf start end) (-update buf start end))))))
+(define cipher-state-desc
+  '((aad    "ready for AAD or input")
+    (open   "ready for input")
+    (closed "closed")
+    (error  "closed by error")))
 
-    (define/public (final tag)
-      (cond [encrypt?
-             (when tag
-               (crypto-error "cannot set authentication tag for encryption context"))]
-            [attached-tag? ;; decrypt w/ attached tag
-             (when tag
-               (crypto-error "cannot set authentication tag for decryption context with attached tag"))]
-            [else ;; decrypt w/ detached tag
-             (let ([tag (or tag #"")])
-               (check-bytes "authentication tag" tag auth-len #:for this))])
-      (with-state #:ok '(1 2) #:post 3
-        (lambda ()
-          (when (member state '(1)) (-finish-aad))
-          (set-state 3)
-          (begin0 (-final (if encrypt? #f (or tag #"")))
-            (-close)))))
+(struct common-cipher-impl cipher-impl-base
+  (inner    ;; CipherInnerImpl
+   )
+  #:properties
+  (method-properties
+   #:export ([cipher-impl$ #:prefix %]
+             [simple-write$ #:prefix %])
+   (define-struct-abbrevs common-cipher-impl)
 
-    (define/public (get-auth-tag)
-      (cond [encrypt?
-             ;; -final sets auth-tag-out for encryption context
-             ;; #"" for non-AEAD cipher
-             (with-state #:ok '(3)
-               (lambda () auth-tag-out))]
-            [else ;; decrypt
-             (crypto-error "cannot get authentication tag for decryption context")]))
+   ;; ---- cipher-impl
 
-    ;; ----------------------------------------
+   (define (%ci-new-ctx self key iv enc? pad? auth-len0 attached-tag?)
+     (check-key-size self (bytes-length key))
+     (check-iv-size self (bytes-length (or iv #"")))
+     (define auth-len (or auth-len0 ($ci-auth-size self)))
+     (check-auth-size self auth-len)
+     (let ([pad? (and pad? ($ci-uses-padding? self))])
+       (define out (open-output-bytes))
+       (define auth-tag-box (box #f))
+       (define ic ($cii-new-ctx (.inner self) self
+                                key iv enc? pad? auth-len attached-tag?
+                                out auth-tag-box))
+       (define init-state (if ($ci-aead? self) 'aad 'open))
+       (cipher-ctx self ic (make-statelock init-state cipher-state-desc)
+                   enc? pad? auth-len attached-tag? out auth-tag-box)))
 
-    ;; -update-aad : Bytes Nat Nat -> Void
-    (define/public (-update-aad buf start end)
-      (send aad-ufp update buf start end))
+   (define (check-key-size self size)
+     (unless ($ci-key-size-ok? self size)
+       (crypto-error
+        "bad key size for cipher\n  expected: ~s bytes\n  given: ~s bytes"
+        (match ($ci-key-sizes self)
+          [(? list? allowed)
+           (string-join (map number->string allowed) ", ")]
+          [(varsize min max step)
+           (format "from ~a to ~a in multiples of ~a" min max step)])
+        size #:in self)))
 
-    ;; -finish-aad : -> Void
-    (define/public (-finish-aad)
-      (send aad-ufp finish 'ignored))
+   (define (check-iv-size self iv-size)
+     (unless ($ci-iv-size-ok? self iv-size)
+       (crypto-error
+        "bad IV size for cipher\n  expected: ~s bytes\n  given: ~s bytes"
+        ($ci-iv-size self) iv-size #:in self)))
 
-    ;; -update : Bytes Nat Nat -> Void
-    (define/public (-update buf start end)
-      (send crypt-ufp update buf start end))
+   (define (check-auth-size self auth-size)
+     (unless ($ci-auth-size-ok? self auth-size)
+       (crypto-error "bad authentication tag size\n  given: ~a bytes"
+                     auth-size #:in self)))
 
-    ;; -final : #f/Bytes -> Void
-    (define/public (-final tag)
-      (send crypt-ufp finish tag))
+   (define (%ci-encrypt? self cctx)
+     (cipher-ctx-encrypt? cctx))
 
-    ;; -close : -> Void
-    (define/public (-close) (void))
+   (define (%ci-update-aad self cctx src)
+     (unless (null? src)
+       (call-with-state
+        cctx #:ok '(aad)
+        (lambda (s) (update-aad* self cctx src)))))
 
-    ;; -make-crypt-sink : -> UFP[#f/AuthTag => ]
-    (define/public (-make-crypt-sink)
-      (sink-ufp (lambda (buf start end) (write-bytes buf out start end))
-                (lambda (result) (set! auth-tag-out result))))
+   (define (update-aad* self cctx src)
+     (define (process-aad buf start end)
+       ($cii-update-aad (.inner self) (ctx-inner cctx) buf start end #f))
+     (process-input src process-aad))
 
-    ;; -make-aad-sink : -> UFP[#f => ]
-    (define/public (-make-aad-sink)
-      (define (update inbuf instart inend) (-do-aad inbuf instart inend))
-      (define (finish _ignored) (void))
-      (sink-ufp update finish))
+   (define (finish-aad* self cctx)
+     ($cii-finish-aad (.inner self) (ctx-inner cctx)))
 
-    (abstract -do-aad) ;; Bytes Nat Nat -> Void
+   (define (%ci-update self cctx src)
+     (call-with-state
+      cctx #:ok '(aad open) #:pre 'error #:post 'open
+      (lambda (s)
+        (when (member s '(aad))
+          (finish-aad* self cctx))
+        (update* self cctx src))))
 
-    ;; -make-crypt-ufp : Boolean UFP -> UFP[Bytes,#f/AuthTag => AuthTag/#f]
-    (define/public (-make-crypt-ufp enc? next)
-      (define (update inbuf instart inend)
-        ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
-        (define outlen0 (+ (- inend instart) (get-block-size)))
-        (define outbuf (make-bytes outlen0))
-        (define outlen (-do-crypt enc? #f inbuf instart inend outbuf))
-        (unless (= outlen (- inend instart))
-          (internal-error "outlen = ~s, inlen = ~s" outlen (- inend instart)))
-        (send next update outbuf 0 outlen))
-      (define (finish partial auth-tag)
-        ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
-        (define outlen0 (* 2 (get-chunk-size)))
-        (define outbuf (make-bytes outlen0))
-        (define outlen (-do-crypt enc? #t partial 0 (bytes-length partial) outbuf))
-        (unless (= outlen (bytes-length partial))
-          (internal-error "outlen = ~s, partial = ~s" outlen (bytes-length partial)))
-        (send next update outbuf 0 outlen)
-        (cond [enc?
-               (send next finish (-do-encrypt-end auth-len))]
-              [else
-               (unless (= (bytes-length auth-tag) auth-len)
-                 (crypto-error "wrong authentication tag size\n  expected: ~s\n  given: ~s\n  cipher: ~a"
-                               auth-len (bytes-length auth-tag) (about)))
-               (-do-decrypt-end auth-tag)
-               (send next finish #f)]))
-      (sink-ufp update finish))
+   (define (update* self cctx src)
+     (define (process-data buf start end)
+       ($cii-update (.inner self) (ctx-inner cctx) buf start end #f))
+     (process-input src process-data))
 
-    (abstract -do-crypt) ;; Enc? Final? Bytes Nat Nat Bytes -> Nat
-    (abstract -do-encrypt-end) ;; Nat -> Tag      -- fetch auth tag
-    (abstract -do-decrypt-end) ;; Nat Tag -> Void -- check auth tag
+   (define (%ci-final self cctx tag)
+     (define encrypt? (cipher-ctx-encrypt? cctx))
+     (define attached-tag? (cipher-ctx-attached-tag? cctx))
+     (when (and encrypt? tag)
+       (crypto-error "cannot set authentication tag for encryption context"
+                     #:for cctx))
+     (when (and (not encrypt?) attached-tag? tag)
+       (crypto-error "cannot set authentication tag for decryption context with attached tag"
+                     #:for cctx))
+     (when #t ;; decrypt w/ detached tag
+       (let ([tag (or tag #"")]
+             [auth-len (cipher-ctx-auth-len cctx)])
+         (check-bytes "authentication tag" tag auth-len #:for cctx)))
+     (call-with-state
+      cctx #:pre 'error #:post 'closed
+      (lambda (s)
+        (when (memq s '(aad))
+          (finish-aad* self cctx))
+        (when (memq s '(aad open))
+          (final* self cctx))
+        (close* self cctx))))
 
-    ;; ----------------------------------------
-    ;; Initialization
+   (define (final* self cctx)
+     ($cii-final (.inner self) (ctx-inner cctx) #f))
 
-    ;; It's most convenient if we know the auth-length up front. That
-    ;; simplifies the creation of the split-right-ufp for decrypting with
-    ;; attached tag.
+   (define (close* self cctx)
+     (when (ctx-inner cctx)
+       ($cii-close (.inner self) (ctx-inner cctx))
+       (set-ctx-inner! cctx #f)))
 
-    (define aad-ufp
-      ;; update-aad
-      ;;   source -> chunk -> add-right -> update-aad
-      ;;          #f       buf,#f       #f
-      (let* ([ufp (-make-aad-sink)]
-             [ufp (add-right-ufp ufp)]
-             [ufp (chunk-ufp (get-chunk-size) ufp)])
-        ufp))
+   (define (%ci-auth-tag self cctx)
+     (cond [(cipher-ctx-encrypt? ctx)
+            ;; ci-final sets auth-tag-out for encryption context
+            ;; #"" for non-AEAD cipher
+            (call-with-state
+             cctx #:ok '(closed)
+             (lambda () (get-auth-tag* self cctx)))]
+           [else ;; decrypt
+            (crypto-error "cannot get authentication tag for decryption context"
+                          #:for cctx)]))
 
-    (define crypt-ufp
-      (cond [encrypt?
-             ;; encrypt (detached tag) =
-             ;;   source -> chunk -> pad  -> auth-encrypt -> sink
-             ;;          #f       buf,#f  buf,#f          tag
-             ;;
-             ;; encrypt/attached-tag =
-             ;;   source -> chunk -> pad  -> auth-encrypt -> add-right -> push #f -> sink
-             ;;          #f       buf,#f  buf,#f          tag          ()         #f
-             (let* ([ufp (-make-crypt-sink)]
-                    [ufp (if attached-tag? (add-right-ufp (push-ufp #f ufp)) ufp)]
-                    [ufp (-make-crypt-ufp #t ufp)]
-                    [ufp (cond [pad? (pad-ufp (get-block-size) ufp)]
-                               [(= (get-block-size) 1) ufp]
-                               [else (check-aligned-ufp (get-block-size) impl ufp)])]
-                    [ufp (chunk-ufp (get-chunk-size) ufp)])
-               ufp)]
-            [else ;; decrypt
-             ;; decrypt (detached tag) =
-             ;;   source -> chunk -> auth-decrypt -> split-right -> unpad -> add-right -> sink
-             ;;          tag      buf,tag         #f             buf,#f   buf,#f       #f
-             ;;
-             ;; decrypt/attached-tag = 
-             ;;   source -> pop -> split-right -> chunk -> pad  -> auth-decrypt -> (...see above)
-             ;;          #""    ()             tag      buf,tag buf,tag         #f
-             (let* ([ufp (-make-crypt-sink)]
-                    [ufp (cond [pad?
-                                (let* ([ufp (add-right-ufp ufp)]
-                                       [ufp (unpad-ufp ufp)]
-                                       [ufp (split-right-ufp (get-block-size) ufp)])
-                                  ufp)]
-                               [else ufp])]
-                    [ufp (-make-crypt-ufp #f ufp)]
-                    [ufp (cond [(= (get-block-size) 1) ufp]
-                               [else (check-aligned-ufp (get-block-size) impl ufp)])]
-                    [ufp (chunk-ufp (get-chunk-size) ufp)]
-                    ;; FIXME: need to delay until we have auth-len ...
-                    [ufp (if (and attached-tag? (positive? auth-len))
-                             (pop-ufp (split-right-ufp auth-len ufp))
-                             ufp)])
-               ufp)]))
-    ))
+   (define (get-auth-tag* self cctx)
+     (unbox (cipher-ctx-auth-tag-box cctx)))))
 
+;; ============================================================
+;; Cipher Inner Impl
+
+(define-interface cipher-inner-impl$
+  ([cii-new-ctx
+    (-> cipher-inner-impl$? cipher-impl? key/c iv/c boolean?
+        cipher-pad/c (or/c nat? #f) boolean? output-port? box?
+        ictx/c)]
+   [cii-update-aad
+    (-> cipher-inner-impl$? ictx/c bytes? nat? nat?
+        void?)]
+   [cii-finish-aad
+    (-> cipher-inner-impl$? ictx/c
+        void?)]
+   [cii-update
+    (-> cipher-inner-impl$? ictx/c bytes? nat? nat?
+        void?)]
+   [cii-final
+    (-> cipher-inner-impl$? ictx/c (or/c bytes? #f)
+        void?)]
+   [cii-close
+    (-> cipher-inner-impl$? ictx/c
+        void?)])
+  #:generics-prefix $)
+
+;; ============================================================
+;; UFP Cipher Inner Impl
+
+(struct ufp-cipher-ictx (llc aad-ufp crypt-ufp))
+
+(struct ufp-cipher-inner-impl
+  (llci     ;; LowLevelCipherImpl
+   )
+  #:properties
+  (method-properties
+   #:export ([cipher-inner-impl$ #:prefix %])
+   (define-struct-abbrevs ufp-cipher-inner-impl)
+
+   ;; ----
+
+   (define (%cii-new-ctx self ci key iv enc? pad? auth-len attached-tag? out auth-box)
+     (define llc ($llci-new-ctx (.llci self) key iv enc? auth-len))
+     (define aad-ufp (make-aad-ufp self ci llc))
+     (define crypt-sink (make-output-sink out auth-box))
+     (define crypt-ufp
+       (make-crypt-ufp self ci llc enc? pad? auth-len attached-tag? crypt-sink))
+     (ufp-cipher-ictx llc aad-ufp crypt-ufp))
+
+   (define (%cii-update-aad self ic buf start end)
+     ($uf-update (ufp-cipher-ictx-aad-ufp ic) buf start end))
+
+   (define (%cii-finish-aad self ic)
+     ($uf-finish (ufp-cipher-ictx-aad-ufp ic) null))
+
+   (define (%cii-update self ic buf start end)
+     ($uf-update (ufp-cipher-ictx-crypt-ufp ic) buf start end))
+
+   (define (%cii-final self ic auth-tag)
+     ($uf-finish (ufp-cipher-ictx-crypt-ufp ic) (list auth-tag)))
+
+   (define (%cii-close self ic)
+     ($llci-close (.llci self) (ufp-cipher-ictx-llc ic)))
+
+   ;; ----
+
+   (define (make-aad-ufp self ci llc)
+     ;; update-aad
+     ;;   source -> chunk -> add-right -> update-aad
+     ;;          ()      (buf)         ()
+     (define (do-aad buf start end)
+       ($llci-aad (.llci self) llc buf start end))
+     (ufp~> (chunk-ufp ($ci-chunk-size ci))
+            (add-right-ufp)
+            #:base (sink-ufp do-aad void)))
+
+   (define (make-crypt-ufp self ci llc enc? pad? auth-len attached-tag? sink)
+     (if enc?
+         (make-encrypt-ufp self ci llc pad? auth-len attached-tag? sink)
+         (make-decrypt-ufp self ci llc pad? auth-len attached-tag? sink)))
+
+   (define (make-encrypt-ufp self ci llc pad? auth-len attached-tag? sink)
+     ;; encrypt (detached tag) =
+     ;;   source -> chunk -> pad  -> auth-encrypt -> sink
+     ;;         (#f)   (buf,#f) (buf,#f)        (tag)
+     ;;
+     ;; encrypt/attached-tag =
+     ;;   source -> chunk -> pad  -> auth-encrypt -> add-right -> push #f -> sink
+     ;;         (#f)   (buf,#f) (buf,#f)         (tag)         ()        (#f)
+     (define block-size ($ci-block-size ci))
+     (define chunk-size ($ci-chunk-size ci))
+     (ufp~> (chunk-ufp chunk-size)
+            (cond [pad? (pad-ufp block-size)]
+                  [else (check-aligned-ufp block-size ci)])
+            (lambda (ufp) (make-inner-crypt-ufp self ci llc #t auth-len ufp))
+            (cond [attached-tag?
+                   (ufp~> (add-right-ufp)
+                          (push-ufp #f))]
+                  [else values])
+            #:base sink))
+
+   (define (make-decrypt-ufp self ci llc pad? auth-len attached-tag? sink)
+     ;; decrypt (detached tag) =
+     ;;   source -> chunk -> auth-decrypt -> split-right -> unpad -> add-right -> sink
+     ;;         (tag)  (buf,tag)         (#f)         (buf,#f)  (buf,#f)      (#f)
+     ;;
+     ;; decrypt/attached-tag =
+     ;;   source -> pop -> split-right -> chunk  ->  auth-decrypt -> (...see above)
+     ;;         ("")    ()            (tag)   (buf,tag)          (#f)
+     (define block-size ($ci-block-size ci))
+     (define chunk-size ($ci-chunk-size ci))
+     (ufp~> (cond [(and attached-tag? (positive? auth-len))
+                   (ufp~> (pop-ufp)
+                          (split-right-ufp auth-len))]
+                  [else values])
+            (chunk-ufp chunk-size)
+            (check-aligned-ufp block-size ci)
+            (lambda (ufp) (make-inner-crypt-ufp self ci llc #f auth-len ufp))
+            (cond [pad?
+                   (ufp~> (split-right-ufp block-size)
+                          (unpad-ufp)
+                          (add-right-ufp))]
+                  [else values])
+            #:base sink))
+
+   (define (make-inner-crypt-ufp self ci llc enc? auth-len next)
+     (define llci (.llci self))
+     (define block-size ($ci-block-size ci))
+     (define chunk-size ($ci-chunk-size ci))
+     (define (update inbuf instart inend)
+       ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
+       (define outlen0 (+ (- inend instart) block-size))
+       (define outbuf (make-bytes outlen0))
+       (define outlen
+         ($llci-crypt llci llc enc? #f inbuf instart inend outbuf))
+       (unless (= outlen (- inend instart))
+         (internal-error "outlen = ~s, inlen = ~s" outlen (- inend instart) #:in ci))
+       ($uf-update next outbuf 0 outlen))
+     (define (finish partial auth-tag)
+       ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
+       (define outlen0 (* 2 chunk-size))
+       (define outbuf (make-bytes outlen0))
+       (define outlen
+         ($llci-crypt llci llc enc? #t partial 0 (bytes-length partial) outbuf))
+       (unless (= outlen (bytes-length partial))
+         (internal-error "outlen = ~s, partial = ~s" outlen (bytes-length partial) #:in ci))
+       ($uf-update next outbuf 0 outlen)
+       (cond [enc?
+              ($uf-finish next ($llci-encrypt-end llci llc auth-len))]
+             [else
+              (unless (= (bytes-length auth-tag) auth-len)
+                (crypto-error "wrong authentication tag size\n  expected: ~s\n  given: ~s"
+                              auth-len (bytes-length auth-tag) #:in ci))
+              ($llci-decrypt-end llci llc auth-tag)
+              ($uf-finish next '(#f))]))
+     (sink-ufp update finish))
+   ))
+
+;; ============================================================
+;; Low-level Cipher Impl
+
+(define-interface lowlevel-cipher-impl$
+  ([llci-new-ctx
+    (-> lowlevel-cipher-impl$? key/c iv/c boolean? nat?
+        ictx/c)]
+   [llci-aad
+    (-> lowlevel-cipher-impl$? ictx/c bytes? nat? nat?
+        void?)]
+   [llci-crypt ;; booleans are (enc? final?)
+    (-> lowlevel-cipher-impl$? ictx/c boolean? boolean? bytes? nat? nat? bytes?
+        nat?)]
+   [llci-encrypt-end
+    (-> lowlevel-cipher-impl$? ictx/c nat?
+        bytes?)]
+   [llci-decrypt-end
+    (-> lowlevel-cipher-impl$? ictx/c bytes?
+        void?)]
+   [llci-close
+    (-> lowlevel-cipher-impl$? ictx/c
+        void?)])
+  #:generics-prefix $)
+
+(struct lowlevel-cipher-impl
+  (new-ctx do-aad do-crypt do-encrypt-end do-decrypt-end do-close)
+  #:properties
+  (method-properties
+   #:export ([lowlevel-cipher-impl$ #:prefix %])
+   (define-struct-abbrevs lowlevel-cipher-impl)
+   ;; ----
+   (define (%llci-new-ctx self key iv enc? auth-len)
+     ((.new-ctx self) key iv enc? auth-len))
+   (define (%llci-aad self llc buf start end)
+     ((.do-aad self) llc buf start end))
+   (define (%llci-crypt self llc enc? final? buf start end outbuf)
+     ((.do-crypt self) llc enc? final? buf start end outbuf))
+   (define (%llci-encrypt-end self llc auth-len)
+     ((.do-encrypt-end self) llc auth-len))
+   (define (%llci-decrypt-end self llc auth-tag)
+     ((.do-decrypt-end self) llc auth-tag))
+   (define (%llci-close self llc)
+     ((.do-close self) llc))))
+
+#;
+(define (cipher-sanity-check #:block-size [block-size #f]
+                             #:chunk-size [chunk-size #f]
+                             #:iv-size [iv-size #f])
+  (when block-size
+    (unless (= block-size (send info get-block-size))
+      (internal-error "block-size expected ~s but got ~s\n  cipher: ~a"
+                      (send info get-block-size) block-size (about))))
+  (when chunk-size
+    (unless (= chunk-size (send info get-chunk-size))
+      (internal-error "chunk-size expected ~s but got ~s\n  cipher: ~a"
+                      (send info get-chunk-size) chunk-size (about))))
+  (when iv-size
+    (unless (iv-size-ok? iv-size)
+      (internal-error "iv-size ~s not ok\n  cipher: ~a" iv-size (about))))
+  (void))
 
 ;; ============================================================
 ;; Padding
@@ -368,7 +489,7 @@
 ;; If we pre-compose (chain . chunkUFP), we get something like
 ;;   chunkUFP' : Nat -> (UFP Chunks out' Bytes res') -> (UFP Bytes out' () res')
 
-;; A useful pattern is fin/res polymorphism (cf concatenative langs?). Compare 
+;; A useful pattern is fin/res polymorphism (cf concatenative langs?). Compare
 ;;
 ;;   chunkUFP' : Nat -> (UFP Chunks out' Bytes res') -> (UFP Bytes out' () res')
 ;;   chunkUFP* : Nat -> (UFP Chunks out' (Bytes,a) res') -> (UFP Bytes out' a res')
@@ -431,7 +552,7 @@
 ;;   source -> chunk -> pad  -> auth-encrypt -> add-right -> push #f -> sink
 ;;          #f       buf,#f  buf,#f          tag          ()         #f
 ;;
-;; decrypt/attached-tag = 
+;; decrypt/attached-tag =
 ;;   source -> pop -> split-right -> chunk -> pad  -> auth-decrypt -> sink
 ;;          #f     ()             tag      buf,tag buf,tag         #f
 
@@ -441,210 +562,236 @@
 
 ;; ============================================================
 
-(define ufp<%>
-  (interface ()
-    update
-    finish
-    update/finish  ;; must not have called update before!
-    ))
+(define-interface ufp$
+  ([uf-update (-> ufp$? bytes? nat? nat? void?)]
+   [uf-finish (-> ufp$? list? any)]
+   [uf-update/finish (-> ufp$? bytes? nat? nat? list? any)])
+  #:fallbacks
+  (let ()
+    (define (uf-update/finish self buf start end a)
+      ($uf-update self buf start end)
+      ($uf-finish self a))
+    (hasheq 'uf-update/finish uf-update/finish))
+  #:generics-prefix $)
 
-(define sink-ufp%
-  (class* object% (ufp<%>)
-    (init-field update-proc finish-proc)
-    (super-new)
-    (define/public (update buf start end) (update-proc buf start end))
-    (define/public (finish . a) (apply finish-proc a))
-    (define/public (update/finish buf start end . a)
-      (update buf start end)
-      (send/apply this finish a))))
+(struct ufp:sink (update-proc finish-proc)
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define-struct-abbrevs ufp:sink)
+   (define (%uf-update self buf start end)
+     ((.update-proc self) buf start end))
+   (define (%uf-finish self a)
+     ((.finish-proc self) a))))
 
-(define chain-ufp%
-  (class* object% (ufp<%>)
-    (init-field next)
-    (super-new)
-    (define/public (update buf [start 0] [end (bytes-length buf)])
-      (send next update buf start end))
-    (define/public (finish . a)
-      (send/apply next finish a))
-    (define/public (update/finish buf start end . a)
-      (update buf start end)
-      (send/apply this finish a))))
-
-;; ----
+(struct ufp:chain (next)
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define-struct-abbrevs ufp:chain)
+   (define (%uf-update self buf start end)
+     ($uf-update (.next self) buf start end))
+   (define (%uf-finish self a)
+     ($uf-finish (.next self) a))))
 
 ;; chunk        : a => bytes,a          ;; |a| = 1
-(define chunk-ufp%
-  (class chain-ufp%
-    (init-field chunk-size)
-    (inherit-field next)
-    (field [partial (make-bytes chunk-size)]
-           [partlen 0])
-    (super-new)
-    (define/override (update in [instart 0] [inend (bytes-length in)])
-      (when (< instart inend)
-        ;; in = A+B+C; A fills partial, B chunks, C leftover
-        (define inlen (- inend instart))
-        (define Alen (min inlen (- chunk-size partlen)))
-        (bytes-copy! partial partlen in instart (+ instart Alen))
-        (cond [(= (+ partlen Alen) chunk-size)
-               (send next update partial 0 chunk-size)
-               (set! partlen 0)]
-              [else (set! partlen (+ partlen Alen))])
-        (define BClen (- inlen Alen))
-        (define Bstart (+ instart Alen))
-        (define Blen (- BClen (remainder BClen chunk-size))) ;; multiple of chunk-size
-        (define Cstart (+ Bstart Blen))
-        (unless (zero? Blen)
-          (send next update in Bstart (+ Bstart Blen)))
-        (bytes-copy! partial partlen in Cstart inend)
-        (set! partlen (+ partlen (- inend Cstart)))))
-    (define/override (finish a)
-      (define res (subbytes partial 0 partlen))
-      (set! partlen 0)
-      (send next finish res a))
-    (define/override (update/finish in instart inend a)
-      (define BClen (- inend instart))
-      (define Blen (- BClen (remainder BClen chunk-size)))
-      (unless (zero? Blen)
-        (send next update in instart (+ instart Blen)))
-      (define Cstart (+ instart Blen))
-      (send next finish (subbytes in Cstart inend) a))))
+(define (make-ufp:chunk next chunk-size)
+  (ufp:chunk next (make-bytes chunk-size) 0))
+
+(struct ufp:chunk ufp:chain (chunk-size partial [partlen #:mutable])
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define-struct-abbrevs ufp:chunk)
+
+   (define (%uf-update self in instart inend)
+     (match-define (ufp:chunk next chunk-size partial partlen0) self)
+     (when (< instart inend)
+       ;; in = A+B+C; A fills partial, B chunks, C leftover
+       (define inlen (- inend instart))
+       (define Alen (min inlen (- chunk-size partlen0)))
+       (bytes-copy! partial partlen0 in instart (+ instart Alen))
+       (cond [(= (+ partlen0 Alen) chunk-size)
+              ($uf-update next partial 0 chunk-size)
+              (.partlen-set! self 0)]
+             [else (.partlen-set! self (+ partlen0 Alen))])
+       (define BClen (- inlen Alen))
+       (define Bstart (+ instart Alen))
+       (define Blen (- BClen (remainder BClen chunk-size))) ;; multiple of chunk-size
+       (define Cstart (+ Bstart Blen))
+       (unless (zero? Blen)
+         ($uf-update next in Bstart (+ Bstart Blen)))
+       (bytes-copy! partial (.partlen self) in Cstart inend)
+       (.partlen-set! self (+ (.partlen self) (- inend Cstart)))))
+
+   (define (%uf-finish self a)
+     (match-define (ufp:chunk next _ partial partlen0) self)
+     (define res (subbytes partial 0 partlen0))
+     (.partlen-set! self 0)
+     ($uf-finish next (cons res a)))))
 
 ;; chunk1       : a => bytes,a          ;; |a| = 1
 ;; Chunk specialized to chunk size of 1
-(define chunk1-ufp%
-  (class chain-ufp%
-    (inherit-field next)
-    (super-new)
-    (define/override (finish a)
-      (send next finish #"" a))
-    (define/override (update/finish in instart inend a)
-      (send next update/finish in instart inend #"" a))))
+(struct ufp:chunk1 ufp:chain ()
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define-struct-abbrevs ufp:chunk1)
+   (define (%uf-finish self a)
+     ($uf-finish (.next self) (cons #"" a)))
+   (define (%uf-update/finish self in instart inend a)
+     ($uf-update/finish (.next self) in instart inend (cons #"" a)))))
 
 ;; add-right    : bytes/#f,a => a          ;; |a| = 0,1
-(define add-right-ufp%
-  (class chain-ufp%
-    (inherit-field next)
-    (super-new)
-    (define/override (finish buf . a)
-      (when buf (send next update buf 0 (bytes-length buf)))
-      (send/apply next finish a))))
+(struct ufp:add-right ufp:chain ()
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define (%uf-finish self a1)
+     (match-define (ufp:add-right next) self)
+     (match-define (cons buf a) a1)
+     (when buf ($uf-update next buf 0 (bytes-length buf)))
+     ($uf-finish next a))))
 
 ;; split-right  : a => bytes,a          ;; |a| = 0,1
-(define split-right-ufp%
-  (class chain-ufp%
-    (init-field suffix-size)
-    (inherit-field next)
-    (field [partial (make-bytes suffix-size)]
-           [partlen 0])
-    (super-new)
-    (define/override (update in [instart 0] [inend (bytes-length in)])
-      (define inlen (- inend instart))
-      (cond [(= instart inend) (void)]
-            [(< partlen suffix-size)
-             (define Alen (min inlen (- suffix-size partlen)))
-             (bytes-copy! partial partlen in instart (+ instart Alen))
-             (set! partlen (+ partlen Alen))
-             (update in (+ instart Alen) inend)]
-            [else ;; partlen = suffix-size
-             ;; How much of partial gets evicted? = (total - suffix), up to suffix (length of partial)
-             (define evictlen (min inlen suffix-size))
-             (unless (zero? evictlen)
-               (send next update partial 0 evictlen)
-               (bytes-copy! partial 0 partial evictlen suffix-size))
-             ;; How much of in gets sent?
-             ;; = (inlen - evictlen) = (inlen - min(inlen, suffix)) = max(0, inlen - suffix)
-             (define sendlen (- inlen evictlen))
-             (unless (zero? sendlen)
-               (send next update in instart (+ instart sendlen)))
-             (bytes-copy! partial (- suffix-size evictlen) in (+ instart sendlen) inend)]))
-    (define/override (finish . a)
-      (define r (subbytes partial 0 partlen))
-      (set! partlen 0)
-      (send/apply next finish r a))
-    (define/override (update/finish in instart inend . a)
-      (define inlen (- inend instart))
-      (define ulen (max 0 (- inlen suffix-size)))
-      (send/apply next update/finish in instart (+ instart ulen)
-                  (subbytes (+ instart ulen) inend) a))))
+(define (make-ufp:split-right next suffix-size)
+  (ufp:split-right next suffix-size (make-bytes suffix-size) 0))
 
-;; check-aligned-ufp%
-(define check-aligned-ufp%
-  (class chain-ufp%
-    (init-field block-size cipher)
-    (inherit-field next)
-    (super-new)
-    (define/override (finish buf a)
-      (unless (zero? (remainder (bytes-length buf) block-size))
-        (crypto-error
-         (string-append "input size not a multiple of block size"
-                        "\n  block-size: ~s bytes\n  remainder: ~s bytes\n  cipher: ~a")
-         block-size (remainder (bytes-length buf) block-size) (send cipher about)))
-      (send next finish buf a))))
+(struct ufp:split-right ufp:chain (suffix-size partial [partlen #:mutable])
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define-struct-abbrevs ufp:split-right)
+
+   (define (%uf-update self in instart inend)
+     (match-define (ufp:split-right next suffix-size partial partlen0) self)
+     (define inlen (- inend instart))
+     (cond [(= instart inend) (void)]
+           [(< partlen0 suffix-size)
+            (define Alen (min inlen (- suffix-size partlen0)))
+            (bytes-copy! partial partlen0 in instart (+ instart Alen))
+            (.partlen-set! self (+ partlen0 Alen))
+            ($uf-update next in (+ instart Alen) inend)]
+           [else ;; partlen = suffix-size
+            ;; How much of partial gets evicted?
+            ;; Evict (total - suffix), up to suffix (length of partial).
+            (define evictlen (min inlen suffix-size))
+            (unless (zero? evictlen)
+              ($uf-update next partial 0 evictlen)
+              (bytes-copy! partial 0 partial evictlen suffix-size))
+            ;; How much of in gets sent?
+            ;; = (inlen - evictlen) = (inlen - min(inlen, suffix)) = max(0, inlen - suffix)
+            (define sendlen (- inlen evictlen))
+            (unless (zero? sendlen)
+              ($uf-update next in instart (+ instart sendlen)))
+            (bytes-copy! partial (- suffix-size evictlen) in (+ instart sendlen) inend)]))
+
+   (define (%uf-finish self a)
+     (match-define (ufp:split-right next _ partial partlen0) self)
+     (define r (subbytes partial 0 partlen0))
+     (.partlen-set! self 0)
+     ($uf-finish (.next self) (cons r a)))
+
+   (define (%uf-update/finish self in instart inend a)
+     (match-define (ufp:split-right next suffix-size partial partlen0) self)
+     (define inlen (- inend instart))
+     (define ulen (max 0 (- inlen suffix-size)))
+     ($uf-update/finish next in instart (+ instart ulen)
+                        (cons (subbytes (+ instart ulen) inend) a)))))
+
+;; check-aligned : bytes,a => bytes,a
+(struct ufp:check-aligned ufp:chain (block-size cipher)
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   ;; FIXME: update should also check multiple of block size?
+   (define ($uf-finish self a1)
+     (match-define (ufp:check-aligned next block-size cipher) self)
+     (match-define (cons buf a) a1)
+     (unless (zero? (remainder (bytes-length buf) block-size))
+       (crypto-error
+        (string-append "input size not a multiple of block size"
+                       "\n  block-size: ~s bytes\n  remainder: ~s bytes")
+        block-size (remainder (bytes-length buf) block-size) #:for cipher))
+     ($uf-finish next a1))))
 
 ;; pad          : bytes,a => bytes,a    ;; |a| = 1
 ;; Add PKCS7 padding
 ;; FIXME: fix case when block-size != chunk-size
-(define pad-ufp%
-  (class chain-ufp%
-    (init-field block-size)
-    (inherit-field next)
-    (super-new)
-    (define/override (finish buf a)
-      ;; Note: if buf is whole block, pads to 2 whole blocks.. problem?
-      (send next finish (pad-bytes/pkcs7 buf block-size) a))))
+(struct ufp:pad ufp:chain (block-size)
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define (%uf-finish self a1)
+     (match-define (cons buf a) a1)
+     (match-define (ufp:pad next block-size) self)
+     ;; Note: if buf is whole block, pads to 2 whole blocks
+     ($uf-finish next (cons (pad-bytes/pkcs7 buf block-size) a)))))
 
 ;; unpad        : bytes,a => bytes,a    ;; |a| = 1
 ;; Check and remove PKCS7 padding
-(define unpad-ufp%
-  (class chain-ufp%
-    (inherit-field next)
-    (super-new)
-    (define/override (finish buf a)
-      (send next finish (unpad-bytes/pkcs7 buf) a))))
+(struct ufp:unpad ufp:chain ()
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define ($uf-finish self a1)
+     (match-define (ufp:unpad next) self)
+     (match-define (cons buf a) a1)
+     ($uf-finish next (cons (unpad-bytes/pkcs7 buf) a)))))
 
 ;; pop          : x,a => a              ;; |a| = 0
-(define pop-ufp%
-  (class chain-ufp%
-    (inherit-field next)
-    (super-new)
-    (define/override (finish v)
-      (send next finish))
-    (define/override (update/finish buf start end v)
-      (send next update/finish buf start end))))
+(struct ufp:pop ufp:chain ()
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define-struct-abbrevs ufp:pop)
+   (define ($uf-finish self a)
+     ($uf-finish (.next self) (cdr a)))
+   (define ($uf-update/finish self buf start end a)
+     ($uf-finish (.next self) buf start end (cdr a)))))
 
 ;; push(x)      : a => x,a              ;; |a| = 0
-(define push-ufp%
-  (class chain-ufp%
-    (init-field value)
-    (inherit-field next)
-    (super-new)
-    (define/override (finish)
-      (send next finish value))))
+(struct ufp:push ufp:chain (value)
+  #:properties
+  (method-properties
+   #:export ([ufp$ #:prefix %])
+   (define-struct-abbrevs ufp:push)
+   (define ($uf-finish self a)
+     (match-define (ufp:push next value) self)
+     ($uf-finish next (cons value a)))))
 
 ;;   auth-encrypt : bytes,#f,a => tag,a   ;; |a| = 0
 ;;   auth-decrypt : bytes,tag,a => #f,a   ;; |a| = 0
-;;   update-aad   : a => a                ;; |a| = 1 -- this choice allows chunk to be monomorphic!
+;;   update-aad   : a => a                ;; |a| = 1
 
 ;; ------------------------------------------------------------
 
 (define (sink-ufp update-proc finish-proc)
-  (new sink-ufp% (update-proc update-proc) (finish-proc finish-proc)))
-(define (chunk-ufp chunk-size next)
-  (if (= chunk-size 1)
-      (new chunk1-ufp% (next next))
-      (new chunk-ufp% (chunk-size chunk-size) (next next))))
-(define (add-right-ufp next)
-  (new add-right-ufp% (next next)))
-(define (split-right-ufp suffix-size next)
-  (new split-right-ufp% (suffix-size suffix-size) (next next)))
-(define (check-aligned-ufp block-size cipher next)
-  (new check-aligned-ufp% (block-size block-size) (cipher cipher) (next next)))
-(define (pad-ufp block-size next)
-  (new pad-ufp% (block-size block-size) (next next)))
-(define (unpad-ufp next)
-  (new unpad-ufp% (next next)))
-(define (pop-ufp next)
-  (new pop-ufp% (next next)))
-(define (push-ufp value next)
-  (new push-ufp% (value value) (next next)))
+  (ufp:sink update-proc finish-proc))
+(define ((chunk-ufp chunk-size) next)
+  (if (= chunk-size 1) (ufp:chunk1 next) (make-ufp:chunk next chunk-size)))
+(define ((add-right-ufp) next)
+  (ufp:add-right next))
+(define ((split-right-ufp suffix-size) next)
+  (make-ufp:split-right next suffix-size))
+(define ((check-aligned-ufp block-size cipher) next)
+  (if (= block-size 1) next (ufp:check-aligned next block-size cipher)))
+(define ((pad-ufp block-size) next)
+  (ufp:pad next block-size))
+(define ((unpad-ufp) next)
+  (ufp:unpad next))
+(define ((pop-ufp) next)
+  (ufp:pop next))
+(define ((push-ufp value) next)
+  (ufp:push next value))
+
+;; make-output-sink : -> UFP[Any => ]
+(define (make-output-sink out finish-box)
+  (sink-ufp (lambda (buf start end) (write-bytes buf out start end))
+            (lambda (a) (when finish-box (set-box! finish-box (car a))))))
+
+(define (ufp~> #:base [base #f] . fs)
+  (define (ufp-compose fs base)
+    (for/fold ([base base]) ([f (in-list (reverse fs))]) (f base)))
+  (cond [base (ufp-compose fs base)]
+        [else (lambda (base) (ufp-compose fs base))]))

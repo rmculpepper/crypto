@@ -21,7 +21,7 @@
 
 (define (crypto-factory? x) (factory? x))
 
-(struct ctx (impl inner)
+(struct ctx (impl [inner #:mutable])
   #:properties
   (method-properties
    #:export ([simple-write$ #:prefix %])
