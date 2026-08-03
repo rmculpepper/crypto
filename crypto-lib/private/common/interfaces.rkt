@@ -195,8 +195,12 @@
 (define-interface kdf-impl$
   #:super (impl$ kdf-info$)
   #:predicate kdf-impl?
-  ([kdf-derive  (-> kdf-impl? (or/c nat? #f) config/c bytes? (or/c bytes? #f)
-                    bytes?)])
+  ([kdf-derive    (-> kdf-impl? (or/c nat? #f) config/c bytes? (or/c bytes? #f)
+                      bytes?)]
+   [pwhash        (-> kdf-impl? config/c bytes?
+                      string?)]
+   [pwhash-verify (-> kdf-impl? config/c string?
+                      boolean?)])
   #:generics-prefix $)
 
 ;; ============================================================

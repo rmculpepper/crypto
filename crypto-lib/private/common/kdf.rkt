@@ -1,17 +1,21 @@
-;; Copyright 2014-2018 Ryan Culpepper
+;; Copyright 2014-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
          racket/string
+         racket/contract/base
+         scramble/bundle
+         scramble/struct
          base64
-         "interfaces.rkt"
          "catalog.rkt"
+         "interfaces.rkt"
          "common.rkt"
          "error.rkt"
          "util.rkt"
          (prefix-in rkt: "../rkt/kdf.rkt"))
+
+#;
 (provide kdf-impl-base%
          hkdf-impl%
          ans-x9.63-kdf-impl%
@@ -33,129 +37,147 @@
 ;; ============================================================
 ;; KDF and Password Hashing
 
-(define kdf-impl-base%
-  (class* info-impl-base% (kdf-impl<%>)
-    (init spec)
-    (inherit-field info)
-    (inherit about get-spec get-factory)
-    (super-new [info (kdf-spec->info spec)])
+(struct kdf-impl-base info-impl-base
+  (inner    ;; KDFInnerImpl
+   )
+  #:properties
+  (method-properties
+   #:export ([kdf-impl$ #:prefix %]
+             [simple-write$ #:prefix %])
+   #:import ([simple-write$ #:super #:prefix super-])
+   (define-struct-abbrevs kdf-impl-base)
+   (define (%to-write-prefixes self)
+     (list "impl" "kdf" (super-to-write-prefixes self)))
 
-    ;; Info methods
-    (define/public (get-salt-mode)
-      (send info get-salt-mode))
-    (define/public (get-salt-default)
-      (send info get-salt-default))
+   ;; ---- kdf-info
 
-    (define/override (to-write-string prefix)
-      (super to-write-string (or prefix "kdf:")))
+   (define (%kdf-salt-mode self) ($kdf-salt-mode (.info self)))
+   (define (%kdf-salt-default self) ($kdf-salt-default (.info self)))
 
-    (define/public (derive key-size params pass salt)
-      (let ([key-size (or key-size (config-ref params 'key-size #f))])
-        (unless key-size (crypto-error "missing key-size"))
-        (-derive key-size params pass (check-salt salt))))
+   ;; ---- kdf-impl
 
-    (define/public (-derive key-size params pass salt)
-      (err/no-impl this))
+   (define (%kdf-derive self key-size params pass salt)
+     (let ([key-size (or key-size (config-ref params 'key-size #f))])
+       (unless key-size (crypto-error "missing key-size" #:in self))
+       (let ([salt (check-salt self salt)])
+         ($kdfi-derive (.inner self) self key-size params pass salt))))
 
-    (define/public (check-salt salt)
-      (case (get-salt-mode)
-        [(req) (or salt (crypto-error "salt required for KDF\n  KDF: ~a" (about)))]
-        [(opt) (or salt (get-salt-default))]
-        [else (if salt (crypto-error "salt not allowed for KDF\n  KDF: ~a" (about)) #f)]))
+   (define (check-salt self salt)
+     (case ($kdf-salt-mode self)
+       [(req) (or salt (crypto-error "salt required for KDF" #:in self))]
+       [(opt) (or salt ($kdf-salt-default self))]
+       [else (if salt (crypto-error "salt not allowed for KDF" #:in self) #f)]))
 
-    (define/public (pwhash config pass)
-      (match (get-spec)
-        [(or 'argon2id 'argon2i 'argon2d)
-         (kdf-pwhash-argon2 this config pass)]
-        ['scrypt
-         (kdf-pwhash-scrypt this config pass)]
-        [(list 'pbkdf2 'hmac dspec)
-         (kdf-pwhash-pbkdf2-hmac this dspec config pass)]
-        [_ (err/no-impl this)]))
+   (define (%pwhash self config pass)
+     (match ($get-spec self)
+       [(or 'argon2id 'argon2i 'argon2d)
+        (kdf-pwhash-argon2 self config pass)]
+       ['scrypt
+        (kdf-pwhash-scrypt self config pass)]
+       [(list 'pbkdf2 'hmac dspec)
+        (kdf-pwhash-pbkdf2-hmac self dspec config pass)]
+       [_ (err/no-impl self)]))
 
-    (define/public (pwhash-verify pass cred)
-      (kdf-pwhash-verify this pass cred))
-    ))
+   (define (%pwhash-verify self pass cred)
+     (kdf-pwhash-verify self pass cred))
+   ))
 
-(define hkdf-impl%
-  (class kdf-impl-base%
-    (init-field di)
-    (super-new)
+;; ----------------------------------------
 
-    (define/override (-derive key-size params pass salt)
-      (define info (check/ref-config '(info) params config:info-kdf "HKDF"))
-      (define (hmac-h key msg) (send di hmac key msg))
-      (rkt:hkdf hmac-h salt info key-size pass))
-    ))
+(define-interface kdf-inner-impl$
+  ([kdfi-derive
+    (-> kdf-inner-impl$? kdf-impl? nat? config/c bytes? (or/c bytes? #f)
+        bytes?)])
+  #:generics-prefix $)
 
-(define ans-x9.63-kdf-impl%
-  (class kdf-impl-base%
-    (init-field di)
-    (super-new)
+;; ----------------------------------------
 
-    (define/override (-derive key-size params pass _salt)
-      (define info (check/ref-config '(info) params config:info-kdf "ANS X9.63 KDF"))
-      (define (H msg) (send di digest msg #f #f null))
-      (rkt:ans-x9.63-kdf H info key-size pass))
-    ))
+(struct hkdf-inner-impl
+  (hmacdi   ;; DigestImpl
+   )
+  #:properties
+  (method-properties
+   #:export ([kdf-inner-impl$ #:prefix %])
+   (define-struct-abbrevs hkdf-inner-impl)
+   (define (%kdfi-derive self kdfi key-size params pass salt)
+     (define info (check/ref-config '(info) params config:info-kdf "HKDF"))
+     (define (hmac-h key msg)
+       ($digest (.hmacdi self) msg key #f null))
+     (rkt:hkdf hmac-h salt info key-size pass))))
 
-(define concat-kdf-impl%
-  (class kdf-impl-base%
-    (inherit about)
-    (init-field di hmac?)
-    (super-new)
+(struct ans-x9.63-kdf-inner-impl
+  (di       ;; DigestImpl
+   )
+  #:properties
+  (method-properties
+   #:export ([kdf-inner-impl$ #:prefix %])
+   (define-struct-abbrevs ans-x9.63-kdf-inner-impl)
+   (define (%kdfi-derive self kdfi key-size params pass _salt)
+     (define info (check/ref-config '(info) params config:info-kdf "ANS X9.63 KDF"))
+     (define (H msg) ($digest (.di self) msg #f #f null))
+     (rkt:ans-x9.63-kdf H info key-size pass))))
 
-    (define/override (-derive key-size params pass salt)
-      (define info
-        (check/ref-config '(info) params config:info-kdf
-                          "NIST SP 800-56 One-Step KDF"))
-      (define H
-        (cond [hmac? (lambda (msg) (send di hmac salt msg))]
-              [else  (lambda (msg) (send di digest msg #f #f null))]))
-      (rkt:concat-kdf H info key-size pass))
-    ))
+(struct concat-kdf-inner-impl
+  (hmac?    ;; Boolean
+   di       ;; DigestImpl, normal or HMAC
+   )
+  #:properties
+  (method-properties
+   #:export ([kdf-inner-impl$ #:prefix %])
+   (define (%kdfi-derive self kdfi key-size params pass salt)
+     (match-define (concat-kdf-inner-impl hmac? di) self)
+     (define info
+       (check/ref-config '(info) params config:info-kdf
+                         "NIST SP 800-56 One-Step KDF"))
+     (define H
+       (if hmac?
+           (lambda (msg) ($digest di msg salt #f null))
+           (lambda (msg) ($digest di msg #f #f null))))
+     (rkt:concat-kdf H info key-size pass))))
 
-(define sp800-108-counter-hmac-kdf-impl%
-  (class kdf-impl-base%
-    (init-field di)
-    (super-new)
+(struct sp800-108-counter-hmac-kdf-inner-impl
+  (di       ;; DigestImpl (HMAC)
+   )
+  #:properties
+  (method-properties
+   #:export ([kdf-inner-impl$ #:prefix %])
+   (define (%kdfi-derive self kdfi key-size params pass _salt)
+     (match-define (sp800-108-counter-hmac-kdf-inner-impl di) self)
+     (define info
+       (check/ref-config '(info) params config:info-kdf
+                         "NIST SP 800-108 Counter KDF"))
+     (define (prf seed msg) ($digest di msg seed #f null))
+     (rkt:sp800-108-counter-kdf prf info key-size pass))))
 
-    (define/override (-derive key-size params pass _salt)
-      (define info
-        (check/ref-config '(info) params config:info-kdf
-                          "NIST SP 800-108 Counter KDF"))
-      (define (prf seed msg) (send di hmac seed msg))
-      (rkt:sp800-108-counter-kdf prf info key-size pass))
-    ))
+(struct sp800-108-feedback-hmac-kdf-inner-impl
+  (di       ;; DigestInfo (HMAC)
+   )
+  #:properties
+  (method-properties
+   #:export ([kdf-inner-impl$ #:prefix %])
+   (define (%kdfi-derive self kdfi key-size params pass salt)
+     (match-define (sp800-108-feedback-hmac-kdf-inner-impl di) self)
+     (define info
+       (check/ref-config '(info) params config:info-kdf
+                         "NIST SP 800-108 Feedback KDF"))
+     (define ctr? #t) ;; FIXME, make configurable
+     (define (prf seed msg) ($digest di msg seed #f null))
+     (rkt:sp800-108-feedback-kdf prf ctr? info key-size salt pass))))
 
-(define sp800-108-feedback-hmac-kdf-impl%
-  (class kdf-impl-base%
-    (inherit about)
-    (init-field di)
-    (super-new)
-
-    (define/override (-derive key-size params pass salt)
-      (define info
-        (check/ref-config '(info) params config:info-kdf
-                          "NIST SP 800-108 Feedback KDF"))
-      (define ctr? #t) ;; FIXME, make configurable
-      (define (prf seed msg) (send di hmac seed msg))
-      (rkt:sp800-108-feedback-kdf prf ctr? info key-size salt pass))
-    ))
-
-(define sp800-108-double-pipeline-hmac-kdf-impl%
-  (class kdf-impl-base%
-    (init-field di)
-    (super-new)
-
-    (define/override (-derive key-size params pass _salt)
-      (define info
-        (check/ref-config '(info) params config:info-kdf
-                          "NIST SP 800-108 Double-Pipeline KDF"))
-      (define ctr? #t) ;; FIXME, make configurable
-      (define (prf seed msg) (send di hmac seed msg))
-      (rkt:sp800-108-double-pipeline-kdf prf ctr? info key-size pass))
-    ))
+(struct sp800-108-double-pipeline-hmac-kdf-inner-impl
+  (di       ;; DigestInfo (HMAC)
+   )
+  #:properties
+  (method-properties
+   #:export ([kdf-inner-impl$ #:prefix %])
+   (define (%kdfi-derive self kdfi key-size params pass _salt)
+     (match-define (sp800-108-double-pipeline-hmac-kdf-inner-impl di) self)
+     (define info
+       (check/ref-config '(info) params config:info-kdf
+                         "NIST SP 800-108 Double-Pipeline KDF"))
+     (define ctr? #t) ;; FIXME, make configurable
+     (define (prf seed msg) ($digest di msg seed #f null))
+     (rkt:sp800-108-double-pipeline-kdf prf ctr? info key-size pass))))
 
 
 ;; ----------------------------------------
@@ -163,16 +185,16 @@
 (define (kdf-pwhash-argon2 ki config pass)
   (define-values (m t p v)
     (check/ref-config '(m t p v) config config:argon2-base "argon2"))
-  (define alg (send ki get-spec))
+  (define alg ($get-spec ki))
   (define salt (crypto-random-bytes 16))
-  (define pwh (send ki derive 32 `((m ,m) (t ,t) (p ,p) (v ,v)) pass salt))
+  (define pwh ($kdf-derive ki 32 `((m ,m) (t ,t) (p ,p) (v ,v)) pass salt))
   (encode-pwhash (hash '$id alg 'v v 'm m 't t 'p p 'salt salt 'pwhash pwh)))
 
 (define (kdf-pwhash-scrypt ki config pass)
   (define-values (ln p r)
     (check/ref-config '(ln p r) config config:scrypt-pwhash "scrypt"))
   (define salt (crypto-random-bytes 16))
-  (define pwh (send ki derive 32 `((N ,(expt 2 ln)) (r ,r) (p ,p)) pass salt))
+  (define pwh ($kdf-derive ki 32 `((N ,(expt 2 ln)) (r ,r) (p ,p)) pass salt))
   (encode-pwhash (hash '$id 'scrypt 'ln ln 'r r 'p p 'salt salt 'pwhash pwh)))
 
 (define (kdf-pwhash-pbkdf2-hmac ki dspec config pass)
@@ -185,7 +207,7 @@
   (define-values (iters)
     (check/ref-config '(iterations) config config:pbkdf2-base "PBKDF2"))
   (define salt (crypto-random-bytes 16))
-  (define pwh (send ki derive 32 `((iterations ,iters)) pass salt))
+  (define pwh ($kdf-derive ki 32 `((iterations ,iters)) pass salt))
   (encode-pwhash (hash '$id id 'rounds iters 'salt salt 'pwhash pwh)))
 
 (define (check-pwhash/kdf-spec cred spec)
@@ -195,7 +217,7 @@
                   (format "$~.a$ password hash" id))))
 
 (define (kdf-pwhash-verify ki pass cred)
-  (check-pwhash/kdf-spec cred (send ki get-spec))
+  (check-pwhash/kdf-spec cred ($get-spec ki))
   (define env (parse-pwhash cred))
   (define config
     (match env
@@ -207,7 +229,7 @@
        `((N ,(expt 2 ln)) (r ,r) (p ,p))]))
   (define salt (hash-ref env 'salt))
   (define pwh (hash-ref env 'pwhash))
-  (define pwh* (send ki derive (bytes-length pwh) config pass salt))
+  (define pwh* ($kdf-derive ki (bytes-length pwh) config pass salt))
   (crypto-bytes=? pwh pwh*))
 
 (define (id->kdf-spec id)
@@ -328,8 +350,6 @@
 (define Raw ($Raw))
 (define B64 ($B64))
 (define AB64 ($AB64))
-
-(define nat? exact-nonnegative-integer?)
 
 ;; ------------------------------------------------------------
 
