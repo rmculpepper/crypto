@@ -653,7 +653,9 @@
 
 (define (pk-key->datum pk fmt)
   (with-crypto-entry 'pk-key->datum
-    (send pk write-key fmt)))
+    (or (send pk write-key fmt)
+        (crypto-error "key format not supported\n  format: ~e"
+                      fmt #:in pk))))
 (define (datum->pk-key datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-key
     (define parsed (parse-key fmt datum))
@@ -663,7 +665,9 @@
 
 (define (pk-parameters->datum pkp fmt)
   (with-crypto-entry 'pk-parameters->datum
-    (send pkp write-params fmt)))
+    (or (send pkp write-params fmt)
+        (crypto-error "parameters format not supported\n  format: ~e"
+                      fmt #:in pkp))))
 (define (datum->pk-parameters datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-parameters
     (define parsed (parse-params fmt datum))

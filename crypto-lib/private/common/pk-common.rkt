@@ -2,8 +2,10 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
+         racket/contract/base
+         scramble/bundle
+         scramble/struct
          asn1
          binaryio/integer
          base64
@@ -19,314 +21,273 @@
          curve-name->oid
          curve-oid->name)
 
+
+(define-interface pk*$
+  ([pk*-make-params
+    (unconstrained-domain-> (or/c pk-parameters? #f))]
+   [pk*-make-public-key
+    (unconstrained-domain-> (or/c pk-key? #f))]
+   [pk*-make-private-key
+    (unconstrained-domain-> (or/c pk-key? #f))]
+
+   [pkk*-sign
+    (-> pk*$? bytes? (or/c digest-spec? 'none) pk-sign-pad/c
+        bytes?)]
+   [pkk*-verify
+    (-> pk*$? bytes? (or/c digest-spec? 'none) pk-sign-pad/c bytes?
+        boolean?)]
+
+   [pkk*-encrypt
+    (-> pk*$? pk-key? bytes? pk-enc-pad/c
+        bytes?)]
+   [pkk*-decrypt
+    (-> pk*$? pk-key? bytes? pk-enc-pad/c
+        bytes?)]
+
+   [pkk*-compute-secret
+    (-> pk*$? pk-key? pk-key?
+        bytes?)]
+   [pk*-import-for-key-agree
+    (-> pk*$? bytes?
+        pk-key?)])
+  #:fallbacks
+  (let ()
+    (define (pk*-make-params self . _) #f)
+    (define (pk*-make-public-key self . _) #f)
+    (define (pk*-make-private-key self . _) #f)
+    (hasheq 'pk*-make-params pk*-make-params
+            'pk*-make-public-key pk*-make-public-key
+            'pk*-make-private-key pk*-make-private-key))
+  #:generics-prefix $)
+
+
 ;; ============================================================
 ;; Base classes
 
-(define pk-impl-base%
-  (class* info-impl-base% (pk-impl<%>)
-    (init spec)
-    (inherit-field info)
-    (inherit about get-spec)
-    (super-new (info (pk-spec->info spec)))
+(struct pk-impl-base info-impl-base
+  ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %]
+             [simple-write$ #:prefix %])
+   #:import ([simple-write$ #:super #:prefix super-])
+   (define-struct-abbrevs pk-impl-base)
+   (define (%to-write-prefixes self)
+     (list "impl" "pk" (super-to-write-prefixes self)))
 
-    (define/override (to-write-string prefix)
-      (super to-write-string (or prefix "pk:")))
+   ;; ---- pk-info
 
-    ;; Info methods
-    ;; Override if not all padding modes or digests are supported.
-    (define/public (can-sign? pad dspec)
-      (case (get-spec)
-        [(rsa) (rsa-can-sign? pad dspec)]
-        [else (send info can-sign? pad dspec)]))
-    (define/public (can-encrypt? pad)
-      (case (get-spec)
-        [(rsa) (rsa-can-encrypt? pad)]
-        [else (send info can-encrypt? pad)]))
-    (define/public (can-key-agree?) (send info can-key-agree?))
-    (define/public (has-params?) (send info has-params?))
+   ;; Implementations vary so much, must override.
+   (define (%pk-can-sign? self pad dspec) #f)
+   (define (%pk-can-encrypt? self pad) #f)
 
-    ;; RSA implementations vary so much, add hooks for override:
-    (define/public (rsa-can-sign? pad dspec) #f)
-    (define/public (rsa-can-encrypt? pad) #f)
+   (define (%pk-can-key-agree? self)
+     ($pk-can-key-agree? (.info self)))
+   (define (%pk-has-params? self)
+     ($pk-has-params? (.info self)))
 
-    (define/public (generate-key config)
-      (cond [(has-params?)
-             (define p (generate-params config))
-             (send p generate-key '())]
-            [else (err/no-impl this)]))
-    (define/public (generate-params config)
-      (cond [(has-params?) (err/no-impl this)]
-            [else (crypto-error "key parameters not supported\n  algorithm: ~a" (about))]))
+   ;; ---- pk-impl
 
-    ;; Called by datum->pk-{key,parameters}%, signature depends on spec
-    (define/public (import-pk parsed)
-      (match parsed
-        [(list* (== (get-spec)) keytype vs)
-         (case keytype
-           [(PARAMS) (send/apply this make-params vs)]
-           [(PUBLIC) (send/apply this make-public-key vs)]
-           [(SECRET) (send/apply this make-private-key vs)])]
-        [_ #f]))
-    (define/public (make-params . _) #f)
-    (define/public (make-public-key . _) #f)
-    (define/public (make-private-key . _) #f)
+   (define (%pk-generate-key self config)
+     (cond [($pk-has-params? self)
+            (define p ($pk-generate-params self config))
+            ($pkp-generate-key self p)]
+           [else (err/no-impl self)]))
 
-    ;; import-key : PKey [Boolean] -> (U PKey #f)
-    ;; Import key from different impl, must be same pkspec
-    (define/public (import-key pkey [public? #f])
-      (define fmt (if public? 'internal-public 'internal))
-      (import-pk (send pkey -write-key fmt)))
+   (define (%pk-generate-params self config)
+     (cond [($pk-has-params? self) (err/no-impl self)]
+           [else (crypto-error "key parameters not supported" #:in self)]))
 
-    ;; Called by pk-{dsa,dh,ec}-params% generate-key:
-    ;; - generate-key-from-params : PK-Params -> PK-Key
+   ;; Called by datum->pk-{key,parameters}%, signature depends on spec
+   (define (%pk-import-pk self parsed)
+     (match parsed
+       [(list* (== ($get-spec self)) keytype vs)
+        (case keytype
+          [(PARAMS) (apply $pk*-make-params self vs)]
+          [(PUBLIC) (apply $pk*-make-public-key self vs)]
+          [(SECRET) (apply $pk*-make-private-key self vs)])]
+       [_ #f]))
 
-    ;; Called by pk-{eddsa,ecx}-params% generate-key:
-    ;; - generate-key-from-curve : Symbol -> PK-Key
-    ))
+   ;; Import key from different impl, must be same pkspec
+   (define (%pk-import-key self pkk public?)
+     (define fmt (if public? 'internal-public 'internal))
+     ($pk-import-pk self (pk-k-write-key pkk fmt)))
 
-(define pk-params-base%
-  (class* ctx-base% (pk-params<%>)
-    (inherit-field impl)
-    (super-new)
-    (define/override (about) (format "~a parameters" (send impl about)))
-    (define/override (to-write-string prefix)
-      (string-append
-       (super to-write-string (or prefix "pk-parameters:"))
-       (cond [(is-a? this pk-curve-params<%>)
-              (format ":~a" (send this get-curve))]
-             [else ""])))
+   ;; ---- pkp
 
-    (abstract generate-key) ;; Config -> PK-Key
+   ;; pkp-generate-key
+   ;; pkp-param-values
 
-    (define/public (write-params fmt)
-      (or (-write-params fmt)
-          (crypto-error "parameters format not supported\n  format: ~e\n  parameters: ~a"
-                        fmt (about))))
-    (define/public (-write-params fmt) #f)
+   (define (%pkp-write-params self pkp fmt)
+     (case ($get-spec self)
+       [(dsa)
+        ;; (values Nat Nat Nat)
+        (define-values (p q g) ($pkp-param-values self pkp))
+        (encode-params-dsa fmt p q g)]
+       [(dh)
+        ;; (values Nat Nat Nat/#f Nat/#f Bytes/#f Nat/#f)
+        (define-values (p g q j seed pgen) ($pkp-param-values self pkp))
+        (encode-params-dh fmt p g q j seed pgen)]
+       [(ec)
+        (define curve-alias ($pkp-param-values self pkp))
+        (define curve-oid (curve-alias->oid curve-alias))
+        (encode-params-ec fmt curve-oid)]
+       [(eddsa)
+        (define curve-name ($pkp-param-values self pkp))
+        (encode-params-eddsa fmt curve-name)]
+       [(ecx)
+        (define curve-name ($pkp-param-values self pkp))
+        (encode-params-ecx fmt curve-name)]
+       [else #f]))
 
-    (define/public (get-security-bits)
-      (rkt-params-security-bits (-write-params 'rkt-params)))
-    ))
+   (define (%pkp-security-bits self pkp)
+     (rkt-params-security-bits
+      ($pkp-write-params self pkp 'rkt-params)))
 
-(define pk-key-base%
-  (class* ctx-base% (pk-key<%>)
-    (inherit-field impl)
-    (super-new)
+   (define (%pkp-equal? self pkp1 pkp2)
+     (pk-compare-params* pkp1 pkp2))
 
-    (define/override (about)
-      (format "~a ~a key" (send impl about) (if (is-private?) 'private 'public)))
-    (define/override (to-write-string prefix)
-      (string-append
-       (super to-write-string (or prefix (if (is-private?) "private-key:" "public-key:")))
-       (cond [(send impl has-params?)
-              (define params (get-params))
-              (cond [(is-a? params pk-curve-params<%>)
-                     (format ":~s" (send params get-curve))]
-                    [else ""])]
-             [else ""])))
-    (define/public (get-spec) (send impl get-spec))
+   ;; ---- pkk
 
-    (define/public (get-security-bits)
-      (if (send impl has-params?)
-          (send (get-params) get-security-bits)
-          #f))
+   ;; pkk-write-key
 
-    (abstract is-private?)
+   (define (%pkk-public-key self pkk)
+     (cond [(pk-key-private? pkk)
+            ($pk-import-pk self ($pkk-write-key self pkk 'internal-public))]
+           [else pkk]))
 
-    (define/public (get-public-key)
-      (if (is-private?) (send impl import-pk (-write-key 'internal-public)) this))
+   (define (%pkk-params self pkk)
+     (if ($pk-has-params? self)
+         (err/no-impl pkk)
+         (crypto-error "key parameters not supported" #:in pkk)))
 
-    (define/public (public-equal? other)
-      (define this-internal (-write-key 'internal-public))
-      (define other-internal (send other -write-key 'internal-public))
-      (unless (and this-internal other-internal)
-        (internal-error "key comparison failed\n  key 1: ~a\n  key 2: ~a"
-                        (about) (send other about)))
-      (equal? this-internal other-internal))
+   (define (%pkk-security-bits self pkk)
+     (if ($pk-has-params? self)
+         ($pkp-security-bits self ($pkk-params self pkk))
+         (parsed-pkey-security-bits ($pkk-write-key self pkk 'internal-public))))
 
-    (define/public (get-params)
-      (if (send impl has-params?)
-          (err/no-impl this)
-          (crypto-error "key parameters not supported\n  key: ~a" (about))))
+   (define (%pkk-equal-params? self pkk1 pkk2)
+     (pk-compare-keys* pkk1 pkk2 'internal-params))
 
-    (define/public (write-key fmt)
-      (or (-write-key fmt)
-          (crypto-error "key format not supported\n  format: ~e\n  key: ~a"
-                        fmt (about))))
-    (define/public (-write-key fmt) #f)
+   (define (%pkk-equal-public? self pkk1 pkk2)
+     (pk-compare-keys* pkk1 pkk2 'internal-public))
 
-    ;; ----
+   ;; ----
 
-    (define/public (sign msg dspec0 pad)
-      (define dspec (or dspec0 'none))
-      (-check-sign pad dspec)
-      (unless (is-private?)
-        (crypto-error "signing requires private key\n  key: ~a" (about)))
-      (unless (eq? dspec 'none) (-check-msg-size msg dspec))
-      (-sign msg dspec pad))
+   (define (%pkk-sign self pkk msg dspec0 pad)
+     (define dspec (or dspec0 'none))
+     (check-sign self pkk pad dspec)
+     (unless (pk-key-private? pkk)
+       (crypto-error "signing requires private key" #:in pkk))
+     (unless (eq? dspec 'none) (check-sign-msg-size self msg dspec))
+     ($pkk*-sign self pkk msg dspec pad))
 
-    (define/public (verify msg dspec0 pad sig)
-      (define dspec (or dspec0 'none))
-      (-check-sign pad dspec)
-      (unless (eq? dspec 'none) (-check-msg-size msg dspec))
-      (-verify msg dspec pad sig))
+   (define (%pkk-verify self pkk msg dspec0 pad sig)
+     (define dspec (or dspec0 'none))
+     (check-sign self pkk pad dspec)
+     (unless (eq? dspec 'none) (check-sign-msg-size self msg dspec))
+     ($pkk*-verify self pkk msg dspec pad sig))
 
-    (define/private (-check-sign pad dspec)
-      (unless (send impl can-sign? pad dspec)
-        (unless (send impl can-sign? #f #f)
-          (crypto-error "sign/verify not supported" #:for this))
-        (unless (send impl can-sign? pad #f)
-          (crypto-error "sign/verify padding not supported\n  padding: ~e"
-                        pad #:for this))
-        (crypto-error "sign/verify digest not supported\n  padding: ~e\n  digest: ~e"
-                      pad dspec #:for this)))
+   (define (check-sign self pad dspec)
+     (unless ($pk-can-sign? self pad dspec)
+       (unless ($pk-can-sign? self #f #f)
+         (crypto-error "sign/verify not supported" #:in self))
+       (unless ($pk-can-sign? self pad #f)
+         (crypto-error "sign/verify padding not supported\n  padding: ~e"
+                       pad #:in self))
+       (crypto-error "sign/verify digest not supported\n  padding: ~e\n  digest: ~e"
+                     pad dspec #:in self)))
 
-    (define/private (-check-msg-size msg dspec)
-      (check-bytes "digest" msg (digest-spec-size dspec) #:for dspec #:in this))
+   (define (check-sign-msg-size self msg dspec)
+     (check-bytes "digest" msg (digest-spec-size dspec) #:for dspec #:in self))
 
-    (define/public (-sign msg dspec pad) (err/no-impl this))
-    (define/public (-verify msg dspec pad sig) (err/no-impl this))
+   ;; ----
 
-    ;; ----
+   (define (%pkk-encrypt self pkk buf pad)
+     (check-encrypt self pad)
+     ($pkk*-encrypt self pkk buf pad))
+   (define (%pkk-decrypt self pkk buf pad)
+     (check-encrypt self pad)
+     (unless (pk-key-private? pkk)
+       (crypto-error "decryption requires private key" #:in pkk))
+     ($pkk*-decrypt self pkk buf pad))
 
-    (define/public (encrypt buf pad)
-      (-check-encrypt pad)
-      (-encrypt buf pad))
-    (define/public (decrypt buf pad)
-      (-check-encrypt pad)
-      (unless (is-private?)
-        (crypto-error "decryption requires private key\n  key: ~a" (about)))
-      (-decrypt buf pad))
+   (define (check-encrypt self pad)
+     (unless ($pk-can-encrypt? self #f)
+       (crypto-error "encrypt/decrypt not supported" #:in self))
+     (unless ($pk-can-encrypt? pad)
+       (crypto-error "encrypt/decrypt not supported\n  padding: ~e" #:in self)))
 
-    (define/public (compute-secret peer)
-      (define (incompatible peer)
-        (crypto-error "peer key is not compatible\n  peer: ~a\n  key: ~a"
-                      (send peer about) (about)))
-      (define (convert-failed)
-        (internal-error "failed to convert peer key"))
-      (-check-key-agree)
-      (let ([peer (if (pk-key? peer) peer (-convert-for-key-agree peer))])
-        (unless (pk-key? peer) (convert-failed))
-        (unless (eq? (send peer get-spec) (send impl get-spec)) (incompatible peer))
-        (let ([peer (cond [(eq? (send peer get-impl) impl) peer]
-                          ;; public key from different impl, must convert
-                          [(send impl import-key peer #t) => values]
-                          [else (convert-failed)])])
-          (unless (-compatible-for-key-agree? peer) (incompatible peer))
-          (-compute-secret peer))))
+   ;; ----
 
-    (define/public (-compatible-for-key-agree? peer-pubkey)
-      ;; PRE: peer-pubkey is key with same impl as this
-      (err/no-impl this))
+   (define (%pkk-compute-secret self pkk peer)
+     (check-key-agree self)
+     (let ([peer (convert-peer-key self pkk peer)])
+       ($pkk*-compute-secret self pkk peer)))
 
-    (define/public (-convert-for-key-agree bs)
-      (crypto-error "cannot convert peer public key\n  key: ~a" (about)))
+   (define (check-key-agree self)
+     (unless ($pk-can-key-agree? self)
+       (crypto-error "key agreement not supported" #:in self)))
 
-    (define/private (-check-encrypt pad)
-      (unless (send impl can-encrypt? #f)
-        (crypto-error "encrypt/decrypt not supported\n  key: ~a" (about)))
-      (unless (send impl can-encrypt? pad)
-        (crypto-error "encrypt/decrypt not supported\n  padding: ~e\n  key: ~a"
-                      pad (about))))
+   (define (convert-peer-key self pkk peer)
+     (define (incompatible peer)
+       (crypto-error "peer key is not compatible\n  peer: ~e" peer #:in pkk))
+     (let ([peer (if (pk-key? peer) peer ($pk*-import-for-key-agree self peer))])
+       (unless (eq? ($get-spec peer) ($get-spec self))
+         (incompatible peer))
+       (let ([peer
+              (cond [(eq? (ctx-impl peer) self) peer]
+                    [($pk-import-key self peer #t) => values]
+                    [else (incompatible peer)])])
+         (unless ($pkk-equal-params? self pkk peer)
+           (incompatible peer))
+         peer)))
+   ))
 
-    (define/public (-encrypt buf pad) (err/no-impl this))
-    (define/public (-decrypt buf pad) (err/no-impl this))
+(define (pk-k-equal-public? pkk1 pkk2)
+  (if (eq? (ctx-impl pkk1) (ctx-impl pkk2))
+      ($pkk-equal-public? (ctx-impl pkk1) pkk1 pkk2)
+      (pk-compare-keys* pkk1 pkk2 'internal-public)))
 
-    ;; ----
+(define (pk-k-equal-params? pkk1 pkk2)
+  (if (eq? (ctx-impl pkk1) (ctx-impl pkk2))
+      ($pkk-equal-public? (ctx-impl pkk1) pkk1 pkk2)
+      (pk-compare-keys* pkk1 pkk2 'internal-params)))
 
-    (define/private (-check-key-agree)
-      (unless (send impl can-key-agree?)
-        (crypto-error "key agreement not supported\n  key: ~a" (about))))
+(define (pk-compare-params* obj1 obj2)
+  (define (to-internal obj)
+    (cond [(pk-key? obj) ($pkk-write-key (ctx-impl obj) obj 'internal-params)]
+          [(pk-parameters? obj) ($pkp-write-params (ctx-impl obj) obj 'internal-params)]))
+  (define internal1 (to-internal obj1))
+  (define internal2 (to-internal obj2))
+  (unless (and internal1 internal2)
+    (internal-error "failure comparing params\n  object 1: ~e\n  object 2: ~e" obj1 obj2))
+  (equal? internal1 internal2))
 
-    (define/public (-compute-secret peer-pubkey)
-      ;; PRE: peer-pubkey is either pk w/ same impl, or not pk (eg, bytes)
-      (err/no-impl this))
-    ))
+(define (pk-compare-keys* pkk1 pkk2 fmt)
+  (define internal1 ($pkk-write-key (ctx-impl pkk1) pkk1 fmt))
+  (define internal2 ($pkk-write-key (ctx-impl pkk2) pkk2 fmt))
+  (unless (and internal1 internal2)
+    (internal-error "failure comparing keys\n  key 1: ~e\n  key 2: ~e" pkk1 pkk2))
+  (equal? internal1 internal2))
+
+
 
 ;; ============================================================
 
-(define pk-dsa-params%
-  (class* pk-params-base% ()
-    (inherit-field impl)
-    (super-new)
-
-    (abstract get-param-values) ;; -> (values Nat Nat Nat)
-
-    (define/override (-write-params fmt)
-      (define-values (p q g) (get-param-values))
-      (encode-params-dsa fmt p q g))
-
-    (define/override (generate-key config)
-      (check-config config '() "DSA keygen from parameters")
-      (send impl generate-key-from-params this))
-    ))
-
-(define pk-dh-params%
-  (class* pk-params-base% ()
-    (inherit-field impl)
-    (super-new)
-
-    (abstract get-param-values) ;; -> (values Nat Nat Nat/#f Nat/#f Bytes/#f Nat/#f)
-
-    (define/override (-write-params fmt)
-      (define-values (p g q j seed pgen) (get-param-values))
-      (encode-params-dh fmt p g q j seed pgen))
-
-    (define/override (generate-key config)
-      (check-config config '() "DH keygen from parameters")
-      (send impl generate-key-from-params this))
-    ))
-
-(define pk-ec-params%
-  (class* pk-params-base% (pk-curve-params<%>)
-    (inherit-field impl)
-    (super-new)
-
-    (abstract get-curve)
-
-    (define/public (get-curve-oid)
-      (curve-alias->oid (get-curve)))
-
-    (define/override (-write-params fmt)
-      (define curve-oid (get-curve-oid))
-      (and curve-oid (encode-params-ec fmt curve-oid)))
-
-    (define/override (generate-key config)
-      (check-config config '() "EC keygen")
-      (send impl generate-key-from-params this))
-    ))
-
-(define pk-eddsa-params%
-  (class* pk-params-base% (pk-curve-params<%>)
-    (inherit-field impl)
-    (init-field curve)
-    (super-new)
-
-    (define/public (get-curve) curve)
-
-    (define/override (-write-params fmt)
-      (encode-params-eddsa fmt curve))
-
-    (define/override (generate-key config)
-      (check-config config '() "EdDSA keygen")
-      (send impl generate-key-from-curve curve))
-    ))
-
-(define pk-ecx-params%
-  (class* pk-params-base% (pk-curve-params<%>)
-    (inherit-field impl)
-    (init-field curve)
-    (super-new)
-
-    (define/public (get-curve) curve)
-
-    (define/override (-write-params fmt)
-      (encode-params-ecx fmt curve))
-
-    (define/override (generate-key config)
-      (check-config config '() "EC/X key generation")
-      (send impl generate-key-from-curve curve))
-    ))
+#;
+(struct pk-curve pk-parameters
+  (curve
+   )
+  #:properties
+  (method-properties
+   #:export ([simple-write$ #:prefix %])
+   #:import ([simple-write$ #:super #:prefix super-])
+   (define-struct-abbrevs pk-curve)
+   (define (%to-write-string self)
+     (format "~a:~a" (super-to-write-string self) (.curve self)))
+   ))
 
 ;; ============================================================
 
@@ -474,6 +435,7 @@
     ;; --
     [else #f]))
 
+;; convert to used parsed/internal representation
 (define (rkt-params-security-bits params)
   (match params
     [(list 'dsa p q g) (dsa/dh-security-bits (add1 (log p 2)) (add1 (log q 2)))]
@@ -483,3 +445,15 @@
     [(list 'eddsa 'params curve) (curve-security-bits curve)]
     [(list 'ecx 'params curve) (curve-security-bits curve)]
     [else #f]))
+
+(define (parsed-pkey-security-bits pkey)
+  (match pkey
+    [(list 'PUBLIC 'rsa n e)
+     (let ([nbits (integer-length n)])
+       (cond [(>= nbits 15360) 256]
+             [(>= nbits 7680) 192]
+             [(>= nbits 3072) 128]
+             [(>= nbits 2048) 112]
+             [(>= nbits 1024) 80]
+             [else #f]))]
+    [_ #f]))

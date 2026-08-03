@@ -145,7 +145,16 @@
    (define (%to-write-prefixes self)
      (cons "pk-parameters" (cdr (super-to-write-prefixes self))))))
 
-(struct pk-key ctx ()
+(define (pk-p-generate-key pkp)
+  ($pkp-generate-key (ctx-impl pkp) pkp))
+(define (pk-p-write-params pkp fmt)
+  ($pkp-write-params (ctx-impl pkp) pkp fmt))
+(define (pk-p-security-bits pkp)
+  ($pkp-security-bits (ctx-impl pkp) pkp))
+(define (pk-p-param-values pkp)
+  ($pkp-param-values (ctx-impl pkp) pkp))
+
+(struct pk-key ctx (private?)
   #:properties
   (method-properties
    #:export ([simple-write$ #:prefix %])
@@ -153,8 +162,27 @@
    (define-struct-abbrevs pk-key)
    ;; ----
    (define (%to-write-prefixes self)
-     (cons (if ($pkk-is-private? (.impl self)) "private-key" "public-key")
+     (cons (if (.private? self) "private-key" "public-key")
            (cdr (super-to-write-prefixes self))))))
+
+(define (pk-k-public-key pkk)
+  ($pkk-public-key (ctx-impl pkk) pkk))
+(define (pk-k-params pkk)
+  ($pkk-params (ctx-impl pkk) pkk))
+(define (pk-k-security-bits pkk)
+  ($pkk-security-bits (ctx-impl pkk) pkk))
+(define (pk-k-write-key pkk fmt)
+  ($pkk-write-key (ctx-impl pkk) pkk fmt))
+(define (pk-k-sign pkk msg dspec pad)
+  ($pkk-sign (ctx-impl pkk) pkk msg dspec pad))
+(define (pk-k-verify pkk msg dspec pad sig)
+  ($pkk-verify (ctx-impl pkk) pkk msg dspec pad sig))
+(define (pk-k-encrypt pkk msg pad)
+  ($pkk-encrypt (ctx-impl pkk) pkk msg pad))
+(define (pk-k-decrypt pkk msg pad)
+  ($pkk-decrypt (ctx-impl pkk) pkk msg pad))
+(define (pk-k-compute-secret pkk peer-pubkey)
+  ($pkk-compute-secret (ctx-impl pkk) pkk peer-pubkey))
 
 (define-interface pk-impl$
   #:super (impl$ pk-info$)
@@ -162,18 +190,20 @@
   ([pk-generate-key     (-> pk-impl? config/c pk-key?)]
    [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
    [pk-import-pk        (-> pk-impl? any/c (or/c pk-key? pk-parameters? #f))]
+   [pk-import-key       (-> pk-impl? pk-key? boolean? pk-key?)]
 
-   [pkp-generate-key    (-> pk-impl? pk-parameters? config/c pk-key?)]
+   [pkp-generate-key    (-> pk-impl? pk-parameters? pk-key?)]
    [pkp-write-params    (-> pk-impl? pk-parameters? symbol? any/c)]
    [pkp-security-bits   (-> pk-impl? pk-parameters? (or/c nat? #f))]
-   [pkp-curve           (-> pk-impl? pk-parameters? (or/c symbol? #f))]
+   [pkp-param-values    (-> pk-impl? pk-parameters? any)] ;; result type varies
+   [pkp-equal?          (-> pk-impl? pk-parameters? pk-parameters? boolean?)]
 
-   [pkk-is-private?     (-> pk-impl? pk-key? boolean?)]
    [pkk-public-key      (-> pk-impl? pk-key? pk-key?)]
    [pkk-params          (-> pk-impl? pk-key? (or/c pk-parameters? #f))]
    [pkk-security-bits   (-> pk-impl? pk-key? (or/c nat? #f))]
    [pkk-write-key       (-> pk-impl? pk-key? symbol? any/c)]
-   [pkk-public-equal?   (-> pk-impl? pk-key? pk-key? boolean?)]
+   [pkk-equal-public?   (-> pk-impl? pk-key? pk-key? boolean?)]
+   [pkk-equal-params?   (-> pk-impl? pk-key? pk-key? boolean?)]
 
    [pkk-sign            (-> pk-impl? pk-key? bytes?
                             (or/c digest-spec? #f) pk-sign-pad/c
