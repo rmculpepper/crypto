@@ -14,15 +14,13 @@
          "error.rkt"
          "util.rkt"
          (prefix-in rkt: "../rkt/kdf.rkt"))
-
-#;
-(provide kdf-impl-base%
-         hkdf-impl%
-         ans-x9.63-kdf-impl%
-         concat-kdf-impl%
-         sp800-108-counter-hmac-kdf-impl%
-         sp800-108-feedback-hmac-kdf-impl%
-         sp800-108-double-pipeline-hmac-kdf-impl%
+(provide (struct-out common-kdf-impl)
+         hkdf-inner-impl
+         ans-x9.63-kdf-inner-impl
+         concat-kdf-inner-impl
+         sp800-108-counter-hmac-kdf-inner-impl
+         sp800-108-feedback-hmac-kdf-inner-impl
+         sp800-108-double-pipeline-hmac-kdf-inner-impl
          check-pwhash/kdf-spec
          parse-pwhash
          encode-pwhash
@@ -37,7 +35,7 @@
 ;; ============================================================
 ;; KDF and Password Hashing
 
-(struct kdf-impl-base info-impl-base
+(struct common-kdf-impl info-impl-base
   (inner    ;; KDFInnerImpl
    )
   #:properties
@@ -45,7 +43,7 @@
    #:export ([kdf-impl$ #:prefix %]
              [simple-write$ #:prefix %])
    #:import ([simple-write$ #:super #:prefix super-])
-   (define-struct-abbrevs kdf-impl-base)
+   (define-struct-abbrevs common-kdf-impl)
    (define (%to-write-prefixes self)
      (list "impl" "kdf" (super-to-write-prefixes self)))
 

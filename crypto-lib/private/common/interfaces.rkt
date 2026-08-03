@@ -36,7 +36,7 @@
 ;; General Implementation & Contexts
 
 (define-interface impl$
-  #:super (info$ simple-write$)
+  #:super (info$)
   ([impl-info     (-> impl$? info?)]
    [impl-factory  (-> impl$? crypto-factory?)])
   #:generics-prefix $)
@@ -207,15 +207,15 @@
 ;; Implementation Factories
 
 (define-interface factory$
-  #:super (simple-write$)
   #:predicate factory?
   ([factory-print     (-> factory? void?)]
    [factory-info      (-> factory? symbol? any)]
    [factory-name      (-> factory? symbol?)]
-   [factory-version   (-> factory? (or/c (listof exact-nonnegative-integer?) #f))]
+   [factory-version   (-> factory? (listof exact-nonnegative-integer?))] ;; '() allowed
+   [factory-display-name (-> factory? string?)]
    [fetch-digest      (-> factory? digest-spec? (or/c digest-impl? #f))]
    [fetch-cipher      (-> factory? cipher-spec? (or/c cipher-impl? #f))]
    [fetch-pk          (-> factory? pk-spec?     (or/c pk-impl? #f))]
    [fetch-kdf         (-> factory? kdf-spec?    (or/c kdf-impl? #f))]
-   [factory-import-pk (-> factory? any/c        (or/c pk-key? pk-parameters? #f))])
+   [fetch-import-pk   (-> factory? any/c        (or/c pk-key? pk-parameters? #f))])
   #:generics-prefix $)

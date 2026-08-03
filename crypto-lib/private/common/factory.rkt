@@ -2,228 +2,270 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
          racket/list
+         racket/contract/base
          racket/string
+         scramble/bundle
+         scramble/struct
          "catalog.rkt"
          "interfaces.rkt"
-         "cipher.rkt"
+         "digest.rkt"
+         #;"cipher.rkt"
          "kdf.rkt")
-(provide factory-base%)
+(provide (struct-out factory-base)
+         (struct-out common-factory)
+         (interface-out inner-fetch$)
+         (struct-out inner-fetch-base))
 
 ;; ============================================================
 ;; Factory
 
-(define factory-base%
-  (class* object% (factory<%> simple-write<%>)
-    (init-field [ok? #t] [load-error #f])
-    (super-new)
+(struct factory-base
+  (name         ;; Symbol
+   version      ;; ??
+   ok?          ;; Boolean
+   load-error   ;; (U String #f)
+   )
+  #:properties
+  (method-properties
+   #:export ([factory$ #:prefix %]
+             [simple-write$ #:prefix %])
+   (define-struct-abbrevs factory-base)
+   (define (%to-write-string self)
+     ($factory-display-name self))
+   (define (%to-write-prefixes self)
+     '(factory))
 
-    (define/public (get-name) #f)
-    (define/public (get-version) (and ok? '()))
-    (define/public (get-display-name)
-      (format "~a:~a"
-              (or (get-name) "?")
-              (let ([version (and ok? (get-version))])
-                (cond [(not ok?) "failed"]
-                      [(null? version) "?"]
-                      [else (string-join (map number->string version) ".")]))))
-    (define/public (to-write-string prefix)
-      (format "~a~a" (or prefix "crypto-factory:") (get-display-name)))
+   ;; ----
 
-    (define/public (info key)
-      (case key
-        [(version) (and ok? (get-version))]
-        [(all-digests) (filter (lambda (s) (get-digest s)) (list-known-digests))]
-        [(all-ciphers) (filter (lambda (x) (get-cipher x)) (list-known-ciphers))]
-        [(all-pks)     (filter (lambda (x) (get-pk x))     (list-known-pks))]
-        [(all-curves)  (append (info 'all-ec-curves)
-                               (info 'all-eddsa-curves)
-                               (info 'all-ecx-curves))]
-        [(all-ec-curves)    '()]
-        [(all-eddsa-curves) '()]
-        [(all-ecx-curves)   '()]
-        [(all-kdfs)    (filter (lambda (k) (get-kdf k))    (list-known-kdfs))]
-        [else #f]))
+   (define (%factory-name self) (.name self))
+   (define (%factory-version self) (.version self))
+   (define (%factory-display-name self)
+     (format "~a:~a"
+             (or (.name self) "?")
+             (let ([version (and (.ok? self) (.version self))])
+               (cond [(not version) "failed"]
+                     [(null? version) "?"]
+                     [else (string-join (map number->string version) ".")]))))
 
-    (define/public (print-info)
-      (printf "Library info:\n")
-      (print-lib-info)
-      (print-avail))
+   (define (%factory-info self key)
+     (case key
+       [(version) (and (.ok? self) (.version self))]
+       [(all-digests) (filter (lambda (s) ($fetch-digest self s)) (list-known-digests))]
+       [(all-ciphers) (filter (lambda (x) ($fetch-cipher self x)) (list-known-ciphers))]
+       [(all-kdfs)    (filter (lambda (k) ($fetch-kdf self k))    (list-known-kdfs))]
+       [(all-pks)     (filter (lambda (x) ($fetch-pk self x))     (list-known-pks))]
+       [(all-curves)  (append ($factory-info self 'all-ec-curves)
+                              ($factory-info self 'all-eddsa-curves)
+                              ($factory-info self 'all-ecx-curves))]
+       [(all-ec-curves)    '()]
+       [(all-eddsa-curves) '()]
+       [(all-ecx-curves)   '()]
+       [else #f]))
 
-    (define/public (print-lib-info)
-      (printf " name: ~s\n" (get-name))
-      (printf " version: ~s\n" (get-version))
-      (when load-error (printf " load error: ~s\n" load-error)))
+   (define (%factory-print self)
+     (printf "Library info:\n")
+     (print-lib-info self)
+     (print-avail self)
+     (void))
 
-    (define/public (print-avail)
-      (define (pad-to v len)
-        (let ([vs (format "~a" v)])
-          (string-append vs (make-string (- len (string-length vs)) #\space))))
-      ;; == Digests ==
-      (let ([all-digests (info 'all-digests)])
-        (when (pair? all-digests)
-          (printf "Available digests:\n")
-          (for ([di (in-list (info 'all-digests))])  (printf " ~v\n" di))))
-      ;; == Ciphers ==
-      (let ([all-ciphers (info 'all-ciphers)])
-        (when (pair? all-ciphers)
-          (printf "Available ciphers:\n")
-          (define cipher-groups (group-by car all-ciphers))
-          (define cipher-max-len
-            (apply max 0 (for/list ([cg (in-list cipher-groups)] #:when (> (length cg) 1))
-                           (string-length (symbol->string (caar cg))))))
-          (for ([group (in-list cipher-groups)])
-            (cond [(> (length group) 1)
-                   (printf " `(~a ,mode)  for mode in ~a\n"
-                           (pad-to (car (car group)) cipher-max-len)
-                           (map cadr group))]
-                  [else (printf " ~v\n" (car group))]))))
-      ;; == PK ==
-      (let ([all-pks (info 'all-pks)])
-        (when (pair? all-pks)
-          (printf "Available PKs:\n")
-          (for ([pk (in-list all-pks)]) (printf " ~v\n" pk))))
-      ;; == EC named curves ==
-      (let ([all-curves (info 'all-ec-curves)])
-        (define all-curve-vs (for/list ([c (in-list all-curves)]) (format "~v" c)))
-        (when (pair? all-curves)
-          (printf "Available 'ec named curves:\n")
-          (define curve-max-len (apply max 0 (map string-length all-curve-vs)))
-          (for ([curve (in-list all-curves)] [curve-v (in-list all-curve-vs)])
-            (define aliases (remove curve (curve-name->aliases curve)))
-            (cond [(null? aliases)
-                   (printf " ~a\n" curve-v)]
-                  [else
-                   (printf " ~a  with aliases ~s\n"
-                           (pad-to curve-v curve-max-len)
-                           aliases)]))))
-      ;; == EdDSA named curves ==
-      (let ([all-curves (info 'all-eddsa-curves)])
-        (when (pair? all-curves)
-          (printf "Available 'eddsa named curves:\n")
-          (for ([curve (in-list all-curves)])
-            (printf " ~v\n" curve))))
-      ;; == EC/X named curves ==
-      (let ([all-curves (info 'all-ecx-curves)])
-        (when (pair? all-curves)
-          (printf "Available 'ecx named curves:\n")
-          (for ([curve (in-list all-curves)])
-            (printf " ~v\n" curve))))
-      ;; == KDFs ==
-      (let ([all-kdfs (info 'all-kdfs)]
-            [all-digests (info 'all-digests)])
-        (when (pair? all-kdfs)
-          (printf "Available KDFs:\n")
-          (for ([kdf (in-list all-kdfs)] #:when (symbol? kdf))
-            (printf " ~v\n" kdf))
-          (define (show-complex label dspec->kdfspec)
-            (cond [(null? all-digests) (void)]
-                  [(for/and ([dspec (in-list all-digests)]
-                             #:when (basic-digest-spec? dspec))
-                     (member (dspec->kdfspec dspec) all-kdfs))
-                   (printf " ~a  for all available basic digests\n" label)]
-                  [else
-                   (for ([dspec (in-list all-digests)])
-                     (define kdfspec (dspec->kdfspec dspec))
-                     (when (member kdfspec all-kdfs)
-                       (printf " ~v\n" (dspec->kdfspec dspec))))]))
-          (show-complex "`(pbkdf2 hmac ,digest)                   "
-                        (lambda (ds) `(pbkdf2 hmac ,ds)))
-          (show-complex "`(hkdf ,digest)                          "
-                        (lambda (ds) `(hkdf ,ds)))
-          (show-complex "`(concat ,digest)                        "
-                        (lambda (ds) `(concat ,ds)))
-          (show-complex "`(concat hmac ,digest)                   "
-                        (lambda (ds) `(concat hmac ,ds)))
-          (show-complex "`(ans-x9.63 ,digest)                     "
-                        (lambda (ds) `(ans-x9.63 ,ds)))
-          (show-complex "`(sp800-108-counter hmac ,digest)        "
-                        (lambda (ds) `(sp800-108-counter hmac ,ds)))
-          (show-complex "`(sp800-108-feedback hmac ,digest)       "
-                        (lambda (ds) `(sp800-108-counter hmac ,ds)))
-          (show-complex "`(sp800-108-double-pipeline hmac ,digest)"
-                        (lambda (ds) `(sp800-108-counter hmac ,ds)))
-          (void)))
-      (void))
+   (define (print-lib-info self)
+     (printf " name: ~s\n" (.name self))
+     (printf " version: ~s\n" (.version self))
+     (let ([load-error (.load-error self)])
+       (when load-error (printf " load error: ~s\n" load-error))))
 
-    ;; table : Hash[*Spec => *Impl]
-    ;; Note: assumes different *Spec types have disjoint values!
-    ;; Only cache successful lookups to keep table size bounded.
-    (field [table (make-hash)])
+   (define (print-avail self)
+     (define (pad-to v len)
+       (let ([vs (format "~a" v)])
+         (string-append vs (make-string (- len (string-length vs)) #\space))))
+     (define all-digests ($factory-info self 'all-digests))
+     (define all-ciphers ($factory-info self 'all-ciphers))
+     ;; == Digests ==
+     (when (pair? all-digests)
+       (printf "Available digests:\n")
+       (for ([di (in-list all-digests)])
+         (printf " ~v\n" di)))
+     ;; == Ciphers ==
+     (when (pair? all-ciphers)
+       (printf "Available ciphers:\n")
+       (define cipher-groups (group-by car all-ciphers))
+       (define cipher-max-len
+         (apply max 0 (for/list ([cg (in-list cipher-groups)] #:when (> (length cg) 1))
+                        (string-length (symbol->string (caar cg))))))
+       (for ([group (in-list cipher-groups)])
+         (cond [(> (length group) 1)
+                (printf " `(~a ,mode)  for mode in ~a\n"
+                        (pad-to (car (car group)) cipher-max-len)
+                        (map cadr group))]
+               [else (printf " ~v\n" (car group))])))
+     ;; == PK ==
+     (let ([all-pks ($factory-info self 'all-pks)])
+       (when (pair? all-pks)
+         (printf "Available PKs:\n")
+         (for ([pk (in-list all-pks)])
+           (printf " ~v\n" pk))))
+     ;; == EC named curves ==
+     (let ([all-curves ($factory-info self 'all-ec-curves)])
+       (define all-curve-vs (for/list ([c (in-list all-curves)]) (format "~v" c)))
+       (when (pair? all-curves)
+         (printf "Available 'ec named curves:\n")
+         (define curve-max-len (apply max 0 (map string-length all-curve-vs)))
+         (for ([curve (in-list all-curves)] [curve-v (in-list all-curve-vs)])
+           (define aliases (remove curve (curve-name->aliases curve)))
+           (cond [(null? aliases)
+                  (printf " ~a\n" curve-v)]
+                 [else
+                  (printf " ~a  with aliases ~s\n"
+                          (pad-to curve-v curve-max-len)
+                          aliases)]))))
+     ;; == EdDSA named curves ==
+     (let ([all-curves ($factory-info self 'all-eddsa-curves)])
+       (when (pair? all-curves)
+         (printf "Available 'eddsa named curves:\n")
+         (for ([curve (in-list all-curves)])
+           (printf " ~v\n" curve))))
+     ;; == EC/X named curves ==
+     (let ([all-curves ($factory-info self 'all-ecx-curves)])
+       (when (pair? all-curves)
+         (printf "Available 'ecx named curves:\n")
+         (for ([curve (in-list all-curves)])
+           (printf " ~v\n" curve))))
+     ;; == KDFs ==
+     (let ([all-kdfs ($factory-info self 'all-kdfs)])
+       (when (pair? all-kdfs)
+         (printf "Available KDFs:\n")
+         (for ([kdf (in-list all-kdfs)] #:when (symbol? kdf))
+           (printf " ~v\n" kdf))
+         (define (show-complex label dspec->kdfspec)
+           (cond [(null? all-digests) (void)]
+                 [(for/and ([dspec (in-list all-digests)]
+                            #:when (basic-digest-spec? dspec))
+                    (member (dspec->kdfspec dspec) all-kdfs))
+                  (printf " ~a  for all available basic digests\n" label)]
+                 [else
+                  (for ([dspec (in-list all-digests)])
+                    (define kdfspec (dspec->kdfspec dspec))
+                    (when (member kdfspec all-kdfs)
+                      (printf " ~v\n" (dspec->kdfspec dspec))))]))
+         (show-complex "`(pbkdf2 hmac ,digest)                   "
+                       (lambda (ds) `(pbkdf2 hmac ,ds)))
+         (show-complex "`(hkdf ,digest)                          "
+                       (lambda (ds) `(hkdf ,ds)))
+         (show-complex "`(concat ,digest)                        "
+                       (lambda (ds) `(concat ,ds)))
+         (show-complex "`(concat hmac ,digest)                   "
+                       (lambda (ds) `(concat hmac ,ds)))
+         (show-complex "`(ans-x9.63 ,digest)                     "
+                       (lambda (ds) `(ans-x9.63 ,ds)))
+         (show-complex "`(sp800-108-counter hmac ,digest)        "
+                       (lambda (ds) `(sp800-108-counter hmac ,ds)))
+         (show-complex "`(sp800-108-feedback hmac ,digest)       "
+                       (lambda (ds) `(sp800-108-counter hmac ,ds)))
+         (show-complex "`(sp800-108-double-pipeline hmac ,digest)"
+                       (lambda (ds) `(sp800-108-counter hmac ,ds)))
+         (void)))
+     (void))
 
-    (define-syntax-rule (get/table spec spec->key get-impl)
-      ;; Note: spec should be variable reference
-      (cond [(not ok?) #f]
-            [(hash-ref table spec #f) => values]
-            [(spec->key spec)
-             => (lambda (key)
-                  (cond [(get-impl key)
-                         => (lambda (impl)
-                              (hash-set! table (send impl get-spec) impl)
-                              impl)]
-                        [else #f]))]
-            [else #f]))
+   (define ($factory-import-pk self parsed)
+     (match parsed
+       [(cons pkspec _)
+        (let ([pk ($fetch-pk self pkspec)])
+          (and pk ($pk-import-pk pk parsed)))]
+       [_ #f]))
+   ))
 
-    (define/public (get-digest spec)
-      (get/table spec digest-spec->info -get-digest))
-    (define/public (get-cipher spec)
-      (get/table spec cipher-spec->info -get-cipher0))
-    (define/public (get-pk spec)
-      (get/table spec values -get-pk))
-    (define/public (get-kdf spec)
-      (get/table spec values -get-kdf))
+(struct common-factory
+  (inner        ;; InnerFetch
+   table        ;; (Hash *Spec => *Impl)
+   )
+  #:properties
+  (method-properties
+   #:export ([factory$ #:prefix %])
+   (define-struct-abbrevs common-factory)
 
-    (define/public (get-normal-digest dspec)
-      (let ([di (get-digest dspec)]) (and di (send di get-size) di)))
+   (define ($fetch-digest self dspec)
+     (fetch self dspec digest-spec->info $fi-digest))
 
-    (define/public (import-pk parsed)
-      (match parsed
-        [(cons pkspec _)
-         (let ([pk (get-pk pkspec)])
-           (and pk (send pk import-pk parsed)))]
-        [_ #f]))
+   (define ($fetch-cipher self cspec)
+     (fetch self cspec cipher-spec->info $fi-cipher))
 
-    (define/public (-get-cipher0 info)
-      (define ci (-get-cipher info))
-      (cond [(cipher-impl? ci) ci]
-            [(and (list? ci) (pair? ci) (andmap cdr ci))
-             (new multikeylen-cipher-impl% (info info) (factory this) (impls ci))]
-            [else #f]))
+   (define ($fetch-kdf self kdfspec)
+     (fetch self kdfspec kdf-spec->info $fi-kdf))
 
-    ;; -get-digest : digest-info -> (U #f digest-impl)
-    (define/public (-get-digest info) #f)
+   (define ($fetch-pk self pkspec)
+     (fetch self pkspec pk-spec->info $fi-pk))
 
-    ;; -get-cipher : cipher-info -> (U #f cipher-impl (listof (cons Nat cipher-impl)))
-    (define/public (-get-cipher info) #f)
+   (define (fetch self spec spec->info inner-fetch)
+     (hash-ref! (.table self) spec
+                (lambda ()
+                  (inner-fetch (.inner self) self (spec->info spec)))))
+   ))
 
-    ;; -get-pk : pk-spec -> (U pk-impl #f)
-    (define/public (-get-pk spec) #f)
+;; ============================================================
 
-    ;; -get-kdf : -> (U kdf-impl #f)
-    (define/public (-get-kdf spec)
-      (match spec
-        [(list 'hkdf (? symbol? dspec))
-         (define di (get-normal-digest dspec))
-         (and di (new hkdf-impl% (spec spec) (factory this) (di di)))]
-        [(list 'concat (? symbol? dspec))
-         (define di (get-normal-digest dspec))
-         (and di (new concat-kdf-impl% (spec spec) (factory this) (di di) (hmac? #f)))]
-        [(list 'concat 'hmac (? symbol? dspec))
-         (define di (get-normal-digest dspec))
-         (and di (new concat-kdf-impl% (spec spec) (factory this) (di di) (hmac? #t)))]
-        [(list 'ans-x9.63 (? symbol? dspec))
-         (define di (get-normal-digest dspec))
-         (and di (new ans-x9.63-kdf-impl% (spec spec) (factory this) (di di)))]
-        [(list 'sp800-108-counter 'hmac (? symbol? dspec))
-         (define di (get-normal-digest dspec))
-         (and di (new sp800-108-counter-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
-        [(list 'sp800-108-feedback 'hmac (? symbol? dspec))
-         (define di (get-normal-digest dspec))
-         (and di (new sp800-108-feedback-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
-        [(list 'sp800-108-double-pipeline 'hmac (? symbol? dspec))
-         (define di (get-normal-digest dspec))
-         (and di (new sp800-108-double-pipeline-hmac-kdf-impl% (spec spec) (factory this) (di di)))]
-        [_ #f]))
-    ))
+(define-interface inner-fetch$
+  ([fi-digest
+    (-> inner-fetch$? factory? digest-info?
+        (or/c digest-impl? #f))]
+   [fi-cipher
+    (-> inner-fetch$? factory? cipher-info?
+        (or/c cipher-impl? #f))]
+   [fi-kdf
+    (-> inner-fetch$? factory? kdf-info?
+        (or/c kdf-impl? #f))]
+   [fi-pk
+    (-> inner-fetch$? factory? pk-info?
+        (or/c pk-impl? #f))])
+  #:generics-prefix $)
+
+;; ----------------------------------------
+
+(struct inner-fetch-base ()
+  #:properties
+  (method-properties
+   #:export ([inner-fetch$ #:prefix %])
+
+   (define (%fi-digest self factory info)
+     (define (make-digest inner)
+       (common-digest-impl info factory inner))
+     (match ($get-spec info)
+       [(list 'hmac dspec)
+        (define di ($fetch-digest factory dspec))
+        (and di (rkt-hmac-inner-impl di))]
+       [_ #f]))
+
+   (define (%fi-cipher self factory info)
+     #f)
+
+   (define (%fi-pk self factory info)
+     #f)
+
+   (define (%fi-kdf self factory info)
+     (define (make-kdf inner)
+       (common-kdf-impl info factory inner))
+     (match ($get-spec info)
+       [(list 'hkdf dspec)
+        (define di ($fetch-digest factory `(hmac ,dspec)))
+        (and di (make-kdf (hkdf-inner-impl di)))]
+       [(list 'concat dspec)
+        (define di ($fetch-digest factory dspec))
+        (and di (make-kdf (concat-kdf-inner-impl di #f)))]
+       [(list 'concat 'hmac (? symbol? dspec))
+        (define di ($fetch-digest factory `(hmac ,dspec)))
+        (and di (make-kdf (concat-kdf-inner-impl di #t)))]
+       [(list 'ans-x9.63 dspec)
+        (define di ($fetch-digest factory dspec))
+        (and di (make-kdf (ans-x9.63-kdf-inner-impl di)))]
+       [(list 'sp800-108-counter 'hmac dspec)
+        (define di ($fetch-digest factory dspec))
+        (and di (make-kdf (sp800-108-counter-hmac-kdf-inner-impl di)))]
+       [(list 'sp800-108-feedback 'hmac dspec)
+        (define di ($fetch-digest factory dspec))
+        (and di (make-kdf (sp800-108-feedback-hmac-kdf-inner-impl di)))]
+       [(list 'sp800-108-double-pipeline 'hmac dspec)
+        (define di ($fetch-digest factory dspec))
+        (and di (make-kdf (sp800-108-double-pipeline-hmac-kdf-inner-impl di)))]
+       [_ #f]))
+   ))
