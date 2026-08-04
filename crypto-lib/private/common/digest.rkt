@@ -1,4 +1,4 @@
-;; Copyright 2012-2018 Ryan Culpepper
+;; Copyright 2012-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
@@ -10,8 +10,7 @@
          "interfaces.rkt"
          "common.rkt"
          "error.rkt")
-(provide (struct-out digest-ctx)
-         (struct-out common-digest-impl)
+(provide (struct-out common-digest-impl)
          (interface-out digest-inner-impl$)
          (struct-out rkt-hmac-inner-impl)
          config:blake2s
@@ -23,7 +22,7 @@
 ;; ============================================================
 ;; Digest
 
-(struct digest-ctx state-ctx
+(struct common-digest-ctx digest-ctx
   (csize    ;; (U Nat #f) -- default/configured size; #f only if late-size ('vz)
    ))
 
@@ -89,11 +88,11 @@
      (define lock (make-statelock 'open))
      (cond [(null? config)
             (define ic ($dii-new-ctx1 (.inner self) key))
-            (digest-ctx self ic lock ($di-size self))]
+            (common-digest-ctx self ic lock ($di-size self))]
            [else
             (define-values (ic csize)
               ($dii-new-ctx2 (.inner self) key config))
-            (digest-ctx self ic lock csize)]))
+            (common-digest-ctx self ic lock csize)]))
 
    (define (%di-update self dctx src)
      (call-with-state
@@ -113,7 +112,7 @@
       (lambda (s) (di-final* self dctx size))))
 
    (define (di-final* self dctx size)
-     (match-define (digest-ctx _ ic _ csize) dctx)
+     (match-define (common-digest-ctx _ ic _ csize) dctx)
      (define outsize
        (cond [csize
               (when (and size (not (= size csize)))
@@ -137,9 +136,9 @@
       (lambda (s) (di-copy* self dctx))))
 
    (define (di-copy* self dctx)
-     (match-define (digest-ctx impl ic lock csize) dctx)
+     (match-define (common-digest-ctx impl ic lock csize) dctx)
      (define ic2 ($dii-copy (.inner self) ic))
-     (and ic2 (digest-ctx impl ic2 (copy-statelock lock) csize)))))
+     (and ic2 (common-digest-ctx impl ic2 (copy-statelock lock) csize)))))
 
 (define (digest-sanity-check impl #:size [size #f] #:block-size [block-size #f])
   ;; Use info's size and block-size directly so that subclasses can override

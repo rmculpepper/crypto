@@ -8,7 +8,8 @@
          scramble/struct
          "catalog.rkt"
          "error.rkt")
-(provide (all-defined-out))
+(provide (all-defined-out)
+         (struct-out bytes-range))
 
 ;; ============================================================
 ;; General Notes
@@ -303,12 +304,16 @@
 (define (pk-k-compute-secret pkk peer-pubkey)
   ($pkk-compute-secret (ctx-impl pkk) pkk peer-pubkey))
 
+(define-interface pk-import$
+  #:predicate pk-import?
+  ([pk-import-pk (-> pk-import? any/c (or/c pk-key? pk-parameters? #f))])
+  #:generics-prefix $)
+
 (define-interface pk-impl$
-  #:super (impl$ pk-info$)
+  #:super (impl$ pk-info$ pk-import$)
   #:predicate pk-impl?
   ([pk-generate-key     (-> pk-impl? config/c pk-key?)]
    [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
-   [pk-import-pk        (-> pk-impl? any/c (or/c pk-key? pk-parameters? #f))]
    [pk-import-key       (-> pk-impl? pk-key? boolean? pk-key?)]
 
    [pkp-generate-key    (-> pk-impl? pk-parameters? pk-key?)]
@@ -356,6 +361,7 @@
 ;; Implementation Factories
 
 (define-interface factory$
+  #:super (pk-import$)
   #:predicate factory?
   ([factory-print     (-> factory? void?)]
    [factory-info      (-> factory? symbol? any)]
@@ -365,6 +371,5 @@
    [fetch-digest      (-> factory? digest-spec? (or/c digest-impl? #f))]
    [fetch-cipher      (-> factory? cipher-spec? (or/c cipher-impl? #f))]
    [fetch-pk          (-> factory? pk-spec?     (or/c pk-impl? #f))]
-   [fetch-kdf         (-> factory? kdf-spec?    (or/c kdf-impl? #f))]
-   [fetch-import-pk   (-> factory? any/c        (or/c pk-key? pk-parameters? #f))])
+   [fetch-kdf         (-> factory? kdf-spec?    (or/c kdf-impl? #f))])
   #:generics-prefix $)

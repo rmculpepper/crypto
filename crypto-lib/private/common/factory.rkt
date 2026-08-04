@@ -1,4 +1,4 @@
-;; Copyright 2013-2018 Ryan Culpepper
+;; Copyright 2013-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
@@ -11,7 +11,6 @@
          "catalog.rkt"
          "interfaces.rkt"
          "digest.rkt"
-         #;"cipher.rkt"
          "kdf.rkt")
 (provide (struct-out factory-base)
          (struct-out common-factory)
@@ -168,7 +167,7 @@
          (void)))
      (void))
 
-   (define ($factory-import-pk self parsed)
+   (define ($pk-import-pk self parsed)
      (match parsed
        [(cons pkspec _)
         (let ([pk ($fetch-pk self pkspec)])

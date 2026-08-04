@@ -4,7 +4,6 @@
 #lang racket/base
 (require racket/contract/base
          racket/match
-         racket/class
          racket/random
          "private/common/interfaces.rkt"
          "private/common/catalog.rkt"
@@ -52,23 +51,22 @@
 
 ;; ============================================================
 
-(define (to-impl src0 [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
+(define (to-impl src0 [fail-ok? #f] #:lookup [lookup #f])
   (let loop ([src src0])
-    (cond [(is-a? src impl<%>) src]
-          [(is-a? src ctx<%>) (loop (send src get-impl))]
+    (cond [(impl? src) src]
+          [(ctx? src) (ctx-impl src)]
           [(and lookup (lookup src)) => values]
           [fail-ok? #f]
-          [else (crypto-error "could not get implementation\n  ~a: ~e"
-                              (or what "given") src0)])))
+          [else (crypto-error "could not get implementation" #:for src0)])))
 
-(define (to-info src0 [fail-ok? #f] #:lookup [lookup #f] #:what [what #f])
+(define (to-info src0 [fail-ok? #f] #:lookup [lookup #f])
   (let loop ([src src0])
-    (cond [(is-a? src info<%>) src]
-          [(is-a? src impl<%>) (send src get-info)]
-          [(is-a? src ctx<%>) (loop (send src get-impl))]
+    (cond [(info? src) src]
+          [(impl? src) ($get-info src)]
+          [(ctx? src) (loop (ctx-impl ctx))]
           [(and lookup (lookup src)) => values]
           [fail-ok? #f]
-          [else (crypto-error "could not get info\n  ~a: ~e" (or what "given") src0)])))
+          [else (crypto-error "could not get info" #:for src0)])))
 
 ;; ============================================================
 ;; Factories
@@ -104,37 +102,37 @@
 ;; crypto-factories : parameter of (listof factory<%>)
 (define crypto-factories (make-parameter null coerce-list))
 
-(define (get-factory i)
+(define (get-factory v)
   (with-crypto-entry 'get-factory
-    (let loop ([i i])
-      (cond [(is-a? i impl<%>) (send i get-factory)]
-            [(is-a? i ctx<%>) (loop (send i get-impl))]))))
+    (cond [(impl? v) ($get-factory v)]
+          [(ctx? v) ($get-factory (ctx-impl v))])))
 
-(define (get-digest di [factory/s (crypto-factories)])
+(define (get-digest dspec [factory/s (crypto-factories)])
   (with-crypto-entry 'get-digest
     (for/or ([f (in-list (coerce-list factory/s))])
-      (send f get-digest di))))
+      ($fetch-digest f dspec))))
 
-(define (get-cipher ci [factory/s (crypto-factories)])
+(define (get-cipher cspec [factory/s (crypto-factories)])
   (with-crypto-entry 'get-cipher
     (for/or ([f (in-list (coerce-list factory/s))])
-      (send f get-cipher ci))))
+      ($fetch-cipher f cspec))))
 
-(define (get-pk pki [factory/s (crypto-factories)])
+(define (get-pk pkspec [factory/s (crypto-factories)])
   (with-crypto-entry 'get-pk
     (for/or ([f (in-list (coerce-list factory/s))])
-      (send f get-pk pki))))
+      ($fetch-pk f pkspec))))
 
-(define (get-kdf k [factory/s (crypto-factories)])
+(define (get-kdf kdfspec [factory/s (crypto-factories)])
   (with-crypto-entry 'get-kdf
     (for/or ([f (in-list (coerce-list factory/s))])
-      (send f get-kdf k))))
+      ($fetch-kdf f kdfspec))))
 
 (define (factory-print-info factory)
-  (send factory print-info) (void))
+  ($factory-print factory)
+  (void))
 
 (define (factory-version factory)
-  (send factory get-version))
+  ($factory-version factory))
 
 
 ;; ============================================================
@@ -177,63 +175,71 @@
    (-> digest/c bytes?)]))
 
 (define digest/c (or/c digest-spec? digest-impl?))
-(define (-get-digest-impl o) (to-impl o #:what "digest" #:lookup get-digest))
-(define (-get-digest-info o) (to-info o #:what "digest" #:lookup digest-spec->info))
-(define (-get-digest-spec o) (let ([di (-get-digest-info o)]) (and di (send di get-spec))))
+(define (-get-digest-impl o) (to-impl o #:lookup get-digest))
+(define (-get-digest-info o) (to-info o #:lookup digest-spec->info))
+(define (-get-digest-spec o) (let ([di (-get-digest-info o)]) (and di ($get-spec di))))
 
 ;; ----
 
-(define (digest-size o)
+(define (digest-size di)
   (with-crypto-entry 'digest-size
-    (send (-get-digest-info o) get-size)))
-(define (digest-block-size o)
+    ($di-size (-get-digest-info di))))
+(define (digest-block-size di)
   (with-crypto-entry 'digest-block-size
-    (send (-get-digest-info o) get-block-size)))
+    ($di-block-size (-get-digest-info di))))
 
-(define (digest-security-strength o [cr? #t])
+(define (digest-security-strength di [cr? #t])
   (with-crypto-entry 'digest-security-strength
-    (send (-get-digest-info o) get-security-strength cr?)))
+    ($di-security-strength (-get-digest-info di) cr?)))
 
 ;; ----
 
 (define (make-digest-ctx di #:key [key #f] #:config [config null])
   (with-crypto-entry 'make-digest-ctx
-    (send (-get-digest-impl di) new-ctx key config)))
+    ($di-new-ctx (-get-digest-impl di) key config)))
 
-(define (digest-update dg src)
+(define (digest-update dctx src)
   (with-crypto-entry 'digest-update
-    (send dg update src)))
+    ($di-update (ctx-impl dctx) dctx src)))
 
-(define (digest-final dg #:size [size #f])
+(define (digest-final dctx #:size [size #f])
   (with-crypto-entry 'digest-final
-    (send dg final size)))
+    ($di-final (ctx-impl dctx) dctx size)))
 
-(define (digest-copy dg)
+(define (digest-copy dctx)
   (with-crypto-entry 'digest-copy
-    (send dg copy)))
+    ($di-copy (ctx-impl dctx) dctx)))
 
-(define (digest-peek-final dg #:size [size #f])
+(define (digest-peek-final dctx #:size [size #f])
   (with-crypto-entry 'digest-peek-final
-    (let ([dg2 (send dg copy)]) (and dg2 (send dg2 final size)))))
+    (define dctx2 ($di-copy (ctx-impl dctx)))
+    (and dctx2 ($di-final (ctx-impl dctx2) dctx2 size))))
 
 ;; ----
 
 (define (digest di inp #:key [key #f] #:size [size #f] #:config [config null])
   (with-crypto-entry 'digest
     (let ([di (-get-digest-impl di)])
-      (send di digest inp key size config))))
+      ($digest di inp key size config))))
 
 ;; ----
 
 (define (make-hmac-ctx di key)
   (with-crypto-entry 'make-hmac-ctx
-    (let ([di (-get-digest-impl di)])
-      (send di new-hmac-ctx key))))
+    (define hmacdi (-get-hmac-impl di))
+    ($di-new-ctx hmacdi key null)))
 
 (define (hmac di key inp)
   (with-crypto-entry 'hmac
-    (let ([di (-get-digest-impl di)])
-      (send di hmac key inp))))
+    (define hmacdi (-get-hmac-impl di))
+    ($digest hmacdi inp key #f null)))
+
+(define (-get-hmac-impl di)
+  (cond [(digest-impl? di)
+         (parameterize ((crypto-factories ($get-factory di)))
+           (-get-digest-impl `(hmac ,($get-spec di))))]
+        [(digest-spec? di)
+         (-get-digest-impl `(hmac ,di))]))
 
 ;; ----
 
@@ -311,8 +317,8 @@
 
 (define default-pad #t)
 
-(define (-get-cipher-impl o) (to-impl o #:what "cipher" #:lookup get-cipher))
-(define (-get-cipher-info o) (to-info o #:what "cipher" #:lookup cipher-spec->info))
+(define (-get-cipher-impl o) (to-impl o #:lookup get-cipher))
+(define (-get-cipher-info o) (to-info o #:lookup cipher-spec->info))
 
 ;; ----
 
@@ -320,32 +326,32 @@
 
 (define (cipher-default-key-size o)
   (with-crypto-entry 'cipher-default-key-size
-    (send (-get-cipher-info o) get-key-size)))
+    ($ci-key-size (-get-cipher-info o))))
 (define (cipher-key-sizes o)
   (with-crypto-entry 'cipher-key-sizes
-    (size-set->list (send (-get-cipher-info o) get-key-sizes))))
+    (size-set->list ($ci-key-sizes (-get-cipher-info o)))))
 (define (cipher-block-size o)
   (with-crypto-entry 'cipher-block-size
-    (send (-get-cipher-info o) get-block-size)))
+    ($ci-block-size (-get-cipher-info o))))
 (define (cipher-chunk-size o)
   (with-crypto-entry 'cipher-chunk-size
-    (send (-get-cipher-info o) get-chunk-size)))
+    ($ci-chunk-size (-get-cipher-info o))))
 (define (cipher-iv-size o)
   (with-crypto-entry 'cipher-iv-size
-    (send (-get-cipher-info o) get-iv-size)))
+    ($ci-iv-size (-get-cipher-info o))))
 (define (cipher-aead? o)
   (with-crypto-entry 'cipher-aead?
-    (send (-get-cipher-info o) aead?)))
+    ($ci-aead? (-get-cipher-info o))))
 (define (cipher-default-auth-size o)
   (with-crypto-entry 'cipher-default-auth-size
-    (send (-get-cipher-info o) get-auth-size)))
+    ($ci-auth-size (-get-cipher-info o))))
 
 ;; ----
 
 (define (encrypt-ctx? x)
-  (and (cipher-ctx? x) (send x get-encrypt?)))
+  (and (cipher-ctx? x) (cipher-ctx-encrypt? x)))
 (define (decrypt-ctx? x)
-  (and (cipher-ctx? x) (not (send x get-encrypt?))))
+  (and (cipher-ctx? x) (cipher-ctx-encrypt? x)))
 
 ;; make-{en,de}crypt-ctx : ... -> cipher-ctx
 ;; auth-tag-size : Nat/#f -- #f means default tag size for cipher
@@ -360,29 +366,28 @@
 
 (define (-encrypt-ctx ci key iv pad auth-size auth-attached?)
   (let ([ci (-get-cipher-impl ci)])
-    (send ci new-ctx key (or iv #"") #t pad auth-size auth-attached?)))
+    ($ci-new-ctx ci key (or iv #"") #t pad auth-size auth-attached?)))
 (define (-decrypt-ctx ci key iv pad auth-size auth-attached?)
   (let ([ci (-get-cipher-impl ci)])
-    (send ci new-ctx key (or iv #"") #f pad auth-size auth-attached?)))
+    ($ci-new-ctx ci key (or iv #"") #f pad auth-size auth-attached?)))
 
-(define (cipher-update-aad c inp)
+(define (cipher-update-aad cctx inp)
   (with-crypto-entry 'cipher-update-aad
-    (send c update-aad inp)
-    (void)))
+    ($ci-update-aad (ctx-impl cctx) cctx inp)))
 
-(define (cipher-update c inp)
+(define (cipher-update cctx inp)
   (with-crypto-entry 'cipher-update
-    (send c update inp)
-    (send c get-output)))
+    ($ci-update (ctx-impl cctx) cctx inp)
+    ($ci-get-output (ctx-impl cctx) cctx)))
 
-(define (cipher-final c [auth-tag #f])
+(define (cipher-final cctx [auth-tag #f])
   (with-crypto-entry 'cipher-final
-    (send c final auth-tag)
-    (send c get-output)))
+    ($ci-final (ctx-impl cctx) cctx auth-tag)
+    ($ci-get-output (ctx-impl cctx) cctx)))
 
-(define (cipher-get-auth-tag c)
+(define (cipher-get-auth-tag cctx)
   (with-crypto-entry 'cipher-get-auth-tag
-    (send c get-auth-tag)))
+    ($ci-auth-tag (ctx-impl cctx) cctx)))
 
 ;; ----
 
@@ -390,42 +395,47 @@
                  #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'encrypt
     (let ([ci (-get-cipher-impl ci)])
-      (define ctx (-encrypt-ctx ci key iv pad auth-size #t))
-      (send ctx update-aad aad-inp)
-      (send ctx update inp)
-      (send ctx final #f)
-      (send ctx get-output))))
+      (define cctx (-encrypt-ctx ci key iv pad auth-size #t))
+      (define impl (ctx-impl cctx))
+      ($ci-update-aad impl cctx aad-inp)
+      ($ci-update impl cctx inp)
+      ($ci-final impl cctx #f)
+      ($ci-get-output impl cctx))))
 
 (define (decrypt ci key iv inp
                  #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'decrypt
     (let ([ci (-get-cipher-impl ci)])
-      (define ctx (-decrypt-ctx ci key iv pad auth-size #t))
-      (send ctx update-aad aad-inp)
-      (send ctx update inp)
-      (send ctx final #f)
-      (send ctx get-output))))
+      (define cctx (-decrypt-ctx ci key iv pad auth-size #t))
+      (define impl (ctx-impl cctx))
+      ($ci-update-aad impl cctx aad-inp)
+      ($ci-update impl cctx inp)
+      ($ci-final impl cctx #f)
+      ($ci-get-output impl cctx))))
 
 (define (encrypt/auth ci key iv inp
                       #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'encrypt/auth
     (let ([ci (-get-cipher-impl ci)])
-      (define ctx (-encrypt-ctx ci key iv pad auth-size #f))
-      (send ctx update-aad aad-inp)
-      (send ctx update inp)
-      (send ctx final #f)
-      (values (send ctx get-output) (send ctx get-auth-tag)))))
+      (define cctx (-encrypt-ctx ci key iv pad auth-size #f))
+      (define impl (ctx-impl cctx))
+      ($ci-update-aad impl cctx aad-inp)
+      ($ci-update impl cctx inp)
+      ($ci-final impl cctx #f)
+      (values ($ci-get-output impl cctx)
+              ($ci-auth-tag impl cctx)))))
 
 (define (decrypt/auth ci key iv inp
                       #:pad [pad default-pad] #:aad [aad-inp null] #:auth-tag [auth-tag #f])
   (with-crypto-entry 'decrypt
     (let ([ci (-get-cipher-impl ci)])
       (define auth-len (and auth-tag (bytes-length auth-tag)))
-      (define ctx (-decrypt-ctx ci key iv pad auth-len #f))
-      (send ctx update-aad aad-inp)
-      (send ctx update inp)
-      (send ctx final auth-tag)
-      (send ctx get-output))))
+      (define cctx (-decrypt-ctx ci key iv pad auth-len #f))
+      (define impl (ctx-impl cctx))
+      ($ci-update-aad impl cctx aad-inp)
+      ($ci-update impl cctx inp)
+      ($ci-final impl cctx #f)
+      ($ci-get-output impl cctx))))
 
 ;; ----
 
@@ -472,22 +482,22 @@
         bytes?)]
   ))
 
-(define (-get-kdf-impl o) (to-impl o #:what "KDF" #:lookup get-kdf))
+(define (-get-kdf-impl o) (to-impl o #:lookup get-kdf))
 
 (define (kdf k pass salt [params '()] #:key-size [key-size #f])
   (with-crypto-entry 'kdf
     (let ([k (-get-kdf-impl k)])
-      (send k derive key-size params pass salt))))
+      ($kdf-derive k key-size params pass salt))))
 
 (define (pwhash k pass [params '()])
   (with-crypto-entry 'pwhash
     (let ([k (-get-kdf-impl k)])
-      (send k pwhash params pass))))
+      ($pwhash k params pass))))
 
 (define (pwhash-verify k pass cred)
   (with-crypto-entry 'pwhash-verify
     (define k* (or k (-get-kdf-impl (pwcred->kdf-spec cred))))
-    (send k* pwhash-verify pass cred)))
+    ($pwhash-verify k* pass cred)))
 
 (define (pwcred->kdf-spec cred)
   ;; see also crypto/private/rkt/pwhash
@@ -506,7 +516,7 @@
                      #:key-size [key-size (digest-size di)])
   (with-crypto-entry 'pbkdf2-hmac
     (let ([k (-get-kdf-impl `(pbkdf2 hmac ,di))])
-      (send k derive key-size `((iterations ,iterations)) pass salt))))
+      ($kdf-derive k key-size `((iterations ,iterations)) pass salt))))
 
 (define (scrypt pass salt
                 #:N N
@@ -515,7 +525,7 @@
                 #:key-size [key-size 32])
   (with-crypto-entry 'scrypt
     (let ([k (-get-kdf-impl 'scrypt)])
-      (send k derive key-size `((N ,N) (p ,p) (r ,r)) pass salt))))
+      ($kdf-derive k key-size `((N ,N) (p ,p) (r ,r)) pass salt))))
 
 ;; ============================================================
 ;; Public-key Systems
@@ -611,138 +621,143 @@
 (define key-format/c
   (or/c symbol? #f))
 
-(define (-get-pk-impl pki) (to-impl pki #:what "algorithm" #:lookup get-pk))
-(define (-get-pk-info pk) (to-info pk #:what "algorithm" #:lookup pk-spec->info))
+(define (-get-pk-impl pki) (to-impl pki #:lookup get-pk))
+(define (-get-pk-info pk) (to-info pk #:lookup pk-spec->info))
 
 ;; ----------------------------------------
 
 ;; A private key is really a keypair, including both private and public parts.
 ;; A public key contains only the public part.
 (define (private-key? x)
-  (and (is-a? x pk-key<%>) (send x is-private?)))
+  (and (pk-key? x) (pk-key-private? x)))
 (define (public-only-key? x)
-  (and (is-a? x pk-key<%>) (not (send x is-private?))))
+  (and (pk-key? x) (not (pk-key-private? x))))
 
 (define (pk-can-sign? pk [pad #f] [dspec #f])
   (with-crypto-entry 'pk-can-sign?
-    (and (send (-get-pk-info pk) can-sign? pad dspec) #t)))
+    ($pk-can-sign? (-get-pk-info pk) pad dspec)))
 (define (pk-can-encrypt? pk [pad #f])
   (with-crypto-entry 'pk-can-encrypt?
-    (and (send (-get-pk-info pk) can-encrypt? pad) #t)))
+    ($pk-can-encrypt? (-get-pk-info pk) pad)))
 (define (pk-can-key-agree? pk)
   (with-crypto-entry 'pk-can-key-agree?
-    (and (send (-get-pk-info pk) can-key-agree?) #t)))
+    ($pk-can-key-agree? (-get-pk-info pk))))
 (define (pk-has-parameters? pk)
   (with-crypto-entry 'pk-has-parameters?
-    (and (send (-get-pk-info pk) has-params?) #t)))
+    ($pk-has-params? (-get-pk-info pk))))
 
 (define (pk-security-strength pk)
   (with-crypto-entry 'pk-security-strength
-    (send pk get-security-bits)))
+    (cond [(pk-key? pk) ($pkk-security-bits (ctx-impl pk) pk)]
+          [(pk-parameters? pk) ($pkp-security-bits (ctx-impl pk) pk)])))
 
-(define (pk-key->parameters pk)
+(define (pk-key->parameters pkk)
   (with-crypto-entry 'pk-key->parameters
-    (and (pk-has-parameters? pk)
-         (send pk get-params))))
+    (and (pk-has-parameters? pkk)
+         ($pkk-params (ctx-impl pkk) pkk))))
 
 ;; Are the *public parts* of the given keys equal?
 (define (public-key=? k1 . ks)
   (with-crypto-entry 'public-key=?
+    (define impl (ctx-impl k1))
     (for/and ([k (in-list ks)])
-      (send k1 public-equal? k))))
+      ($pkk-equal-public? impl k1 k))))
 
-(define (pk-key->datum pk fmt)
+(define (pk-key->datum pkk fmt)
   (with-crypto-entry 'pk-key->datum
-    (or (send pk write-key fmt)
+    (or ($pkk-write-key (ctx-impl pkk) pkk fmt)
         (crypto-error "key format not supported\n  format: ~e"
-                      fmt #:in pk))))
+                      fmt #:in pkk))))
 (define (datum->pk-key datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-key
     (define parsed (parse-key fmt datum))
     (or (and parsed (for/or ([src (in-list (if (list? src) src (list src)))])
-                      (send src import-pk parsed)))
+                      ($pk-import-pk src parsed)))
         (crypto-error "unable to read key\n  format: ~e" fmt))))
 
 (define (pk-parameters->datum pkp fmt)
   (with-crypto-entry 'pk-parameters->datum
-    (or (send pkp write-params fmt)
+    (or ($pkp-write-params (ctx-impl pkp) pkp fmt)
         (crypto-error "parameters format not supported\n  format: ~e"
                       fmt #:in pkp))))
 (define (datum->pk-parameters datum fmt [src (crypto-factories)])
   (with-crypto-entry 'datum->pk-parameters
     (define parsed (parse-params fmt datum))
     (or (and parsed (for/or ([src (in-list (if (list? src) src (list src)))])
-                      (send src import-pk parsed)))
+                      ($pk-import-pk src parsed)))
         (crypto-error "unable to read parameters\n  format: ~e" fmt))))
 
-(define (pk-key->public-only-key pk)
+(define (pk-key->public-only-key pkk)
   (with-crypto-entry 'pk-key->public-only-key
-    (send pk get-public-key)))
+    ($pkk-public-key (ctx-impl pkk) pkk)))
 
 ;; ----------------------------------------
 
-(define (pk-sign pk msg #:digest [dspec #f] #:pad [pad #f])
+(define (pk-sign pkk msg #:digest [dspec #f] #:pad [pad #f])
   (with-crypto-entry 'pk-sign
-    (send pk sign msg dspec pad)))
+    ($pkk-sign (ctx-impl pkk) pkk msg dspec pad)))
 
-(define (pk-verify pk msg sig #:digest [dspec #f] #:pad [pad #f])
+(define (pk-verify pkk msg sig #:digest [dspec #f] #:pad [pad #f])
   (with-crypto-entry 'pk-verify
-    (send pk verify msg dspec pad sig)))
+    ($pkk-verify (ctx-impl pkk) pkk msg dspec pad sig)))
 
-(define (pk-sign-digest pk di dbuf #:pad [pad #f])
+(define (pk-sign-digest pkk di dbuf #:pad [pad #f])
   (with-crypto-entry 'pk-sign-digest
     (define dspec (-get-digest-spec di))
-    (send pk sign dbuf di pad)))
-(define (pk-verify-digest pk di dbuf sig #:pad [pad #f])
+    ($pkk-sign (ctx-impl pkk) pkk dbuf di pad)))
+
+(define (pk-verify-digest pkk di dbuf sig #:pad [pad #f])
   (with-crypto-entry 'pk-verify-digest
     (define dspec (-get-digest-spec di))
-    (send pk verify dbuf di pad sig)))
+    ($pkk-verify (ctx-impl pkk) pkk dbuf di pad sig)))
 
-(define (digest/sign pk di0 inp #:pad [pad #f])
+(define (digest/sign pkk di0 inp #:pad [pad #f])
   (with-crypto-entry 'digest/sign
     (define dspec (-get-digest-spec di0))
-    (define di (get-digest dspec (get-factory pk)))
+    (define di (get-digest dspec (get-factory pkk)))
     (unless di (err/missing-digest dspec))
-    (unless (digest-size di) (err/not-fixed-digest di #:in pk))
-    (send pk sign (digest di inp) dspec pad)))
+    (unless (digest-size di) (err/not-fixed-digest di #:in pkk))
+    ($pkk-sign (ctx-impl pkk) pkk (digest di inp) dspec pad)))
 
-(define (digest/verify pk di0 inp sig #:pad [pad #f])
+(define (digest/verify pkk di0 inp sig #:pad [pad #f])
   (with-crypto-entry 'digest/verify
     (define dspec (-get-digest-spec di0))
-    (define di (get-digest dspec (get-factory pk)))
+    (define di (get-digest dspec (get-factory pkk)))
     (unless di (err/missing-digest dspec))
-    (unless (digest-size di) (err/not-fixed-digest di #:in pk))
-    (send pk verify (digest di inp) dspec pad sig)))
+    (unless (digest-size di) (err/not-fixed-digest di #:in pkk))
+    ($pkk-verify (ctx-impl pkk) pkk (digest di inp) dspec pad sig)))
 
 ;; ----------------------------------------
 
-(define (pk-encrypt pk buf #:pad [pad #f])
+(define (pk-encrypt pkk buf #:pad [pad #f])
   (with-crypto-entry 'pk-encrypt
-    (send pk encrypt buf pad)))
+    ($pkk-encrypt (ctx-impl pkk) pkk buf pad)))
 
-(define (pk-decrypt pk buf #:pad [pad #f])
+(define (pk-decrypt pkk buf #:pad [pad #f])
   (with-crypto-entry 'pk-decrypt
-    (send pk decrypt buf pad)))
+    ($pkk-decrypt (ctx-impl pkk) pkk buf pad)))
 
 ;; ----------------------------------------
 
-(define (pk-derive-secret pk peer-key)
+(define (pk-derive-secret pkk peer-key)
   (with-crypto-entry 'pk-derive-secret
-    (send pk compute-secret peer-key)))
+    ($pkk-compute-secret (ctx-impl pkk) pkk peer-key)))
 
 ;; ----------------------------------------
 
-(define (generate-private-key pki [config '()])
+(define (generate-private-key pk [config '()])
   (with-crypto-entry 'generate-private-key
-    (if (is-a? pki pk-params<%>)
-        (send pki generate-key config)
-        (let ([pki (-get-pk-impl pki)])
-          (send pki generate-key config)))))
+    (cond [(pk-parameters? pk)
+           (check-config config '() "key generation from parameters")
+           ($pkp-generate-key (ctx-impl pk) pk)]
+          [else
+           (define pki (-get-pk-impl pk))
+           ($pk-generate-key pki config)])))
 
-(define (generate-pk-parameters pki [config '()])
+(define (generate-pk-parameters pk [config '()])
   (with-crypto-entry 'generate-pk-parameters
-    (let ([pki (-get-pk-impl pki)])
-      (send pki generate-params config))))
+    (define pki (-get-pk-impl pk))
+    ($pk-generate-params pki config)))
 
 ;; ============================================================
 ;; Security bits and levels
