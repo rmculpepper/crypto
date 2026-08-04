@@ -70,21 +70,13 @@
 
 ;; ----------------------------------------
 
-(struct cipher-ctx state-ctx
-  (encrypt?       ;; Boolean
-   pad?           ;; Boolean
+(struct common-cipher-ctx cipher-ctx
+  (pad?           ;; Boolean
    auth-len       ;; Nat -- 0 means no tag
    attached-tag?  ;; Boolean
    out            ;; BytesOutputPort
    auth-tag-box   ;; (Box (U Bytes #f))
-   )
-  #:properties
-  (method-properties
-   #:export ([simple-write$ #:prefix %])
-   (define-struct-abbrevs cipher-ctx)
-   (define (%to-write-prefixes self)
-     (list* "ctx" (if (.encrypt? self) "encrypt" "decrypt")
-            (cdr ($to-write-prefixes (.impl self)))))))
+   ))
 
 (define cipher-state-desc
   '((aad    "ready for AAD or input")
@@ -115,8 +107,8 @@
                                 key iv enc? pad? auth-len attached-tag?
                                 out auth-tag-box))
        (define init-state (if ($ci-aead? self) 'aad 'open))
-       (cipher-ctx self ic (make-statelock init-state cipher-state-desc)
-                   enc? pad? auth-len attached-tag? out auth-tag-box)))
+       (common-cipher-ctx self ic (make-statelock init-state cipher-state-desc)
+                          enc? pad? auth-len attached-tag? out auth-tag-box)))
 
    (define (check-key-size self size)
      (unless ($ci-key-size-ok? self size)
@@ -139,9 +131,6 @@
      (unless ($ci-auth-size-ok? self auth-size)
        (crypto-error "bad authentication tag size\n  given: ~a bytes"
                      auth-size #:in self)))
-
-   (define (%ci-encrypt? self cctx)
-     (cipher-ctx-encrypt? cctx))
 
    (define (%ci-update-aad self cctx src)
      (unless (null? src)
@@ -172,7 +161,7 @@
 
    (define (%ci-final self cctx tag)
      (define encrypt? (cipher-ctx-encrypt? cctx))
-     (define attached-tag? (cipher-ctx-attached-tag? cctx))
+     (define attached-tag? (common-cipher-ctx-attached-tag? cctx))
      (when (and encrypt? tag)
        (crypto-error "cannot set authentication tag for encryption context"
                      #:for cctx))
@@ -181,7 +170,7 @@
                      #:for cctx))
      (when #t ;; decrypt w/ detached tag
        (let ([tag (or tag #"")]
-             [auth-len (cipher-ctx-auth-len cctx)])
+             [auth-len (common-cipher-ctx-auth-len cctx)])
          (check-bytes "authentication tag" tag auth-len #:for cctx)))
      (call-with-state
       cctx #:pre 'error #:post 'closed
@@ -200,6 +189,9 @@
        ($cii-close (.inner self) (ctx-inner cctx))
        (set-ctx-inner! cctx #f)))
 
+   (define (%ci-get-output self cctx)
+     (get-output-bytes (common-cipher-ctx-out cctx)))
+
    (define (%ci-auth-tag self cctx)
      (cond [(cipher-ctx-encrypt? ctx)
             ;; ci-final sets auth-tag-out for encryption context
@@ -212,7 +204,7 @@
                           #:for cctx)]))
 
    (define (get-auth-tag* self cctx)
-     (unbox (cipher-ctx-auth-tag-box cctx)))))
+     (unbox (common-cipher-ctx-auth-tag-box cctx)))))
 
 ;; ============================================================
 ;; Cipher Inner Impl

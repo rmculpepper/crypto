@@ -79,10 +79,15 @@
 ;; ============================================================
 ;; Info
 
-(define-interface info$
-  #:predicate info?
+(define-interface has-spec$
+  #:predicate has-spec?
   (get-spec)
   #:generics-prefix $)
+
+(define-interface info$
+  #:super (has-spec$)
+  #:predicate info?
+  ())
 
 ;; ============================================================
 ;; Digests

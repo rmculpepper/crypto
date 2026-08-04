@@ -2,10 +2,12 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/contract/base
+(require racket/match
+         racket/contract/base
          scramble/bundle
          scramble/struct
-         "catalog.rkt")
+         "catalog.rkt"
+         "error.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================
@@ -19,26 +21,143 @@
 
 ;; ============================================================
 
+;; Forward references
 (define (crypto-factory? x) (factory? x))
+
+;; ------------------------------------------------------------
+
+(define-interface has-info$
+  #:predicate has-info?
+  ([get-info    (-> has-info? info?)])
+  #:generics-prefix $)
+
+(define-interface has-factory$
+  #:predicate has-factory?
+  ([get-factory (-> has-factory? crypto-factory?)])
+  #:generics-prefix $)
+
+;; ============================================================
 
 (struct ctx (impl [inner #:mutable])
   #:properties
   (method-properties
-   #:export ([simple-write$ #:prefix %])
+   #:export ([has-spec$ #:prefix %]
+             [has-info$ #:prefix %]
+             [has-factory$ #:prefix %]
+             [simple-write$ #:prefix %])
    (define-struct-abbrevs ctx)
+   ;; ----
+   (define (%get-spec self) ($get-spec ($get-info self)))
+   (define (%get-info self) ($get-info (.impl self)))
+   (define (%get-factory self) ($get-factory (.impl self)))
    ;; ----
    (define (%to-write-string self)
      ($to-write-string (.impl self)))
    (define (%to-write-prefixes self)
      (cons "ctx" (cdr ($to-write-prefixes (.impl self)))))))
 
+;; ----------------------------------------
+
+(struct state-ctx ctx (lock))
+(struct statelock (sema [state #:mutable] desc))
+
+(define (call-with-state stctx proc
+                         #:ok   [ok-states #f]
+                         #:pre  [pre-state #f]
+                         #:post [post-state #f]
+                         #:msg  [msg #f])
+  (define self (state-ctx-lock stctx))
+  (define-struct-abbrevs statelock)
+  (define (set-state new-state)
+    (unless (equal? (.state self) new-state)
+      (.state-set! self new-state)))
+  (define (bad-state state ok-states msg)
+    (crypto-error "wrong state\n  state: ~a~a"
+                  (describe-state state)
+                  (or msg "")))
+  (define (describe-state state)
+    (cond [(.desc self)
+           (cond [(assoc state (.desc self))
+                  => cadr]
+                 [else (format "unknown (~s)" state)])]
+          [else (format "~s" state)]))
+  (call-with-semaphore (.sema self)
+    (lambda ()
+      (define now-state (.state self))
+      (when ok-states
+        (unless (memq now-state ok-states)
+          (bad-state now-state ok-states msg)))
+         (when pre-state
+           (set-state pre-state))
+         (begin0 (proc now-state)
+           (when post-state (set-state post-state))))))
+
+(define (make-statelock init-state [desc #f])
+  (statelock (make-semaphore 1) init-state desc))
+
+(define (copy-statelock stl)
+  (match-define (statelock _ state desc) stl)
+  (statelock (make-semaphore 1) state desc))
+
+;; ----------------------------------------
+
+(struct digest-ctx state-ctx ())
+
+(struct cipher-ctx state-ctx
+  (encrypt?     ;; Boolean
+   )
+  #:properties
+  (method-properties
+   #:export ([simple-write$ #:prefix %])
+   (define-struct-abbrevs cipher-ctx)
+   (define (%to-write-prefixes self)
+     (list* "ctx" (if (.encrypt? self) "encrypt" "decrypt")
+            (cdr ($to-write-prefixes (.impl self)))))))
+
 ;; ============================================================
 ;; General Implementation & Contexts
 
 (define-interface impl$
-  #:super (info$)
-  ([impl-info     (-> impl$? info?)]
-   [impl-factory  (-> impl$? crypto-factory?)])
+  #:super (info$ has-info$ has-factory$)
+  #:predicate impl?
+  ())
+
+;; ----------------------------------------
+
+(struct info-impl-base (info factory)
+  #:properties
+  (method-properties
+   #:export ([impl$ #:prefix %]
+             [simple-write$ #:prefix %])
+   (define-struct-abbrevs info-impl-base)
+   ;; ----
+   (define (%get-spec self) ($get-spec (.info self)))
+   (define (%get-info self) (.info self))
+   (define (%get-factory self) (.factory self))
+   ;; ----
+   (define (%to-write-string self)
+     (format "~s" ($get-spec self)))
+   (define (%to-write-prefixes self)
+     (list ($factory-name (.factory self))))))
+
+;; ----------------------------------------
+
+#;
+(define-interface clone$
+  (clone
+   prepare-clone   ;; -> (values (X ... -> Self) (Listof X) (Self -> Void))
+   )
+  #:fallbacks
+  (let ()
+    (define (clone self)
+      (define-values (maker args patchup) ($prepare-clone self))
+      (define copy (apply maker args))
+      (patchup copy)
+      copy)
+    (define (prepare-clone self)
+      (define (invalid . args) (error 'clone "invalid constructor"))
+      (values invalid null void))
+    (hasheq 'clone clone 'prepare-clone prepare-clone))
   #:generics-prefix $)
 
 ;; ============================================================
@@ -117,10 +236,10 @@
   ([ci-new-ctx      (-> cipher-impl? key/c iv/c boolean?
                         cipher-pad/c (or/c nat? #f) boolean?
                         ctx?)]
-   [ci-encrypt?     (-> cipher-impl? ctx? boolean?)]
    [ci-update-aad   (-> cipher-impl? ctx? input/c void?)]
    [ci-update       (-> cipher-impl? ctx? input/c void?)]
    [ci-final        (-> cipher-impl? ctx? (or/c bytes? #f) void?)]
+   [ci-get-output   (-> cipher-impl? ctx? bytes?)]
    [ci-auth-tag     (-> cipher-impl? ctx? (or/c bytes? #f))])
   #:generics-prefix $)
 

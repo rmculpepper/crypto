@@ -11,13 +11,7 @@
          "catalog.rkt"
          "interfaces.rkt"
          "error.rkt")
-(provide (struct-out info-impl-base)
-         (struct-out state-ctx)
-         (struct-out statelock)
-         make-statelock
-         copy-statelock
-         call-with-state
-         process-input
+(provide process-input
          shrink-bytes
          make-sized-copy
          ceil/
@@ -30,88 +24,6 @@
          version->string
          version>=?
          crypto-random-bytes)
-
-;; ============================================================
-
-(struct info-impl-base (info factory)
-  #:properties
-  (method-properties
-   #:export ([info$ #:prefix %]
-             [impl$ #:prefix %]
-             [simple-write$ #:prefix %])
-   (define-struct-abbrevs info-impl-base)
-   ;; ----
-   (define (%get-spec self) ($get-spec (.info self)))
-   ;; ----
-   (define (%impl-info self) (.info self))
-   (define (%impl-factory self) (.factory self))
-   ;; ----
-   (define (%to-write-string self)
-     (format "~s" ($get-spec self)))
-   (define (%to-write-prefixes self)
-     (list ($factory-name (.factory self))))))
-
-;; ----------------------------------------
-
-(struct state-ctx ctx (lock))
-
-(struct statelock (sema [state #:mutable] desc))
-
-(define (call-with-state stctx proc
-                         #:ok   [ok-states #f]
-                         #:pre  [pre-state #f]
-                         #:post [post-state #f]
-                         #:msg  [msg #f])
-  (define self (state-ctx-lock stctx))
-  (define-struct-abbrevs statelock)
-  (define (set-state new-state)
-    (unless (equal? (.state self) new-state)
-      (.state-set! self new-state)))
-  (define (bad-state state ok-states msg)
-    (crypto-error "wrong state\n  state: ~a~a"
-                  (describe-state state)
-                  (or msg "")))
-  (define (describe-state state)
-    (cond [(.desc self)
-           (cond [(assoc state (.desc self))
-                  => cadr]
-                 [else (format "unknown (~s)" state)])]
-          [else (format "~s" state)]))
-  (call-with-semaphore (.sema self)
-    (lambda ()
-      (define now-state (.state self))
-      (when ok-states
-        (unless (memq now-state ok-states)
-          (bad-state now-state ok-states msg)))
-         (when pre-state
-           (set-state pre-state))
-         (begin0 (proc now-state)
-           (when post-state (set-state post-state))))))
-
-(define (make-statelock init-state [desc #f])
-  (statelock (make-semaphore 1) init-state desc))
-
-(define (copy-statelock stl)
-  (match-define (statelock _ state desc) stl)
-  (statelock (make-semaphore 1) state desc))
-
-#;
-(define-interface clone$
-  (clone
-   prepare-clone   ;; -> (values (X ... -> Self) (Listof X) (Self -> Void))
-   )
-  #:fallbacks
-  (let ()
-    (define (clone self)
-      (define-values (maker args patchup) ($prepare-clone self))
-      (define copy (apply maker args))
-      (patchup copy)
-      copy)
-    (define (prepare-clone self)
-      (define (invalid . args) (error 'clone "invalid constructor"))
-      (values invalid null void))
-    (hasheq 'clone clone 'prepare-clone prepare-clone))
-  #:generics-prefix $)
 
 ;; ============================================================
 ;; Input

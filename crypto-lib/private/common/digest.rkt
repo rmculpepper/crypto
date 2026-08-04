@@ -145,13 +145,13 @@
   ;; Use info's size and block-size directly so that subclasses can override
   ;; $di-size, $di-block-size.
   (when size
-    (define info-size ($di-size ($impl-info impl)))
+    (define info-size ($di-size ($get-info impl)))
     (when info-size
       (unless (= size info-size)
         (internal-error "digest size: expected ~s but got ~s"
                         info-size size #:in impl))))
   (when block-size
-    (define info-block-size ($di-block-size ($impl-info impl)))
+    (define info-block-size ($di-block-size ($get-info impl)))
     (unless (= block-size info-block-size)
       (internal-error "block size: expected ~s but got ~s"
                       info-block-size block-size #:in impl))))
