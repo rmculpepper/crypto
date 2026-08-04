@@ -19,7 +19,6 @@
          check-config
          config-ref
          check/ref-config
-         check-null-config
          version->list
          version->string
          version>=?
@@ -79,26 +78,34 @@
 ;; - (list Symbol Predicate String/#f '#:opt Any) -- optional w/ default
 ;; - (list Symbol Predicate String/#f '#:alt Symbol) -- requires this or alt but not both
 
-(define (check-config config0 spec what)
-  ;; Assume already checked config/c, now check entries
-  (define config config0)
-  (for ([entry (in-list config)])
+(define (check-config config0 spec [what #f]
+                      #:impl-limit? [impl-limit? #f]
+                      #:in [inval #f])
+  ;; assume already checked config/c, now check entries
+  (define (more [key #f])
+    (string-append
+     (if what (format " for ~a" what) "")
+     (if (and key impl-limit? (null? spec))
+         ";\n no options supported due to implementation limit"
+         "")))
+  (for ([entry (in-list config0)])
     (match-define (list key value) entry)
     (cond [(assq key spec)
            => (match-lambda
                 [(list* _ pred? expected _)
                  (unless (pred? value)
-                   (crypto-error "bad option value for ~a\n  option: ~e\n  expected: ~a\n  given: ~e"
-                                 what key (or expected (object-name pred?)) value))])]
+                   (crypto-error
+                    "bad option value~a\n  option: ~e\n  expected: ~a\n  given: ~e"
+                    (more) key (or expected (object-name pred?)) value #:in inval))])]
           [else
-           (crypto-error "unsupported option for ~a\n  option: ~e\n  value: ~e"
-                         what key value)]))
-  (for/fold ([config config]) ([aentry (in-list spec)])
+           (crypto-error "unsupported option~a\n  option: ~e\n  value: ~e"
+                         (more key) key value #:in inval)]))
+  (for/fold ([config config0]) ([aentry (in-list spec)])
     (match aentry
       [(list key _ _ '#:req)
        (unless (assq key config)
-         (crypto-error "missing required option for ~a\n  option: ~e\n  given: ~e"
-                       what key config0))
+         (crypto-error "missing required option~a\n  option: ~e\n  given: ~e"
+                       (more) key config0 #:in inval))
        config]
       [(list key _ _ '#:opt default)
        (if (assq key config)
@@ -107,11 +114,11 @@
       [(list key _ _ '#:alt key2)
        (if (assq key config)
            (when (assq key2 config)
-             (crypto-error "conflicting options for ~a\n  options: ~e and ~e\n  given: ~e"
-                           what key key2 config0))
+             (crypto-error "conflicting options~a\n  options: ~e and ~e\n  given: ~e"
+                           (more) key key2 config0 #:in inval))
            (unless (assq key2 config)
-             (crypto-error "missing required option for ~a\n  option: either ~e or ~e\n  given: ~e"
-                           what key key2 config0)))
+             (crypto-error "missing required option~a\n  option: either ~e or ~e\n  given: ~e"
+                           (more) key key2 config0 #:in inval)))
        config])))
 
 (define (config-ref config key [default #f])
@@ -121,12 +128,6 @@
 (define (check/ref-config keys config spec what)
   (define config* (check-config config spec what))
   (apply values (for/list ([key (in-list keys)]) (config-ref config* key))))
-
-(define (check-null-config config what #:in [impl #f])
-  (unless (null? config)
-    (define impl-note (if impl ";\n implementation limitation" ""))
-    (crypto-error "no options supported for ~a~a\n  given: ~e"
-                  what impl-note config #:in impl)))
 
 ;; ----------------------------------------
 
