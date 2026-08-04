@@ -102,5 +102,5 @@
 (define (err/no-curve curve [obj #f])
   (crypto-error "given named curve not supported\n  curve: ~e" curve #:for obj))
 
-(define (err/off-curve what)
-  (crypto-error "invalid ~a (point not on curve)" what))
+(define (err/off-curve what #:in [inobj #f])
+  (crypto-error "invalid ~a (point not on curve)" what #:in inobj))

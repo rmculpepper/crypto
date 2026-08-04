@@ -8,7 +8,8 @@
          scramble/struct
          "catalog.rkt"
          "error.rkt")
-(provide (all-defined-out)
+(provide (all-from-out "catalog.rkt")
+         (all-defined-out)
          (struct-out bytes-range))
 
 ;; ============================================================
@@ -22,7 +23,6 @@
 
 ;; ============================================================
 
-;; Forward references
 (define (crypto-factory? x) (factory? x))
 
 ;; ------------------------------------------------------------

@@ -125,8 +125,8 @@
   (cond [(assq key config) => (lambda (e) (or (cadr e) default))]
         [else default]))
 
-(define (check/ref-config keys config spec what)
-  (define config* (check-config config spec what))
+(define (check/ref-config keys config spec [what #f] #:in [inval #f])
+  (define config* (check-config config spec what #:in inval))
   (apply values (for/list ([key (in-list keys)]) (config-ref config* key))))
 
 ;; ----------------------------------------

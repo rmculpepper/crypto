@@ -21,7 +21,6 @@
          curve-name->oid
          curve-oid->name)
 
-
 (define-interface pk*$
   ([pk*-make-params
     (unconstrained-domain-> (or/c pk-parameters? #f))]
@@ -31,10 +30,10 @@
     (unconstrained-domain-> (or/c pk-key? #f))]
 
    [pkk*-sign
-    (-> pk*$? bytes? (or/c digest-spec? 'none) pk-sign-pad/c
+    (-> pk*$? pk-key? bytes? (or/c digest-spec? 'none) pk-sign-pad/c
         bytes?)]
    [pkk*-verify
-    (-> pk*$? bytes? (or/c digest-spec? 'none) pk-sign-pad/c bytes?
+    (-> pk*$? pk-key? bytes? (or/c digest-spec? 'none) pk-sign-pad/c bytes?
         boolean?)]
 
    [pkk*-encrypt
@@ -47,8 +46,8 @@
    [pkk*-compute-secret
     (-> pk*$? pk-key? pk-key?
         bytes?)]
-   [pk*-import-for-key-agree
-    (-> pk*$? bytes?
+   [pkk*-import-for-key-agree
+    (-> pk*$? pk-key? bytes?
         pk-key?)])
   #:fallbacks
   (let ()
@@ -158,9 +157,9 @@
            [else pkk]))
 
    (define (%pkk-params self pkk)
-     (if ($pk-has-params? self)
-         (err/no-impl pkk)
-         (crypto-error "key parameters not supported" #:in pkk)))
+     (cond [($pk-has-params? self)
+            ($pk-import-pk self ($pkk-write-key self pkk 'internal-params))]
+           [else (crypto-error "key parameters not supported" #:in pkk)]))
 
    (define (%pkk-security-bits self pkk)
      (if ($pk-has-params? self)
@@ -233,7 +232,7 @@
    (define (convert-peer-key self pkk peer)
      (define (incompatible peer)
        (crypto-error "peer key is not compatible\n  peer: ~e" peer #:in pkk))
-     (let ([peer (if (pk-key? peer) peer ($pk*-import-for-key-agree self peer))])
+     (let ([peer (if (pk-key? peer) peer ($pkk*-import-for-key-agree self pkk peer))])
        (unless (eq? ($get-spec peer) ($get-spec self))
          (incompatible peer))
        (let ([peer

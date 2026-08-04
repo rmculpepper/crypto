@@ -15,6 +15,7 @@
          "util.rkt"
          (prefix-in rkt: "../rkt/kdf.rkt"))
 (provide (struct-out common-kdf-impl)
+         (struct-out common-kdf-inner-impl)
          hkdf-inner-impl
          ans-x9.63-kdf-inner-impl
          concat-kdf-inner-impl
@@ -87,6 +88,15 @@
     (-> kdf-inner-impl$? kdf-impl? nat? config/c bytes? (or/c bytes? #f)
         bytes?)])
   #:generics-prefix $)
+
+(struct common-kdf-inner-impl
+  (do-kdf-derive)
+  #:properties
+  (method-properties
+   #:export ([kdf-inner-impl$ #:prefix %])
+   (define-struct-abbrevs common-kdf-inner-impl)
+   (define (%kdfi-derive self kdfi key-size params pass salt)
+     ((.do-kdf-derive self) kdfi key-size params pass salt))))
 
 ;; ----------------------------------------
 

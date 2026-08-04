@@ -87,11 +87,11 @@
                        keysize #:in self)))
      (define lock (make-statelock 'open))
      (cond [(null? config)
-            (define ic ($dii-new-ctx1 (.inner self) key))
+            (define ic ($dii-new-ctx1 (.inner self) self key))
             (common-digest-ctx self ic lock ($di-size self))]
            [else
             (define-values (ic csize)
-              ($dii-new-ctx2 (.inner self) key config))
+              ($dii-new-ctx2 (.inner self) self key config))
             (common-digest-ctx self ic lock csize)]))
 
    (define (%di-update self dctx src)
@@ -104,7 +104,8 @@
      (define iimpl (.inner self))
      (process-input src
                     (lambda (buf start end)
-                      ($dii-update iimpl ic buf start end))))
+                      ($dii-update iimpl ic buf start end)
+                      (void))))
 
    (define (%di-final self dctx size)
      (call-with-state
@@ -162,14 +163,14 @@
     (-> digest-inner-impl$? bytes? nat? nat? nat?
         (or/c bytes? #f))]
    [dii-new-ctx1
-    (-> digest-inner-impl$? (or/c bytes? #f)
+    (-> digest-inner-impl$? digest-impl? (or/c bytes? #f)
         ictx/c)]
    [dii-new-ctx2
-    (-> digest-inner-impl$? (or/c bytes? #f) config/c
+    (-> digest-inner-impl$? digest-impl? (or/c bytes? #f) config/c
         (values ictx/c (or/c nat? #f)))]
    [dii-update
     (-> digest-inner-impl$? ictx/c bytes? nat? nat?
-        void?)]
+        any)]
    [dii-final
     (-> digest-inner-impl$? ictx/c nat?
         bytes?)]
@@ -179,10 +180,10 @@
   #:fallbacks
   (let ()
     (define (dii-digest-buffer self buf start end) #f)
-    (define (dii-new-ctx1 self key) ($dii-new-ctx2 self key null))
-    (define (dii-new-ctx2 self key config)
-      (check-null-config config ($get-spec self) #:in self)
-      (internal-error "unimplemented" #:in self))
+    (define (dii-new-ctx1 self di key) ($dii-new-ctx2 self di key null))
+    (define (dii-new-ctx2 self di key config)
+      (unless (null? config) (check-config config null #:in di))
+      (internal-error "unimplemented" #:in di))
     (hasheq 'dii-digest-buffer dii-digest-buffer
             'dii-new-ctx1 dii-new-ctx1
             'dii-new-ctx2 dii-new-ctx2))
@@ -207,7 +208,7 @@
    #:export ([digest-inner-impl$ #:prefix %])
    (define-struct-abbrevs rkt-hmac-inner-impl)
 
-   (define (%dii-new-ctx1 self key)
+   (define (%dii-new-ctx1 self di key)
      (define block-size ($di-block-size (.di self)))
      (define ipad (make-bytes block-size #x36))
      (define opad (make-bytes block-size #x5c))

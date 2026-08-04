@@ -267,7 +267,8 @@
      ($uf-finish (ufp-cipher-ictx-crypt-ufp ic) (list auth-tag)))
 
    (define (%cii-close self ic)
-     ($llci-close (.llci self) (ufp-cipher-ictx-llc ic)))
+     ($llci-close (.llci self) (ufp-cipher-ictx-llc ic))
+     (void))
 
    ;; ----
 
@@ -276,7 +277,8 @@
      ;;   source -> chunk -> add-right -> update-aad
      ;;          ()      (buf)         ()
      (define (do-aad buf start end)
-       ($llci-aad (.llci self) llc buf start end))
+       ($llci-aad (.llci self) llc buf start end)
+       (void))
      (ufp~> (chunk-ufp ($ci-chunk-size ci))
             (add-right-ufp)
             #:base (sink-ufp do-aad void)))
@@ -372,7 +374,7 @@
         ictx/c)]
    [llci-aad
     (-> lowlevel-cipher-impl$? ictx/c bytes? nat? nat?
-        void?)]
+        any)]
    [llci-crypt ;; booleans are (enc? final?)
     (-> lowlevel-cipher-impl$? ictx/c boolean? boolean? bytes? nat? nat? bytes?
         nat?)]
@@ -381,18 +383,18 @@
         bytes?)]
    [llci-decrypt-end
     (-> lowlevel-cipher-impl$? ictx/c bytes?
-        void?)]
+        any)]
    [llci-close
     (-> lowlevel-cipher-impl$? ictx/c
-        void?)])
+        any)])
   #:generics-prefix $)
 
-(struct lowlevel-cipher-impl
+(struct common-lowlevel-cipher-impl
   (new-ctx do-aad do-crypt do-encrypt-end do-decrypt-end do-close)
   #:properties
   (method-properties
    #:export ([lowlevel-cipher-impl$ #:prefix %])
-   (define-struct-abbrevs lowlevel-cipher-impl)
+   (define-struct-abbrevs common-lowlevel-cipher-impl)
    ;; ----
    (define (%llci-new-ctx self key iv enc? auth-len)
      ((.new-ctx self) key iv enc? auth-len))
