@@ -2,8 +2,7 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/list
-         racket/class)
+(require racket/list)
 (provide (all-from-out (submod "." logger))
          crypto-entry-point
          with-crypto-entry
@@ -57,7 +56,6 @@
                        #:in [invalue #f])
   (define (line label val)
     (cond [(string? val) (format "\n  ~a: ~a" label val)]
-          [(aboutable? val) (format "\n  ~a: ~a" label (send val about))]
           [val (format "\n  ~a: ~e" label val)]
           [else ""]))
   (error (crypto-who) "~a~a~a~a"
@@ -65,9 +63,6 @@
          (apply format fmt args)
          (line "for" forvalue)
          (line "in" invalue)))
-
-(define (aboutable? v)
-  (and (object? v) (object-method-arity-includes? v 'about 0)))
 
 ;; ----
 
@@ -93,9 +88,8 @@
   (crypto-error "could not get digest implementation\n  digest: ~e" spec))
 
 (define (err/not-fixed-digest di #:in [impl #f])
-  (crypto-error "variable-sized digest or XOF not allowed\n  digest: ~a"
-                (if (aboutable? di) (send di about) (format "~e" di))
-                #:in impl))
+  (crypto-error "variable-sized digest or XOF not allowed\n  digest: ~e"
+                di #:in impl))
 
 (define (err/crypt-failed enc? auth?)
   (crypto-error "~a~a failed"
@@ -106,7 +100,7 @@
   (err/crypt-failed #f #t))
 
 (define (err/no-curve curve [obj #f])
-  (crypto-error "given named curve not supported\n  curve: ~e~a" curve #:for obj))
+  (crypto-error "given named curve not supported\n  curve: ~e" curve #:for obj))
 
 (define (err/off-curve what)
   (crypto-error "invalid ~a (point not on curve)" what))
