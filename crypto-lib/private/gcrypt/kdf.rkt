@@ -2,13 +2,36 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
+(require racket/match
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/kdf.rkt"
          "../common/error.rkt"
-         "ffi.rkt")
-(provide (all-defined-out))
+         "ffi.rkt"
+         "digest.rkt")
+(provide gcrypt-fetch-kdf)
+
+(define (gcrypt-fetch-kdf factory info)
+  (define spec ($get-spec info))
+  (match spec
+    [(list 'pbkdf2 'hmac dspec)
+     (define algid (get-digest-algid dspec))
+     (and algid (make-kdf info factory (gcrypt-pbkdf2-inner-impl algid)))]
+    ['scrypt
+     (make-kdf info factory (gcrypt-scrypt-inner-impl))]
+    [(or 'argon2d 'argon2i 'argon2id)
+     #:when v1.10/later?
+     (make-kdf info factory (gcrypt-argon2-inner-impl))]
+    [(list 'hkdf dspec)
+     #:when v1.11/later?
+     (match (assq dspec digests)
+       [(list _ algid blocksize hmac-algid)
+        (and hmac-algid (gcry_md_test_algo algid)
+             (make-kdf info (gcrypt-hkdf-inner-impl hmac-algid)))]
+       [#f #f])]
+    [_ #f]))
+
+;; ----------------------------------------
 
 (define (gcrypt-pbkdf2-inner-impl md)
   (common-kdf-inner-impl

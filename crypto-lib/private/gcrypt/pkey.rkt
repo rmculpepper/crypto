@@ -13,7 +13,19 @@
          "../common/error.rkt"
          "../common/base256.rkt"
          "ffi.rkt")
-(provide (all-defined-out))
+(provide gcrypt-fetch-pk)
+
+(define (gcrypt-fetch-pk factory info)
+  (define spec ($get-spec info))
+  (case spec
+    [(rsa) (gcrypt-rsa-impl info factory)]
+    [(dsa) (gcrypt-dsa-impl info factory)]
+    [(ec)  (gcrypt-ec-impl info factory)]
+    [(eddsa) (and ed25519-ok? (gcrypt-eddsa-impl info factory))]
+    [(ecx) (and x25519-ok? (gcrypt-ecx-impl info factory))]
+    [else #f]))
+
+;; ============================================================
 
 (define DSA-Sig-Val (SEQUENCE [r INTEGER] [s INTEGER]))
 
