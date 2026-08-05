@@ -2,70 +2,67 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
+(require scramble/bundle
+         scramble/struct
          ffi/unsafe
-         "../common/digest.rkt"
+         "../common/interfaces.rkt"
          "../common/common.rkt"
+         "../common/digest.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide gcrypt-digest-impl%)
+(provide gcrypt-digest-inner-impl)
 
-(define gcrypt-digest-impl%
-  (class digest-impl%
-    (init-field md) ;; int
-    (init blocksize)
-    (super-new)
-    (inherit get-spec get-config-family get-size sanity-check)
+(struct gcrypt-digest-inner-impl
+  (md       ;; Int
+   hmac?    ;; Boolean
+   xof?     ;; Boolean
+   )
+  #:properties
+  (method-properties
+   #:export ([digest-inner-impl$ #:prefix %])
+   (define-struct-abbrevs gcrypt-digest-inner-impl)
 
-    (sanity-check #:size (gcry_md_get_algo_dlen md) #:block-size blocksize)
+   #;
+   (sanity-check #:size (gcry_md_get_algo_dlen md) #:block-size blocksize)
 
-    (define/override (-new-ctx2 key config)
-      (let ([ctx (gcry_md_open md 0)])
-        (case (get-config-family)
-          [(cshake)
-           (define-values (function custom)
-             (check/ref-config '(function custom) config config:cshake "cshake"))
-           (unless (and (zero? (bytes-length function)) (zero? (bytes-length custom)))
-             (check-bytes 'function function 0 255 #:for "cshake" #:in this)
-             (check-bytes 'custom   custom   0 255 #:for "cshake" #:in this)
-             (gcry_md_cshake_customize ctx (new-cshake_customization function custom)))]
-          [else
-           (unless (null? config) ;; includes blake2; gcrypt does not support options
-             (check-null-config config (get-spec) #:in this))])
-        (when key (gcry_md_setkey ctx key (bytes-length key)))
-        (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
+   (define (%dii-digest-buffer self buf start end size)
+     ;; FIXME: switch to gcry_md_hash_buffers
+     (cond [(.hmac? self) #f]
+           [else
+            (define outbuf (make-bytes size))
+            (gcry_md_hash_buffer (.md self) outbuf (ptr-add buf start) (- end start))
+            outbuf]))
 
-    (define/override (-new-hmac-ctx key)
-      (let ([ctx (gcry_md_open md GCRY_MD_FLAG_HMAC)])
-        (gcry_md_setkey ctx key (bytes-length key))
-        (new gcrypt-digest-ctx% (impl this) (ctx ctx))))
+   (define (%dii-new-ctx2 self ci key config)
+     (define ctx
+       (cond [(.hmac? self) (gcry_md_open (.md self) GCRY_MD_FLAG_HMAC)]
+             [else (gcry_md_open (.md self) 0)]))
+     (case ($di-config-family ci)
+       [(cshake)
+        (define-values (function custom)
+          (check/ref-config '(function custom) config config:cshake #:in ci))
+        (unless (and (zero? (bytes-length function)) (zero? (bytes-length custom)))
+          (check-bytes 'function function 0 255 #:for "cshake" #:in ci)
+          (check-bytes 'custom   custom   0 255 #:for "cshake" #:in ci)
+          (gcry_md_cshake_customize ctx (new-cshake_customization function custom)))]
+       [(blake2b blake2s)
+        (unless (null? config) (check-config config null #:in ci #:impl-limit? #t))]
+       [else
+        (unless (null? config) (check-config config null #:in ci))])
+     (when key (gcry_md_setkey ctx key (bytes-length key)))
+     ctx)
 
-    (define/override (-digest-buffer buf start end size)
-      ;; FIXME: docs say "will abort the process if an unavailable algorithm is used"
-      ;; so maybe not worth the trouble?
-      (define outbuf (make-bytes size))
-      (gcry_md_hash_buffer md outbuf (ptr-add buf start) (- end start))
-      outbuf)
-    ))
+   (define (%dii-update self ic buf start end)
+     (gcry_md_write ctx (ptr-add buf start) (- end start)))
 
-(define gcrypt-digest-ctx%
-  (class digest-ctx%
-    (init-field ctx)
-    (inherit-field impl)
-    (super-new)
+   (define (%dii-final self ic size)
+     (define buf (make-bytes size))
+     (if (.xof? self)
+         (gcry_md_extract ic buf size)
+         (gcry_md_read ic buf size))
+     (gcry_md_close ic)
+     buf)
 
-    (define/override (-update buf start end)
-      (gcry_md_write ctx (ptr-add buf start) (- end start)))
-
-    (define/override (-final! buf)
-      (gcry_md_read ctx buf (bytes-length buf))
-      (gcry_md_close ctx))
-
-    (define/override (-final-xof! buf)
-      (gcry_md_extract ctx buf (bytes-length buf))
-      (gcry_md_close ctx))
-
-    (define/override (-copy-inits)
-      (define ctx2 (gcry_md_copy ctx))
-      `((ctx ,ctx2)))
-    ))
+   (define (%dii-copy self ic)
+     (gcry_md_copy ic))
+   ))

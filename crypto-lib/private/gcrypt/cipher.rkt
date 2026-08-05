@@ -2,72 +2,60 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
+(require scramble/bundle
+         scramble/struct
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/cipher.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide gcrypt-cipher-impl%)
+(provide gcrypt-lowlevel-cipher-impl)
 
-(define gcrypt-cipher-impl%
-  (class* cipher-impl-base% (cipher-impl<%>)
-    (init-field cipher mode)
-    (inherit-field info)
-    (inherit get-spec get-iv-size)
-    (super-new)
+(struct gcrypt-lowlevel-cipher-impl
+  (cipher mode aead?)
+  #:properties
+  (method-properties
+   #:export ([lowlevel-cipher-impl$ #:prefix %])
+   (define-struct-abbrevs gcrypt-lowlevel-cipher-impl)
 
-    (define/override (get-key-size) (gcry_cipher_get_algo_keylen cipher))
+   #;
+   (define (sanity-check)
+     (define key-size (gcry_cipher_get_algo_keylen cipher))
+     (define chunk-size (gcry_cipher_get_algo_blklen cipher))
+     __)
 
-    (define chunk-size (gcry_cipher_get_algo_blklen cipher))
-    (define/override (get-chunk-size) chunk-size)
+   (define (%llci-new-ctx self key iv enc? auth-len)
+     (define ctx (gcry_cipher_open (.cipher self) (.mode self) 0))
+     (gcry_cipher_setkey ctx key (bytes-length key))
+     (when (positive? (bytes-length iv)) ;; (positive? iv-size)
+       (if (= (.mode self) GCRY_CIPHER_MODE_CTR)
+           (gcry_cipher_setctr ctx iv (bytes-length iv))
+           (gcry_cipher_setiv ctx iv (bytes-length iv))))
+     ctx)
 
-    (define/override (-new-ctx key iv enc? pad? auth-len attached-tag?)
-      (define iv-size (get-iv-size))
-      (let ([ctx (gcry_cipher_open cipher mode 0)])
-        (gcry_cipher_setkey ctx key (bytes-length key))
-        (when (positive? iv-size)
-          (gcry_cipher_setiv ctx iv (bytes-length iv)))
-        (when (or (= mode GCRY_CIPHER_MODE_CTR))
-          (gcry_cipher_setctr ctx iv (bytes-length iv)))
-        (new gcrypt-cipher-ctx% (impl this) (ctx ctx) (encrypt? enc?) (pad? pad?)
-             (auth-len auth-len) (attached-tag? attached-tag?))))
-    ))
+   (define (%llci-aad self llc buf start end)
+     (gcry_cipher_authenticate llc (ptr-add buf start) (- end start)))
 
-(define gcrypt-cipher-ctx%
-  (class cipher-ctx%
-    (init-field ctx)
-    (super-new)
-    (inherit-field impl encrypt?)
-    (inherit get-block-size)
+   (define (%llci-crypt self llc enc? final? buf start end outbuf)
+     (when final? (gcry_cipher_final llc))
+     (define outlen (bytes-length outbuf))
+     (if enc?
+         (gcry_cipher_encrypt llc outbuf outlen (ptr-add buf start) (- end start))
+         (gcry_cipher_decrypt llc outbuf outlen (ptr-add buf start) (- end start)))
+     (- end start))
 
-    (define/public (get-spec) (send impl get-spec))
+   (define (%llci-encrypt-end self llc auth-len)
+     (cond [(positive? auth-len)
+            (define tag (make-bytes auth-len))
+            (gcry_cipher_gettag llc tag auth-len)
+            tag]
+           [else #""]))
 
-    (define/override (-close)
-      (when ctx
-        (gcry_cipher_close ctx)
-        (set! ctx #f)))
+   (define (%llci-decrypt-end self llc auth-tag)
+     (when (.aead? self)
+       (unless (= (gcry_cipher_checktag llc auth-tag (bytes-length auth-tag)) GPG_ERR_NO_ERROR)
+         (err/auth-decrypt-failed))))
 
-    (define/override (-do-aad inbuf instart inend)
-      (gcry_cipher_authenticate ctx (ptr-add inbuf instart) (- inend instart)))
-
-    (define/override (-do-crypt enc? final? inbuf instart inend outbuf)
-      (when final? (gcry_cipher_final ctx))
-      (define outlen (bytes-length outbuf))
-      (if encrypt?
-          (gcry_cipher_encrypt ctx outbuf outlen (ptr-add inbuf instart) (- inend instart))
-          (gcry_cipher_decrypt ctx outbuf outlen (ptr-add inbuf instart) (- inend instart)))
-      (- inend instart))
-
-    (define/override (-do-encrypt-end auth-len)
-      (cond [(positive? auth-len)
-             (define tag (make-bytes auth-len))
-             (gcry_cipher_gettag ctx tag auth-len)
-             tag]
-            [else #""]))
-
-    (define/override (-do-decrypt-end auth-tag)
-      (when (send impl aead?)
-        (unless (= (gcry_cipher_checktag ctx auth-tag (bytes-length auth-tag)) GPG_ERR_NO_ERROR)
-          (err/auth-decrypt-failed))))
-    ))
+   (define (%llci-close self llc)
+     (gcry_cipher_close llc))
+   ))
