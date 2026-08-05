@@ -34,7 +34,7 @@
             outbuf]))
 
    (define (%dii-new-ctx2 self ci key config)
-     (define ctx
+     (define ic
        (cond [(.hmac? self) (gcry_md_open (.md self) GCRY_MD_FLAG_HMAC)]
              [else (gcry_md_open (.md self) 0)]))
      (case ($di-config-family ci)
@@ -44,16 +44,16 @@
         (unless (and (zero? (bytes-length function)) (zero? (bytes-length custom)))
           (check-bytes 'function function 0 255 #:for "cshake" #:in ci)
           (check-bytes 'custom   custom   0 255 #:for "cshake" #:in ci)
-          (gcry_md_cshake_customize ctx (new-cshake_customization function custom)))]
+          (gcry_md_cshake_customize ic (new-cshake_customization function custom)))]
        [(blake2b blake2s)
         (unless (null? config) (check-config config null #:in ci #:impl-limit? #t))]
        [else
         (unless (null? config) (check-config config null #:in ci))])
-     (when key (gcry_md_setkey ctx key (bytes-length key)))
-     ctx)
+     (when key (gcry_md_setkey ic key (bytes-length key)))
+     (values ic #f))
 
    (define (%dii-update self ic buf start end)
-     (gcry_md_write ctx (ptr-add buf start) (- end start)))
+     (gcry_md_write ic (ptr-add buf start) (- end start)))
 
    (define (%dii-final self ic size)
      (define buf (make-bytes size))

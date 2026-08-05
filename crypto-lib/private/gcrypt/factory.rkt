@@ -2,11 +2,14 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
+         scramble/bundle
+         scramble/struct
          "../common/interfaces.rkt"
-         "../common/catalog.rkt"
          "../common/common.rkt"
+         "../common/digest.rkt"
+         "../common/cipher.rkt"
+         "../common/kdf.rkt"
          "../common/factory.rkt"
          "ffi.rkt"
          "digest.rkt"
@@ -53,6 +56,12 @@
     (tiger1     ,GCRY_MD_TIGER1     64)
     (tiger2     ,GCRY_MD_TIGER2     64)
     |#))
+
+(define (get-digest-algid spec)
+  (match (assq spec digests)
+    [(list _ algid _ _)
+     (and (gcry_md_test_algo algid) algid)]
+    [_ #f]))
 
 ;; ----------------------------------------
 
@@ -111,7 +120,7 @@
 (define gcm-ok? (mode-ok? GCRY_CIPHER_MODE_GCM))
 (define ocb-ok? (mode-ok? GCRY_CIPHER_MODE_OCB))
 
-(define (spec-ok? spec)
+(define (cipher-spec-ok? spec)
   ;; Additional mode compat checks
   (match-define (list cipher mode) spec)
   (and (case mode
@@ -119,91 +128,102 @@
          [(ocb) ocb-ok?]
          [else #t])
        (case mode
-         [(ccm gcm ocb xts eax) (memq cipher '(aes twofish serpent camellia))]
+         [(ccm gcm ocb xts eax)
+          (memq cipher '(aes twofish serpent camellia))]
          [else #t])))
 
 ;; ----------------------------------------
 
-(define gcrypt-factory%
-  (class* factory-base% (factory<%>)
-    (inherit print-avail get-digest get-normal-digest get-cipher)
-    (super-new [ok? gcrypt-ok?] [load-error gcrypt-load-error])
+(define (gcrypt-fetch-digest factory info)
+  (define xof? (eq? ($di-size* info) 'vz))
+  (match ($get-spec info)
+    [(? symbol? dspec)
+     (define algid (get-digest-algid dspec))
+     (and algid (let ([inner (gcrypt-digest-inner-impl algid #f xof?)])
+                  (make-digest info factory inner)))]
+    [(list 'hmac dspec)
+     (define algid (get-digest-algid dspec))
+     (and algid (let ([inner (gcrypt-digest-inner-impl algid #t #f)])
+                  (make-digest info factory inner)))]
+    [_ #f]))
 
-    (define/override (get-name) 'gcrypt)
-    (define/override (get-version)
-      (version->list (gcry_check_version #f)))
-
-    (define/override (-get-digest info)
-      (define spec (send info get-spec))
-      (match (assq spec digests)
-        [(list _ algid blocksize _)
-         (and (gcry_md_test_algo algid)
-              (new gcrypt-digest-impl%
-                   (info info)
-                   (factory this)
-                   (md algid)
-                   (blocksize blocksize)))]
-        [_ #f]))
-
-    (define/override (-get-cipher info)
-      (define spec (send info get-spec))
-      (define (algid->cipher algid mode-id)
-        (and (gcry_cipher_test_algo algid)
-             (new gcrypt-cipher-impl%
-                  (info info)
-                  (factory this)
-                  (cipher algid)
-                  (mode mode-id))))
-      (define (multi->cipher keylens+algids mode-id)
-        (cond [(list? keylens+algids)
-               (for/list ([keylen+algid (in-list keylens+algids)])
-                 (cons (quotient (car keylen+algid) 8)
-                       (algid->cipher (cadr keylen+algid) mode-id)))]
-              [else (let ([algid keylens+algids])
-                      (algid->cipher algid mode-id))]))
-      (define (search ciphers modes)
-        (match (assq (cipher-spec-algo spec) ciphers)
-          [(list _ keylens+algids mode-id)
-           (multi->cipher keylens+algids mode-id)]
-          [(list _ keylens+algids)
-           (match (assq (cipher-spec-mode spec) modes)
-             [(list _ mode-id)
-              (multi->cipher keylens+algids mode-id)]
-             [_ #f])]
-          [_ #f]))
-      (and (spec-ok? spec)
-           (or (search block-ciphers block-modes)
-               (search stream-ciphers '()))))
-
-    (define/override (-get-pk spec)
-      (case spec
-        [(rsa) (new gcrypt-rsa-impl% (factory this))]
-        [(dsa) (new gcrypt-dsa-impl% (factory this))]
-        [(ec)  (new gcrypt-ec-impl%  (factory this))]
-        [(eddsa) (and ed25519-ok? (new gcrypt-eddsa-impl% (factory this)))]
-        [(ecx) (and x25519-ok? (new gcrypt-ecx-impl% (factory this)))]
-        [else #f]))
-
-    (define/override (-get-kdf spec)
-      (or (match spec
-            [(list 'pbkdf2 'hmac di-spec)
-             (let ([di (get-normal-digest di-spec)])
-               (and di (new gcrypt-pbkdf2-impl% (spec spec) (factory this) (di di))))]
-            ['scrypt
-             (new gcrypt-scrypt-impl% (spec spec) (factory this))]
-            [(or 'argon2d 'argon2i 'argon2id)
-             #:when v1.10/later?
-             (new gcrypt-argon2-impl% (spec spec) (factory this))]
-            [(list 'hkdf di-spec)
-             #:when v1.11/later?
-             (match (assq di-spec digests)
-               [(list _ algid blocksize hmac-algid)
-                (and hmac-algid (gcry_md_test_algo algid)
-                     (new gcrypt-hkdf-impl% (spec spec) (factory this)
-                          (mac-algo hmac-algid)))]
+(define (gcrypt-fetch-cipher factory info)
+  (define spec ($get-spec info))
+  (define aead? ($ci-aead? info))
+  (define (algid->llci algid mode-id)
+    (and (gcry_cipher_test_algo algid)
+         (gcrypt-lowlevel-cipher-impl algid mode-id aead?)))
+  (define (multi->cipher keylens+algids mode-id)
+    (match keylens+algids
+      [(? list?)
+       (make-multikeylen-cipher
+        info factory
+        (for/list ([keylen (in-list (map car keylens+algids))]
+                   [algid (in-list (map cadr keylens+algids))])
+          (cons (quotient keylen 8) (algid->llci algid mode-id))))]
+      [(? exact-integer? algid)
+       (make-cipher info factory (algid->llci algid mode-id))]))
+  (and (cipher-spec-ok? spec)
+       (match spec
+         [(list cipher-name 'stream)
+          (match (assq cipher-name stream-ciphers)
+            [(list _ keylens+algids mode-id)
+             (multi->cipher keylens+algids mode-id)]
+            [#f #f])]
+         [(list cipher-name block-mode)
+          (match (assq cipher-name block-ciphers)
+            [(list _ keylens+algids)
+             (match (assq block-mode block-modes)
+               [(list _ mode-id)
+                (multi->cipher keylens+algids mode-id)]
                [#f #f])]
-            [_ #f])
-          (super -get-kdf spec)))
+            [#f #f])])))
+
+(define (gcrypt-fetch-kdf factory info)
+  (define spec ($get-spec info))
+  (match spec
+    [(list 'pbkdf2 'hmac dspec)
+     (define algid (get-digest-algid dspec))
+     (and algid (make-kdf info factory (gcrypt-pbkdf2-inner-impl algid)))]
+    ['scrypt
+     (make-kdf info factory (gcrypt-scrypt-inner-impl))]
+    [(or 'argon2d 'argon2i 'argon2id)
+     #:when v1.10/later?
+     (make-kdf info factory (gcrypt-argon2-inner-impl))]
+    [(list 'hkdf dspec)
+     #:when v1.11/later?
+     (match (assq dspec digests)
+       [(list _ algid blocksize hmac-algid)
+        (and hmac-algid (gcry_md_test_algo algid)
+             (make-kdf info (gcrypt-hkdf-inner-impl hmac-algid)))]
+       [#f #f])]
+    [_ #f]))
+
+(define (gcrypt-fetch-pk factory info)
+  (define spec ($get-spec info))
+  (case spec
+    [(rsa) (gcrypt-rsa-impl info factory)]
+    [(dsa) (gcrypt-dsa-impl info factory)]
+    [(ec)  (gcrypt-ec-impl info factory)]
+    [(eddsa) (and ed25519-ok? (gcrypt-eddsa-impl info factory))]
+    [(ecx) (and x25519-ok? (gcrypt-ecx-impl info factory))]
+    [else #f]))
+
+;; ----------------------------------------
+
+(define gcrypt-factory
+  (make-factory
+   #:name 'gcrypt
+   #:version (version->list (gcry_check_version #f))
+   #:ok? gcrypt-ok?
+   #:load-error gcrypt-load-error
+
+   #:get-digest gcrypt-fetch-digest
+   #:get-cipher gcrypt-fetch-cipher
+   #:get-kdf gcrypt-fetch-kdf
+   #:get-pk gcrypt-fetch-pk))
+
+#|
 
     ;; ----
 
@@ -220,5 +240,4 @@
       (super print-lib-info)
       (printf " version string: ~s\n" (gcry_check_version #f)))
     ))
-
-(define gcrypt-factory (new gcrypt-factory%))
+|#
