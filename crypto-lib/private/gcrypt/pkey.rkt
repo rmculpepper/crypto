@@ -353,7 +353,7 @@
    (define (%pk-generate-params self config)
      ;; gcrypt has no separate paramgen operation,
      ;; so generate private key and extract params
-     (define pkk (generate-key config "DSA paramgen"))
+     (define pkk (generate-key config self))
      (match ($pkk-write-key self pkk 'rkt-params)
        [(list 'rkt 'params p q g) ($pk*-make-params p q g)]))
 
@@ -377,7 +377,7 @@
               [q (unsigned->base256 q)]
               [g (unsigned->base256 g)])
           (make-sexp `(genkey (dsa (domain (p ,p) (q ,q) (g ,g))))))))
-     (pk-key self (keypair #f pub priv) #t))
+     (pk-key self (keypair (list p q g) pub priv) #t))
 
    (define (%pkp-param-values self pkp)
      (match-define (list p q g) (ctx-inner pkp))
@@ -644,7 +644,7 @@
      (define pub (make-public-sexp curve-name qB))
      (and curve-name (pk-key self (keypair curve pub #f) #f)))
 
-   (define (make-private-key self curve qB dB)
+   (define (%pk*-make-private-key self curve qB dB)
      (define curve-name (check-curve curve))
      ;; It doesn't seem to be possible to recover qB if missing, so just fail.
      (and curve-name qB
