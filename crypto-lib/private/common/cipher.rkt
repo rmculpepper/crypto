@@ -50,7 +50,7 @@
    #:import ([simple-write$ #:super #:prefix super-])
    (define-struct-abbrevs cipher-impl-base)
    (define (%to-write-prefixes self)
-     (list "impl" "cipher" (super-to-write-prefixes self)))
+     (list* "impl" "cipher" (super-to-write-prefixes self)))
 
    ;; ---- cipher-info
 
@@ -166,7 +166,7 @@
 
    (define (update-aad* self cctx src)
      (define (process-aad buf start end)
-       ($cii-update-aad (.inner self) (ctx-inner cctx) buf start end #f))
+       ($cii-update-aad (.inner self) (ctx-inner cctx) buf start end))
      (process-input src process-aad))
 
    (define (finish-aad* self cctx)
@@ -182,7 +182,7 @@
 
    (define (update* self cctx src)
      (define (process-data buf start end)
-       ($cii-update (.inner self) (ctx-inner cctx) buf start end #f))
+       ($cii-update (.inner self) (ctx-inner cctx) buf start end))
      (process-input src process-data))
 
    (define (%ci-final self cctx tag)
@@ -194,7 +194,7 @@
      (when (and (not encrypt?) attached-tag? tag)
        (crypto-error "cannot set authentication tag for decryption context with attached tag"
                      #:for cctx))
-     (when #t ;; decrypt w/ detached tag
+     (when (and (not encrypt?) (not attached-tag?))
        (let ([tag (or tag #"")]
              [auth-len (common-cipher-ctx-auth-len cctx)])
          (check-bytes "authentication tag" tag auth-len #:for cctx)))
@@ -219,12 +219,12 @@
      (get-output-bytes (common-cipher-ctx-out cctx)))
 
    (define (%ci-auth-tag self cctx)
-     (cond [(cipher-ctx-encrypt? ctx)
+     (cond [(cipher-ctx-encrypt? cctx)
             ;; ci-final sets auth-tag-out for encryption context
             ;; #"" for non-AEAD cipher
             (call-with-state
              cctx #:ok '(closed)
-             (lambda () (get-auth-tag* self cctx)))]
+             (lambda (s) (get-auth-tag* self cctx)))]
            [else ;; decrypt
             (crypto-error "cannot get authentication tag for decryption context"
                           #:for cctx)]))
@@ -371,7 +371,8 @@
        (unless (= outlen (- inend instart))
          (internal-error "outlen = ~s, inlen = ~s" outlen (- inend instart) #:in ci))
        ($uf-update next outbuf 0 outlen))
-     (define (finish partial auth-tag)
+     (define (finish a)
+       (match-define (list partial auth-tag) a)
        ;; with block aligned and padding disabled, outlen = inlen... check, tighten (FIXME)
        (define outlen0 (* 2 chunk-size))
        (define outbuf (make-bytes outlen0))
@@ -381,7 +382,7 @@
          (internal-error "outlen = ~s, partial = ~s" outlen (bytes-length partial) #:in ci))
        ($uf-update next outbuf 0 outlen)
        (cond [enc?
-              ($uf-finish next ($llci-encrypt-end llci llc auth-len))]
+              ($uf-finish next (list ($llci-encrypt-end llci llc auth-len)))]
              [else
               (unless (= (bytes-length auth-tag) auth-len)
                 (crypto-error "wrong authentication tag size\n  expected: ~s\n  given: ~s"
@@ -601,7 +602,8 @@
    #:export ([ufp$ #:prefix %])
    (define-struct-abbrevs ufp:sink)
    (define (%uf-update self buf start end)
-     ((.update-proc self) buf start end))
+     ((.update-proc self) buf start end)
+     (void))
    (define (%uf-finish self a)
      ((.finish-proc self) a))))
 
@@ -617,7 +619,7 @@
 
 ;; chunk        : a => bytes,a          ;; |a| = 1
 (define (make-ufp:chunk next chunk-size)
-  (ufp:chunk next (make-bytes chunk-size) 0))
+  (ufp:chunk next chunk-size (make-bytes chunk-size) 0))
 
 (struct ufp:chunk ufp:chain (chunk-size partial [partlen #:mutable])
   #:properties
@@ -726,7 +728,7 @@
   (method-properties
    #:export ([ufp$ #:prefix %])
    ;; FIXME: update should also check multiple of block size?
-   (define ($uf-finish self a1)
+   (define (%uf-finish self a1)
      (match-define (ufp:check-aligned next block-size cipher) self)
      (match-define (cons buf a) a1)
      (unless (zero? (remainder (bytes-length buf) block-size))
@@ -755,7 +757,7 @@
   #:properties
   (method-properties
    #:export ([ufp$ #:prefix %])
-   (define ($uf-finish self a1)
+   (define (%uf-finish self a1)
      (match-define (ufp:unpad next) self)
      (match-define (cons buf a) a1)
      ($uf-finish next (cons (unpad-bytes/pkcs7 buf) a)))))
@@ -766,9 +768,9 @@
   (method-properties
    #:export ([ufp$ #:prefix %])
    (define-struct-abbrevs ufp:pop)
-   (define ($uf-finish self a)
+   (define (%uf-finish self a)
      ($uf-finish (.next self) (cdr a)))
-   (define ($uf-update/finish self buf start end a)
+   (define (%uf-update/finish self buf start end a)
      ($uf-finish (.next self) buf start end (cdr a)))))
 
 ;; push(x)      : a => x,a              ;; |a| = 0
@@ -777,7 +779,7 @@
   (method-properties
    #:export ([ufp$ #:prefix %])
    (define-struct-abbrevs ufp:push)
-   (define ($uf-finish self a)
+   (define (%uf-finish self a)
      (match-define (ufp:push next value) self)
      ($uf-finish next (cons value a)))))
 
