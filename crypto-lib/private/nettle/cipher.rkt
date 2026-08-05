@@ -1,15 +1,81 @@
-;; Copyright 2013-2018 Ryan Culpepper
+;; Copyright 2013-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require ffi/unsafe
-         racket/class
+(require racket/match
+         scramble/bundle
+         scramble/struct
+         ffi/unsafe
          "../common/interfaces.rkt"
          "../common/cipher.rkt"
          "../common/error.rkt"
          "../common/util.rkt"
          "ffi.rkt")
-(provide nettle-cipher-impl%)
+(provide nettle-fetch-cipher)
+
+(define (nettle-fetch-cipher factory info)
+  (define spec ($get-spec info))
+  (define (alg->cipher alg mode)
+    (cond [(string? alg)
+           (make-cipher info factory (make-llci alg mode))]
+          [(list? alg)
+           (make-multikeylen-cipher
+            info factory
+            (for/list ([keylen (in-list (map car alg))]
+                       [algid (in-list (map cadr alg))])
+              (cons (quotient keylen 8)
+                    (make-llci algid mode))))]))
+  (match spec
+    [(list cipher-name 'stream)
+     (match (assq cipher-name stream-ciphers)
+       [(list _ algid)
+        (alg->cipher algid 'stream)]
+       [#f #f])]
+    [(list cipher-name block-mode)
+     (match (assq cipher-name block-ciphers)
+       [(list _ gcm/eax-ok? alg)
+        (and (memq block-mode block-modes)
+             (if (memq block-mode '(gcm eax)) gcm/eax-ok? #t)
+             (alg->cipher alg block-mode))]
+       [#f #f])]))
+
+(define (make-llci algid mode)
+  (match (assoc algid nettle-all-ciphers)
+    [(list _ nc) (nettle-lowlevel-cipher-impl nc mode)]
+    [#f #f]))
+
+;; ----------------------------------------
+
+(define block-ciphers
+  `(;;[Name GCMok? String/([KeySize String] ...)]
+    [aes #t ([128 "aes128"]
+             [192 "aes192"]
+             [256 "aes256"])]
+    [blowfish #f "blowfish"]
+    [camellia #t ([128 "camellia128"]
+                  [192 "camellia192"]
+                  [256 "camellia256"])]
+    [cast128 #f ([128 "cast128"])]
+    [serpent #t ([128 "serpent128"]
+                 [192 "serpent192"]
+                 [256 "serpent256"])]
+    [twofish #t ([128 "twofish128"]
+                 [192 "twofish192"]
+                 [256 "twofish256"])]))
+
+(define block-modes `(ecb cbc ctr ,@(if gcm-ok? '(gcm) '()) ,@(if eax-ok? '(eax) '())))
+
+(define stream-ciphers
+  `(;;[Name String/([KeySize String] ...)]
+    [salsa20 "salsa20"]
+    [salsa20r12 "salsa20r12"]
+    [chacha20 "chacha"]
+    [rc4 "arcfour128"]
+    [chacha20-poly1305 "chacha-poly1305"]
+    ;; "arctwo40", "arctwo64", "arctwo128"
+    ))
+
+;; ============================================================
 
 (define (make-tagged-mem size tag)
   (let ([mem (malloc size 'atomic-interior)])
@@ -22,183 +88,117 @@
 (define (make-eax_key) (make-tagged-mem EAX_KEY_SIZE eax_key-tag))
 (define (make-eax_ctx) (make-tagged-mem EAX_CTX_SIZE eax_ctx-tag))
 
-(define nettle-cipher-impl%
-  (class* cipher-impl-base% (cipher-impl<%>)
-    (init-field nc)
-    (inherit get-mode sanity-check)
-    (super-new)
+;; ----------------------------------------
 
-    (define chunk-size (nettle-cipher-block-size nc))
-    (define/override (get-chunk-size) chunk-size)
-    (sanity-check #:chunk-size chunk-size)
+(struct nettle-llc (ctx ekey ectx))
 
-    (define/override (-new-ctx key iv enc? pad? auth-len attached-tag?)
-      (define ctx%
-        (case (get-mode)
-          [(gcm) nettle-gcm-cipher-ctx%]
-          [(eax) nettle-eax-cipher-ctx%]
-          [else  nettle-classic-cipher-ctx%]))
-      (define ctx
-        (new ctx% (impl this) (nc nc) (encrypt? enc?) (pad? pad?)
-             (auth-len auth-len) (attached-tag? attached-tag?)))
-      (send ctx set-key+iv key iv)
-      ctx)
-    ))
+(struct nettle-lowlevel-cipher-impl
+  (nc mode)
+  #:properties
+  (method-properties
+   #:export ([lowlevel-cipher-impl$ #:prefix %])
+   (define-struct-abbrevs nettle-lowlevel-cipher-impl)
 
-;; ============================================================
+   (define (%llci-new-ctx self key iv enc? auth-len)
+     (define nc (.nc self))
+     (define ctx (make-ctx (nettle-cipher-context-size nc)))
+     (if (or enc? (memq (.mode self) '(ctr gcm eax)))
+         ((nettle-cipher-set-encrypt-key nc) ctx key)
+         ((nettle-cipher-set-decrypt-key nc) ctx key))
+     (let ([set-iv (nettle-cipher-ref nc 'set-iv)])
+       (when set-iv (set-iv ctx iv)))
+     (case (.mode self)
+       [(gcm)
+        (define gcm-key (make-gcm_key))
+        (define gcm-ctx (make-gcm_ctx))
+        ;; GCM uses block cipher's encrypt
+        (nettle_gcm_set_key gcm-key ctx (nettle-cipher-encrypt nc))
+        (nettle_gcm_set_iv  gcm-ctx gcm-key (bytes-length iv) iv)
+        (nettle-llc ctx gcm-key gcm-ctx)]
+       [(eax)
+        (define eax-key (make-eax_key))
+        (define eax-ctx (make-eax_ctx))
+        ;; EAX uses block cipher's encrypt
+        (nettle_eax_set_key eax-key ctx (nettle-cipher-encrypt nc))
+        (nettle_eax_set_nonce eax-ctx eax-key ctx (nettle-cipher-encrypt nc)
+                              (bytes-length iv) iv)
+        (nettle-llc ctx eax-key eax-ctx)]
+       [(cbc ctr)
+        (define llc-iv (make-bytes (nettle-cipher-block-size nc)))
+        (when (positive? (bytes-length llc-iv))
+          (bytes-copy! llc-iv 0 iv 0 (bytes-length llc-iv)))
+        (nettle-llc ctx #f llc-iv)]
+       [else
+        (nettle-llc ctx #f #f)]))
 
-(define nettle-cipher-ctx-base%
-  (class cipher-ctx%
-    (init-field nc)
-    (inherit-field impl)
-    (super-new)
+   (define (%llci-aad self llc buf start end)
+     (define nc (.nc self))
+     (match-define (nettle-llc ctx ekey ectx) llc)
+     (case (.mode self)
+       [(gcm)
+        (nettle_gcm_update ectx ekey (- end start) (ptr-add buf start))]
+       [(eax)
+        (nettle_eax_update ectx ekey ctx (nettle-cipher-encrypt nc)
+                           (- end start) (ptr-add buf start))]
+       [else
+        (let ([update-aad (nettle-cipher-ref (.nc self) 'update-aad)])
+          (unless update-aad (internal-error "cannot update AAD" #:in self))
+          (update-aad ctx (- end start) (ptr-add buf start)))]))
 
-    (field [ctx (make-ctx (nettle-cipher-context-size nc))]
-           [iv (make-bytes (send impl get-iv-size))])
+   (define (%llci-crypt self llc enc? final? buf start end outbuf)
+     (define nc (.nc self))
+     (match-define (nettle-llc ctx ekey ectx) llc)
+     (case (.mode self)
+       [(gcm)
+        ;; Note: must use *encrypt* function in GCM mode
+        (define crypt (nettle-cipher-encrypt nc))
+        (define gcm*crypt (if enc? nettle_gcm_encrypt nettle_gcm_decrypt))
+        (gcm*crypt ectx ekey ctx crypt (- end start) outbuf (ptr-add buf start))]
+       [(eax)
+        ;; Note: must use *encrypt* function in EAX mode
+        (define crypt (nettle-cipher-encrypt nc))
+        (define eax*crypt (if enc? nettle_eax_encrypt nettle_eax_decrypt))
+        (eax*crypt ectx ekey ctx crypt (- end start) outbuf (ptr-add buf start))]
+       [(ecb stream)
+        (define crypt (if enc? (nettle-cipher-rkt-encrypt nc) (nettle-cipher-rkt-decrypt nc)))
+        (crypt ctx (- end start) outbuf (ptr-add buf start))]
+       [(cbc)
+        (define crypt (if enc? (nettle-cipher-encrypt nc) (nettle-cipher-decrypt nc)))
+        (define cbc_*crypt (if enc? nettle_cbc_encrypt nettle_cbc_decrypt))
+        (define chunk-size (nettle-cipher-block-size nc))
+        (cbc_*crypt ctx crypt chunk-size ectx (- end start) outbuf (ptr-add buf start))]
+       [(ctr)
+        ;; Note: must use *encrypt* function in CTR mode, even when decrypting
+        (define crypt (nettle-cipher-encrypt nc))
+        (define chunk-size (nettle-cipher-block-size nc))
+        (nettle_ctr_crypt ctx crypt chunk-size ectx (- end start) outbuf (ptr-add buf start))]
+       [else (internal-error "bad mode: ~e" (.mode self) #:in self)])
+     (- end start))
 
-    (define/public (set-key+iv key iv*)
-      (when (positive? (bytes-length iv))
-        (bytes-copy! iv 0 iv* 0 (bytes-length iv))))
+   (define (%llci-encrypt-end self llc auth-len)
+     (get-auth-tag self llc auth-len))
 
-    (define/override (-close)
-      (set! ctx #f)
-      (set! iv #f))
+   (define (%llci-decrypt-end self llc auth-tag)
+     (define actual-tag (get-auth-tag self llc (bytes-length auth-tag)))
+     (unless (crypto-bytes=? auth-tag actual-tag)
+       (err/auth-decrypt-failed)))
 
-    (define/override (-do-encrypt-end auth-len)
-      (-get-auth-tag auth-len))
+   (define (get-auth-tag self llc taglen)
+     (define nc (.nc self))
+     (match-define (nettle-llc ctx ekey ectx) llc)
+     (define tag (make-bytes taglen))
+     (case (.mode self)
+       [(gcm)
+        (nettle_gcm_digest ectx ekey ctx (nettle-cipher-encrypt nc) taglen tag)]
+       [(eax)
+        (nettle_eax_digest ectx ekey ctx (nettle-cipher-encrypt nc) taglen tag)]
+       [else
+        (cond [(zero? taglen) (void)]
+              [(nettle-cipher-ref nc 'get-auth-tag)
+               => (lambda (get-auth-tag) (get-auth-tag ctx taglen tag))]
+              [else (internal-error "cannot get auth tag" #:in self)])])
+     tag)
 
-    (define/override (-do-decrypt-end auth-tag)
-      (define actual-tag (-get-auth-tag (bytes-length auth-tag)))
-      (unless (crypto-bytes=? auth-tag actual-tag)
-        (err/auth-decrypt-failed)))
-
-    (abstract -get-auth-tag) ;; Nat -> Bytes
-    ))
-
-(define nettle-gcm-cipher-ctx%
-  (class nettle-cipher-ctx-base%
-    (super-new)
-    (inherit-field impl nc ctx iv)
-    (inherit get-block-size get-chunk-size)
-
-    (define gcm-key (make-gcm_key))
-    (define gcm-ctx (make-gcm_ctx))
-
-    (define/override (set-key+iv key iv*)
-      (super set-key+iv key iv*)
-      ;; GCM uses block cipher's encrypt
-      ((nettle-cipher-set-encrypt-key nc) ctx key)
-      (nettle_gcm_set_key gcm-key ctx (nettle-cipher-encrypt nc))
-      (nettle_gcm_set_iv  gcm-ctx gcm-key (bytes-length iv) iv))
-
-    (define/override (-close)
-      (super -close)
-      (set! gcm-key #f)
-      (set! gcm-ctx #f))
-
-    (define/override (-do-aad inbuf instart inend)
-      (nettle_gcm_update gcm-ctx gcm-key (- inend instart) (ptr-add inbuf instart)))
-
-    (define/override (-do-crypt enc? final? inbuf instart inend outbuf)
-      ;; Note: must use *encrypt* function in GCM mode
-      (define crypt (nettle-cipher-encrypt nc))
-      (define gcm*crypt (if enc? nettle_gcm_encrypt nettle_gcm_decrypt))
-      (gcm*crypt gcm-ctx gcm-key ctx crypt (- inend instart)
-                 outbuf (ptr-add inbuf instart))
-      (- inend instart))
-
-    (define/override (-get-auth-tag taglen)
-      (define tag (make-bytes taglen))
-      (nettle_gcm_digest gcm-ctx gcm-key ctx (nettle-cipher-encrypt nc) taglen tag)
-      tag)
-    ))
-
-(define nettle-eax-cipher-ctx%
-  (class nettle-cipher-ctx-base%
-    (super-new)
-    (inherit-field impl nc ctx iv)
-    (inherit get-block-size get-chunk-size)
-
-    (define eax-key (make-eax_key))
-    (define eax-ctx (make-eax_ctx))
-
-    (define/override (set-key+iv key iv*)
-      (super set-key+iv key iv*)
-      ;; EAX uses block cipher's encrypt
-      ((nettle-cipher-set-encrypt-key nc) ctx key)
-      (nettle_eax_set_key eax-key ctx (nettle-cipher-encrypt nc))
-      (nettle_eax_set_nonce eax-ctx eax-key ctx (nettle-cipher-encrypt nc)
-                            (bytes-length iv) iv))
-
-    (define/override (-close)
-      (super -close)
-      (set! eax-key #f)
-      (set! eax-ctx #f))
-
-    (define/override (-do-aad inbuf instart inend)
-      (nettle_eax_update eax-ctx eax-key ctx (nettle-cipher-encrypt nc)
-                         (- inend instart) (ptr-add inbuf instart)))
-
-    (define/override (-do-crypt enc? final? inbuf instart inend outbuf)
-      ;; Note: must use *encrypt* function in EAX mode
-      (define crypt (nettle-cipher-encrypt nc))
-      (define eax*crypt (if enc? nettle_eax_encrypt nettle_eax_decrypt))
-      (eax*crypt eax-ctx eax-key ctx crypt (- inend instart)
-                 outbuf (ptr-add inbuf instart))
-      (- inend instart))
-
-    (define/override (-get-auth-tag taglen)
-      (define tag (make-bytes taglen))
-      (nettle_eax_digest eax-ctx eax-key ctx (nettle-cipher-encrypt nc) taglen tag)
-      tag)
-    ))
-
-(define nettle-classic-cipher-ctx%
-  (class nettle-cipher-ctx-base%
-    (super-new)
-    (inherit-field impl nc encrypt? ctx iv)
-    (inherit about get-block-size get-chunk-size)
-
-    (define/public (get-spec) (send impl get-spec))
-    (define mode (send impl get-mode))
-
-    (define/override (set-key+iv key iv*)
-      (super set-key+iv key iv*)
-      (if (or encrypt? (eq? mode 'ctr))
-          ((nettle-cipher-set-encrypt-key nc) ctx key)
-          ((nettle-cipher-set-decrypt-key nc) ctx key))
-      (let ([set-iv (nettle-cipher-ref nc 'set-iv)])
-        (when set-iv (set-iv ctx iv))))
-
-    (define/override (-do-aad inbuf instart inend)
-      (let ([update-aad (nettle-cipher-ref nc 'update-aad)])
-        (unless update-aad
-          (internal-error "cannot update AAD\n  cipher: ~a" (about)))
-        (update-aad ctx (- inend instart) (ptr-add inbuf instart))))
-
-    (define/override (-do-crypt enc? final? inbuf instart inend outbuf)
-      (case mode
-        [(ecb stream)
-         (define crypt (if enc? (nettle-cipher-rkt-encrypt nc) (nettle-cipher-rkt-decrypt nc)))
-         (crypt ctx (- inend instart) outbuf (ptr-add inbuf instart))]
-        [(cbc)
-         (define crypt (if enc? (nettle-cipher-encrypt nc) (nettle-cipher-decrypt nc)))
-         (define cbc_*crypt (if enc? nettle_cbc_encrypt nettle_cbc_decrypt))
-         (cbc_*crypt ctx crypt (get-chunk-size) iv (- inend instart)
-                     outbuf (ptr-add inbuf instart))]
-        [(ctr)
-         ;; Note: must use *encrypt* function in CTR mode, even when decrypting
-         (define crypt (nettle-cipher-encrypt nc))
-         (nettle_ctr_crypt ctx crypt (get-chunk-size) iv (- inend instart)
-                           outbuf (ptr-add inbuf instart))]
-        [else (internal-error "bad mode: ~e\n  cipher: ~a" mode (about))])
-      (- inend instart))
-
-    (define/override (-get-auth-tag taglen)
-      (define tag (make-bytes taglen))
-      (cond [(zero? taglen) (void)]
-            [(nettle-cipher-ref nc 'get-auth-tag)
-             => (lambda (get-auth-tag) (get-auth-tag ctx taglen tag))]
-            [else (internal-error "cannot get auth tag\n  cipher: ~a" (about))])
-      tag)
-    ))
+   (define (%llci-close self llc)
+     (void))
+   ))
