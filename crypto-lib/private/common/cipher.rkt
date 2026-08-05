@@ -409,7 +409,7 @@
    [llci-encrypt-end
     (-> lowlevel-cipher-impl? ictx/c nat?
         bytes?)]
-   [llci-decrypt-end
+   [llci-decrypt-end ;; auth-tag size already checked
     (-> lowlevel-cipher-impl? ictx/c bytes?
         any)]
    [llci-close
