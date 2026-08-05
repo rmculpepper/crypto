@@ -10,7 +10,11 @@
          "interfaces.rkt"
          "common.rkt"
          "error.rkt")
-(provide (struct-out common-digest-impl)
+(provide (contract-out
+          [make-digest
+           (-> info? factory? (or/c digest-inner-impl? #f)
+               (or/c digest-impl? #f))])
+         (struct-out common-digest-impl)
          (interface-out digest-inner-impl$)
          (struct-out rkt-hmac-inner-impl)
          config:blake2s
@@ -18,6 +22,9 @@
          config:blake2s+size
          config:blake2b+size
          config:cshake)
+
+(define (make-digest info factory inner)
+  (and inner (common-digest-impl info factory inner)))
 
 ;; ============================================================
 ;; Digest
@@ -36,7 +43,7 @@
    #:import ([simple-write$ #:super #:prefix super-])
    (define-struct-abbrevs common-digest-impl)
    (define (%to-write-prefixes self)
-     (list "impl" "digest" (super-to-write-prefixes self)))
+     (list* "impl" "digest" (super-to-write-prefixes self)))
 
    ;; ---- digest-info
 
@@ -92,7 +99,7 @@
            [else
             (define-values (ic csize)
               ($dii-new-ctx2 (.inner self) self key config))
-            (common-digest-ctx self ic lock csize)]))
+            (common-digest-ctx self ic lock (or csize ($di-size self)))]))
 
    (define (%di-update self dctx src)
      (call-with-state
@@ -159,28 +166,32 @@
 ;; ------------------------------------------------------------
 
 (define-interface digest-inner-impl$
+  #:predicate digest-inner-impl?
   ([dii-digest-buffer
-    (-> digest-inner-impl$? bytes? nat? nat? nat?
+    (-> digest-inner-impl? bytes? nat? nat? nat?
         (or/c bytes? #f))]
    [dii-new-ctx1
-    (-> digest-inner-impl$? digest-impl? (or/c bytes? #f)
+    (-> digest-inner-impl? digest-impl? (or/c bytes? #f)
         ictx/c)]
    [dii-new-ctx2
-    (-> digest-inner-impl$? digest-impl? (or/c bytes? #f) config/c
+    (-> digest-inner-impl? digest-impl? (or/c bytes? #f) config/c
         (values ictx/c (or/c nat? #f)))]
    [dii-update
-    (-> digest-inner-impl$? ictx/c bytes? nat? nat?
+    (-> digest-inner-impl? ictx/c bytes? nat? nat?
         any)]
    [dii-final
-    (-> digest-inner-impl$? ictx/c nat?
+    (-> digest-inner-impl? ictx/c nat?
         bytes?)]
    [dii-copy
-    (-> digest-inner-impl$? ictx/c
+    (-> digest-inner-impl? ictx/c
         (or/c ictx/c #f))])
   #:fallbacks
   (let ()
     (define (dii-digest-buffer self buf start end) #f)
-    (define (dii-new-ctx1 self di key) ($dii-new-ctx2 self di key null))
+    (define (dii-new-ctx1 self di key)
+      (let-values ([(ic csize) ($dii-new-ctx2 self di key null)])
+        (when csize (internal-error "would discard csize" #:in di))
+        ic))
     (define (dii-new-ctx2 self di key config)
       (unless (null? config) (check-config config null #:in di))
       (internal-error "unimplemented" #:in di))

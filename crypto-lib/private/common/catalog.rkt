@@ -23,7 +23,7 @@
 
 (define-interface simple-write$
   ([to-write-string (-> simple-write$? string?)]
-   [to-write-prefixes (-> simple-write$? (listof string?))])
+   [to-write-prefixes (-> simple-write$? (listof (or/c string? symbol?)))])
   #:fallbacks
   (hasheq 'to-write-prefixes (lambda (self) null))
   #:derive-property prop:custom-write
@@ -108,7 +108,7 @@
   #:fallbacks
   (let ()
     (define (di-size self)
-      (let ([size ($di-size self)])
+      (let ([size ($di-size* self)])
         (and (exact-integer? size) size)))
     (define (di-config-family self)
       (case ($get-spec self)

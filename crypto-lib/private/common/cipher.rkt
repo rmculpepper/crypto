@@ -11,7 +11,33 @@
          "interfaces.rkt"
          "common.rkt"
          "error.rkt")
-(provide (all-defined-out))
+(provide (contract-out
+          [make-cipher
+           (-> info? factory? (or/c lowlevel-cipher-impl? #f)
+               (or/c cipher-impl? #f))]
+          [make-multikeylen-cipher
+           (-> info? factory? (listof (cons/c nat? (or/c lowlevel-cipher-impl? #f)))
+               (or/c cipher-impl? #f))])
+         (struct-out cipher-impl-base)
+         (struct-out common-cipher-impl)
+         (struct-out multikeylen-cipher-impl)
+         (interface-out cipher-inner-impl$)
+         (interface-out lowlevel-cipher-impl$))
+
+(define (make-cipher info factory llci)
+  (cond [llci
+         (define inner (ufp-cipher-inner-impl llci))
+         (common-cipher-impl info factory inner)]
+        [else #f]))
+
+(define (make-multikeylen-cipher info factory keylen+llci-list)
+  (define keylen+ci-list
+    (for/list ([keylen (in-list (map car keylen+llci-list))]
+               [llci (in-list (map cdr keylen+llci-list))]
+               #:when llci)
+      (cons keylen (make-cipher info factory llci))))
+  (and (pair? keylen+ci-list)
+       (multikeylen-cipher-impl info factory keylen+ci-list)))
 
 ;; ============================================================
 ;; Cipher
@@ -369,23 +395,24 @@
 ;; Low-level Cipher Impl
 
 (define-interface lowlevel-cipher-impl$
+  #:predicate lowlevel-cipher-impl?
   ([llci-new-ctx
-    (-> lowlevel-cipher-impl$? key/c iv/c boolean? nat?
+    (-> lowlevel-cipher-impl? key/c iv/c boolean? nat?
         ictx/c)]
    [llci-aad
-    (-> lowlevel-cipher-impl$? ictx/c bytes? nat? nat?
+    (-> lowlevel-cipher-impl? ictx/c bytes? nat? nat?
         any)]
    [llci-crypt ;; booleans are (enc? final?)
-    (-> lowlevel-cipher-impl$? ictx/c boolean? boolean? bytes? nat? nat? bytes?
+    (-> lowlevel-cipher-impl? ictx/c boolean? boolean? bytes? nat? nat? bytes?
         nat?)]
    [llci-encrypt-end
-    (-> lowlevel-cipher-impl$? ictx/c nat?
+    (-> lowlevel-cipher-impl? ictx/c nat?
         bytes?)]
    [llci-decrypt-end
-    (-> lowlevel-cipher-impl$? ictx/c bytes?
+    (-> lowlevel-cipher-impl? ictx/c bytes?
         any)]
    [llci-close
-    (-> lowlevel-cipher-impl$? ictx/c
+    (-> lowlevel-cipher-impl? ictx/c
         any)])
   #:generics-prefix $)
 

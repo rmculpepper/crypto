@@ -14,7 +14,11 @@
          "error.rkt"
          "util.rkt"
          (prefix-in rkt: "../rkt/kdf.rkt"))
-(provide (struct-out common-kdf-impl)
+(provide (contract-out
+          [make-kdf
+           (-> info? factory? (or/c kdf-inner-impl? #f)
+               (or/c kdf-impl? #f))])
+         (struct-out common-kdf-impl)
          (struct-out common-kdf-inner-impl)
          hkdf-inner-impl
          ans-x9.63-kdf-inner-impl
@@ -32,6 +36,9 @@
          config:scrypt-kdf
          config:argon2-base
          config:argon2-kdf)
+
+(define (make-kdf info factory inner)
+  (and inner (common-kdf-impl info factory inner)))
 
 ;; ============================================================
 ;; KDF and Password Hashing
@@ -84,8 +91,9 @@
 ;; ----------------------------------------
 
 (define-interface kdf-inner-impl$
+  #:predicate kdf-inner-impl?
   ([kdfi-derive
-    (-> kdf-inner-impl$? kdf-impl? nat? config/c bytes? (or/c bytes? #f)
+    (-> kdf-inner-impl? kdf-impl? nat? config/c bytes? (or/c bytes? #f)
         bytes?)])
   #:generics-prefix $)
 

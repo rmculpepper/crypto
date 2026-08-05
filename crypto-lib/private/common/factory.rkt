@@ -15,7 +15,8 @@
 (provide (struct-out factory-base)
          (struct-out common-factory)
          (interface-out inner-fetch$)
-         (struct-out inner-fetch-base))
+         (struct-out inner-fetch-base)
+         make-factory)
 
 ;; ============================================================
 ;; Factory
@@ -175,7 +176,7 @@
        [_ #f]))
    ))
 
-(struct common-factory
+(struct common-factory factory-base
   (inner        ;; InnerFetch
    table        ;; (Hash *Spec => *Impl)
    )
@@ -184,16 +185,16 @@
    #:export ([factory$ #:prefix %])
    (define-struct-abbrevs common-factory)
 
-   (define ($fetch-digest self dspec)
+   (define (%fetch-digest self dspec)
      (fetch self dspec digest-spec->info $fi-digest))
 
-   (define ($fetch-cipher self cspec)
+   (define (%fetch-cipher self cspec)
      (fetch self cspec cipher-spec->info $fi-cipher))
 
-   (define ($fetch-kdf self kdfspec)
+   (define (%fetch-kdf self kdfspec)
      (fetch self kdfspec kdf-spec->info $fi-kdf))
 
-   (define ($fetch-pk self pkspec)
+   (define (%fetch-pk self pkspec)
      (fetch self pkspec pk-spec->info $fi-pk))
 
    (define (fetch self spec spec->info inner-fetch)
@@ -268,3 +269,52 @@
         (and di (make-kdf (sp800-108-double-pipeline-hmac-kdf-inner-impl di)))]
        [_ #f]))
    ))
+
+(struct common-inner-fetch inner-fetch-base
+  (fetch-digest
+   fetch-cipher
+   fetch-kdf
+   fetch-pk
+   )
+  #:properties
+  (method-properties
+   #:export ([inner-fetch$ #:prefix %])
+   #:import ([inner-fetch$ #:super #:prefix super-])
+   (define-struct-abbrevs common-inner-fetch)
+
+   (define (%fi-digest self factory info)
+     (or ((.fetch-digest self) factory info)
+         (super-fi-digest self factory info)))
+
+   (define (%fi-cipher self factory info)
+     (or ((.fetch-cipher self) factory info)
+         (super-fi-cipher self factory info)))
+
+   (define (%fi-kdf self factory info)
+     (or ((.fetch-kdf self) factory info)
+         (super-fi-kdf self factory info)))
+
+   (define (%fi-pk self factory info)
+     (or ((.fetch-pk self) factory info)
+         (super-fi-pk self factory info)))
+   ))
+
+;; ============================================================
+
+(define (make-factory #:name name
+                      #:version version
+                      #:ok? [ok? #f]
+                      #:load-error [load-error #f]
+                      #:get-digest [get-digest #f]
+                      #:get-cipher [get-cipher #f]
+                      #:get-kdf [get-kdf #f]
+                      #:get-pk [get-pk #f])
+  (define (fetch-none factory info) #f)
+  (define table (make-hash))
+  (define inner
+    (common-inner-fetch (or get-digest fetch-none)
+                        (or get-cipher fetch-none)
+                        (or get-kdf fetch-none)
+                        (or get-pk fetch-none)))
+  (common-factory name version ok? load-error
+                  inner table))
