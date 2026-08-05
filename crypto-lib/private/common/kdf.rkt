@@ -53,7 +53,7 @@
    #:import ([simple-write$ #:super #:prefix super-])
    (define-struct-abbrevs common-kdf-impl)
    (define (%to-write-prefixes self)
-     (list "impl" "kdf" (super-to-write-prefixes self)))
+     (list* "impl" "kdf" (super-to-write-prefixes self)))
 
    ;; ---- kdf-info
 

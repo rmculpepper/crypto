@@ -73,7 +73,7 @@
    #:import ([simple-write$ #:super #:prefix super-])
    (define-struct-abbrevs pk-impl-base)
    (define (%to-write-prefixes self)
-     (list "impl" "pk" (super-to-write-prefixes self)))
+     (list* "impl" "pk" (super-to-write-prefixes self)))
 
    ;; ---- pk-info
 
@@ -215,7 +215,7 @@
    (define (check-encrypt self pad)
      (unless ($pk-can-encrypt? self #f)
        (crypto-error "encrypt/decrypt not supported" #:in self))
-     (unless ($pk-can-encrypt? pad)
+     (unless ($pk-can-encrypt? self pad)
        (crypto-error "encrypt/decrypt not supported\n  padding: ~e" #:in self)))
 
    ;; ----
