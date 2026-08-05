@@ -15,6 +15,17 @@
          "kdf.rkt")
 (provide gcrypt-factory)
 
+(define (gcrypt-info key)
+  (case key
+    [(all-ec-curves) gcrypt-curves]
+    [(all-eddsa-curves)
+     (append (if ed25519-ok? '(ed25519) '()) (if ed448-ok? '(ed448) '()))]
+    [(all-ecx-curves)
+     (append (if x25519-ok? '(x25519) '()) (if x448-ok? '(x448) '()))]
+    [(extra-lib-info)
+     `(("version string" ,(gcry_check_version #f)))]
+    [else #f]))
+
 (define gcrypt-factory
   (make-factory
    #:name 'gcrypt
@@ -25,23 +36,6 @@
    #:get-digest gcrypt-fetch-digest
    #:get-cipher gcrypt-fetch-cipher
    #:get-kdf gcrypt-fetch-kdf
-   #:get-pk gcrypt-fetch-pk))
+   #:get-pk gcrypt-fetch-pk
 
-#|
-
-    ;; ----
-
-    (define/override (info key)
-      (case key
-        [(all-ec-curves) gcrypt-curves]
-        [(all-eddsa-curves)
-         (append (if ed25519-ok? '(ed25519) '()) (if ed448-ok? '(ed448) '()))]
-        [(all-ecx-curves)
-         (append (if x25519-ok? '(x25519) '()) (if x448-ok? '(x448) '()))]
-        [else (super info key)]))
-
-    (define/override (print-lib-info)
-      (super print-lib-info)
-      (printf " version string: ~s\n" (gcry_check_version #f)))
-    ))
-|#
+   #:get-info gcrypt-info))

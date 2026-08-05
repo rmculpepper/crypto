@@ -74,7 +74,10 @@
      (printf " name: ~s\n" (.name self))
      (printf " version: ~s\n" (.version self))
      (let ([load-error (.load-error self)])
-       (when load-error (printf " load error: ~s\n" load-error))))
+       (when load-error (printf " load error: ~s\n" load-error)))
+     (for ([extra (in-list (or ($factory-info self 'extra-lib-info) null))])
+       (match-define (list key val) extra)
+       (printf " ~a: ~s\n" key val)))
 
    (define (print-avail self)
      (define (pad-to v len)
@@ -179,11 +182,17 @@
 (struct common-factory factory-base
   (inner        ;; InnerFetch
    table        ;; (Hash *Spec => *Impl)
+   get-info     ;; (Symbol -> (U Any #f))
    )
   #:properties
   (method-properties
    #:export ([factory$ #:prefix %])
+   #:import ([factory$ #:super #:prefix super-])
    (define-struct-abbrevs common-factory)
+
+   (define (%factory-info self key)
+     (or ((.get-info self) key)
+         (super-factory-info self key)))
 
    (define (%fetch-digest self dspec)
      (fetch self dspec digest-spec->info $fi-digest))
@@ -305,11 +314,13 @@
                       #:version version
                       #:ok? [ok? #f]
                       #:load-error [load-error #f]
+                      #:get-info [get-info #f]
                       #:get-digest [get-digest #f]
                       #:get-cipher [get-cipher #f]
                       #:get-kdf [get-kdf #f]
                       #:get-pk [get-pk #f])
   (define (fetch-none factory info) #f)
+  (define (get-none key) #f)
   (define table (make-hash))
   (define inner
     (common-inner-fetch (or get-digest fetch-none)
@@ -317,4 +328,4 @@
                         (or get-kdf fetch-none)
                         (or get-pk fetch-none)))
   (common-factory name version ok? load-error
-                  inner table))
+                  inner table (or get-info get-none)))
