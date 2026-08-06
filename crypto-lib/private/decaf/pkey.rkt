@@ -1,210 +1,215 @@
-;; Copyright 2018 Ryan Culpepper
+;; Copyright 2018-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
+(require racket/match
+         scramble/bundle
+         scramble/struct
+         "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide (all-defined-out))
+(provide decaf-fetch-pk)
+
+(define (decaf-fetch-pk factory info)
+  (case ($get-spec info)
+    [(eddsa) (decaf-eddsa-impl info factory)]
+    [(ecx) (decaf-ecx-impl info factory)]
+    [else #f]))
+
+(struct keypair (param pub priv))
 
 ;; ============================================================
 ;; Ed25519
 
-(define decaf-eddsa-impl%
-  (class pk-impl-base%
-    (inherit-field factory)
-    (super-new (spec 'eddsa))
+(struct decaf-eddsa-impl pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (generate-params config)
-      (check-config config config:eddsa-keygen "EdDSA parameters generation")
-      (curve->params (config-ref config 'curve)))
+   (define (%pk-generate-params self config)
+     (check-config config config:eddsa-keygen #:in self)
+     (define curve (config-ref config 'curve))
+     (or (curve->params self curve)
+         (err/no-curve curve self)))
 
-    (define/public (curve->params curve)
-      (case curve
-        [(ed25519 ed448) (new pk-eddsa-params% (impl this) (curve curve))]
-        [else (err/no-curve curve this)]))
+   (define (curve->params self curve)
+     (and (memq curve '(ed25519 ed448))
+          (pk-parameters self curve)))
 
-    (define/public (generate-key-from-curve curve)
-      (case curve
-        [(ed25519)
-         (define priv (crypto-random-bytes DECAF_EDDSA_25519_PRIVATE_BYTES))
-         (define pub (decaf_ed25519_derive_public_key priv))
-         (new decaf-ed25519-key% (impl this) (pub pub) (priv priv))]
-        [(ed448)
-         (define priv (crypto-random-bytes DECAF_EDDSA_448_PRIVATE_BYTES))
-         (define pub (decaf_ed448_derive_public_key priv))
-         (new decaf-ed448-key% (impl this) (pub pub) (priv priv))]))
+   ;; ----
 
-    ;; ---- EdDSA ----
+   (define (%pkp-generate-key self pkp)
+     (define curve (ctx-inner pkp))
+     (case curve
+       [(ed25519)
+        (define priv (crypto-random-bytes DECAF_EDDSA_25519_PRIVATE_BYTES))
+        (define pub (decaf_ed25519_derive_public_key priv))
+        (pk-key self (keypair curve pub priv) #t)]
+       [(ed448)
+        (define priv (crypto-random-bytes DECAF_EDDSA_448_PRIVATE_BYTES))
+        (define pub (decaf_ed448_derive_public_key priv))
+        (pk-key self (keypair curve pub priv) #t)]))
 
-    (define/override (make-params curve)
-      (case curve
-        [(ed25519 ed448) (curve->params curve)]
-        [else #f]))
+   (define (%pkp-param-values self pkp)
+     (define curve-name (ctx-inner pkp))
+     curve-name)
 
-    (define/override (make-public-key curve qB)
-      (case curve
-        [(ed25519)
-         (define pub (make-sized-copy DECAF_EDDSA_25519_PUBLIC_BYTES qB))
-         (new decaf-ed25519-key% (impl this) (pub qB) (priv #f))]
-        [(ed448)
-         (define pub (make-sized-copy DECAF_EDDSA_448_PUBLIC_BYTES qB))
-         (new decaf-ed448-key% (impl this) (pub qB) (priv #f))]
-        [else #f]))
+   ;; ----
 
-    (define/override (make-private-key curve qB dB)
-      (case curve
-        [(ed25519)
-         (define priv (make-sized-copy DECAF_EDDSA_25519_PRIVATE_BYTES dB))
-         (define pub (decaf_ed25519_derive_public_key priv))
-         (when qB (check-recomputed-qB pub qB))
-         (new decaf-ed25519-key% (impl this) (pub pub) (priv priv))]
-        [(ed448)
-         (define priv (make-sized-copy DECAF_EDDSA_448_PRIVATE_BYTES dB))
-         (define pub (decaf_ed448_derive_public_key priv))
-         (when qB (check-recomputed-qB pub qB))
-         (new decaf-ed448-key% (impl this) (pub pub) (priv priv))]
-        [else #f]))
-    ))
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (keypair curve pub priv) (ctx-inner pkk))
+     (case curve
+       [(ed25519)
+        (cond [priv (encode-priv-eddsa fmt 'ed25519 pub priv)]
+              [else (encode-pub-eddsa fmt 'ed25519 pub)])]
+       [(ed448)
+        (cond [priv (encode-priv-eddsa fmt 'ed448 pub priv)]
+              [else (encode-pub-eddsa fmt 'ed448 pub)])]))
 
-(define decaf-ed*-key%
-  (class pk-key-base%
-    (init-field pub priv)
-    (inherit-field impl)
-    (super-new)
 
-    (abstract get-curve)
-    (define/override (is-private?) (and priv #t))
-    (define/override (get-params)
-      (send impl curve->params (get-curve)))
-    (define/override (-write-key fmt)
-      (cond [priv (encode-priv-eddsa fmt (get-curve) pub priv)]
-            [else (encode-pub-eddsa fmt (get-curve) pub)]))
-    ))
+   ;; ---- pk*
 
-(define decaf-ed25519-key%
-  (class decaf-ed*-key%
-    (inherit-field impl pub priv)
-    (super-new)
-    (define/override (get-curve) 'ed25519)
-    (define/override (-sign msg _dspec pad)
-      (decaf_ed25519_sign priv pub msg (bytes-length msg) 0))
-    (define/override (-verify msg _dspec pad sig)
-      (and (= (bytes-length sig) DECAF_EDDSA_25519_SIGNATURE_BYTES)
-           (decaf_ed25519_verify sig pub msg (bytes-length msg) 0)))
-    ))
+   (define (%pk*-make-params self curve)
+     (curve->params self curve))
 
-(define decaf-ed448-key%
-  (class decaf-ed*-key%
-    (inherit-field impl pub priv)
-    (super-new)
-    (define/override (get-curve) 'ed448)
-    (define/override (-sign msg _dspec pad)
-      (decaf_ed448_sign priv pub msg (bytes-length msg) 0))
-    (define/override (-verify msg _dspec pad sig)
-      (and (= (bytes-length sig) DECAF_EDDSA_448_SIGNATURE_BYTES)
-           (decaf_ed448_verify sig pub msg (bytes-length msg) 0)))
-    ))
+   (define (%pk*-make-public-key self curve qB)
+     (case curve
+       [(ed25519)
+        (define pub (make-sized-copy DECAF_EDDSA_25519_PUBLIC_BYTES qB))
+        (pk-key self (keypair curve pub #f) #f)]
+       [(ed448)
+        (define pub (make-sized-copy DECAF_EDDSA_448_PUBLIC_BYTES qB))
+        (pk-key self (keypair curve pub #f) #f)]
+       [else #f]))
+
+   (define (%pk*-make-private-key self curve qB dB)
+     (case curve
+       [(ed25519)
+        (define priv (make-sized-copy DECAF_EDDSA_25519_PRIVATE_BYTES dB))
+        (define pub (decaf_ed25519_derive_public_key priv))
+        (when qB (check-recomputed-qB pub qB))
+        (pk-key self (keypair curve pub priv) #t)]
+       [(ed448)
+        (define priv (make-sized-copy DECAF_EDDSA_448_PRIVATE_BYTES dB))
+        (define pub (decaf_ed448_derive_public_key priv))
+        (when qB (check-recomputed-qB pub qB))
+        (pk-key self (keypair curve pub priv) #t)]
+       [else #f]))
+
+   ;; ----
+
+   (define (%pkk*-sign self pkk msg _dspec _pad)
+     (match-define (keypair curve pub priv) (ctx-inner pkk))
+     (case curve
+       [(ed25519)
+        (decaf_ed25519_sign priv pub msg (bytes-length msg) 0)]
+       [(ed448)
+        (decaf_ed448_sign priv pub msg (bytes-length msg) 0)]
+       [else (internal-error "bad curve: ~e" curve #:in pkk)]))
+
+   (define (%pkk*-verify self pkk msg _dspec _pad sig)
+     (match-define (keypair curve pub _) (ctx-inner pkk))
+     (case curve
+       [(ed25519)
+        (and (= (bytes-length sig) DECAF_EDDSA_25519_SIGNATURE_BYTES)
+             (decaf_ed25519_verify sig pub msg (bytes-length msg) 0))]
+       [(ed448)
+        (and (= (bytes-length sig) DECAF_EDDSA_448_SIGNATURE_BYTES)
+             (decaf_ed448_verify sig pub msg (bytes-length msg) 0))]
+       [else (internal-error "bad curve: ~e" curve #:in pkk)]))
+   ))
 
 ;; ============================================================
 ;; X25519
 
-(define decaf-ecx-impl%
-  (class pk-impl-base%
-    (inherit-field factory)
-    (super-new (spec 'ecx))
+(struct decaf-ecx-impl pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (generate-params config)
-      (check-config config config:ecx-keygen "EC/X parameters generation")
-      (curve->params (config-ref config 'curve)))
+   (define (%pk-generate-params self config)
+     (check-config config config:ecx-keygen #:in self)
+     (define curve (config-ref config 'curve))
+     (or (curve->params self curve)
+         (err/no-curve curve self)))
 
-    (define/public (curve->params curve)
-      (case curve
-        [(x25519 x448) (new pk-ecx-params% (impl this) (curve curve))]
-        [else (err/no-curve curve this)]))
+   (define (curve->params self curve)
+     (and (memq curve '(x25519 x448))
+          (pk-parameters self curve)))
 
-    (define/public (generate-key-from-curve curve)
-      (case curve
-        [(x25519)
-         (define priv (crypto-random-bytes DECAF_X25519_PRIVATE_BYTES))
-         (define pub  (decaf_x25519_derive_public_key priv))
-         (new decaf-x25519-key% (impl this) (pub pub) (priv priv))]
-        [(x448)
-         (define priv (crypto-random-bytes DECAF_X448_PRIVATE_BYTES))
-         (define pub  (decaf_x448_derive_public_key priv))
-         (new decaf-x448-key% (impl this) (pub pub) (priv priv))]))
+   ;; ----
 
-    ;; ----
+   (define (%pkp-generate-key self pkp)
+     (define curve ($pkp-param-values self pkp))
+     (case curve
+       [(x25519)
+        (define priv (crypto-random-bytes DECAF_X25519_PRIVATE_BYTES))
+        (define pub  (decaf_x25519_derive_public_key priv))
+        (pk-key self (keypair curve pub priv) #t)]
+       [(x448)
+        (define priv (crypto-random-bytes DECAF_X448_PRIVATE_BYTES))
+        (define pub  (decaf_x448_derive_public_key priv))
+        (pk-key self (keypair curve pub priv) #t)]
+       [else (internal-error "bad curve: ~e" curve #:in pkp)]))
 
-    (define/override (make-params curve)
-      (case curve
-        [(x25519 x448) (curve->params curve)]
-        [else #f]))
+   (define (%pkp-param-values self pkp)
+     (define curve-name (ctx-inner pkp))
+     curve-name)
 
-    (define/override (make-public-key curve qB)
-      (case curve
-        [(x25519)
-         (define pub (make-sized-copy DECAF_X25519_PUBLIC_BYTES qB))
-         (new decaf-x25519-key% (impl this) (pub qB) (priv #f))]
-        [(x448)
-         (define pub (make-sized-copy DECAF_X448_PUBLIC_BYTES qB))
-         (new decaf-x448-key% (impl this) (pub qB) (priv #f))]
-        [else #f]))
+   ;; ----
 
-    (define/override (make-private-key curve qB dB)
-      (case curve
-        [(x25519)
-         (define priv (make-sized-copy DECAF_X25519_PRIVATE_BYTES dB))
-         (define pub  (decaf_x25519_derive_public_key priv))
-         (when qB (check-recomputed-qB pub qB))
-         (new decaf-x25519-key% (impl this) (pub pub) (priv priv))]
-        [(x448)
-         (define priv (make-sized-copy DECAF_X448_PRIVATE_BYTES dB))
-         (define pub  (decaf_x448_derive_public_key priv))
-         (when qB (check-recomputed-qB pub qB))
-         (new decaf-x448-key% (impl this) (pub pub) (priv priv))]
-        [else #f]))
-    ))
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (keypair curve pub priv) (ctx-inner pkk))
+     (cond [priv (encode-priv-ecx fmt curve pub priv)]
+           [else (encode-pub-ecx fmt curve pub)]))
 
-(define decaf-x*-key%
-  (class pk-key-base%
-    (init-field pub priv)
-    (inherit-field impl)
-    (super-new)
+   ;; ---- pk*
 
-    (abstract get-curve)
-    (define/override (is-private?) (and priv #t))
-    (define/override (get-params)
-      (send impl curve->params (get-curve)))
-    (define/override (-write-key fmt)
-      (cond [priv (encode-priv-ecx fmt (get-curve) pub priv)]
-            [else (encode-pub-ecx fmt (get-curve) pub)]))
-    (define/override (-compatible-for-key-agree? peer-pubkey)
-      (equal? (get-curve) (send peer-pubkey get-curve)))
-    (define/override (-convert-for-key-agree bs)
-      (send impl make-public-key (get-curve) bs))
-    ))
+   (define (%pk*-make-params self curve)
+     (curve->params self curve))
 
-(define decaf-x25519-key%
-  (class decaf-x*-key%
-    (inherit-field impl priv pub)
-    (super-new)
-    (define/override (get-curve) 'x25519)
-    (define/override (-compute-secret peer-pubkey)
-      (define peer-pub (get-field pub peer-pubkey))
-      (or (decaf_x25519 peer-pub priv)
-          (crypto-error "operation failed")))
-    ))
+   (define (%pk*-make-public-key self curve qB)
+     (case curve
+       [(x25519)
+        (define pub (make-sized-copy DECAF_X25519_PUBLIC_BYTES qB))
+        (pk-key self (keypair curve pub #f) #f)]
+       [(x448)
+        (define pub (make-sized-copy DECAF_X448_PUBLIC_BYTES qB))
+        (pk-key self (keypair curve pub #f) #f)]
+       [else #f]))
 
-(define decaf-x448-key%
-  (class decaf-x*-key%
-    (inherit-field impl priv pub)
-    (super-new)
-    (define/override (get-curve) 'x448)
-    (define/override (-compute-secret peer-pubkey)
-      (define peer-pub (get-field pub peer-pubkey))
-      (or (decaf_x448 peer-pub priv)
-          (crypto-error "operation failed")))
-    ))
+   (define (%pk*-make-private-key self curve qB dB)
+     (case curve
+       [(x25519)
+        (define priv (make-sized-copy DECAF_X25519_PRIVATE_BYTES dB))
+        (define pub  (decaf_x25519_derive_public_key priv))
+        (when qB (check-recomputed-qB pub qB))
+        (pk-key self (keypair curve priv pub) #t)]
+       [(x448)
+        (define priv (make-sized-copy DECAF_X448_PRIVATE_BYTES dB))
+        (define pub  (decaf_x448_derive_public_key priv))
+        (when qB (check-recomputed-qB pub qB))
+        (pk-key self (keypair curve priv pub) #t)]
+       [else #f]))
+
+   ;; ----
+
+   (define (%pkk*-compute-secret self pkk peer-pubkey)
+     (match-define (keypair curve pub priv) (ctx-inner pkk))
+     (define peer (keypair-pub (ctx-inner peer-pubkey)))
+     (case curve
+       [(x25519)
+        (or (decaf_x25519 peer priv)
+            (crypto-error "operation failed" #:in pkk))]
+       [(x448)
+        (or (decaf_x448 peer priv)
+            (crypto-error "operation failed" #:in pkk))]))
+
+   (define (%pkk*-import-for-key-agree self pkk bs)
+     (define curve (keypair-param (ctx-inner pkk)))
+     ($pk*-make-public-key self curve bs))
+   ))

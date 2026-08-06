@@ -23,7 +23,10 @@
 
 (define ((K v) . as) v)
 
-(define (decaf-is-ok?)
+(define-decaf DECAF_ED25519_NO_CONTEXT _pointer
+  #:fail (lambda () 'missing))
+
+(define decaf-is-ok?
   (and libdecaf (not (eq? DECAF_ED25519_NO_CONTEXT 'missing))))
 
 ;; ============================================================
@@ -64,9 +67,6 @@
 
 ;; ============================================================
 ;; ed25519
-
-(define-decaf DECAF_ED25519_NO_CONTEXT _pointer
-  #:fail (lambda () 'missing))
 
 ;; Number of bytes in an EdDSA public key.
 (define DECAF_EDDSA_25519_PUBLIC_BYTES 32)
