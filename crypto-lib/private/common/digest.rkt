@@ -187,10 +187,11 @@
         (or/c ictx/c #f))])
   #:fallbacks
   (let ()
-    (define (dii-digest-buffer self buf start end) #f)
+    (define (dii-digest-buffer self buf start end size) #f)
     (define (dii-new-ctx1 self di key)
       (let-values ([(ic csize) ($dii-new-ctx2 self di key null)])
-        (when csize (internal-error "would discard csize" #:in di))
+        (when (and csize (not (equal? csize ($di-size* di))))
+          (internal-error "would discard csize" #:in di))
         ic))
     (define (dii-new-ctx2 self di key config)
       (unless (null? config) (check-config config null #:in di))
@@ -199,6 +200,24 @@
             'dii-new-ctx1 dii-new-ctx1
             'dii-new-ctx2 dii-new-ctx2))
   #:generics-prefix $)
+
+(struct common-digest-inner-impl
+  (do-digest-buffer do-new-ctx1 do-update do-final do-copy)
+  #:properties
+  (method-properties
+   #:export ([digest-inner-impl$ #:prefix %])
+   (define-struct-abbrevs common-digest-inner-impl)
+   (define (%dii-digest-buffer self buf start end size)
+     ((.do-digest-buffer self) buf start end size))
+   (define (%dii-new-ctx1 self di key)
+     ((.do-new-ctx1 self) di key))
+   (define (%dii-update self ic buf start end)
+     ((.do-update self) ic buf start end))
+   (define (%dii-final self ic size)
+     ((.do-final self) ic size))
+   (define (%dii-copy self ic)
+     ((.do-copy self) ic))
+   ))
 
 ;; ============================================================
 ;; HMAC

@@ -17,7 +17,12 @@
 (provide (contract-out
           [make-kdf
            (-> info? factory? (or/c kdf-inner-impl? #f)
-               (or/c kdf-impl? #f))])
+               (or/c kdf-impl? #f))]
+          [make-kdf-inner-impl
+           (->* [(-> kdf-impl? nat? config/c bytes? bytes? bytes?)]
+                [(-> kdf-impl? config/c bytes? (or/c bytes? #f))
+                 (-> kdf-impl? bytes? string? (or/c 'valid 'invalid 'fallback))]
+                kdf-inner-impl?)])
          (struct-out common-kdf-impl)
          (struct-out common-kdf-inner-impl)
          hkdf-inner-impl
@@ -75,6 +80,10 @@
        [else (if salt (crypto-error "salt not allowed for KDF" #:in self) #f)]))
 
    (define (%pwhash self config pass)
+     (or ($kdfi-pwhash (.inner self) self config pass)
+         (fallback-pwhash self config pass)))
+
+   (define (fallback-pwhash self config pass)
      (match ($get-spec self)
        [(or 'argon2id 'argon2i 'argon2d)
         (kdf-pwhash-argon2 self config pass)]
@@ -85,7 +94,10 @@
        [_ (err/no-impl self)]))
 
    (define (%pwhash-verify self pass cred)
-     (kdf-pwhash-verify self pass cred))
+     (match ($kdfi-pwhash-verify (.inner self) self pass cred)
+       ['valid #t]
+       ['invalid #f]
+       ['fallback (kdf-pwhash-verify self pass cred)]))
    ))
 
 ;; ----------------------------------------
@@ -94,17 +106,34 @@
   #:predicate kdf-inner-impl?
   ([kdfi-derive
     (-> kdf-inner-impl? kdf-impl? nat? config/c bytes? (or/c bytes? #f)
-        bytes?)])
+        bytes?)]
+   [kdfi-pwhash
+    (-> kdf-inner-impl? kdf-impl? config/c bytes?
+        (or/c bytes? #f))]
+   [kdfi-pwhash-verify
+    (-> kdf-inner-impl? kdf-impl? config/c string?
+        (or/c 'valid 'invalid 'fallback))])
   #:generics-prefix $)
 
 (struct common-kdf-inner-impl
-  (do-kdf-derive)
+  (do-kdf-derive do-pwhash do-verify)
   #:properties
   (method-properties
    #:export ([kdf-inner-impl$ #:prefix %])
    (define-struct-abbrevs common-kdf-inner-impl)
-   (define (%kdfi-derive self kdfi key-size params pass salt)
-     ((.do-kdf-derive self) kdfi key-size params pass salt))))
+   (define (%kdfi-derive self kdfi key-size config pass salt)
+     ((.do-kdf-derive self) kdfi key-size config pass salt))
+   (define (%kdfi-pwhash self kdfi config pass)
+     ((.do-pwhash self) kdfi config pass))
+   (define (%kdfi-pwhash-verify self kdfi config cred)
+     ((.do-verify self) kdfi config cred))))
+
+(define (make-kdf-inner-impl do-kdf-derive [do-pwhash #f] [do-verify #f])
+  (define (pwhash-none kdfi config pass) #f)
+  (define (verify-fallback kdfi config cred) 'fallback)
+  (common-kdf-inner-impl do-kdf-derive
+                         (or do-pwhash pwhash-none)
+                         (or do-verify verify-fallback)))
 
 ;; ----------------------------------------
 
