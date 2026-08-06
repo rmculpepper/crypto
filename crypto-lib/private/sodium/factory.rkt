@@ -1,4 +1,4 @@
-;; Copyright 2018 Ryan Culpepper
+;; Copyright 2018-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
@@ -8,75 +8,34 @@
          "../common/factory.rkt"
          "ffi.rkt"
          "digest.rkt"
-         "cipher.rkt"
-         "pkey.rkt"
+         #;"cipher.rkt"
+         #;"pkey.rkt"
          "kdf.rkt")
 (provide sodium-factory)
 
-(define blake2-digests '(blake2b-512 blake2b-384 blake2b-256 blake2b-160))
+(define (sodium-info key)
+  (case key
+    [(all-ec-curves) '()]
+    [(all-eddsa-curves) '(ed25519)]
+    [(all-ecx-curves) '(x25519)]
+    [(sodium_version_string) (sodium_version_string)]
+    [(sodium_library_version_major) (sodium_library_version_major)]
+    [(sodium_library_version_minor) (sodium_library_version_minor)]
+    [(extra-lib-info)
+     `((sodium_version_string ,(sodium-info 'sodium_version_string))
+       (sodium_library_version_major ,(sodium-info 'sodium_library_version_major))
+       (sodium_library_version_minor ,(sodium-info 'sodium_library_version_minor)))]
+    [else #f]))
 
-(define sodium-factory%
-  (class* factory-base% (factory<%>)
-    (inherit get-cipher get-kdf print-avail)
-    (super-new [ok? (and sodium-ok? (sodium_init))] [load-error sodium-load-error])
-
-    (define/override (get-name) 'sodium)
-    (define/override (get-version)
-      (and sodium-ok? (version->list (sodium_version_string))))
-
-    (define/override (-get-digest info)
-      (define spec (send info get-spec))
-      (cond [(and (memq spec blake2-digests) blake2-ok?)
-             (new sodium-blake2-digest-impl% (info info) (factory this))]
-            [(and (eq? spec 'sha256) sha256-ok?)
-             (new sodium-sha256-digest-impl% (info info) (factory this))]
-            [(and (eq? spec 'sha512) sha512-ok?)
-             (new sodium-sha512-digest-impl% (info info) (factory this))]
-            [(and (eq? spec 'shake128) shake128-ok?)
-             (new sodium-shake128-impl% (info info) (factory this))]
-            [(and (eq? spec 'shake256) shake256-ok?)
-             (new sodium-shake256-impl% (info info) (factory this))]
-            [else #f]))
-
-    (define/override (-get-cipher info)
-      (define spec (send info get-spec))
-      (define cipher
-        (for/first ([rec (in-list cipher-records)]
-                    #:when (equal? (aeadcipher-spec rec) spec))
-          rec))
-      (and cipher (new sodium-cipher-impl% (info info) (factory this) (cipher cipher))))
-
-    (define/override (-get-pk spec)
-      (case spec
-        [(eddsa) (new sodium-eddsa-impl% (factory this))]
-        [(ecx) (new sodium-ecx-impl% (factory this))]
-        [else #f]))
-
-    (define/override (-get-kdf spec)
-      (case spec
-        [(argon2i)
-         (and argon2i-ok? (new sodium-argon2-impl% (factory this) (spec 'argon2i)))]
-        [(argon2id)
-         (and argon2id-ok? (new sodium-argon2-impl% (factory this) (spec 'argon2id)))]
-        [(scrypt)
-         (and scrypt-ok? (new sodium-scrypt-impl% (factory this) (spec 'scrypt)))]
-        [else (super -get-kdf spec)]))
-
-    ;; ----
-
-    (define/override (info key)
-      (case key
-        [(version-string) (and sodium-ok? (sodium_version_string))]
-        [(all-ec-curves) '()]
-        [(all-eddsa-curves) '(ed25519)]
-        [(all-ecx-curves) '(x25519)]
-        [else (super info key)]))
-
-    (define/override (print-lib-info)
-      (super print-lib-info)
-      (printf " version string: ~v\n" (info 'version-string))
-      (printf " sodium_library_version_major: ~s\n" (sodium_library_version_major))
-      (printf " sodium_library_version_minor: ~s\n" (sodium_library_version_minor)))
-    ))
-
-(define sodium-factory (new sodium-factory%))
+(define sodium-factory
+  (make-factory
+   #:name 'sodium
+   #:version (version->list (sodium_version_string))
+   #:ok? (and sodium-ok? (sodium_init) #t)
+   #:load-error sodium-load-error
+   #:get-info sodium-info
+   #:get-digest sodium-fetch-digest
+   ;; #:get-cipher sodium-fetch-cipher
+   #:get-kdf sodium-fetch-kdf
+   ;; #:get-pk sodium-fetch-pk
+   ))

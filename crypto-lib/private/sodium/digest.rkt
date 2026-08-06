@@ -1,199 +1,211 @@
-;; Copyright 2018 Ryan Culpepper
+;; Copyright 2018-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
+(require racket/match
+         scramble/bundle
+         scramble/struct
          ffi/unsafe
+         "../common/interfaces.rkt"
          "../common/digest.rkt"
+         "../common/common.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide sodium-blake2-digest-impl%
-         sodium-sha256-digest-impl%
-         sodium-sha512-digest-impl%
-         sodium-shake128-impl%
-         sodium-shake256-impl%)
+(provide sodium-fetch-digest)
 
-(define (make-ctx size) (malloc size 'atomic-interior))
+(define (sodium-fetch-digest factory info)
+  (define spec ($get-spec info))
+  (define inner
+    (match ($get-spec info)
+      [(? symbol? dspec)
+       (case dspec
+         [(sha256) (and sha256-ok? (sodium-sha256-inner-impl))]
+         [(sha512) (and sha512-ok? (sodium-sha512-inner-impl))]
+         [(shake128) (and shake128-ok? (sodium-shake128-inner-impl))]
+         [(shake256) (and shake256-ok? (sodium-shake256-inner-impl))]
+         [(blake2b-512 blake2b-384 blake2b-256 blake2b-160)
+          (sodium-blake2-inner-impl)]
+         [else #f])]
+      [(list 'hmac dspec)
+       (case dspec
+         [(sha256) (and sha256-ok? (sodium-hmac-sha256-inner-impl))]
+         [(sha512) (and sha512-ok? (sodium-hmac-sha512-inner-impl))]
+         [else #f])]
+      [_ #f]))
+  (make-digest info factory inner))
 
-(define sodium-blake2-digest-impl%
-  (class digest-impl%
-    (super-new)
-    (inherit sanity-check get-size)
+;; ============================================================
 
-    (define/override (key-size-ok? size)
-      (<= (crypto_generichash_blake2b_keybytes_min)
-          size
-          (crypto_generichash_blake2b_keybytes_max)))
+(define (make-ctx size [initialize void])
+  (define ctx (malloc size 'atomic-interior))
+  (initialize ctx)
+  ctx)
 
-    (define/override (-new-ctx key)
-      (define ctx (make-ctx (crypto_generichash_blake2b_statebytes)))
-      (crypto_generichash_blake2b_init ctx (or key #"") (get-size))
-      (new sodium-blake2b-digest-ctx% (impl this) (ctx ctx)))
-    ))
+(define (copy-ctx ctx size)
+  (define ctx2 (make-ctx size))
+  (memmove ctx2 ctx size)
+  ctx2)
 
-(define sodium-blake2b-digest-ctx%
-  (class digest-ctx%
-    (init-field ctx)
-    (inherit-field impl)
-    (super-new)
+;; ----------------------------------------
 
-    (define/override (-update buf start end)
-      (crypto_generichash_blake2b_update ctx (ptr-add buf start) (- end start)))
+(struct sodium-blake2-inner-impl ()
+  #:properties
+  (method-properties
+   #:export ([digest-inner-impl$ #:prefix %])
 
-    (define/override (-final! buf)
-      (crypto_generichash_blake2b_final ctx buf))
+   (define (%dii-digest-buffer self buf start end size)
+     (define outbuf (make-bytes size))
+     (crypto_generichash_blake2b outbuf size (ptr-add buf start) (- end start) #"" 0)
+     outbuf)
 
-    (define/override (-copy-inits)
-      (define size (crypto_generichash_blake2b_statebytes))
-      (define ctx2 (make-ctx size))
-      (memmove ctx2 ctx size)
-      `((ctx ,ctx2)))
-    ))
+   (define (%dii-new-ctx2 self di key config)
+     (unless (null? config) (check-config config null #:in di #:impl-limit? #t))
+     (define size ($di-size di))
+     (define ic (make-ctx (crypto_generichash_blake2b_statebytes)))
+     (crypto_generichash_blake2b_init ic (or key #"") size)
+     (values ic size))
 
-;; ----
+   (define (%dii-update self ic buf start end)
+     (crypto_generichash_blake2b_update ctx (ptr-add buf start) (- end start)))
 
-(define sodium-sha256-digest-impl%
-  (class digest-impl%
-    (super-new)
-    (inherit sanity-check get-size)
-    (define/override (-new-ctx key)
-      (define ctx (make-ctx (crypto_hash_sha256_statebytes)))
-      (crypto_hash_sha256_init ctx)
-      (new sodium-sha256-digest-ctx% (impl this) (ctx ctx)))
-    (define/override (new-hmac-ctx key)
-      (define ctx (make-ctx (crypto_auth_hmacsha256_statebytes)))
-      (crypto_auth_hmacsha256_init ctx key (bytes-length key))
-      (new sodium-hmac-sha256-digest-ctx% (impl this) (ctx ctx)))
-    ))
+   (define (%dii-final self ic size)
+     (define buf (make-bytes size))
+     (crypto_generichash_blake2b_final ctx buf)
+     buf)
 
-(define sodium-sha256-digest-ctx%
-  (class digest-ctx%
-    (init-field ctx)
-    (inherit-field impl)
-    (super-new)
-    (define/override (-update buf start end)
-      (crypto_hash_sha256_update ctx (ptr-add buf start) (- end start)))
-    (define/override (-final! buf)
-      (crypto_hash_sha256_final ctx buf))
-    (define/override (-copy-inits)
-      (define size (crypto_hash_sha256_statebytes))
-      (define ctx2 (make-ctx size))
-      (memmove ctx2 ctx size)
-      `((ctx ,ctx2)))
-    ))
+   (define (%dii-copy self ic)
+     (copy-ctx ic (crypto_generichash_blake2b_statebytes)))
+   ))
 
-(define sodium-hmac-sha256-digest-ctx%
-  (class digest-ctx%
-    (init-field ctx)
-    (inherit-field impl)
-    (super-new)
-    (define/override (-update buf start end)
-      (crypto_auth_hmacsha256_update ctx (ptr-add buf start) (- end start)))
-    (define/override (-final! buf)
-      (crypto_auth_hmacsha256_final ctx buf))
-    (define/override (-copy-inits)
-      (define size (crypto_auth_hmacsha256_statebytes))
-      (define ctx2 (make-ctx size))
-      (memmove ctx2 ctx size)
-      `((ctx ,ctx2)))
-    ))
+;; ----------------------------------------
 
-;; ----
+(struct sodium-digest-inner-impl
+  (digest_buffer
+   ctx_size
+   ctx_init
+   ctx_update
+   ctx_final)
+  #:properties
+  (method-properties
+   #:export ([digest-inner-impl$ #:prefix %])
+   (define-struct-abbrevs sodium-digest-inner-impl)
 
-(define sodium-sha512-digest-impl%
-  (class digest-impl%
-    (super-new)
-    (inherit sanity-check get-size)
-    (define/override (-new-ctx key)
-      (define ctx (make-ctx (crypto_hash_sha512_statebytes)))
-      (crypto_hash_sha512_init ctx)
-      (new sodium-sha512-digest-ctx% (impl this) (ctx ctx)))
-    (define/override (new-hmac-ctx key)
-      (define ctx (make-ctx (crypto_auth_hmacsha512_statebytes)))
-      (crypto_auth_hmacsha512_init ctx key (bytes-length key))
-      (new sodium-hmac-sha512-digest-ctx% (impl this) (ctx ctx)))
-    ))
+   (define (%dii-digest-buffer self buf start end size)
+     (define outbuf (make-bytes size))
+     ((.digest_buffer self) outbuf (ptr-add buf start) (- end start))
+     outbuf)
 
-(define sodium-sha512-digest-ctx%
-  (class digest-ctx%
-    (init-field ctx)
-    (inherit-field impl)
-    (super-new)
-    (define/override (-update buf start end)
-      (crypto_hash_sha512_update ctx (ptr-add buf start) (- end start)))
-    (define/override (-final! buf)
-      (crypto_hash_sha512_final ctx buf))
-    (define/override (-copy-inits)
-      (define size (crypto_hash_sha512_statebytes))
-      (define ctx2 (make-ctx size))
-      (memmove ctx2 ctx size)
-      `((ctx ,ctx2)))
-    ))
+   (define (%dii-new-ctx1 self di key)
+     (make-ctx (.ctx_size self) (.ctx_init self)))
 
-(define sodium-hmac-sha512-digest-ctx%
-  (class digest-ctx%
-    (init-field ctx)
-    (inherit-field impl)
-    (super-new)
-    (define/override (-update buf start end)
-      (crypto_auth_hmacsha512_update ctx (ptr-add buf start) (- end start)))
-    (define/override (-final! buf)
-      (crypto_auth_hmacsha512_final ctx buf))
-    (define/override (-copy-inits)
-      (define size (crypto_auth_hmacsha512_statebytes))
-      (define ctx2 (make-ctx size))
-      (memmove ctx2 ctx size)
-      `((ctx ,ctx2)))
-    ))
+   (define (%dii-update self ic buf start end)
+     ((.ctx_update self) ic (ptr-add buf start) (- end start)))
 
-;; ----
+   (define (%dii-final self ic size)
+     (define buf (make-bytes size))
+     ((.ctx_final self) ic buf))
 
-(define (make-shake-impl ctx_size
-                         ctx_init
-                         ctx_update
-                         ctx_final)
-  (define sodium-shake-impl%
-    (class digest-impl%
-      (super-new)
+   (define (%dii-copy self ic)
+     (copy-ctx ic (.ctx_size self)))
+   ))
 
-      (define/override (-new-ctx key)
-        (define ctx (make-ctx (ctx_size)))
-        (ctx_init ctx)
-        (new sodium-shake-ctx% (impl this) (ctx ctx)))
-      ))
+(define (sodium-sha256-inner-impl)
+  (sodium-digest-inner-impl crypto_hash_sha256
+                            (crypto_hash_sha256_statebytes)
+                            crypto_hash_sha256_init
+                            crypto_hash_sha256_update
+                            crypto_hash_sha256_final))
 
-  (define sodium-shake-ctx%
-    (class digest-ctx%
-      (init-field ctx)
-      (inherit-field impl)
-      (super-new)
+(define (sodium-sha512-inner-impl)
+  (sodium-digest-inner-impl crypto_hash_sha512
+                            (crypto_hash_sha512_statebytes)
+                            crypto_hash_sha512_init
+                            crypto_hash_sha512_update
+                            crypto_hash_sha512_final))
 
-      (define/override (-update buf start end)
-        (ctx_update ctx (ptr-add buf start) (- end start)))
+;; ----------------------------------------
 
-      (define/override (-final! buf)
-        (internal-error "wrong method for XOF"))
+(struct sodium-hmac-inner-impl
+  (ctx_size
+   ctx_init
+   ctx_update
+   ctx_final)
+  #:properties
+  (method-properties
+   #:export ([digest-inner-impl$ #:prefix %])
+   (define-struct-abbrevs sodium-hmac-inner-impl)
 
-      (define/override (-final-xof! buf)
-        (ctx_final ctx buf (bytes-length buf)))
+   ;; no digest-buffer; sodium function does not take keylen arg
 
-      (define/override (-copy-inits)
-        (define size (ctx_size))
-        (define ctx2 (make-ctx size))
-        (memmove ctx2 ctx size)
-        `((ctx ,ctx2)))
-      ))
+   (define (%dii-new-ctx1 self di key)
+     (make-ctx (.ctx_size self) (.ctx_init self)))
 
-  sodium-shake-impl%)
+   (define (%dii-update self ic buf start end)
+     ((.ctx_update self) ic (ptr-add buf start) (- end start)))
 
-(define sodium-shake128-impl%
-  (make-shake-impl crypto_xof_shake128_statebytes
-                   crypto_xof_shake128_init
-                   crypto_xof_shake128_update
-                   crypto_xof_shake128_squeeze))
+   (define (%dii-final self ic size)
+     (define buf (make-bytes size))
+     ((.ctx_final self) ic buf)
+     buf)
 
-(define sodium-shake256-impl%
-  (make-shake-impl crypto_xof_shake128_statebytes
-                   crypto_xof_shake128_init
-                   crypto_xof_shake128_update
-                   crypto_xof_shake128_squeeze))
+   (define (%dii-copy self ic)
+     (copy-ctx ic (.ctx_size self)))
+   ))
+
+(define (sodium-hmac-sha256-inner-impl)
+  (sodium-hmac-inner-impl (crypto_auth_hmacsha256_statebytes)
+                          crypto_auth_hmacsha256_init
+                          crypto_auth_hmacsha256_update
+                          crypto_auth_hmacsha256_final))
+
+(define (sodium-hmac-sha512-inner-impl)
+  (sodium-hmac-inner-impl (crypto_auth_hmacsha512_statebytes)
+                          crypto_auth_hmacsha512_init
+                          crypto_auth_hmacsha512_update
+                          crypto_auth_hmacsha512_final))
+
+;; ----------------------------------------
+
+(struct sodium-xof-inner-impl
+  (digest_buffer
+   ctx_size
+   ctx_init
+   ctx_update
+   ctx_final)
+  #:properties
+  (method-properties
+   #:export ([digest-inner-impl$ #:prefix %])
+   (define-struct-abbrevs sodium-xof-inner-impl)
+
+   (define (%dii-digest-buffer self buf start end size)
+     (define outbuf (make-bytes size))
+     ((.digest_buffer self) outbuf size (ptr-add buf start) (- end start))
+     outbuf)
+
+   (define (%dii-new-ctx1 self di key)
+     (make-ctx (.ctx_size self) (.ctx_init self)))
+
+   (define (%dii-update self ic buf start end)
+     ((.ctx_update self) ic (ptr-add buf start) (- end start)))
+
+   (define (%dii-final self ic size)
+     (define buf (make-bytes size))
+     ((.ctx_final self) ic buf size))
+
+   (define (%dii-copy self ic)
+     (copy-ctx ic (.ctx_size self)))
+   ))
+
+(define (sodium-shake128-inner-impl)
+  (sodium-xof-inner-impl crypto_xof_shake128
+                         (crypto_xof_shake128_statebytes)
+                         crypto_xof_shake128_init
+                         crypto_xof_shake128_update
+                         crypto_xof_shake128_squeeze))
+
+(define (sodium-shake256-inner-impl)
+  (sodium-xof-inner-impl crypto_xof_shake256
+                         (crypto_xof_shake128_statebytes)
+                         crypto_xof_shake128_init
+                         crypto_xof_shake128_update
+                         crypto_xof_shake128_squeeze))

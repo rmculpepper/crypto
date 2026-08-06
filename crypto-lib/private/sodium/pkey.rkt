@@ -9,6 +9,12 @@
          "ffi.rkt")
 (provide (all-defined-out))
 
+    (define/override (-get-pk spec)
+      (case spec
+        [(eddsa) (new sodium-eddsa-impl% (factory this))]
+        [(ecx) (new sodium-ecx-impl% (factory this))]
+        [else #f]))
+
 ;; Size of serialized public and private key components.
 (define KEYSIZE 32)
 
