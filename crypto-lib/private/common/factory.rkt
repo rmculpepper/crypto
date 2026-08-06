@@ -237,12 +237,11 @@
    #:export ([inner-fetch$ #:prefix %])
 
    (define (%fi-digest self factory info)
-     (define (make-digest inner)
-       (common-digest-impl info factory inner))
      (match ($get-spec info)
        [(list 'hmac dspec)
         (define di ($fetch-digest factory dspec))
-        (and di (rkt-hmac-inner-impl di))]
+        (define inner (and di (rkt-hmac-inner-impl di)))
+        (make-digest info factory inner)]
        [_ #f]))
 
    (define (%fi-cipher self factory info)
