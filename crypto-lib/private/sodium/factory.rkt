@@ -8,7 +8,7 @@
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"
-         #;"pkey.rkt"
+         "pkey.rkt"
          "kdf.rkt")
 (provide sodium-factory)
 
@@ -36,5 +36,4 @@
    #:get-digest sodium-fetch-digest
    #:get-cipher sodium-fetch-cipher
    #:get-kdf sodium-fetch-kdf
-   ;; #:get-pk sodium-fetch-pk
-   ))
+   #:get-pk sodium-fetch-pk))
