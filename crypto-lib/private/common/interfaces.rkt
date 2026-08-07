@@ -259,7 +259,7 @@
   #:properties
   (method-properties
    #:export ([simple-write$ #:prefix %])
-   #:import ([simple-write$ #:super #:prefix super-])
+   #:import ([simple-write$ #:super])
    (define-struct-abbrevs pk-parameters)
    ;; ----
    (define (%to-write-prefixes self)
@@ -278,7 +278,7 @@
   #:properties
   (method-properties
    #:export ([simple-write$ #:prefix %])
-   #:import ([simple-write$ #:super #:prefix super-])
+   #:import ([simple-write$ #:super])
    (define-struct-abbrevs pk-key)
    ;; ----
    (define (%to-write-prefixes self)

@@ -50,7 +50,7 @@
   (method-properties
    #:export ([pk-impl$ #:prefix %]
              [pk*$ #:prefix %])
-   #:import ([pk-impl$ #:super #:prefix super-])
+   #:import ([pk-impl$ #:super])
    (define-struct-abbrevs nettle-pk-impl-base)
 
    (define (%pkk-public-key self pkk)

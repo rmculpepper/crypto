@@ -51,7 +51,7 @@
   (method-properties
    #:export ([cipher-impl$ #:prefix %]
              [simple-write$ #:prefix %])
-   #:import ([simple-write$ #:super #:prefix super-])
+   #:import ([simple-write$ #:super])
    (define-struct-abbrevs cipher-impl-base)
    (define (%to-write-prefixes self)
      (list* "impl" "cipher" (super-to-write-prefixes self)))

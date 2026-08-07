@@ -55,7 +55,7 @@
   (method-properties
    #:export ([kdf-impl$ #:prefix %]
              [simple-write$ #:prefix %])
-   #:import ([simple-write$ #:super #:prefix super-])
+   #:import ([simple-write$ #:super])
    (define-struct-abbrevs common-kdf-impl)
    (define (%to-write-prefixes self)
      (list* "impl" "kdf" (super-to-write-prefixes self)))

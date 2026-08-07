@@ -69,7 +69,7 @@
    #:export ([pk-impl$ #:prefix %]
              [pk*$ #:prefix %]
              [simple-write$ #:prefix %])
-   #:import ([simple-write$ #:super #:prefix super-])
+   #:import ([simple-write$ #:super])
    (define-struct-abbrevs pk-impl-base)
    (define (%to-write-prefixes self)
      (list* "impl" "pk" (super-to-write-prefixes self)))
@@ -281,7 +281,7 @@
   (method-properties
    #:export ([pk-impl$ #:prefix %]
              [pk*$ #:prefix %])
-   #:import ([pk-impl$ #:super #:prefix super-])
+   #:import ([pk-impl$ #:super])
 
    (define (%pkk-public-key self pkk)
      (match-define (pk-key impl (keypair param pub priv) private?) pkk)
@@ -418,7 +418,7 @@
   #:properties
   (method-properties
    #:export ([simple-write$ #:prefix %])
-   #:import ([simple-write$ #:super #:prefix super-])
+   #:import ([simple-write$ #:super])
    (define-struct-abbrevs pk-curve)
    (define (%to-write-string self)
      (format "~a:~a" (super-to-write-string self) (.curve self)))

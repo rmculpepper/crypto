@@ -187,7 +187,7 @@
   #:properties
   (method-properties
    #:export ([factory$ #:prefix %])
-   #:import ([factory$ #:super #:prefix super-])
+   #:import ([factory$ #:super])
    (define-struct-abbrevs common-factory)
 
    (define (%factory-info self key)
@@ -287,7 +287,7 @@
   #:properties
   (method-properties
    #:export ([inner-fetch$ #:prefix %])
-   #:import ([inner-fetch$ #:super #:prefix super-])
+   #:import ([inner-fetch$ #:super])
    (define-struct-abbrevs common-inner-fetch)
 
    (define (%fi-digest self factory info)
