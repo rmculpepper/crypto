@@ -13,22 +13,26 @@
          "error.rkt")
 (provide (contract-out
           [make-cipher
-           (-> info? factory? (or/c lowlevel-cipher-impl? #f)
+           (-> info? factory? (or/c cipher-inner-impl? lowlevel-cipher-impl? #f)
                (or/c cipher-impl? #f))]
           [make-multikeylen-cipher
            (-> info? factory? (listof (cons/c nat? (or/c lowlevel-cipher-impl? #f)))
                (or/c cipher-impl? #f))])
          (struct-out cipher-impl-base)
          (struct-out common-cipher-impl)
+         (struct-out oneshot-cipher-inner-impl)
          (struct-out multikeylen-cipher-impl)
          (interface-out cipher-inner-impl$)
          (interface-out lowlevel-cipher-impl$))
 
-(define (make-cipher info factory llci)
-  (cond [llci
-         (define inner (ufp-cipher-inner-impl llci))
-         (common-cipher-impl info factory inner)]
-        [else #f]))
+(define (make-cipher info factory inner/llci)
+  (match inner/llci
+    [(? cipher-inner-impl? inner)
+     (common-cipher-impl info factory inner)]
+    [(? lowlevel-cipher-impl? llci)
+     (define inner (ufp-cipher-inner-impl llci))
+     (common-cipher-impl info factory inner)]
+    [#f #f]))
 
 (define (make-multikeylen-cipher info factory keylen+llci-list)
   (define keylen+ci-list
@@ -185,30 +189,30 @@
        ($cii-update (.inner self) (ctx-inner cctx) buf start end))
      (process-input src process-data))
 
-   (define (%ci-final self cctx tag)
+   (define (%ci-final self cctx auth-tag)
      (define encrypt? (cipher-ctx-encrypt? cctx))
      (define attached-tag? (common-cipher-ctx-attached-tag? cctx))
-     (when (and encrypt? tag)
+     (when (and encrypt? auth-tag)
        (crypto-error "cannot set authentication tag for encryption context"
                      #:for cctx))
-     (when (and (not encrypt?) attached-tag? tag)
+     (when (and (not encrypt?) attached-tag? auth-tag)
        (crypto-error "cannot set authentication tag for decryption context with attached tag"
                      #:for cctx))
      (when (and (not encrypt?) (not attached-tag?))
-       (let ([tag (or tag #"")]
+       (let ([auth-tag (or auth-tag #"")]
              [auth-len (common-cipher-ctx-auth-len cctx)])
-         (check-bytes "authentication tag" tag auth-len #:for cctx)))
+         (check-bytes "authentication tag" auth-tag auth-len #:for cctx)))
      (call-with-state
       cctx #:pre 'error #:post 'closed
       (lambda (s)
         (when (memq s '(aad))
           (finish-aad* self cctx))
         (when (memq s '(aad open))
-          (final* self cctx))
+          (final* self cctx auth-tag))
         (close* self cctx))))
 
-   (define (final* self cctx)
-     ($cii-final (.inner self) (ctx-inner cctx) #f))
+   (define (final* self cctx auth-tag)
+     ($cii-final (.inner self) (ctx-inner cctx) auth-tag))
 
    (define (close* self cctx)
      (when (ctx-inner cctx)
@@ -236,31 +240,104 @@
 ;; Cipher Inner Impl
 
 (define-interface cipher-inner-impl$
+  #:predicate cipher-inner-impl?
   ([cii-new-ctx
-    (-> cipher-inner-impl$? cipher-impl? key/c iv/c boolean?
+    (-> cipher-inner-impl? cipher-impl? key/c iv/c boolean?
         cipher-pad/c (or/c nat? #f) boolean? output-port? box?
         ictx/c)]
    [cii-update-aad
-    (-> cipher-inner-impl$? ictx/c bytes? nat? nat?
+    (-> cipher-inner-impl? ictx/c bytes? nat? nat?
         void?)]
    [cii-finish-aad
-    (-> cipher-inner-impl$? ictx/c
+    (-> cipher-inner-impl? ictx/c
         void?)]
    [cii-update
-    (-> cipher-inner-impl$? ictx/c bytes? nat? nat?
+    (-> cipher-inner-impl? ictx/c bytes? nat? nat?
         void?)]
    [cii-final
-    (-> cipher-inner-impl$? ictx/c (or/c bytes? #f)
+    (-> cipher-inner-impl? ictx/c (or/c bytes? #f)
         void?)]
    [cii-close
-    (-> cipher-inner-impl$? ictx/c
+    (-> cipher-inner-impl? ictx/c
         void?)])
   #:generics-prefix $)
 
-;; ============================================================
+;; ----------------------------------------
+;; Oneshot Cipher Inner Impl
+
+(struct oneshot-cipher-ctx
+  (crypt        ;; (Bytes Bytes Bytes -> Void)
+   aad-out      ;; BytesOutputPort
+   text-out     ;; BytesOutputPort
+   ))
+
+(struct oneshot-cipher-inner-impl
+  (encrypt    ;; Bool Bool Nat Bool Bytes Bytes Bytes Bytes -> (values Bytes Nat Bytes)
+   decrypt    ;; Bool Bool Nat Bool Bytes Bytes Bytes Bytes -> (values Bytes Nat Bytes)
+   )
+  #:properties
+  (method-properties
+   #:export ([cipher-inner-impl$ #:prefix %])
+   (define-struct-abbrevs oneshot-cipher-inner-impl)
+
+   ;; ---- cipher-impl
+
+   (define (%cii-new-ctx self ci key iv enc? pad? auth-len attached? out auth-box)
+     (define aad-out (open-output-bytes))
+     (define text-out (open-output-bytes))
+     (cond [enc?
+            (define (crypt* _ignored)
+              (define aad (get-output-bytes aad-out #t))
+              (define text (get-output-bytes text-out))
+              (define-values (outbuf outlen auth-tag)
+                ((.encrypt self) pad? key iv aad text auth-len))
+              (write-bytes outbuf out 0 outlen)
+              (cond [attached?
+                     (write-bytes auth-tag out)
+                     (set-box! auth-box #"")]
+                    [else (set-box! auth-box auth-tag)]))
+            (oneshot-cipher-ctx crypt* aad-out text-out)]
+           [else
+            (define (crypt* auth-tag1)
+              (define aad (get-output-bytes aad-out #t))
+              (define-values (text auth-tag)
+                (cond [attached?
+                       (define len (file-position text-out))
+                       (when (< len auth-len)
+                         (crypto-error "ciphertext too short"))
+                       (define textlen (- len auth-len))
+                       (define text (get-output-bytes text-out #f 0 textlen))
+                       (define auth-tag (get-output-bytes text-out #t textlen #f))
+                       (values text auth-tag)]
+                      [else (values (get-output-bytes text-out) auth-tag1)]))
+              (define-values (outbuf outlen)
+                ((.decrypt self) pad? key iv aad text auth-tag))
+              (write-bytes outbuf out 0 outlen)
+              (set-box! auth-box #""))
+            (oneshot-cipher-ctx crypt* aad-out text-out)]))
+
+   (define (%cii-update-aad self ic buf start end)
+     (write-bytes buf (oneshot-cipher-ctx-aad-out ic) start end)
+     (void))
+
+   (define (%cii-finish-aad self ic)
+     (void))
+
+   (define (%cii-update self ic buf start end)
+     (write-bytes buf (oneshot-cipher-ctx-text-out ic) start end)
+     (void))
+
+   (define (%cii-final self ic auth-tag)
+     ((oneshot-cipher-ctx-crypt ic) auth-tag))
+
+   (define (%cii-close self ic)
+     (void))
+   ))
+
+;; ----------------------------------------
 ;; UFP Cipher Inner Impl
 
-(struct ufp-cipher-ictx (llc aad-ufp crypt-ufp))
+(struct ufp-cipher-ctx (llc aad-ufp crypt-ufp))
 
 (struct ufp-cipher-inner-impl
   (llci     ;; LowLevelCipherImpl
@@ -278,22 +355,22 @@
      (define crypt-sink (make-output-sink out auth-box))
      (define crypt-ufp
        (make-crypt-ufp self ci llc enc? pad? auth-len attached-tag? crypt-sink))
-     (ufp-cipher-ictx llc aad-ufp crypt-ufp))
+     (ufp-cipher-ctx llc aad-ufp crypt-ufp))
 
    (define (%cii-update-aad self ic buf start end)
-     ($uf-update (ufp-cipher-ictx-aad-ufp ic) buf start end))
+     ($uf-update (ufp-cipher-ctx-aad-ufp ic) buf start end))
 
    (define (%cii-finish-aad self ic)
-     ($uf-finish (ufp-cipher-ictx-aad-ufp ic) null))
+     ($uf-finish (ufp-cipher-ctx-aad-ufp ic) null))
 
    (define (%cii-update self ic buf start end)
-     ($uf-update (ufp-cipher-ictx-crypt-ufp ic) buf start end))
+     ($uf-update (ufp-cipher-ctx-crypt-ufp ic) buf start end))
 
    (define (%cii-final self ic auth-tag)
-     ($uf-finish (ufp-cipher-ictx-crypt-ufp ic) (list auth-tag)))
+     ($uf-finish (ufp-cipher-ctx-crypt-ufp ic) (list auth-tag)))
 
    (define (%cii-close self ic)
-     ($llci-close (.llci self) (ufp-cipher-ictx-llc ic))
+     ($llci-close (.llci self) (ufp-cipher-ctx-llc ic))
      (void))
 
    ;; ----
