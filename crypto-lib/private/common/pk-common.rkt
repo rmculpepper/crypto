@@ -59,7 +59,6 @@
             'pk*-make-private-key pk*-make-private-key))
   #:generics-prefix $)
 
-
 ;; ============================================================
 ;; Base classes
 
@@ -272,6 +271,143 @@
   (equal? internal1 internal2))
 
 
+
+;; ============================================================
+
+(struct keypair (param pub priv))
+
+(struct keypair-pk-impl-base pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
+   #:import ([pk-impl$ #:super #:prefix super-])
+
+   (define (%pkk-public-key self pkk)
+     (match-define (pk-key impl (keypair param pub priv) private?) pkk)
+     (if private? (pk-key impl (keypair param pub #f) #f) pkk))
+
+   (define (%pkk-params self pkk)
+     (cond [($pk-has-params? self)
+            (define param (keypair-param (ctx-inner pkk)))
+            (pk-parameters self param)]
+           [else (super-pkk-params self pkk)]))
+   ))
+
+;; ----------------------------------------
+
+(define-interface curve-ok$
+  ([curve-ok? (-> curve-ok$? symbol? boolean?)])
+  #:generics-prefix $)
+
+;; abstract class where param is represented by curve name (symbol)
+(struct curve-pk-impl-base keypair-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %]
+             [curve-ok$ #:prefix %])
+
+   (define (%pkp-param-values self pkp)
+     (define curve-name (ctx-inner pkp))
+     curve-name)
+
+   (define (%pk*-make-params self curve)
+     (and ($curve-ok? self curve)
+          (pk-parameters self curve)))
+   ))
+
+;; ----------------------------------------
+
+;; abstract class for eddsa where pub, priv are bytestrings
+(struct eddsa-impl-base curve-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %]
+             [curve-ok$ #:prefix %])
+
+   (define (%pk-generate-params self config)
+     (check-config config config:eddsa-keygen #:in self)
+     (define curve (config-ref config 'curve))
+     (or ($pk*-make-params self curve)
+         (err/no-curve curve self)))
+
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (keypair curve pub priv) (ctx-inner pkk))
+     ;; accommodate sodium, which sets priv = priv-seed || pub
+     (cond [priv (let ([priv (subbytes priv 0 (eddsa-keylen curve))])
+                   (encode-priv-eddsa fmt curve pub priv))]
+           [else (encode-pub-eddsa fmt curve pub)]))
+
+   (define (%pk*-make-public-key self curve qB)
+     (cond [($curve-ok? self curve)
+            (define pub (eddsa-check-keys curve qB))
+            (pk-key self (keypair curve pub #f) #f)]
+           [else #f]))
+   ))
+
+;; length of public and private key components
+(define (eddsa-keylen curve)
+  (match curve
+    ['ed25519 32]
+    ['ed448 57]))
+
+(define (eddsa-check-keys curve private? k1 [k2 #f])
+  (eddsa/ecx-check-keys curve private? k1 k2 (eddsa-keylen curve)))
+
+(define (eddsa/ecx-check-keys curve private? k1 k2 len)
+  (define what1 (if private? "private" "public"))
+  (define what2 (if private? "public" "private"))
+  (unless (bytes? k1)
+    (crypto-error "missing ~a key component" what1))
+  (unless (= (bytes-length k1) len)
+    (crypto-error "invalid ~a key (wrong length)" what1))
+  (when k2
+    (unless (= (bytes-length k2) len)
+      (crypto-error "invalid ~a key (wrong length)" what2)))
+  (bytes->immutable-bytes k1))
+
+;; ----------------------------------------
+
+;; abstract class for ecx where pub, priv are bytestrings
+(struct ecx-impl-base curve-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %]
+             [curve-ok$ #:prefix %])
+
+   (define (%pk-generate-params self config)
+     (check-config config config:ecx-keygen #:in self)
+     (define curve (config-ref config 'curve))
+     (or ($pk*-make-params self curve)
+         (err/no-curve curve self)))
+
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (keypair curve pub priv) (ctx-inner pkk))
+     (cond [priv (encode-priv-ecx fmt curve pub priv)]
+           [else (encode-pub-ecx fmt curve pub)]))
+
+   (define (%pk*-make-public-key self curve qB)
+     (cond [($curve-ok? curve)
+            (define pub (ecx-check-keys curve  qB))
+            (pk-key self (keypair curve qB #f) #f)]
+           [else #f]))
+
+   (define (%pkk*-import-for-key-agree self pkk bs)
+     (define curve (keypair-param (ctx-inner pkk)))
+     ($pk*-make-public-key self curve bs))
+   ))
+
+;; length of public and private key components and derived secret
+(define (ecx-keylen curve)
+  (match curve
+    ['x25519 32]
+    ['x448 56]))
+
+(define (ecx-check-keys curve private? k1 [k2 #f])
+  (eddsa/ecx-check-keys curve private? k1 k2 (ecx-keylen curve)))
 
 ;; ============================================================
 

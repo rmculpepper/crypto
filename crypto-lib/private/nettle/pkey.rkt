@@ -64,8 +64,6 @@
            [else (super-pkk-params self pkk)]))
    ))
 
-(struct keypair (param pub priv))
-
 ;; ----------------------------------------
 
 (define (get-random-ctx pki)
@@ -512,22 +510,19 @@
 ;; ============================================================
 ;; Ed25519 and Ed448
 
-(struct nettle-eddsa-impl nettle-pk-impl-base ()
+(struct nettle-eddsa-impl eddsa-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+             [pk*$ #:prefix %]
+             [curve-ok$ #:prefix %])
    (define-struct-abbrevs nettle-eddsa-impl)
 
-   (define (%pk-generate-params self config)
-     (check-config config config:eddsa-keygen #:in self)
-     (define curve (config-ref config 'curve))
-     (or (curve->params self curve)
-         (err/no-curve curve self)))
-
-   (define (curve->params self curve)
-     (and (case curve [(ed25519) ed25519-ok?] [(ed448) ed448-ok?] [else #f])
-          (pk-parameters self curve)))
+   (define (%curve-ok? self curve)
+     (match curve
+       ['ed25519 ed25519-ok?]
+       ['ed448 ed448-ok?]
+       [_ #f]))
 
    ;; ----
 
@@ -548,53 +543,19 @@
      (nettle_ed448_shake256_public_key pub priv)
      (pk-key self (keypair 'ed448 pub priv) #t))
 
-   (define (%pkp-param-values self pkp)
-     (define curve-name (ctx-inner pkp))
-     curve-name)
-
-   ;; ----
-
-   (define (%pkk-write-key self pkk fmt)
-     (match-define (keypair curve pub priv) (ctx-inner pkk))
-     (case curve
-       [(ed25519)
-        (cond [priv (encode-priv-eddsa fmt 'ed25519 pub priv)]
-              [else (encode-pub-eddsa fmt 'ed25519 pub)])]
-       [(ed448)
-        (cond [priv (encode-priv-eddsa fmt 'ed448 pub priv)]
-              [else (encode-pub-eddsa fmt 'ed448 pub)])]))
-
-
    ;; ---- pk*
-
-   (define (%pk*-make-params self curve)
-     (curve->params self curve))
-
-   (define (%pk*-make-public-key self curve qB)
-     (define (make-ed25519-public-key)
-       (define pub (make-sized-copy ED25519_KEY_SIZE qB))
-       (pk-key self (keypair curve pub #f) #f))
-     (define (make-ed448-public-key)
-       (define pub (make-sized-copy ED448_KEY_SIZE qB))
-       (pk-key self (keypair curve pub #f) #f))
-     (case curve
-       [(ed25519) (and ed25519-ok? (make-ed25519-public-key))]
-       [(ed448) (and ed448-ok? (make-ed448-public-key))]
-       [else #f]))
 
    (define (%pk*-make-private-key self curve qB dB)
      ;; public key might be missing, so recompute; if present, check
      (define (make-ed25519-private-key)
-       (define priv (make-sized-copy ED25519_KEY_SIZE dB))
+       (define priv (eddsa-check-keys curve #t dB qB))
        (define pub (make-bytes ED25519_KEY_SIZE))
-       (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED25519_KEY_SIZE))
        (nettle_ed25519_sha512_public_key pub priv)
        (check-recomputed-qB pub qB)
        (pk-key self (keypair curve pub priv) #t))
      (define (make-ed448-private-key)
-       (define priv (make-sized-copy ED448_KEY_SIZE dB))
+       (define priv (eddsa-check-keys curve #t dB qB))
        (define pub (make-bytes ED448_KEY_SIZE))
-       (bytes-copy! priv 0 dB 0 (min (bytes-length dB) ED448_KEY_SIZE))
        (nettle_ed448_shake256_public_key pub priv)
        (check-recomputed-qB pub qB)
        (pk-key self (keypair curve pub priv) #t))
@@ -607,24 +568,23 @@
 
    (define (%pkk*-sign self pkk msg _dspec _pad)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
-     (case curve
-       [(ed25519)
+     (match curve
+       ['ed25519
         (define sig (make-bytes ED25519_SIGNATURE_SIZE))
         (nettle_ed25519_sha512_sign pub priv (bytes-length msg) msg sig)
         sig]
-       [(ed448)
+       ['ed448
         (define sig (make-bytes ED448_SIGNATURE_SIZE))
         (nettle_ed448_shake256_sign pub priv (bytes-length msg) msg sig)
-        sig]
-       [else (internal-error "bad curve: ~e" curve #:in pkk)]))
+        sig]))
 
    (define (%pkk*-verify self pkk msg _dspec _pad sig)
      (match-define (keypair curve pub _) (ctx-inner pkk))
-     (case curve
-       [(ed25519)
+     (match curve
+       ['ed25519
         (and (= (bytes-length sig) ED25519_SIGNATURE_SIZE)
              (nettle_ed25519_sha512_verify pub (bytes-length msg) msg sig))]
-       [(ed448)
+       ['ed448
         (and (= (bytes-length sig) ED448_SIGNATURE_SIZE)
              (nettle_ed448_shake256_verify pub (bytes-length msg) msg sig))]
        [else (internal-error "bad curve: ~e" curve #:in pkk)]))
@@ -633,27 +593,18 @@
 ;; ============================================================
 ;; X25519 and X448
 
-(struct nettle-ecx-impl nettle-pk-impl-base ()
+(struct nettle-ecx-impl ecx-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+             [pk*$ #:prefix %]
+             [curve-ok$ #:prefix %])
 
-   (define (%pk-generate-params self config)
-     (check-config config config:ecx-keygen #:in self)
-     (define curve (config-ref config 'curve))
-     (or (curve->params self curve)
-         (err/no-curve curve self)))
-
-   (define (curve->params self curve)
-     (and (curve-ok? curve)
-          (pk-parameters self curve)))
-
-   (define (curve-ok? curve)
-     (case curve [(x25519) x25519-ok?] [(x448) x448-ok?] [else #f]))
-
-   (define (get-keylen curve)
-     (case curve [(x25519) 32] [(x448) 56]))
+   (define (%curve-ok? self curve)
+     (match curve
+       ['x25519 x25519-ok?]
+       ['x448 x448-ok?]
+       [else #f]))
 
    ;; ----
 
@@ -674,46 +625,19 @@
         (pk-key self (keypair curve pub priv) #t)]
        [else (internal-error "bad curve: ~e" curve #:in pkp)]))
 
-   (define (%pkp-param-values self pkp)
-     (define curve-name (ctx-inner pkp))
-     curve-name)
-
-   ;; ----
-
-   (define (%pkk-write-key self pkk fmt)
-     (match-define (keypair curve pub priv) (ctx-inner pkk))
-     (cond [priv (encode-priv-ecx fmt curve pub priv)]
-           [else (encode-pub-ecx fmt curve pub)]))
-
    ;; ---- pk*
 
-   (define (%pk*-make-params self curve)
-     (and (curve-ok? curve) (curve->params self curve)))
-
-   (define (%pk*-make-public-key self curve qB)
-     (cond [(curve-ok? curve)
-            (case curve
-              [(x25519)
-               (unless (= (bytes-length qB) (get-keylen curve))
-                 (crypto-error "invalid public key (wrong length)" #:in self))
-               (define pub (make-sized-copy X25519_KEY_SIZE qB))
-               (pk-key self (keypair curve pub #f) #f)]
-              [(x448)
-               (define pub (make-sized-copy X448_KEY_SIZE qB))
-               (pk-key self (keypair curve pub #f) #f)])]
-           [else #f]))
-
    (define (%pk*-make-private-key self curve qB dB)
-     (cond [(curve-ok? curve)
+     (cond [($curve-ok? self curve)
             (case curve
               [(x25519)
-               (define priv (make-sized-copy X25519_KEY_SIZE dB))
+               (define priv (ecx-check-keys curve #t dB qB))
                (define pub (make-bytes X25519_KEY_SIZE))
                (nettle_curve25519_mul_g pub priv)
                (check-recomputed-qB pub qB)
                (pk-key self (keypair curve priv pub) #t)]
               [(x448)
-               (define priv (make-sized-copy X448_KEY_SIZE dB))
+               (define priv (ecx-check-keys curve #t dB qB))
                (define pub (make-bytes X448_KEY_SIZE))
                (nettle_curve448_mul_g pub priv)
                (check-recomputed-qB pub qB)

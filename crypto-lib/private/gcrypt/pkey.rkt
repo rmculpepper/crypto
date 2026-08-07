@@ -48,26 +48,6 @@
 
 ;; ============================================================
 
-(struct gcrypt-pk-impl-base pk-impl-base ()
-  #:properties
-  (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
-   #:import ([pk-impl$ #:super #:prefix super-])
-
-   (define (%pkk-public-key self pkk)
-     (match-define (pk-key impl (keypair param pub priv) private?) pkk)
-     (if private? (pk-key impl (keypair param pub #f) #f) pkk))
-
-   (define (%pkk-params self pkk)
-     (cond [($pk-has-params? self)
-            (define param (keypair-param (ctx-inner pkk)))
-            (pk-parameters self param)]
-           [else (super-pkk-params self pkk)]))
-   ))
-
-;; ----------------------------------------
-
 (define (generate-keypair keygen-sexp)
   (define result
     (or (gcry_pk_genkey keygen-sexp)
@@ -129,42 +109,9 @@
                                  (s ,(unsigned->base256 s)))))]
     [_ #f]))
 
-#;
-(define gcrypt-pk-key%
-  (class pk-key-base%
-    (init-field pub priv)
-    (inherit-field impl)
-    (super-new)
-
-    (define/override (-sign digest digest-spec pad)
-      (check-sig-pad pad)
-      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
-      (define sig-sexp (gcry_pk_sign data-sexp priv))
-      (define result (sign-unpack-sig-sexp sig-sexp))
-      (gcry_sexp_release sig-sexp)
-      (gcry_sexp_release data-sexp)
-      result)
-
-    (define/override (-verify digest digest-spec pad sig)
-      (check-sig-pad pad)
-      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
-      (define sig-sexp (verify-make-sig-sexp sig))
-      (define result (and sig-sexp (gcry_pk_verify sig-sexp data-sexp pub)))
-      (when sig-sexp (gcry_sexp_release sig-sexp))
-      (gcry_sexp_release data-sexp)
-      result)
-
-    (abstract sign-make-data-sexp
-              sign-unpack-sig-sexp
-              verify-make-sig-sexp
-              check-sig-pad)
-    ))
-
-(struct keypair (param pub priv))
-
 ;; ============================================================
 
-(struct gcrypt-rsa-impl gcrypt-pk-impl-base ()
+(struct gcrypt-rsa-impl keypair-pk-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
@@ -341,7 +288,7 @@
 
 ;; ============================================================
 
-(struct gcrypt-dsa-impl gcrypt-pk-impl-base ()
+(struct gcrypt-dsa-impl keypair-pk-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
@@ -444,7 +391,7 @@
 
 ;; ============================================================
 
-(struct gcrypt-ec-impl gcrypt-pk-impl-base ()
+(struct gcrypt-ec-impl keypair-pk-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
@@ -453,12 +400,11 @@
    (define (%pk-generate-params self config)
      (check-config config config:ec-paramgen #:in self)
      (define curve (config-ref config 'curve))
-     (curve->params self curve))
+     (or (curve->params self curve)
+         (err/no-curve curve self)))
 
    (define (curve->params self curve)
      (define curve* (alias->curve-name curve))
-     (unless (memq curve* gcrypt-curves)
-       (err/no-curve curve self))
      (pk-parameters self curve*))
 
    ;; ----
@@ -587,25 +533,25 @@
 
 ;; ============================================================
 
-(struct gcrypt-eddsa-impl gcrypt-pk-impl-base ()
+(struct gcrypt-eddsa-impl keypair-pk-impl-base ()
+  ;; can't use eddsa-pk-impl: pub, priv are not bytestrings
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+             [pk*$ #:prefix %]
+             [curve-ok$ #:prefix %])
    (define-struct-abbrevs gcrypt-eddsa-impl)
 
    (define (%pk-generate-params self config)
      (check-config config config:eddsa-keygen #:in self)
-     (curve->params self (config-ref config 'curve)))
+     (define curve (config-ref config 'curve))
+     (or ($pk*-make-params self curve)
+         (err/no-curve curve self)))
 
-   (define (curve->params self curve)
-     (unless (check-curve curve) (err/no-curve curve self))
-     (pk-parameters self curve))
-
-   (define (check-curve curve)
+   (define (%curve-ok? self curve)
      (case curve
-       [(ed25519) (and ed25519-ok? "Ed25519")]
-       [(ed448) (and ed448-ok? "Ed448")]
+       [(ed25519) ed25519-ok?]
+       [(ed448) ed448-ok?]
        [else #f]))
 
    ;; ----
@@ -617,10 +563,6 @@
        (generate-keypair
         (make-sexp `(genkey (ecc (curve ,curve-name) (flags eddsa))))))
      (pk-key self (keypair curve pub priv) #t))
-
-   (define (%pkp-param-values self pkp)
-     (define curve-name (ctx-inner pkp))
-     curve-name)
 
    ;; ----
 
@@ -636,16 +578,20 @@
 
    ;; ---- pk*
 
-   (define (%pk*-make-params self curve)
-     (and (check-curve self curve) (curve->params curve)))
+   (define (check-curve curve)
+     (match curve
+       ['ed25519 (and ed25519-ok? "Ed25519")]
+       ['ed448 (and ed448-ok? "Ed448")]))
 
    (define (%pk*-make-public-key self curve qB)
      (define curve-name (check-curve curve))
+     (eddsa-check-keys curve #f qB #f)
      (define pub (make-public-sexp curve-name qB))
      (and curve-name (pk-key self (keypair curve pub #f) #f)))
 
    (define (%pk*-make-private-key self curve qB dB)
      (define curve-name (check-curve curve))
+     (eddsa-check-keys curve #t dB qB)
      ;; It doesn't seem to be possible to recover qB if missing, so just fail.
      (and curve-name qB
           (let ([pub (make-public-sexp curve-name qB)]
@@ -707,107 +653,58 @@
 
 ;; ============================================================
 
-(struct gcrypt-ecx-impl gcrypt-pk-impl-base ()
+(struct gcrypt-ecx-impl keypair-pk-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+             [pk*$ #:prefix %]
+             [curve-ok$ #:prefix %])
 
-   (define (%pk-generate-params self config)
-     (check-config config config:ecx-keygen #:in self)
-     (define curve (config-ref config 'curve))
-     (curve->params self curve))
-
-   (define (curve->params self curve)
-     (unless (curve-ok? curve) (err/no-curve curve self))
-     (pk-parameters self curve))
-
-   (define (curve-ok? curve)
-     (case curve [(x25519) x25519-ok?] [(x448) x448-ok?] [else #f]))
-
-   (define (get-keylen curve)
-     (case curve [(x25519) 32] [(x448) 56]))
+   (define (%curve-ok? self curve)
+     (match curve
+       ['x25519 x25519-ok?]
+       ['x448 x448-ok?]
+       [else #f]))
 
    ;; ----
 
    (define (%pkp-generate-key self pkp)
      (define curve ($pkp-param-values self pkp))
-     (define priv (crypto-random-bytes (get-keylen curve)))
+     (define priv (crypto-random-bytes (ecx-keylen curve)))
      (ecx-clamp-secret! curve priv)
      (define pub (compute-pub curve priv))
      (pk-key self (keypair curve pub priv) #t))
 
-   (define (%pkp-param-values self pkp)
-     (define curve-name (ctx-inner pkp))
-     curve-name)
-
    (define (compute-pub curve priv)
-     (define pub (make-bytes (get-keylen curve)))
-     (case curve
-       [(x25519) (gcry_ecc_mul_point GCRY_ECC_CURVE25519 pub priv #f)]
-       [(x448) (gcry_ecc_mul_point GCRY_ECC_CURVE448 pub priv #f)])
+     (define pub (make-bytes (ecx-keylen curve)))
+     (match curve
+       ['x25519 (gcry_ecc_mul_point GCRY_ECC_CURVE25519 pub priv #f)]
+       ['x448 (gcry_ecc_mul_point GCRY_ECC_CURVE448 pub priv #f)])
      pub)
-
-   ;; ----
-
-   (define (%pkk-write-key self pkk fmt)
-     (match-define (keypair curve pub priv) (ctx-inner pkk))
-     (cond [priv (encode-priv-ecx fmt curve pub priv)]
-           [else (encode-pub-ecx fmt curve pub)]))
 
    ;; ---- pk*
 
-   (define (%pk*-make-params self curve)
-     (and (curve-ok? curve) (curve->params curve)))
-
-   (define (%pk*-make-public-key self curve qB)
-     (cond [(curve-ok? curve)
-            (unless (= (bytes-length qB) (get-keylen curve))
-              (crypto-error "invalid public key (wrong length)" #:in self))
-            (pk-key self (keypair curve qB #f) #f)]
-           [else #f]))
-
    (define (%pk*-make-private-key self curve qB dB)
-     (cond [(curve-ok? curve)
-            (define len (get-keylen curve))
-            (unless (= (bytes-length dB) len)
-              (crypto-error "invalid private key (wrong length)" #:in self))
-            (when (and qB (not (= (bytes-length dB) len)))
-              (crypto-error "invalid public key (wrong length)" #:in self))
-            (define priv (bytes-copy dB))
+     (cond [($curve-ok? curve)
+            (define priv (ecx-check-keys curve #t dB qB))
             (ecx-clamp-secret! curve priv)
             (define pub (compute-pub curve priv))
             (when qB (check-recomputed-qB pub qB))
             (pk-key self (keypair curve pub priv) #t)]
            [else #f]))
 
-   (define (make-ec-public-key curve qB)
-     (make-sexp `(public-key (ecc (curve ,curve) (q ,qB)))))
-
-   (define (make-ec-private-key curve qB d)
-     (define priv
-       (make-sexp `(private-key (ecc (curve ,curve)
-                                     (q ,qB)
-                                     (d ,(unsigned->base256 d))))))
-     (gcry_pk_testkey priv)
-     priv)
-
    ;; ----
 
    (define (%pkk*-compute-secret self pkk peer-pubkey)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (define peer (keypair-pub (ctx-inner peer-pubkey)))
-     (case curve
-       [(x25519)
+     (match curve
+       ['x25519
         (define result (make-bytes 32))
         (gcry_ecc_mul_point GCRY_ECC_CURVE25519 result priv peer)
         result]
-       [(x448)
+       ['x448
         (define result (make-bytes 56))
         (gcry_ecc_mul_point GCRY_ECC_CURVE448 result priv peer)
         result]))
-
-   (define (%pkk*-import-for-key-agree self pkk bs)
-     (define curve (keypair-param (ctx-inner pkk)))
-     ($pk*-make-public-key self curve bs))
    ))
