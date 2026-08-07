@@ -2,13 +2,12 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         "../common/interfaces.rkt"
+(require "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/factory.rkt"
          "ffi.rkt"
          "digest.rkt"
-         #;"cipher.rkt"
+         "cipher.rkt"
          #;"pkey.rkt"
          "kdf.rkt")
 (provide sodium-factory)
@@ -35,7 +34,7 @@
    #:load-error sodium-load-error
    #:get-info sodium-info
    #:get-digest sodium-fetch-digest
-   ;; #:get-cipher sodium-fetch-cipher
+   #:get-cipher sodium-fetch-cipher
    #:get-kdf sodium-fetch-kdf
    ;; #:get-pk sodium-fetch-pk
    ))

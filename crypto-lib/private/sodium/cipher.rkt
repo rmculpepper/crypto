@@ -1,77 +1,44 @@
-;; Copyright 2018 Ryan Culpepper
+;; Copyright 2018-2026 Ryan Culpepper
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         "../common/interfaces.rkt"
+(require "../common/interfaces.rkt"
          "../common/cipher.rkt"
          "../common/error.rkt"
          "ffi.rkt")
-(provide sodium-cipher-impl%)
+(provide sodium-fetch-cipher)
 
-(define sodium-cipher-impl%
-  (class* cipher-impl-base% (cipher-impl<%>)
-    (init-field cipher)
-    (inherit-field info)
-    (inherit sanity-check)
-    (super-new)
+(define (sodium-fetch-cipher factory info)
+  (define spec ($get-spec info))
+  (for/first ([rec (in-list cipher-records)]
+              #:when (equal? (aeadcipher-spec rec) spec))
+    (define inner (sodium-cipher-inner-impl rec))
+    (make-cipher info factory inner)))
 
-    (sanity-check #:iv-size (aeadcipher-noncesize cipher))
+;; ----------------------------------------
 
-    (define/override (get-key-size) (aeadcipher-keysize cipher))
-    (define/override (get-key-sizes) (list (aeadcipher-keysize cipher)))
-    (define/override (get-iv-size) (aeadcipher-noncesize cipher))
-    (define/override (get-auth-size) (aeadcipher-authsize cipher))
-    (define/override (get-chunk-size) 1)
+(define (sodium-cipher-inner-impl cipher)
+  ;; for sodium, pad? is always #f, output length same as text length
+  (define (encrypt _pad? key iv aad text auth-len)
+    (define outbuf (make-bytes (bytes-length text)))
+    (define authbuf (make-bytes auth-len))
+    (define auth-len* ((aeadcipher-encrypt cipher) outbuf authbuf text aad iv key))
+    (unless auth-len* (crypto-error "encryption failed"))
+    (unless (= auth-len* auth-len)
+      (crypto-error "wrong size for authentication tag"))
+    (values outbuf (bytes-length outbuf) authbuf))
+  (define (decrypt _pad? key iv aad text auth-tag)
+    (define outbuf (make-bytes (bytes-length text)))
+    (define s ((aeadcipher-decrypt cipher) outbuf text auth-tag aad iv key))
+    (unless (zero? s) (crypto-error "authenticated decryption failed"))
+    (values outbuf (bytes-length outbuf)))
+  (oneshot-cipher-inner-impl encrypt decrypt))
 
-    (define/override (-new-ctx key iv enc? pad? auth-len attached-tag?)
-      (new sodium-cipher-ctx% (impl this) (cipher cipher) (encrypt? enc?) (key key) (iv iv)
-           (auth-len auth-len) (attached-tag? attached-tag?)))
-    ))
-
-(define sodium-cipher-ctx%
-  (class cipher-ctx%
-    (init-field cipher key iv)
-    (super-new (pad? #f))
-    (inherit-field impl encrypt? auth-len)
-    (field [aad-buffer (open-output-bytes)]
-           [msg-buffer (open-output-bytes)])
-
-    (define/public (get-spec) (send impl get-spec))
-
-    (define/override (-close)
-      (when key (set! key #f))
-      (when iv  (set! iv #f))
-      (when aad-buffer (set! aad-buffer #f))
-      (when msg-buffer (set! msg-buffer #f)))
-
-    (define/override (-do-aad inbuf instart inend)
-      (write-bytes inbuf aad-buffer instart inend))
-
-    ;; -make-crypt-ufp : Boolean UFP -> UFP[Bytes,#f/AuthTag => AuthTag/#f]
-    (define/override (-make-crypt-ufp enc? next)
-      (define (update inbuf instart inend)
-        (-do-crypt inbuf instart inend))
-      (define (finish partial auth-tag)
-        (-do-crypt partial 0 (bytes-length partial))
-        (define aad (get-output-bytes aad-buffer #t))
-        (define msg (get-output-bytes msg-buffer #t))
-        (define outbuf (make-bytes (bytes-length msg)))
-        (cond [enc?
-               (define authbuf (make-bytes auth-len))
-               (define authlen ((aeadcipher-encrypt cipher) outbuf authbuf msg aad iv key))
-               (unless authlen (crypto-error "encryption failed"))
-               (send next update outbuf 0 (bytes-length outbuf))
-               (send next finish (subbytes authbuf 0 authlen))]
-              [else
-               (define s ((aeadcipher-decrypt cipher) outbuf msg auth-tag aad iv key))
-               (unless (zero? s) (crypto-error "authenticated decryption failed"))
-               (send next update outbuf 0 (bytes-length outbuf))
-               (send next finish #f)]))
-      (sink-ufp update finish))
-
-    (define/override (-do-crypt inbuf instart inend)
-      (write-bytes inbuf msg-buffer instart inend))
-    (define/override (-do-encrypt-end auth-len) (err/no-impl))
-    (define/override (-do-decrypt-end auth-tag) (err/no-impl))
-    ))
+#|
+(sanity-check #:iv-size (aeadcipher-noncesize cipher))
+(define/override (get-key-size) (aeadcipher-keysize cipher))
+(define/override (get-key-sizes) (list (aeadcipher-keysize cipher)))
+(define/override (get-iv-size) (aeadcipher-noncesize cipher))
+(define/override (get-auth-size) (aeadcipher-authsize cipher))
+(define/override (get-chunk-size) 1)
+|#
