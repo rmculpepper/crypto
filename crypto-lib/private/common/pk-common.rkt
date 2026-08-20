@@ -4,8 +4,7 @@
 #lang racket/base
 (require racket/match
          racket/contract/base
-         scramble/bundle
-         scramble/struct
+         brandx
          asn1
          binaryio/integer
          base64

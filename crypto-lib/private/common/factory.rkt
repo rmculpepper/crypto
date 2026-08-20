@@ -6,8 +6,7 @@
          racket/list
          racket/contract/base
          racket/string
-         scramble/bundle
-         scramble/struct
+         brandx
          "catalog.rkt"
          "interfaces.rkt"
          "digest.rkt"

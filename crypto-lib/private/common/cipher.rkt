@@ -5,8 +5,7 @@
 (require racket/match
          racket/string
          racket/contract/base
-         scramble/bundle
-         scramble/struct
+         brandx
          "catalog.rkt"
          "interfaces.rkt"
          "common.rkt"

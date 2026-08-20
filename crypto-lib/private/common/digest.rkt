@@ -4,8 +4,7 @@
 #lang racket/base
 (require racket/match
          racket/contract/base
-         scramble/bundle
-         scramble/struct
+         brandx
          "catalog.rkt"
          "interfaces.rkt"
          "common.rkt"

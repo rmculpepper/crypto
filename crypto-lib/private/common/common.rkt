@@ -6,8 +6,7 @@
          racket/contract/base
          racket/random
          racket/string
-         scramble/bundle
-         scramble/struct
+         brandx
          "catalog.rkt"
          "interfaces.rkt"
          "error.rkt")

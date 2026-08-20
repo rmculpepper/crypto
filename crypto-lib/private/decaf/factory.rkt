@@ -3,8 +3,6 @@
 
 #lang racket/base
 (require racket/match
-         scramble/bundle
-         scramble/struct
          "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/factory.rkt"

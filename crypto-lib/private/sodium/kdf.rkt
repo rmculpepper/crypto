@@ -3,8 +3,7 @@
 
 #lang racket/base
 (require racket/match
-         scramble/bundle
-         scramble/struct
+         brandx
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"

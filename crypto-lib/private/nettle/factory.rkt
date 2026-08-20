@@ -2,8 +2,7 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
          ffi/unsafe
          "../common/interfaces.rkt"
          "../common/common.rkt"

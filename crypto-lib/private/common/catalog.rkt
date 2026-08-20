@@ -5,7 +5,7 @@
 (require racket/match
          racket/contract/base
          racket/list
-         scramble/bundle
+         brandx
          scramble/struct
          "error.rkt")
 (provide (all-defined-out))
