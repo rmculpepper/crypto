@@ -10,7 +10,7 @@
          "../common/factory.rkt"
          "ffi.rkt"
          "digest.rkt"
-         #;"cipher.rkt"
+         "cipher.rkt"
          #;"pkey.rkt"
          #;"kdf.rkt")
 (provide libcrypto-factory)
@@ -99,7 +99,9 @@
    #:load-error #f ;; FIXME
 
    #:get-info libcrypto3-info
-   #:get-digest libcrypto3-fetch-digest))
+   #:get-digest libcrypto3-fetch-digest
+   #:get-cipher libcrypto3-fetch-cipher
+   ))
 
 
 #;
