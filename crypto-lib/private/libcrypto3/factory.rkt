@@ -12,7 +12,7 @@
          "digest.rkt"
          "cipher.rkt"
          #;"pkey.rkt"
-         #;"kdf.rkt")
+         "kdf.rkt")
 (provide libcrypto-factory)
 
 (define (libcrypto3-info key)
@@ -101,6 +101,7 @@
    #:get-info libcrypto3-info
    #:get-digest libcrypto3-fetch-digest
    #:get-cipher libcrypto3-fetch-cipher
+   #:get-kdf libcrypto3-fetch-kdf
    ))
 
 
