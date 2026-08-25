@@ -182,6 +182,7 @@
   (inner        ;; InnerFetch
    table        ;; (Hash *Spec => *Impl)
    get-info     ;; (Symbol -> (U Any #f))
+   ctx          ;; impl-specific
    )
   #:properties
   (method-properties
@@ -192,6 +193,9 @@
    (define (%factory-info self key)
      (or ((.get-info self) key)
          (super-factory-info self key)))
+
+   (define (%factory-inner-ctx self)
+     (.ctx self))
 
    (define (%fetch-digest self dspec)
      (fetch self dspec digest-spec->info $fi-digest))
@@ -312,6 +316,7 @@
                       #:version version
                       #:ok? [ok? #f]
                       #:load-error [load-error #f]
+                      #:inner-ctx [ic #f]
                       #:get-info [get-info #f]
                       #:get-digest [get-digest #f]
                       #:get-cipher [get-cipher #f]
@@ -326,4 +331,4 @@
                         (or get-kdf fetch-none)
                         (or get-pk fetch-none)))
   (common-factory name version ok? load-error
-                  inner table (or get-info get-none)))
+                  inner table (or get-info get-none) ic))

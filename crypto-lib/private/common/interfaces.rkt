@@ -367,6 +367,7 @@
    [factory-name      (-> factory? symbol?)]
    [factory-version   (-> factory? (listof exact-nonnegative-integer?))] ;; '() allowed
    [factory-display-name (-> factory? string?)]
+   [factory-inner-ctx (-> factory? any/c)]
    [fetch-digest      (-> factory? digest-spec? (or/c digest-impl? #f))]
    [fetch-cipher      (-> factory? cipher-spec? (or/c cipher-impl? #f))]
    [fetch-pk          (-> factory? pk-spec?     (or/c pk-impl? #f))]
