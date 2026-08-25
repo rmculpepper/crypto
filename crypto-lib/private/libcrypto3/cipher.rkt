@@ -11,6 +11,57 @@
          "ffi.rkt")
 (provide libcrypto3-cipher-impl%)
 
+(define libcrypto-ciphers
+  '(;; [CipherName Modes KeySizes String]
+    ;; Note: key sizes in bits (to match lookup string); converted to bytes below
+    ;; keys=#f means inherit constraints, don't add to string
+    [aes (cbc cfb #|cfb1 cfb8|# ctr ecb gcm ofb #|xts|#) (128 192 256) "aes"]
+    [blowfish (cbc cfb ecb ofb) #f "bf"]
+    [camellia (cbc cfb #|cfb1 cfb8|# ecb ofb) (128 192 256) "camellia"]
+    [cast128 (cbc cfb ecb ofb) #f "cast5"]
+    [des (cbc cfb #|cfb1 cfb8|# ecb ofb) #f "des"]
+    [des-ede2 (cbc cfb ofb) #f "des-ede"] ;; ECB mode???
+    [des-ede3 (cbc cfb ofb) #f "des-ede3"] ;; ECB mode???
+    [rc4 (stream) #f "rc4"]
+    [chacha20 (stream) #f "chacha20"] ;; libcrypto reports wrong IV length
+    [chacha20-poly1305 (stream) #f "chacha20-poly1305"]))
+    (define/override (-get-cipher info)
+      (define evp/s (-get-cipher-evp (send info get-cipher-name) (send info get-mode)))
+      (make-cipher info evp/s))
+
+    (define/private (-get-cipher-evp cipher-name mode)
+      (case mode
+        [(stream)
+         (match (assq cipher-name libcrypto-ciphers)
+           [(list _ '(stream) #f name-string)
+            (NOERR (EVP_CIPHER_fetch libctx name-string #f))]
+           [_ #f])]
+        [else
+         (match (assq cipher-name libcrypto-ciphers)
+           [(list _ modes keys name-string)
+            (and (memq mode modes)
+                 (cond [keys
+                        (for/list ([key (in-list keys)])
+                          (define s (format "~a-~a-~a" name-string key mode))
+                          (cons (quotient key 8) (NOERR (EVP_CIPHER_fetch libctx s #f))))]
+                       [else
+                        (define s (format "~a-~a" name-string mode))
+                        (NOERR (EVP_CIPHER_fetch libctx s #f))]))]
+           [_ #f])]))
+
+    (define/private (make-cipher info evp/s)
+      (cond [(list? evp/s)
+             (for/list ([keylen+evp (in-list evp/s)] #:when (cdr keylen+evp))
+               (cons (car keylen+evp) (make-cipher info (cdr keylen+evp))))]
+            [evp/s
+             (new libcrypto3-cipher-impl% (info info) (factory this) (cipher evp/s))]
+            [else #f]))
+
+
+
+
+
+
 (define libcrypto3-cipher-impl%
   (class cipher-impl-base%
     (init-field cipher)

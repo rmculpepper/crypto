@@ -71,6 +71,13 @@
 (define libcrypto3-ok?
   (and libcrypto (memv (OPENSSL_version_major) '(3 4))))
 
+(define libcrypto3-version
+  (cond [libcrypto3-ok?
+         (list (OPENSSL_version_major)
+               (OPENSSL_version_minor)
+               (OPENSSL_version_patch))]
+        [else null]))
+
 (define (get-ok? fun-name)
   (and libcrypto3-ok? (get-ffi-obj fun-name libcrypto _fpointer (lambda () #f)) #t))
 

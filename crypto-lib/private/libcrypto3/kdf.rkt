@@ -10,6 +10,50 @@
          "ffi.rkt")
 (provide libcrypto3-kdf-impl%)
 
+    (define/override (-get-kdf spec)
+      (define (fetch kdf-name)
+        (NOERR (EVP_KDF_fetch libctx kdf-name #f)))
+      (define (make-impl evp params0)
+        (new libcrypto3-kdf-impl% (factory this) (spec spec) (evp evp)
+             (params0 params0)))
+      (define (check/get-digest-name dspec)
+        (define di (get-normal-digest dspec)) ;; check availability
+        (and di (get-digest-lcname dspec)))
+      (or (match spec
+            [(or 'argon2d 'argon2i 'argon2id) ;; added in v3.2
+             (define evp (fetch (symbol->string spec)))
+             (and evp (make-impl evp null))]
+            ['scrypt
+             (define evp (fetch "scrypt"))
+             (and evp (make-impl evp null))]
+            [(list 'pbkdf2 'hmac di)
+             (define evp (fetch "pbkdf2"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+            [(list 'hkdf di)
+             (define evp (fetch "hkdf"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+            [(list 'concat di)
+             (define evp (fetch "ssdf"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+            [(list 'concat 'hmac di)
+             (define evp (fetch "ssdf"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname)
+                                             (#"mac" utf8-string "hmac"))))]
+            [(list 'ans-x9.63 di)
+             (define evp (fetch "X963KDF"))
+             (define dname (check/get-digest-name di))
+             (and evp dname (make-impl evp `((#"digest" utf8-string ,dname))))]
+            [_ #f])
+          (super -get-kdf spec)))
+
+
+
+
+
 (define libcrypto3-kdf-impl%
   (class kdf-impl-base%
     (inherit about get-spec)
