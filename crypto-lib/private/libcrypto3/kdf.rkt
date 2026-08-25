@@ -12,7 +12,7 @@
 (provide libcrypto3-fetch-kdf)
 
 (define (libcrypto3-fetch-kdf factory info)
-  (define libctx #f) ;; FIXME
+  (define libctx ($factory-inner-ctx factory))
   (define spec ($get-spec info))
   (define (fetch kdf-name)
     (NOERR (EVP_KDF_fetch libctx kdf-name #f)))

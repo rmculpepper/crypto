@@ -67,7 +67,7 @@
 ;; ----------------------------------------
 
 (define (libcrypto3-fetch-digest factory info)
-  (define libctx #f #;(get-field libctx factory)) ;; FIXME
+  (define libctx ($factory-inner-ctx factory))
   (define spec ($get-spec info))
   (define xof? (eq? ($di-size* info) 'vz))
   (define inner

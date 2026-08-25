@@ -28,7 +28,7 @@
     [chacha20-poly1305 (stream) #f "chacha20-poly1305"]))
 
 (define (libcrypto3-fetch-cipher factory info)
-  (define libctx #f) ;; FIXME
+  (define libctx ($factory-inner-ctx factory))
   (define spec ($get-spec info))
   (match-define (list cipher-name mode) spec)
   (define evp/s

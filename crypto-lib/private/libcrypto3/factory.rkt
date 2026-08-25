@@ -91,12 +91,17 @@
 
 ;; ----------------------------------------
 
-(define libcrypto-factory
+(define (make-libcrypto-factory)
+  (define libctx (and libcrypto3-ok? (HANDLEp (OSSL_LIB_CTX_new))))
+  (when libctx
+    (HANDLEp (OSSL_PROVIDER_load libctx "default"))
+    (NOERR (OSSL_PROVIDER_load libctx "legacy")))
   (make-factory
    #:name 'libcrypto
    #:version libcrypto3-version
    #:ok? libcrypto3-ok?
    #:load-error #f ;; FIXME
+   #:inner-ctx libctx
 
    #:get-info libcrypto3-info
    #:get-digest libcrypto3-fetch-digest
@@ -104,31 +109,15 @@
    #:get-kdf libcrypto3-fetch-kdf
    ))
 
+(define libcrypto-factory
+  (make-libcrypto-factory))
 
 #;
-(define libcrypto3-factory%
-  (class* factory-base% (factory<%>)
-    (inherit get-digest get-normal-digest get-cipher get-pk get-kdf)
-    (super-new [ok? libcrypto3-ok?]
-               [load-error #f])
-
-    (field [libctx (and libcrypto3-ok? (HANDLEp (OSSL_LIB_CTX_new)))])
-    (when libctx
-      (HANDLEp (OSSL_PROVIDER_load libctx "default"))
-      (NOERR (OSSL_PROVIDER_load libctx "legacy")))
-
-    (define/public (get-libctx) libctx)
-
-
-    ;; ----------------------------------------
-
-
-    (define/override (print-lib-info)
-      (super print-lib-info)
-      (when (and libcrypto (> (OpenSSL_version_num) 0))
-        (printf " OpenSSL_version_num: #x~x\n" (OpenSSL_version_num)))
-      (when libcrypto3-ok?
-        (printf " OPENSSL_VERSION_TEXT: ~s\n" (OpenSSL_version OPENSSL_VERSION)))
-      (when (and libcrypto (not libcrypto3-ok?))
-        (printf " status: library version not supported!\n")))
-    ))
+(define/override (print-lib-info)
+  (super print-lib-info)
+  (when (and libcrypto (> (OpenSSL_version_num) 0))
+    (printf " OpenSSL_version_num: #x~x\n" (OpenSSL_version_num)))
+  (when libcrypto3-ok?
+    (printf " OPENSSL_VERSION_TEXT: ~s\n" (OpenSSL_version OPENSSL_VERSION)))
+  (when (and libcrypto (not libcrypto3-ok?))
+    (printf " status: library version not supported!\n")))
