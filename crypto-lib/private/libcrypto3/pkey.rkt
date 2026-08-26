@@ -2,245 +2,218 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
          racket/string
          ffi/unsafe
          asn1
-         "../common/catalog.rkt"
+         brandx
+         "../common/interfaces.rkt"
          "../common/common.rkt"
          "../common/pk-common.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
          "ffi.rkt")
-(provide (all-defined-out))
+(provide libcrypto3-fetch-pk)
 
-
-    (define/override (-get-pk spec)
-      (case spec
-        [(rsa) (new libcrypto3-rsa-impl% (factory this))]
-        [(dsa) (new libcrypto3-dsa-impl% (factory this))]
-        [(dh)  (new libcrypto3-dh-impl%  (factory this))]
-        [(ec)  (new libcrypto3-ec-impl%  (factory this))]
-        [(eddsa) (new libcrypto3-eddsa-impl% (factory this))]
-        [(ecx) (new libcrypto3-ecx-impl% (factory this))]
-        [else #f]))
-
-    ;; libcrypto-read-key : Bytes Symbol -> pkey/#f
-    ;; Not used by datum->pk-key, but retained for debugging/testing.
-    (define/public (libcrypto-read-key sk fmt)
-      (unless (bytes? sk)
-        (raise-argument-error 'libcrypto-read-key "bytes?" sk))
-      (define (make-key evp private?)
-        (define impl (and evp (evp->impl evp)))
-        (cond [private? (and impl (send impl evp->private-key evp))]
-              [else (and impl (send impl evp->public-key evp))]))
-      (define (evp->impl evp)
-        (define spec
-          (cond [(EVP_PKEY_is_a evp "RSA") 'rsa]
-                [(EVP_PKEY_is_a evp "DSA") 'dsa]
-                [(EVP_PKEY_is_a evp "DH") 'dh] ;; or DHX?
-                [(EVP_PKEY_is_a evp "EC") 'ec]
-                [(or (EVP_PKEY_is_a evp "ED25519")
-                     (EVP_PKEY_is_a evp "ED448"))
-                 'eddsa]
-                [(or (EVP_PKEY_is_a evp "X25519")
-                     (EVP_PKEY_is_a evp "X448"))
-                 'ecx]
-                [else #f]))
-        (and spec (get-pk spec)))
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (make-key (HANDLEp (d2i_PUBKEY_ex sk (bytes-length sk) libctx #f)))]
-        [(PrivateKeyInfo)
-         (define p (HANDLEp (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk))))
-         (make-key (HANDLEp (EVP_PKCS82PKEY_ex p libctx #f)) #t)]
-        [else #f]))
-
-
+(define (libcrypto3-fetch-pk factory info)
+  (define spec ($get-spec info))
+  (case spec
+    [(rsa) (libcrypto3-rsa-impl info factory)]
+    [(dsa) (libcrypto3-dsa-impl info factory)]
+    [(dh)  (libcrypto3-dh-impl info factory)]
+    [(ec)  (libcrypto3-ec-impl info factory)]
+    [(eddsa) (libcrypto3-eddsa-impl info factory)]
+    [(ecx) (libcrypto3-ecx-impl info factory)]
+    [else #f]))
 
 ;; ============================================================
-;; Base
 
-(define libcrypto3-pk-impl%
-  (class pk-impl-base%
-    (inherit-field factory)
-    (super-new)
+;; libcrypto3-write-key : PKKey Symbol -> Bytes/#f
+;; Not used by pk-key->datum, but retained for debugging/testing.
+(define (libcrypto3-write-key pkk fmt)
+  (match-define (pk-key impl evp private?) pkk)
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (HANDLEp (i2d_PUBKEY evp))]
+    [(PrivateKeyInfo)
+     (and private?
+          (HANDLEp (i2d_PKCS8_PRIV_KEY_INFO (HANDLEp (EVP_PKEY2PKCS8 evp)))))]
+    [else #f]))
 
-    (define/public (get-libctx) (send factory get-libctx))
+;; libcrypto3-read-key : Bytes Symbol -> pkey/#f
+;; Not used by datum->pk-key, but retained for debugging/testing.
+(define (libcrypto3-read-key factory sk fmt)
+  (define libctx ($factory-inner-ctx factory))
+  (unless (bytes? sk)
+    (raise-argument-error 'libcrypto3-read-key "bytes?" sk))
+  (define (make-key evp private?)
+    (define impl (and evp (evp->impl factory evp)))
+    (and impl (if private? (evp->private-key impl evp) (evp->public-key impl evp))))
+  (case fmt
+    [(SubjectPublicKeyInfo)
+     (make-key (HANDLEp (d2i_PUBKEY_ex sk (bytes-length sk) libctx #f)))]
+    [(PrivateKeyInfo)
+     (define p (HANDLEp (d2i_PKCS8_PRIV_KEY_INFO sk (bytes-length sk))))
+     (make-key (HANDLEp (EVP_PKCS82PKEY_ex p libctx #f)) #t)]
+    [else #f]))
 
-    (define/public (evp->params evp)
-      (and (evp-ok? evp 'params)
-           (new (get-params-class) (impl this) (pevp evp))))
-    (define/public (evp->public-key evp)
-      (and (evp-ok? evp 'public)
-           (new (get-key-class) (impl this) (evp evp) (private? #f))))
-    (define/public (evp->private-key evp)
-      (and (evp-ok? evp 'private)
-           (new (get-key-class) (impl this) (evp evp) (private? #t))))
+(define (evp->impl factory evp)
+  (define spec
+    (cond [(EVP_PKEY_is_a evp "RSA") 'rsa]
+          [(EVP_PKEY_is_a evp "DSA") 'dsa]
+          [(EVP_PKEY_is_a evp "DH") 'dh] ;; or DHX?
+          [(EVP_PKEY_is_a evp "EC") 'ec]
+          [(or (EVP_PKEY_is_a evp "ED25519")
+               (EVP_PKEY_is_a evp "ED448"))
+           'eddsa]
+          [(or (EVP_PKEY_is_a evp "X25519")
+               (EVP_PKEY_is_a evp "X448"))
+           'ecx]
+          [else #f]))
+  (and spec ($fetch-pk factory spec)))
 
-    (define/private (evp-ok? evp mode)
-      (and evp
-           (let ([ctx (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)])
-             (HANDLEp (EVP_PKEY_param_check ctx)
-                      #:or-fail-with "key parameters validation failed")
-             (case mode
-               [(public) (HANDLEp (EVP_PKEY_public_check ctx)
-                                  #:or-fail-with "public key validation failed")]
-               [(private) (HANDLEp (EVP_PKEY_check ctx)
-                                   #:or-fail-with "private key validation failed")]))))
+(define (pk-libctx impl)
+  ($factory-inner-ctx ($get-factory impl)))
 
-    (define/public (get-params-class) (err/no-impl this))
-    (define/public (get-key-class) (err/no-impl this))
+(define (evp-ok? impl evp mode)
+  (and evp
+       (let ([ctx (EVP_PKEY_CTX_new_from_pkey (pk-libctx impl) evp #f)])
+         (HANDLEp (EVP_PKEY_param_check ctx)
+                  #:or-fail-with "key parameters validation failed")
+         (case mode
+           [(public) (HANDLEp (EVP_PKEY_public_check ctx)
+                              #:or-fail-with "public key validation failed")]
+           [(private) (HANDLEp (EVP_PKEY_check ctx)
+                               #:or-fail-with "private key validation failed")]))))
 
-    ;; fromdata : Bytes Symbol ParamList/#f -> EVP_PKEY
-    (define/public (fromdata keytype mode params)
-      (define selection
-        (case mode
-          [(params)  EVP_PKEY_KEY_PARAMETERS]
-          [(public)  EVP_PKEY_PUBLIC_KEY]
-          [(private) EVP_PKEY_KEYPAIR]))
-      (define paramsarray (make-param-array params))
-      (fromdata* keytype selection paramsarray))
+(define (evp->params impl evp)
+  (and (evp-ok? impl evp 'params)
+       (pk-parameters impl evp)))
 
-    ;; fromdata* : Bytes Int OSSL_PARAM-array -> EVP_PKEY
-    (define/public (fromdata* keytype selection paramsarray)
-      (define keytype-ptr (nonmoving keytype))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) keytype-ptr #f)))
-      (HANDLEp (EVP_PKEY_fromdata_init ctx))
-      (begin0 (HANDLEp (EVP_PKEY_fromdata ctx selection paramsarray))
-        (void/reference-sink keytype-ptr)))
+(define (evp->public-key impl evp)
+  (and (evp-ok? impl evp 'public)
+       (pk-key impl evp #f)))
 
-    ;; generate-key-from-pevp : EVP_PKEY -> PK-Key
-    (define/public (generate-key-from-pevp pevp)
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) pevp #f)))
-      (HANDLEp (EVP_PKEY_keygen_init ctx))
-      (define kevp (HANDLEp (EVP_PKEY_generate ctx)))
-      (evp->private-key kevp))
+(define (evp->private-key impl evp)
+  (and (evp-ok? impl evp 'private)
+       (pk-key impl evp #t)))
 
-    ;; generate-key-from-params : PK-Params -> PK-Key
-    (define/public (generate-key-from-params pkp)
-      (generate-key-from-pevp (get-field pevp pkp)))
-    ))
+(define (evp-copy impl evp selection)
+  (define data (EVP_PKEY_todata evp selection))
+  (define keytype (EVP_PKEY_get0_type_name evp))
+  (begin0 (fromdata* impl keytype selection data)
+    (OSSL_PARAM_free data)
+    (void/reference-sink keytype)))
 
-(define (libcrypto3-pk-params-mixin base%)
-  (class base%
-    (init-field pevp)
-    (super-new)
+;; fromdata : PKImpl Bytes Symbol ParamList/#f -> EVP_PKEY
+(define (fromdata impl keytype mode params)
+  (define selection
+    (case mode
+      [(params)  EVP_PKEY_KEY_PARAMETERS]
+      [(public)  EVP_PKEY_PUBLIC_KEY]
+      [(private) EVP_PKEY_KEYPAIR]))
+  (define paramsarray (make-param-array params))
+  (fromdata* impl keytype selection paramsarray))
 
-    (define/override (get-security-bits)
-      (EVP_PKEY_get_security_bits pevp))
-    ))
+;; fromdata* : PKImpl Bytes Int OSSL_PARAM-array -> EVP_PKEY
+(define (fromdata* impl keytype selection paramsarray)
+  (define keytype-ptr (nonmoving keytype))
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (pk-libctx impl) keytype-ptr #f)))
+  (HANDLEp (EVP_PKEY_fromdata_init ctx))
+  (begin0 (HANDLEp (EVP_PKEY_fromdata ctx selection paramsarray))
+    (void/reference-sink keytype-ptr)))
+
+;; generate-key-from-pevp : PKImpl EVP_PKEY -> PK-Key
+(define (generate-key-from-pevp impl pevp)
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (pk-libctx impl) pevp #f)))
+  (HANDLEp (EVP_PKEY_keygen_init ctx))
+  (define kevp (HANDLEp (EVP_PKEY_generate ctx)))
+  (evp->private-key impl kevp))
+
+;; generate-params : PKImpl Bytes Params -> PKParameters
+(define (generate-params impl keytype params)
+  (define libctx (pk-libctx impl))
+  (define keytype-ptr (nonmoving keytype))
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name libctx keytype-ptr #f)))
+  (HANDLEp (EVP_PKEY_paramgen_init ctx))
+  (HANDLEp (EVP_PKEY_CTX_set_params ctx (make-param-array params)))
+  (define pevp (HANDLEp (EVP_PKEY_generate ctx)
+                        #:or-fail-with "parameter generation failed"))
+  (void/reference-sink keytype-ptr)
+  (evp->params impl pevp))
 
 ;; ----------------------------------------
 
-(define libcrypto3-pk-key%
-  (class pk-key-base%
-    (init-field evp private?)
-    (inherit-field impl)
-    (super-new)
+(define (pkk-sign pkk msg params)
+  (define evp (ctx-inner pkk))
+  (define libctx (pk-libctx (ctx-impl pkk)))
+  (evp-sign evp libctx msg params))
 
-    (define/public (get-libctx) (send impl get-libctx))
+(define (pkk-verify pkk msg params sig)
+  (define evp (ctx-inner pkk))
+  (define libctx (pk-libctx (ctx-impl pkk)))
+  (evp-verify evp libctx msg params sig))
 
-    (define/override (get-security-bits)
-      (EVP_PKEY_get_security_bits evp))
+(define (evp-sign evp libctx msg params)
+  (define msglen (bytes-length msg))
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey libctx evp #f)))
+  (HANDLEp (EVP_PKEY_sign_init_ex ctx (make-param-array params)))
+  (define siglen (HANDLEp (EVP_PKEY_sign ctx #f 0 msg msglen)))
+  (define sigbuf (make-bytes siglen))
+  (define siglen2 (HANDLEp (EVP_PKEY_sign ctx sigbuf siglen msg msglen)))
+  (subbytes sigbuf 0 siglen2))
 
-    (define/override (is-private?) private?)
+(define (evp-verify evp libctx msg params sig)
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey libctx evp #f)))
+  (HANDLEp (EVP_PKEY_verify_init_ex ctx (make-param-array params)))
+  (NOERR (EVP_PKEY_verify ctx sig (bytes-length sig) msg (bytes-length msg))))
 
-    (define/override (get-public-key)
-      (cond [private?
-             (define keytype (EVP_PKEY_get0_type_name evp))
-             (define data (EVP_PKEY_todata evp EVP_PKEY_PUBLIC_KEY))
-             (define pub-evp (send impl fromdata* keytype EVP_PKEY_PUBLIC_KEY data))
-             (OSSL_PARAM_free data)
-             (send impl evp->public-key pub-evp)]
-            [else this]))
+;; ----------------------------------------
 
-    (define/override (get-params)
-      (cond [private? (send (get-public-key) get-params)]
-            [else (send impl evp->params evp)]))
+(define (pkk-encrypt pkk msg params)
+  (define evp (ctx-inner pkk))
+  (define libctx (pk-libctx (ctx-impl pkk)))
+  (evp-encrypt evp libctx msg params))
 
-    ;; libcrypto-write-key : Symbol -> Bytes/#f
-    ;; Not used by pk-key->datum, but retained for debugging/testing.
-    (define/public (libcrypto-write-key fmt)
-      (case fmt
-        [(SubjectPublicKeyInfo)
-         (HANDLEp (i2d_PUBKEY evp))]
-        [(PrivateKeyInfo)
-         (and private?
-              (HANDLEp (i2d_PKCS8_PRIV_KEY_INFO (HANDLEp (EVP_PKEY2PKCS8 evp)))))]
-        [else #f]))
+(define (pkk-decrypt pkk msg params)
+  (define evp (ctx-inner pkk))
+  (define libctx (pk-libctx (ctx-impl pkk)))
+  (evp-decrypt evp libctx msg params))
 
-    ;; ----------------------------------------
-    ;; Encrypt
+(define (evp-encrypt evp libctx msg params)
+  (define msglen (bytes-length msg))
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey libctx evp #f)))
+  (HANDLEp (EVP_PKEY_encrypt_init_ex ctx (make-param-array params)))
+  (define outlen (HANDLEp (EVP_PKEY_encrypt ctx #f 0 msg msglen)))
+  (define outbuf (make-bytes outlen))
+  (define outlen2 (HANDLEp (EVP_PKEY_encrypt ctx outbuf outlen msg msglen)))
+  (subbytes outbuf 0 outlen2))
 
-    (define/override (-encrypt msg pad)
-      (define msglen (bytes-length msg))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)))
-      (define params (make-param-array (-get-encrypt/decrypt-params #t pad)))
-      (HANDLEp (EVP_PKEY_encrypt_init_ex ctx params))
-      (define outlen (HANDLEp (EVP_PKEY_encrypt ctx #f 0 msg msglen)))
-      (define outbuf (make-bytes outlen))
-      (define outlen2 (HANDLEp (EVP_PKEY_encrypt ctx outbuf outlen msg msglen)))
-      (subbytes outbuf 0 outlen2))
+(define (evp-decrypt evp libctx msg params)
+  (define msglen (bytes-length msg))
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey libctx evp #f)))
+  (HANDLEp (EVP_PKEY_decrypt_init_ex ctx (make-param-array params)))
+  (define outlen (HANDLEp (EVP_PKEY_decrypt ctx #f 0 msg msglen)))
+  (define outbuf (make-bytes outlen))
+  (define outlen2 (HANDLEp (EVP_PKEY_decrypt ctx outbuf outlen msg msglen)))
+  (subbytes outbuf 0 outlen2))
 
-    (define/override (-decrypt msg pad)
-      (define msglen (bytes-length msg))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)))
-      (define params (make-param-array (-get-encrypt/decrypt-params #f pad)))
-      (HANDLEp (EVP_PKEY_decrypt_init_ex ctx params))
-      (define outlen (HANDLEp (EVP_PKEY_decrypt ctx #f 0 msg msglen)))
-      (define outbuf (make-bytes outlen))
-      (define outlen2 (HANDLEp (EVP_PKEY_decrypt ctx outbuf outlen msg msglen)))
-      (subbytes outbuf 0 outlen2))
+;; ----------------------------------------
 
-    (define/public (-get-encrypt/decrypt-params enc? pad) '())
+(define (pkk-compute-secret pkk peer-pkk params)
+  (define evp (ctx-inner pkk))
+  (define libctx (pk-libctx (ctx-impl pkk)))
+  (define peer-evp (ctx-inner peer-pkk))
+  (evp-compute-secret evp libctx peer-evp params))
 
-    ;; ----------------------------------------
-    ;; Sign and Verify
-
-    (define/override (-sign digest dspec pad)
-      (define digestlen (bytes-length digest))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)))
-      (define params (make-param-array (-get-sign/verify-params #t pad dspec)))
-      (HANDLEp (EVP_PKEY_sign_init_ex ctx params))
-      (define siglen (HANDLEp (EVP_PKEY_sign ctx #f 0 digest digestlen)))
-      (define sigbuf (make-bytes siglen))
-      (define siglen2 (HANDLEp (EVP_PKEY_sign ctx sigbuf siglen digest digestlen)))
-      (subbytes sigbuf 0 siglen2))
-
-    (define/override (-verify digest dspec pad sig)
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)))
-      (define params (make-param-array (-get-sign/verify-params #f pad dspec)))
-      (HANDLEp (EVP_PKEY_verify_init_ex ctx params))
-      (NOERR (EVP_PKEY_verify ctx sig (bytes-length sig) digest (bytes-length digest))))
-
-    (define/public (-get-sign/verify-params sign? pad dspec)
-      ;; Default: require pad=#f, ignore digest
-      (unless (eq? pad #f) (err/bad-signature-pad this pad))
-      '())
-
-    ;; ----------------------------------------
-    ;; Key exchange
-
-    (define/override (-compute-secret peer-pubkey)
-      ;; PRE: peer-pubkey is libcrypto-pk-key% with same impl
-      (define peer-evp (get-field evp peer-pubkey))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey (get-libctx) evp #f)))
-      (define params (make-param-array (-get-keyexch-params)))
-      (HANDLEp (EVP_PKEY_derive_init_ex ctx params))
-      (HANDLEp (EVP_PKEY_derive_set_peer_ex ctx peer-evp #t))
-      (define outlen (HANDLEp (EVP_PKEY_derive ctx #f 0)))
-      (define buf (make-bytes outlen))
-      (define outlen2 (HANDLEp (EVP_PKEY_derive ctx buf (bytes-length buf))))
-      (subbytes buf 0 outlen2))
-
-    (define/public (-get-keyexch-params) '())
-
-    (define/override (-compatible-for-key-agree? peer-pubkey)
-      ;; PRE: peer-pubkey is libcrypto-pk-key% with same impl
-      (NOERR (EVP_PKEY_parameters_eq evp (get-field evp peer-pubkey))))
-    ))
+(define (evp-compute-secret evp libctx peer-evp params)
+  (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_pkey libctx evp #f)))
+  (HANDLEp (EVP_PKEY_derive_init_ex ctx (make-param-array params)))
+  (HANDLEp (EVP_PKEY_derive_set_peer_ex ctx peer-evp #t))
+  (define outlen (HANDLEp (EVP_PKEY_derive ctx #f 0)))
+  (define buf (make-bytes outlen))
+  (define outlen2 (HANDLEp (EVP_PKEY_derive ctx buf (bytes-length buf))))
+  (subbytes buf 0 outlen2))
 
 (define signing-digests
   ;; https://docs.openssl.org/master/man3/EVP_DigestSignInit/
@@ -250,549 +223,572 @@
     sha3-224 sha3-256 sha3-384 sha3-512))
 
 ;; ============================================================
+;; Base
+
+(struct libcrypto3-pk-impl-base pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %])
+
+   ;; ---- pkp
+
+   (define (%pkp-generate-key self pkp)
+     (generate-key-from-pevp self (ctx-inner pkp)))
+
+   (define (%pkp-security-bits self pkp)
+     (EVP_PKEY_get_security_bits (ctx-inner pkp)))
+
+   (define (%pkp-equal? self pkp1 pkp2)
+     (define evp1 (ctx-inner pkp1))
+     (define evp2 (ctx-inner pkp2))
+     (NOERR (EVP_PKEY_parameters_eq evp1 evp2)))
+
+   ;; ---- pkk
+
+   (define (%pkk-public-key self pkk)
+     (match-define (pk-key _ evp private?) pkk)
+     (if private? (evp->public-key self (evp-copy self evp EVP_PKEY_PUBLIC_KEY)) pkk))
+
+   ;; XXXX!!!! not if param is curve name
+   (define (%pkk-params self pkk)
+     (evp->params self (evp-copy self (ctx-inner pkk) EVP_PKEY_KEY_PARAMETERS)))
+
+   (define (%pkk-security-bits self pkk)
+     (EVP_PKEY_get_security_bits (ctx-inner pkk)))
+
+   (define (%pkk-equal-public? self pkk1 pkk2)
+     (define evp1 (ctx-inner ($pkk-public-key self pkk1)))
+     (define evp2 (ctx-inner ($pkk-public-key self pkk2)))
+     (NOERR (EVP_PKEY_eq evp1 evp2)))
+
+   (define (%pkk-equal-params? self pkk1 pkk2)
+     (define evp1 (ctx-inner pkk1))
+     (define evp2 (ctx-inner pkk2))
+     (NOERR (EVP_PKEY_parameters_eq evp1 evp2)))
+   ))
+
+;; ============================================================
 ;; RSA
 
-(define libcrypto3-rsa-impl%
-  (class libcrypto3-pk-impl%
-    (inherit-field factory)
-    (inherit get-libctx evp->public-key evp->private-key fromdata)
-    (super-new (spec 'rsa))
+(struct libcrypto3-rsa-impl libcrypto3-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (get-key-class) libcrypto3-rsa-key%)
+   ;; ---- pk-info
 
-    (define/override (rsa-can-sign? pad dspec)
-      (and (memq pad '(#f pkcs1-v1.5 pss pss*))
-           (or (memq dspec signing-digests)
-               (memq dspec '(md5 md4 md2)))
-           (and (send factory get-digest dspec) #t)))
-    (define/override (rsa-can-encrypt? pad)
-      (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
+   (define (%pk-can-sign? self pad dspec)
+     (and (memq pad '(#f pkcs1-v1.5 pss pss*))
+          (or (memq dspec signing-digests)
+              (memq dspec '(md5 md4 md2)))
+          (and (send factory get-digest dspec) #t)))
 
-    (define/override (make-public-key n e)
-      (evp->public-key (fromdata #"RSA" 'public
-                                 (make-fromdata-params n e #f #f #f #f #f #f))))
-    (define/override (make-private-key n e d p q dp dq qInv)
-      (evp->private-key (fromdata #"RSA" 'private
-                                  (make-fromdata-params n e d p q dp dq qInv))))
+   (define (%pk-can-encrypt? self pad)
+     (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
 
-    (define/private (make-fromdata-params n e d p q dp dq qInv)
-      (define derive? (and n e d p q (not (and dp dq qInv))))
-      `((#"n" ubignum ,n)
-        (#"e" ubignum ,e)
-        (#"d" ubignum ,d #:?)
-        (#"rsa-factor1" ubignum ,p #:?)
-        (#"rsa-factor2" ubignum ,q #:?)
-        (#"rsa-exponent1" ubignum ,dp #:?)
-        (#"rsa-exponent2" ubignum ,dq #:?)
-        (#"rsa-coefficient1" ubignum ,qInv #:?)
-        (#"rsa-derive-from-pq" uint ,(and derive? 1) #:?)))
+   ;; ---- pk-impl
 
-    (define/override (generate-key config)
-      (define-values (nbits e)
-        (check/ref-config '(nbits e) config config:rsa-keygen "RSA keygen"))
-      (cond [e
-             (define params (make-param-array
-                             `((#"bits" uint ,nbits)
-                               (#"e" uint ,e #:?))))
-             (define keytype (nonmoving #"rsa"))
-             (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) keytype #f)))
-             (HANDLEp (EVP_PKEY_keygen_init ctx))
-             (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
-             (define evp (HANDLEp (EVP_PKEY_generate ctx)))
-             (void/reference-sink keytype)
-             (evp->private-key evp)]
-            [else
-             (define evp (HANDLEp (EVP_PKEY_Q_keygen/RSA (get-libctx) #f nbits)))
-             (evp->private-key evp)]))
-    ))
+   (define (%pk-generate-key self config)
+     (define-values (nbits e)
+       (check/ref-config '(nbits e) config config:rsa-keygen #:in self))
+     (cond [e
+            (define params (make-param-array
+                            `((#"bits" uint ,nbits)
+                              (#"e" uint ,e #:?))))
+            (define keytype (nonmoving #"rsa"))
+            (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (pk-libctx self) keytype #f)))
+            (HANDLEp (EVP_PKEY_keygen_init ctx))
+            (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
+            (define evp (HANDLEp (EVP_PKEY_generate ctx)))
+            (void/reference-sink keytype)
+            (evp->private-key self evp)]
+           [else
+            (define evp (HANDLEp (EVP_PKEY_Q_keygen/RSA (get-libctx) #f nbits)))
+            (evp->private-key self evp)]))
 
-;; ----------------------------------------
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (pk-key _ evp private?) pkk)
+     (define n (HANDLEp (EVP_PKEY_get_bn_param/value evp #"n")))
+     (define e (HANDLEp (EVP_PKEY_get_bn_param/value evp #"e")))
+     (cond [private?
+            (define d (HANDLEp (EVP_PKEY_get_bn_param/value evp #"d")))
+            (define p (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor1")))
+            (define q (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor2")))
+            (define dp (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent1")))
+            (define dq (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent2")))
+            (define qInv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-coefficient1")))
+            ;; Writing keys with >2 prime factors is not supported.
+            (cond [(NOERR (EVP_PKEY_get_bn_param/value evp #"rsa-factor3")) #f]
+                  [else (encode-priv-rsa fmt n e d p q dp dq qInv)])]
+           [else
+            (encode-pub-rsa fmt n e)]))
 
-(define libcrypto3-rsa-key%
-  (class libcrypto3-pk-key%
-    (inherit-field impl evp private?)
-    (super-new)
+   ;; ---- pkk*
 
-    (define/override (-write-key fmt)
-      (define n (HANDLEp (EVP_PKEY_get_bn_param/value evp #"n")))
-      (define e (HANDLEp (EVP_PKEY_get_bn_param/value evp #"e")))
-      (cond [private?
-             (define d (HANDLEp (EVP_PKEY_get_bn_param/value evp #"d")))
-             (define p (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor1")))
-             (define q (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-factor2")))
-             (define dp (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent1")))
-             (define dq (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-exponent2")))
-             (define qInv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"rsa-coefficient1")))
-             ;; Writing keys with >2 prime factors is not supported.
-             (cond [(NOERR (EVP_PKEY_get_bn_param/value evp #"rsa-factor3")) #f]
-                   [else (encode-priv-rsa fmt n e d p q dp dq qInv)])]
-            [else
-             (encode-pub-rsa fmt n e)]))
+   (define (%pk*-make-public-key self n e)
+     (define evp (fromdata self #"RSA" 'public (make-fromdata-params n e #f #f #f #f #f #f)))
+     (evp->public-key self evp))
+   (define (%pk*-make-private-key self n e d p q dp dq qInv)
+     (define evp (fromdata self #"RSA" 'private (make-fromdata-params n e d p q dp dq qInv)))
+     (evp->private-key self evp))
 
-    (define/override (-get-encrypt/decrypt-params enc? pad)
-      (case pad
-        [(oaep #f) `((#"pad-mode" utf8-string "oaep"))]
-        [(pkcs1-v1.5) `((#"pad-mode" utf8-string "pkcs1"))]
-        [else (err/bad-encrypt-pad this pad)]))
+   (define (make-fromdata-params self n e d p q dp dq qInv)
+     (define derive? (and n e d p q (not (and dp dq qInv))))
+     `((#"n" ubignum ,n)
+       (#"e" ubignum ,e)
+       (#"d" ubignum ,d #:?)
+       (#"rsa-factor1" ubignum ,p #:?)
+       (#"rsa-factor2" ubignum ,q #:?)
+       (#"rsa-exponent1" ubignum ,dp #:?)
+       (#"rsa-exponent2" ubignum ,dq #:?)
+       (#"rsa-coefficient1" ubignum ,qInv #:?)
+       (#"rsa-derive-from-pq" uint ,(and derive? 1) #:?)))
 
-    (define/override (-get-sign/verify-params sign? pad dspec)
-      (define factory (send impl get-factory))
-      (define dname (send factory get-digest-lcname dspec))
-      (case pad
-        [(pkcs1-v1.5 #f)
-         `((#"digest" utf8-string ,dname)
-           (#"pad-mode" utf8-string "pkcs1"))]
-        [(pss)
-         `((#"digest" utf8-string ,dname)
-           (#"pad-mode" utf8-string "pss")
-           (#"saltlen" utf8-string "digest"))]
-        [(pss*)
-         `((#"digest" utf8-string ,dname)
-           (#"pad-mode" utf8-string "pss")
-           (#"saltlen" utf8-string ,(if sign? "digest" "auto")))]
-        [else (err/bad-signature-pad this pad)]))
-    ))
+   (define (%pkk*-sign self pkk msg dspec pad)
+     (pkk-sign pkk msg (get-sign/verify-params self #t dspec pad)))
+
+   (define (%pkk*-verify self pkk msg dspec pad sig)
+     (pkk-sign pkk msg (get-sign/verify-params self #f dspec pad) sig))
+
+   (define (get-sign/verify-params self sign? dspec pad)
+     (define dname (get-digest-lcname dspec))
+     (case pad
+       [(pkcs1-v1.5 #f)
+        `((#"digest" utf8-string ,dname)
+          (#"pad-mode" utf8-string "pkcs1"))]
+       [(pss)
+        `((#"digest" utf8-string ,dname)
+          (#"pad-mode" utf8-string "pss")
+          (#"saltlen" utf8-string "digest"))]
+       [(pss*)
+        `((#"digest" utf8-string ,dname)
+          (#"pad-mode" utf8-string "pss")
+          (#"saltlen" utf8-string ,(if sign? "digest" "auto")))]
+       [else (err/bad-signature-pad self pad)]))
+
+   (define (%pkk*-encrypt self pkk msg pad)
+     (pkk-encrypt pkk msg (get-encrypt/decrypt-params self #t pad)))
+
+   (define (%pkk*-decrypt self pkk msg pad)
+     (pkk-decrypt pkk msg (get-encrypt/decrypt-params self #f pad)))
+
+   (define (get-encrypt/decrypt-params self enc? pad)
+     (case pad
+       [(oaep #f) `((#"pad-mode" utf8-string "oaep"))]
+       [(pkcs1-v1.5) `((#"pad-mode" utf8-string "pkcs1"))]
+       [else (err/bad-encrypt-pad self pad)]))
+   ))
 
 ;; ============================================================
 ;; DSA
 
-(define libcrypto3-dsa-impl%
-  (class libcrypto3-pk-impl%
-    (inherit-field factory)
-    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'dsa))
+(struct libcrypto3-dsa-impl libcrypto3-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (get-params-class) libcrypto3-dsa-params%)
-    (define/override (get-key-class) libcrypto3-dsa-key%)
+   ;; ---- pk-impl
 
-    (define/override (make-params p q g)
-      (evp->params (fromdata #"DSA" 'params
-                             (make-fromdata-params p q g #f #f))))
-    (define/override (make-public-key p q g y)
-      (evp->public-key (fromdata #"DSA" 'public
-                                 (make-fromdata-params p q g y #f))))
-    (define/override (make-private-key p q g y x)
-      (evp->private-key (fromdata #"DSA" 'private
-                                  (make-fromdata-params p q g y x))))
+   (define (%pk-generate-params self config)
+     (define-values (nbits qbits)
+       (check/ref-config '(nbits qbits) config config:dsa-paramgen #:in self))
+     (define params
+       `((#"pbits" uint ,nbits #:?)
+         (#"qbits" uint ,qbits #:?)))
+     (generate-params self #"DSA" params))
 
-    (define/private (make-fromdata-params p q g y x)
-      `((#"p" ubignum ,p)
-        (#"q" ubignum ,q)
-        (#"g" ubignum ,g)
-        (#"pub" ubignum ,y #:?)
-        (#"priv" ubignum ,x #:?)))
+   (define (%pkp-write-params self pkp fmt)
+     (define-values (p q g) (dsa-evp-get-params (ctx-inner pkp)))
+     (encode-params-dsa fmt p q g))
 
-    (define/override (generate-params config)
-      (define-values (nbits qbits)
-        (check/ref-config '(nbits qbits) config config:dsa-paramgen "DSA paramgen"))
-      (define dsa-ptr (nonmoving #"DSA"))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dsa-ptr #f)))
-      (HANDLEp (EVP_PKEY_paramgen_init ctx))
-      (define params (make-param-array
-                      `((#"pbits" uint ,nbits #:?)
-                        (#"qbits" uint ,qbits #:?))))
-      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
-      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
-                            #:or-fail-with "parameter generation failed"))
-      (void/reference-sink dsa-ptr)
-      (evp->params pevp))
-    ))
+   (define (%pkp-param-values self pkp)
+     (dsa-evp-get-params (ctx-inner pkp)))
 
-(define libcrypto3-dsa-params%
-  (class (libcrypto3-pk-params-mixin pk-dsa-params%)
-    (inherit-field impl pevp)
-    (super-new)
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (pk-key _ evp private?) pkk)
+     (define-values (p q g) (dsa-evp-get-params evp))
+     (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
+     (cond [private?
+            (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+            (encode-priv-dsa fmt p q g pub priv)]
+           [else (encode-pub-dsa fmt p q g pub)]))
 
-    (define/override (-write-params fmt)
-      (define-values (p q g) (dsa-evp-get-params pevp))
-      (encode-params-dsa fmt p q g))
+   (define (dsa-evp-get-params pevp)
+     (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
+     (define q (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"q")))
+     (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
+     (values p q g))
 
-    (define/override (get-param-values)
-      (dsa-evp-get-params pevp))
-    ))
+   ;; ---- pkk*
 
-(define (dsa-evp-get-params pevp)
-  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
-  (define q (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"q")))
-  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
-  (values p q g))
+   (define (%pk*-make-params self p q g)
+     (define evp (fromdata self #"DSA" 'params (make-fromdata-params p q g #f #f)))
+     (evp->params self evp))
+   (define (%pk*-make-public-key self p q g y)
+     (define evp (fromdata self #"DSA" 'public (make-fromdata-params p q g y #f)))
+     (evp->public-key self evp))
+   (define (%pk*-make-private-key self p q g y x)
+     (define evp (fromdata self #"DSA" 'private (make-fromdata-params p q g y x)))
+     (evp->private-key self evp))
 
-;; ----------------------------------------
+   (define (make-fromdata-params p q g y x)
+     `((#"p" ubignum ,p)
+       (#"q" ubignum ,q)
+       (#"g" ubignum ,g)
+       (#"pub" ubignum ,y #:?)
+       (#"priv" ubignum ,x #:?)))
 
-(define libcrypto3-dsa-key%
-  (class libcrypto3-pk-key%
-    (inherit get-params)
-    (inherit-field impl evp private?)
-    (super-new)
+   (define (%pkk*-sign self pkk msg dspec pad)
+     (pkk-sign pkk msg (get-sign/verify-params self #t dspec pad)))
 
-    (define/override (-write-key fmt)
-      (define-values (p q g) (dsa-evp-get-params evp))
-      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
-      (cond [private?
-             (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
-             (encode-priv-dsa fmt p q g pub priv)]
-            [else (encode-pub-dsa fmt p q g pub)]))
+   (define (%pkk*-verify self pkk msg dspec pad sig)
+     (pkk-sign pkk msg (get-sign/verify-params self #f dspec pad) sig))
 
-    (define/override (-get-sign/verify-params sign? pad dspec)
-      (unless (eq? pad #f) (err/bad-signature-pad this pad))
-      ;; DSA does not include the digest identity in the signature
-      ;; calculation; this should only cause a length check.
-      (cond [(memq dspec signing-digests)
-             (define factory (send impl get-factory))
-             (define dname (send factory get-digest-lcname dspec))
-             `((#"digest" utf8-string ,dname))]
-            [else '()]))
-    ))
+   (define (get-sign/verify-params self sign? dspec pad)
+     (unless (eq? pad #f) (err/bad-signature-pad self pad))
+     ;; DSA does not include the digest identity in the signature
+     ;; calculation; this should only cause a length check.
+     (cond [(memq dspec signing-digests)
+            (define dname (get-digest-lcname dspec))
+            `((#"digest" utf8-string ,dname))]
+           [else '()]))
+   ))
 
 ;; ============================================================
 ;; DH
 
-(define libcrypto3-dh-impl%
-  (class libcrypto3-pk-impl%
-    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'dh))
+(struct libcrypto3-dh-impl libcrypto3-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (get-params-class) libcrypto3-dh-params%)
-    (define/override (get-key-class) libcrypto3-dh-key%)
+   ;; ---- pk-impl
 
-    (define/override (make-params p g q j seed pgen)
-      (evp->params (fromdata #"DH" 'params
-                             (make-fromdata-params p g q j seed pgen #f #f))))
-    (define/override (make-public-key p g q j seed pgen y)
-      (evp->public-key (fromdata #"DH" 'public
-                                 (make-fromdata-params p g q j seed pgen y #f))))
-    (define/override (make-private-key p g q j seed pgen y x)
-      (evp->private-key (fromdata #"DH" 'private
-                                  (make-fromdata-params p g q j seed pgen y x))))
+   (define (%pk-generate-params self config)
+     (define-values (nbits generator)
+       (check/ref-config '(nbits generator) config config:dh-paramgen "DH paramgen"))
+     (define params `((#"pbits" uint ,nbits #:?)
+                      #;(#"qbits" uint ,qbits #:?)
+                      (#"g" uint ,generator #:?)))
+     (generate-params self #"DH" params))
 
-    (define/private (make-fromdata-params p g q j seed pgen y x)
-      `((#"p" ubignum ,p)
-        (#"g" ubignum ,g)
-        (#"q" ubignum ,q #:?)
-        (#"j" ubignum ,j #:?)
-        (#"seed" octet-string ,(and seed pgen seed) #:?)
-        (#"pcounter" uint ,(and seed pgen pgen) #:?)
-        (#"pub" ubignum ,y #:?)
-        (#"priv" ubignum ,x #:?)))
+   (define (%pkp-write-params self pkp fmt)
+     (define-values (p g q j seed pgen) (dh-evp-get-params (ctx-inner pkp)))
+     (encode-params-dh fmt p g q j seed pgen))
 
-    (define/override (generate-params config)
-      (define-values (nbits generator)
-        (check/ref-config '(nbits generator) config config:dh-paramgen "DH paramgen"))
-      (define dh-ptr (nonmoving #"DH"))
-      (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (get-libctx) dh-ptr #f)))
-      (HANDLEp (EVP_PKEY_paramgen_init ctx))
-      (define params (make-param-array
-                      `((#"pbits" uint ,nbits #:?)
-                        #;(#"qbits" uint ,qbits #:?)
-                        (#"g" uint ,generator #:?))))
-      (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
-      (define pevp (HANDLEp (EVP_PKEY_generate ctx)
-                            #:or-fail-with "parameter generation failed"))
-      (void/reference-sink dh-ptr)
-      (evp->params pevp))
+   (define (%pkp-param-values self pkp)
+     (dh-evp-get-params (ctx-inner pevp)))
 
-    (define/public (libcrypto-named-params group)
-      ;; Group is one of:
-      ;; - 'ffdhe2048 'ffdhe3072 'ffdhe4096 'ffdhe6144 'ffdhe8192
-      ;; - 'modp_2048 'modp_3072 'modp_4096 'modp_6144 'modp_8192
-      ;; - 'modp_1536 'dh_1024_160 'dh_2048_224 'dh_2048_256
-      (evp->params (fromdata #"DHX" 'params
-                             `((#"group" utf8-string ,(symbol->string group))))))
-    ))
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (pk-key _ evp private?) pkk)
+     (define-values (p g q j seed pgen) (dh-evp-get-params evp))
+     (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
+     (cond [private?
+            (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+            (encode-priv-dh fmt p g q j seed pgen pub priv)]
+           [else (encode-pub-dh fmt p g q j seed pgen pub)]))
 
-(define libcrypto3-dh-params%
-  (class (libcrypto3-pk-params-mixin pk-dh-params%)
-    (inherit-field impl pevp)
-    (super-new)
+   (define (dh-evp-get-params pevp)
+     (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
+     (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
+     (define q (NOERR (EVP_PKEY_get_bn_param/value pevp #"q")))
+     (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
+     (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
+     (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
+     (values p g q j seed pgen))
 
-    (define/override (-write-params fmt)
-      (define-values (p g q j seed pgen) (dh-evp-get-params pevp))
-      (encode-params-dh fmt p g q j seed pgen))
+   ;; ---- pkk*
 
-    (define/override (get-param-values)
-      (dh-evp-get-params pevp))
-    ))
+   (define (%pk*-make-params self p g q j seed pgen)
+     (define evp (fromdata self #"DH" 'params (make-fromdata-params p g q j seed pgen #f #f)))
+     (evp->params self evp))
+   (define (%pk*-make-public-key self p g q j seed pgen y)
+     (define evp (fromdata self #"DH" 'public (make-fromdata-params p g q j seed pgen y #f)))
+     (evp->public-key self evp))
+   (define (%pk*-make-private-key self p g q j seed pgen y x)
+     (define evp (fromdata self #"DH" 'private (make-fromdata-params p g q j seed pgen y x)))
+     (evp->private-key self evp))
 
-(define (dh-evp-get-params pevp)
-  (define p (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"p")))
-  (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
-  (define q (NOERR (EVP_PKEY_get_bn_param/value pevp #"q")))
-  (define j (NOERR (EVP_PKEY_get_bn_param/value pevp #"j")))
-  (define seed (NOERR (EVP_PKEY_get_bn_param/value pevp #"seed")))
-  (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
-  (values p g q j seed pgen))
+   (define (make-fromdata-params p g q j seed pgen y x)
+     `((#"p" ubignum ,p)
+       (#"g" ubignum ,g)
+       (#"q" ubignum ,q #:?)
+       (#"j" ubignum ,j #:?)
+       (#"seed" octet-string ,(and seed pgen seed) #:?)
+       (#"pcounter" uint ,(and seed pgen pgen) #:?)
+       (#"pub" ubignum ,y #:?)
+       (#"priv" ubignum ,x #:?)))
 
-;; ----------------------------------------
+   (define (%pkk*-compute-secret self pkk peer-pkk)
+     (define params `((#"pad" uint 1)))
+     (pkk-compute-secret pkk peer-pkk params))
+   ))
 
-(define libcrypto3-dh-key%
-  (class libcrypto3-pk-key%
-    (inherit get-params)
-    (inherit-field impl evp private?)
-    (super-new)
-
-    (define/override (-write-key fmt)
-      (define-values (p g q j seed pgen) (dh-evp-get-params evp))
-      (define pub (HANDLEp (EVP_PKEY_get_bn_param/value evp #"pub")))
-      (cond [private?
-             (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
-             (encode-priv-dh fmt p g q j seed pgen pub priv)]
-            [else (encode-pub-dh fmt p g q j seed pgen pub)]))
-
-    (define/override (-get-keyexch-params)
-      `((#"pad" uint 1)))
-    ))
+#;
+(define (libcrypto3-named-params group)
+  ;; Group is one of:
+  ;; - 'ffdhe2048 'ffdhe3072 'ffdhe4096 'ffdhe6144 'ffdhe8192
+  ;; - 'modp_2048 'modp_3072 'modp_4096 'modp_6144 'modp_8192
+  ;; - 'modp_1536 'dh_1024_160 'dh_2048_224 'dh_2048_256
+  (evp->params (fromdata #"DHX" 'params `((#"group" utf8-string ,(symbol->string group))))))
 
 ;; ============================================================
 ;; EC
 
-(define libcrypto3-ec-impl%
-  (class libcrypto3-pk-impl%
-    (inherit-field factory)
-    (inherit evp->params evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'ec))
+(struct libcrypto3-ec-impl libcrypto3-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (get-params-class) libcrypto3-ec-params%)
-    (define/override (get-key-class) libcrypto3-ec-key%)
+   ;; ---- pk-impl
 
-    (define/override (make-params curve-oid)
-      (define curve-lcname (curve-oid->lcname curve-oid))
-      (and curve-lcname
-           (let ([params (make-fromdata-params curve-lcname #f #f)])
-             (evp->params (fromdata #"EC" 'params params)))))
-    (define/override (make-public-key curve-oid qB)
-      (define curve-lcname (curve-oid->lcname curve-oid))
-      (and curve-lcname
-           (let ([params (make-fromdata-params curve-lcname qB #f)])
-             (evp->public-key (fromdata #"EC" 'public params)))))
-    (define/override (make-private-key curve-oid qB x)
-      (define curve-lcname (curve-oid->lcname curve-oid))
-      (and curve-lcname
-           (let ([params (make-fromdata-params curve-lcname qB x)])
-             (evp->private-key (fromdata #"EC" 'private params)))))
+   (define (%pk-generate-key self config)
+     (define curve (check/ref-config '(curve) config config:ec-paramgen #:in self))
+     (define curve-lcname (curve-alias->lcname curve))
+     (and curve-lcname
+          (let ([evp (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-lcname)
+                              #:or-fail-with "key generation failed")])
+            (evp->private-key self evp))))
 
-    (define/private (make-fromdata-params curve-lcname qB x)
-      `((#"group" utf8-string ,curve-lcname)
-        (#"pub" octet-string ,qB #:?)
-        (#"priv" ubignum ,x #:?)))
+   (define (%pk-generate-params self config)
+     (define curve (check/ref-config '(curve) config config:ec-paramgen #:in self))
+     (define curve-lcname (curve-alias->lcname curve))
+     (and curve-lcname
+          (let ([params `((#"group" utf8-string ,curve-lcname))])
+            (evp->params self (fromdata self #"EC" 'params params)))))
 
-    (define/override (generate-params config)
-      (define curve (check/ref-config '(curve) config config:ec-paramgen "EC paramgen"))
-      (define curve-lcname (curve-alias->lcname curve))
-      (and curve-lcname
-           (let ([params `((#"group" utf8-string ,curve-lcname))])
-             (evp->params (fromdata #"EC" 'params params)))))
+   (define (%pkp-write-params self pkp fmt)
+     (define curve-oid (%pkp-param-values self pkp))
+     (encode-params-ec fmt curve-oid))
 
-    (define/override (generate-key config)
-      (define curve (check/ref-config '(curve) config config:ec-paramgen "EC keygen"))
-      (define curve-lcname (curve-alias->lcname curve))
-      (and curve-lcname
-           (evp->private-key
-            (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-lcname)
-                     #:or-fail-with "key generation failed"))))
-    ))
+   (define (%pkp-param-values self pkp)
+     (define pevp (ctx-inner pkp))
+     (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
+     (and curve-lcname (curve-lcname->oid curve-lcname)))
 
-(define libcrypto3-ec-params%
-  (class (libcrypto3-pk-params-mixin pk-ec-params%)
-    (inherit-field impl pevp)
-    (super-new)
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (pk-key _ evp private?) pkk)
+     (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
+     (define curve-oid (and curve-lcname (curve-lcname->oid curve-lcname)))
+     (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"encoded-pub-key")))
+     (cond [private?
+            (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
+            (and curve-oid pub priv (encode-priv-ec fmt curve-oid pub priv))]
+           [else (and curve-oid pub (encode-pub-ec fmt curve-oid pub))]))
 
-    (define/override (get-curve)
-      (define curve-lcname
-        (NOERR (EVP_PKEY_get_utf8_string_param/value pevp #"group")))
-      (cond [curve-lcname (curve-lcname->name curve-lcname)]
-            [else (internal-error "unable to fetch curve name")]))
-    ))
+   #;
+   (define (get-curve self pkp)
+     (define curve-lcname
+       (NOERR (EVP_PKEY_get_utf8_string_param/value pevp #"group")))
+     (cond [curve-lcname (curve-lcname->name curve-lcname)]
+           [else (internal-error "unable to fetch curve name")]))
 
-;; ----------------------------------------
+   ;; ---- pkk*
 
-(define libcrypto3-ec-key%
-  (class libcrypto3-pk-key%
-    (inherit-field impl evp private?)
-    (super-new)
+   (define (%pk*-make-params self curve-oid)
+     (define curve-lcname (curve-oid->lcname curve-oid))
+     (and curve-lcname
+          (let ([params (make-fromdata-params curve-lcname #f #f)])
+            (evp->params self (fromdata self #"EC" 'params params)))))
+   (define (%pk*-make-public-key self curve-oid qB)
+     (define curve-lcname (curve-oid->lcname curve-oid))
+     (and curve-lcname
+          (let ([params (make-fromdata-params curve-lcname qB #f)])
+            (evp->public-key self (fromdata self #"EC" 'public params)))))
+   (define (%pk*-make-private-key self curve-oid qB x)
+     (define curve-lcname (curve-oid->lcname curve-oid))
+     (and curve-lcname
+          (let ([params (make-fromdata-params curve-lcname qB x)])
+            (evp->private-key self (fromdata self #"EC" 'private params)))))
 
-    (define/override (-write-key fmt)
-      (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
-      (define curve-oid (and curve-lcname (curve-lcname->oid curve-lcname)))
-      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"encoded-pub-key")))
-      (cond [private?
-             (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
-             (and curve-oid pub priv (encode-priv-ec fmt curve-oid pub priv))]
-            [else (and curve-oid pub (encode-pub-ec fmt curve-oid pub))]))
+   (define (make-fromdata-params curve-oid qB x)
+     `((#"group" utf8-string ,curve-lcname)
+       (#"pub" octet-string ,qB #:?)
+       (#"priv" ubignum ,x #:?)))
 
-    (define/override (-get-sign/verify-params sign? pad dspec)
-      (unless (eq? pad #f) (err/bad-signature-pad this pad))
-      ;; ECDSA does not include the digest identity in the signature
-      ;; calculation; this should only cause a length check.
-      (cond [(memq dspec signing-digests)
-             (define factory (send impl get-factory))
-             (define dname (send factory get-digest-lcname dspec))
-             `((#"digest" utf8-string ,dname))]
-            [else '()]))
-    ))
+   (define (%pkk*-sign self pkk msg dspec pad)
+     (pkk-sign pkk msg (get-sign/verify-params self #t dspec pad)))
+
+   (define (%pkk*-verify self pkk msg dspec pad sig)
+     (pkk-sign pkk msg (get-sign/verify-params self #f dspec pad) sig))
+
+   (define (get-sign/verify-params self sign? dspec pad)
+     (unless (eq? pad #f) (err/bad-signature-pad this pad))
+     ;; ECDSA does not include the digest identity in the signature
+     ;; calculation; this should only cause a length check.
+     (cond [(memq dspec signing-digests)
+            (define dname (get-digest-lcname dspec))
+            `((#"digest" utf8-string ,dname))]
+           [else '()]))
+
+   (define (%pkk*-compute-secret self pkk peer-pkk)
+     (pkk-compute-secret pkk peer-pkk '()))
+   ))
 
 ;; ============================================================
 ;; EdDSA
 
-(define libcrypto3-eddsa-impl%
-  (class libcrypto3-pk-impl%
-    (inherit evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'eddsa))
+(struct libcrypto3-eddsa-impl libcrypto3-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (get-key-class) libcrypto3-eddsa-key%)
+   ;; ---- pk-impl
 
-    (define/override (make-params curve)
-      (new pk-eddsa-params% (impl this) (curve curve)))
-    (define/override (make-public-key curve qB)
-      (evp->public-key (fromdata (curve->keytype curve) 'public
-                                 (make-fromdata-params qB #f))))
-    (define/override (make-private-key curve qB dB)
-      (evp->private-key (fromdata (curve->keytype curve) 'private
-                                  (make-fromdata-params qB dB))))
+   (define (%pk-generate-key self config)
+     (define libctx (pk-libctx self))
+     (define curve (check/ref-config '(curve) config config:eddsa-keygen #:in self))
+     (match curve
+       ['ed25519
+        (define evp (HANDLEp (EVP_PKEY_Q_keygen/none libctx #f "ED25519")))
+        (evp->private-key self evp)]
+       ['ed448
+        (define evp (HANDLEp (EVP_PKEY_Q_keygen/none libctx #f "ED448")))
+        (evp->private-key self evp)]))
 
-    (define/private (make-fromdata-params qB dB)
-      `((#"pub" octet-string ,qB #:?)
-        (#"priv" octet-string ,dB #:?)))
+   (define (%pk-generate-params self config)
+     (define curve (check/ref-config '(curve) config config:eddsa-keygen #:in self))
+     (pk-parameters self curve))
 
-    (define/private (curve->keytype curve)
-      (case curve [(ed25519) #"ED25519"] [(ed448) #"ED448"] [else #f]))
+   (define (%pkp-write-params self pkp fmt)
+     (define curve (%pkp-param-values self pkp))
+     (encode-params-eddsa fmt curve))
 
-    (define/override (generate-params config)
-      (define curve
-        (check/ref-config '(curve) config config:eddsa-keygen "EDDSA paramgen"))
-      ;; FIXME: check that curve is available?
-      (make-params curve))
+   (define (%pkp-param-values self pkp)
+     (evp->curve (ctx-inner pkp)))
 
-    (define/override (generate-key config)
-      (define curve
-        (check/ref-config '(curve) config config:eddsa-keygen "EDDSA keygen"))
-      (generate-key-from-curve curve))
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (pk-key _ evp private?) pkk)
+     (define curve (evp->curve evp))
+     (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
+     (cond [private?
+            (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
+            (and pub priv (encode-priv-eddsa fmt curve pub priv))]
+           [else (and pub (encode-pub-eddsa fmt curve pub))]))
 
-    (define/public (generate-key-from-curve curve)
-      (case curve
-        [(ed25519)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "ED25519")))
-         (evp->private-key evp)]
-        [(ed448)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "ED448")))
-         (evp->private-key evp)]
-        [else #f]))
-    ))
+   (define (evp->curve evp)
+     (cond [(EVP_PKEY_is_a evp "ED25519") 'ed25519]
+           [(EVP_PKEY_is_a evp "ED448") 'ed448]
+           [else (internal-error "unknown EdDSA curve")]))
 
-;; ----------------------------------------
+   ;; ---- pkk*
 
-(define libcrypto3-eddsa-key%
-  (class libcrypto3-pk-key%
-    (inherit get-libctx)
-    (inherit-field impl evp private?)
-    (super-new)
+   (define (%pk*-make-params self curve)
+     (pk-parameters self curve))
+   (define (%pk*-make-public-key self curve qB)
+     (define evp (fromdata self (curve->keytype curve) 'public (make-fromdata-params qB #f)))
+     (evp->public-key self evp))
+   (define (%pk*-make-private-key self curve qB dB)
+     (define evp (fromdata self (curve->keytype curve) 'private (make-fromdata-params qB dB)))
+     (evp->private-key self evp))
 
-    (define/override (get-params)
-      (send impl make-params (get-curve)))
+   (define (make-fromdata-params qB dB)
+     `((#"pub" octet-string ,qB #:?)
+       (#"priv" octet-string ,dB #:?)))
 
-    (define/public (get-curve)
-      (cond [(EVP_PKEY_is_a evp "ED25519") 'ed25519]
-            [(EVP_PKEY_is_a evp "ED448") 'ed448]
-            [else (internal-error "unknown EdDSA curve")]))
+   (define (curve->keytype curve)
+     (match curve
+       ['ed25519 #"ED25519"]
+       ['ed448 #"ED448"]))
 
-    (define/override (-write-key fmt)
-      (define curve (get-curve))
-      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
-      (cond [private?
-             (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
-             (and pub priv (encode-priv-eddsa fmt curve pub priv))]
-            [else (and pub (encode-pub-eddsa fmt curve pub))]))
+   (define (%pkk*-sign self pkk msg _dspec _pad)
+     (define libctx (pk-libctx self))
+     (define evp (ctx-inner pkk))
+     (define mdctx (HANDLEp (EVP_MD_CTX_new)))
+     (define params (make-param-array '()))
+     (HANDLEp (EVP_DigestSignInit_ex mdctx #f (get-libctx) #f evp params))
+     (define msglen (bytes-length msg))
+     (define siglen (HANDLEp (EVP_DigestSign mdctx #f 0 msg msglen)))
+     (define sigbuf (make-bytes siglen))
+     (define siglen2 (HANDLEp (EVP_DigestSign mdctx sigbuf siglen msg msglen)))
+     (subbytes sigbuf 0 siglen2))
 
-    (define/override (-sign msg _dspec _pad)
-      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
-      (define params (make-param-array '()))
-      (HANDLEp (EVP_DigestSignInit_ex mdctx #f (get-libctx) #f evp params))
-      (define msglen (bytes-length msg))
-      (define siglen (HANDLEp (EVP_DigestSign mdctx #f 0 msg msglen)))
-      (define sigbuf (make-bytes siglen))
-      (define siglen2 (HANDLEp (EVP_DigestSign mdctx sigbuf siglen msg msglen)))
-      (subbytes sigbuf 0 siglen2))
-
-    (define/override (-verify msg _dspec _pad sig)
-      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
-      (define params (make-param-array '()))
-      (HANDLEp (EVP_DigestVerifyInit_ex mdctx #f (get-libctx) #f evp params))
-      (NOERR (EVP_DigestVerify mdctx sig (bytes-length sig) msg (bytes-length msg))))
-    ))
+   (define (%pkk*-verify self pkk msg _dspec _pad sig)
+     (define libctx (pk-libctx self))
+     (define evp (ctx-inner pkk))
+     (define mdctx (HANDLEp (EVP_MD_CTX_new)))
+     (define params (make-param-array '()))
+     (HANDLEp (EVP_DigestVerifyInit_ex mdctx #f (get-libctx) #f evp params))
+     (NOERR (EVP_DigestVerify mdctx sig (bytes-length sig) msg (bytes-length msg))))
+   ))
 
 ;; ============================================================
 ;; ECX
 
-(define libcrypto3-ecx-impl%
-  (class libcrypto3-pk-impl%
-    (inherit evp->public-key evp->private-key fromdata get-libctx)
-    (super-new (spec 'ecx))
+(struct libcrypto3-ecx-impl libcrypto3-pk-impl-base ()
+  #:properties
+  (method-properties
+   #:export ([pk-impl$ #:prefix %]
+             [pk*$ #:prefix %])
 
-    (define/override (get-key-class) libcrypto3-ecx-key%)
+   ;; ---- pk-impl
 
-    (define/override (make-params curve)
-      (new pk-ecx-params% (impl this) (curve curve)))
-    (define/override (make-public-key curve qB)
-      (evp->public-key (fromdata (curve->keytype curve) 'public
-                                 (make-fromdata-params qB #f))))
-    (define/override (make-private-key curve qB dB)
-      (evp->private-key (fromdata (curve->keytype curve) 'private
-                                  (make-fromdata-params qB dB))))
+   (define (%pk-generate-key self config)
+     (define curve (check/ref-config '(curve) config config:ecx-keygen #:in self))
+     (define keytype
+       (match curve
+         ['x25519 "X25519"]
+         ['x448 "X448"]))
+     (define libctx (pk-libctx self))
+     (define evp (HANDLEp (EVP_PKEY_Q_keygen/none libctx #f keytype)))
+     (evp->private-key self evp))
 
-    (define/private (make-fromdata-params qB dB)
-      `((#"pub" octet-string ,qB #:?)
-        (#"priv" octet-string ,dB #:?)))
+   (define (%pk-generate-params self config)
+     (define curve (check/ref-config '(curve) config config:ecx-keygen #:in self))
+     (pk-parameters self curve))
 
-    (define/private (curve->keytype curve)
-      (case curve [(x25519) #"X25519"] [(x448) #"X448"] [else #f]))
+   (define (%pkp-write-params self pkp fmt)
+     (encode-params-ecx fmt (evp->curve (ctx-inner pkp))))
 
-    (define/override (generate-params config)
-      (define curve
-        (check/ref-config '(curve) config config:ecx-keygen "ECX paramgen"))
-      ;; FIXME: check that curve is available
-      (make-params curve))
+   (define (%pkp-param-values self pkp)
+     (evp->curve (ctx-inner pkp)))
 
-    (define/override (generate-key config)
-      (define curve
-        (check/ref-config '(curve) config config:ecx-keygen "ECX keygen"))
-      (generate-key-from-curve curve))
+   (define (%pkk-write-key self pkk fmt)
+     (match-define (pk-key _ evp private?) pkk)
+     (define curve (evp->curve evp))
+     (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
+     (cond [private?
+            (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
+            (and pub priv (encode-priv-ecx fmt curve pub priv))]
+           [else (and pub (encode-pub-ecx fmt curve pub))]))
 
-    (define/public (generate-key-from-curve curve)
-      (case curve
-        [(x25519)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "X25519")))
-         (evp->private-key evp)]
-        [(x448)
-         (define evp (HANDLEp (EVP_PKEY_Q_keygen/none (get-libctx) #f "X448")))
-         (evp->private-key evp)]
-        [else #f]))
-    ))
+   (define (evp->curve evp)
+     (cond [(EVP_PKEY_is_a evp "X25519") 'x25519]
+           [(EVP_PKEY_is_a evp "X448") 'x448]
+           [else (internal-error "unknown ECX curve")]))
 
-;; ----------------------------------------
+   ;; ---- pkk*
 
-(define libcrypto3-ecx-key%
-  (class libcrypto3-pk-key%
-    (inherit-field impl evp private?)
-    (super-new)
+   (define (%pk*-make-params self curve)
+     (pk-parameters self curve))
+   (define (%pk*-make-public-key self curve qB)
+     (define evp (fromdata self (curve->keytype curve) 'public (make-fromdata-params qB #f)))
+     (evp->public-key self evp))
+   (define (%pk*-make-private-key self curve qB dB)
+     (define evp (fromdata self (curve->keytype curve) 'private (make-fromdata-params qB dB)))
+     (evp->private-key self evp))
 
-    (define/override (get-params)
-      (send impl make-params (get-curve)))
+   (define (make-fromdata-params qB dB)
+     `((#"pub" octet-string ,qB #:?)
+       (#"priv" octet-string ,dB #:?)))
 
-    (define/public (get-curve)
-      (cond [(EVP_PKEY_is_a evp "X25519") 'x25519]
-            [(EVP_PKEY_is_a evp "X448") 'x448]
-            [else (internal-error "unknown ECX curve")]))
+   (define (curve->keytype curve)
+     (match curve
+       ['x25519 #"X25519"]
+       ['x448 #"X448"]))
 
-    (define/override (-write-key fmt)
-      (define curve (get-curve))
-      (define pub (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"pub")))
-      (cond [private?
-             (define priv (HANDLEp (EVP_PKEY_get_octet_string_param/value evp #"priv")))
-             (and pub priv (encode-priv-ecx fmt curve pub priv))]
-            [else (and pub (encode-pub-ecx fmt curve pub))]))
+   (define (%pkk*-compute-secret self pkk peer-pkk)
+     (pkk-compute-secret pkk peer-pkk null))
 
-    (define/override (-convert-for-key-agree bs)
-      (send impl make-public-key (get-curve) bs))
-    ))
+   (define (%pkk*-import-for-key-agree self pkk peer-pubkey)
+     (define curve (evp->curve (ctx-inner pkk)))
+     ($pk*-make-public-key self curve peer-pubkey))
+   ))
 
 ;; ============================================================
 
