@@ -56,16 +56,6 @@
      (cond [($pk-has-params? self) (err/no-impl self)]
            [else (crypto-error "key parameters not supported" #:in self)]))
 
-   ;; Called by datum->pk-{key,parameters}%, signature depends on spec
-   (define (%pk-import-pk self parsed)
-     (match parsed
-       [(list* (== ($get-spec self)) keytype vs)
-        (case keytype
-          [(PARAMS) (apply $pk-make-params self vs)]
-          [(PUBLIC) (apply $pk-make-public-key self vs)]
-          [(SECRET) (apply $pk-make-private-key self vs)])]
-       [_ #f]))
-
    ;; ---- pkp
 
    ;; pkp-generate-key
@@ -106,12 +96,12 @@
 
    (define (%pkk-public-key self pkk)
      (cond [(pk-key-private? pkk)
-            ($pk-import-pk self ($pkk-write-key self pkk 'internal-public))]
+            (pk-import-parsed self ($pkk-write-key self pkk 'internal-public))]
            [else pkk]))
 
    (define (%pkk-params self pkk)
      (cond [($pk-has-params? self)
-            ($pk-import-pk self ($pkk-write-key self pkk 'internal-params))]
+            (pk-import-parsed self ($pkk-write-key self pkk 'internal-params))]
            [else (crypto-error "key parameters not supported" #:in pkk)]))
 
    (define (%pkk-security-bits self pkk)

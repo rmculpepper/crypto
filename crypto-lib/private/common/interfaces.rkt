@@ -291,16 +291,8 @@
      (cons (if (.private? self) "private-key" "public-key")
            (cdr (super-to-write-prefixes self))))))
 
-(define (pk-k-write-key pkk fmt)
-  ($pkk-write-key (ctx-impl pkk) pkk fmt))
-
-(define-interface pk-import$
-  #:predicate pk-import?
-  ([pk-import-pk (-> pk-import? any/c (or/c pk-key? pk-parameters? #f))])
-  #:generics-prefix $)
-
 (define-interface pk-impl$
-  #:super (impl$ pk-info$ pk-import$)
+  #:super (impl$ pk-info$)
   #:predicate pk-impl?
   ([pk-generate-key     (-> pk-impl? config/c pk-key?)]
    [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
@@ -372,11 +364,21 @@
             'pk-make-private-key pk-make-private-key))
   #:generics-prefix $)
 
+(define (pk-import-parsed pk parsed)
+  (match parsed
+    [(list* pkspec keytype vs)
+     #:when (eq? pkspec ($get-spec pk))
+     (case keytype
+       [(PARAMS) (apply $pk-make-params pk vs)]
+       [(PUBLIC) (apply $pk-make-public-key pk vs)]
+       [(SECRET) (apply $pk-make-private-key pk vs)])]
+    [_ #f]))
+
 ;; Import key from different impl, must be same pkspec
 (define (pk-import-key pk pkk public?)
   (define fmt (if public? 'internal-public 'internal))
   (define datum ($pkk-write-key (ctx-impl pkk) pkk fmt))
-  ($pk-import-pk pk datum))
+  (pk-import-parsed pk datum))
 
 (define (pk-compare-key-data pkk1 pkk2 fmt)
   (define internal1 ($pkk-write-key (ctx-impl pkk1) pkk1 fmt))
@@ -410,7 +412,6 @@
 ;; Implementation Factories
 
 (define-interface factory$
-  #:super (pk-import$)
   #:predicate factory?
   ([factory-print     (-> factory? void?)]
    [factory-info      (-> factory? symbol? any)]
@@ -423,3 +424,14 @@
    [fetch-pk          (-> factory? pk-spec?     (or/c pk-impl? #f))]
    [fetch-kdf         (-> factory? kdf-spec?    (or/c kdf-impl? #f))])
   #:generics-prefix $)
+
+(define (import-parsed impl parsed)
+  (match impl
+    [(? factory? factory)
+     (match parsed
+       [(cons pkspec _)
+        (let ([pk ($fetch-pk factory pkspec)])
+          (and pk (pk-import-parsed pk parsed)))]
+       [_ #f])]
+    [(? pk-impl? pki)
+     (pk-import-parsed pki parsed)]))

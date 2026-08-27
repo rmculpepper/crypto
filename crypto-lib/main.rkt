@@ -675,7 +675,7 @@
   (with-crypto-entry 'datum->pk-key
     (define parsed (parse-key fmt datum))
     (or (and parsed (for/or ([src (in-list (if (list? src) src (list src)))])
-                      ($pk-import-pk src parsed)))
+                      (import-parsed src parsed)))
         (crypto-error "unable to read key\n  format: ~e" fmt))))
 
 (define (pk-parameters->datum pkp fmt)
@@ -687,7 +687,7 @@
   (with-crypto-entry 'datum->pk-parameters
     (define parsed (parse-params fmt datum))
     (or (and parsed (for/or ([src (in-list (if (list? src) src (list src)))])
-                      ($pk-import-pk src parsed)))
+                      (import-parsed src parsed)))
         (crypto-error "unable to read parameters\n  format: ~e" fmt))))
 
 (define (pk-key->public-only-key pkk)

@@ -169,13 +169,6 @@
                        (lambda (ds) `(sp800-108-counter hmac ,ds)))
          (void)))
      (void))
-
-   (define ($pk-import-pk self parsed)
-     (match parsed
-       [(cons pkspec _)
-        (let ([pk ($fetch-pk self pkspec)])
-          (and pk ($pk-import-pk pk parsed)))]
-       [_ #f]))
    ))
 
 (struct common-factory factory-base
