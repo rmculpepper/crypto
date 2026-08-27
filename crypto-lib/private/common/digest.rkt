@@ -46,6 +46,8 @@
 
    ;; ---- digest-info
 
+   ;; type Ctx <: (common-digest-ctx _ inner.InnerCtx _)
+
    ;; use fallbacks for di-size, di-config-family, di-key-size-ok?
    (define (%di-size* self) ($di-size* (.info self)))
    (define (%di-block-size self) ($di-block-size (.info self)))
@@ -166,7 +168,8 @@
 
 (define-interface digest-inner-impl$
   #:predicate digest-inner-impl?
-  ([dii-digest-buffer
+  (;; type InnerCtx (ictx/c)
+   [dii-digest-buffer
     (-> digest-inner-impl? bytes? nat? nat? nat?
         (or/c bytes? #f))]
    [dii-new-ctx1
@@ -236,6 +239,8 @@
   (method-properties
    #:export ([digest-inner-impl$ #:prefix %])
    (define-struct-abbrevs rkt-hmac-inner-impl)
+
+   ;; type InnerCtx <: (rkt-hmac-ictx _ _ di.Ctx)
 
    (define (%dii-new-ctx1 self di key)
      (define block-size ($di-block-size (.di self)))

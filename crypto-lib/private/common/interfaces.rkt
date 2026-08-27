@@ -38,6 +38,13 @@
 
 ;; ============================================================
 
+;; The ctx struct is the basis for all "context" types: digest-ctx,
+;; cipher-ctx, pk-key, pk-parameters. The inner field stores an "inner
+;; context" (ic) with an impl-specific type.
+
+;; General invariant for impl interfaces below taking impl (self) and
+;; context argument: impl field of context matches impl.
+
 (struct ctx (impl [inner #:mutable])
   #:properties
   (method-properties
@@ -213,12 +220,12 @@
 (define-interface digest-impl$
   #:super (impl$ digest-info$)
   #:predicate digest-impl?
-  ([digest      (-> digest-impl? input/c maybe-key/c maybe-size/c config/c
-                    bytes?)]
-   [di-new-ctx  (-> digest-impl? maybe-key/c config/c ctx?)]
-   [di-update   (-> digest-impl? ctx? input/c void?)]
-   [di-final    (-> digest-impl? ctx? maybe-size/c bytes?)]
-   [di-copy     (-> digest-impl? ctx? (or/c ctx? #f))])
+  (;; type Ctx <: (digest-ctx _ Any)
+   [digest      (-> digest-impl? input/c maybe-key/c maybe-size/c config/c bytes?)]
+   [di-new-ctx  (-> digest-impl? maybe-key/c config/c digest-ctx?)]
+   [di-update   (-> digest-impl? digest-ctx? input/c void?)]
+   [di-final    (-> digest-impl? digest-ctx? maybe-size/c bytes?)]
+   [di-copy     (-> digest-impl? digest-ctx? (or/c digest-ctx? #f))])
   #:generics-prefix $)
 
 
@@ -233,14 +240,15 @@
 (define-interface cipher-impl$
   #:super (impl$ cipher-info$)
   #:predicate cipher-impl?
-  ([ci-new-ctx      (-> cipher-impl? key/c iv/c boolean?
+  (;; type Ctx <: (cipher-ctx _ Any)
+   [ci-new-ctx      (-> cipher-impl? key/c iv/c boolean?
                         cipher-pad/c (or/c nat? #f) boolean?
-                        ctx?)]
-   [ci-update-aad   (-> cipher-impl? ctx? input/c void?)]
-   [ci-update       (-> cipher-impl? ctx? input/c void?)]
-   [ci-final        (-> cipher-impl? ctx? (or/c bytes? #f) void?)]
-   [ci-get-output   (-> cipher-impl? ctx? bytes?)]
-   [ci-auth-tag     (-> cipher-impl? ctx? (or/c bytes? #f))])
+                        cipher-ctx?)]
+   [ci-update-aad   (-> cipher-impl? cipher-ctx? input/c void?)]
+   [ci-update       (-> cipher-impl? cipher-ctx? input/c void?)]
+   [ci-final        (-> cipher-impl? cipher-ctx? (or/c bytes? #f) void?)]
+   [ci-get-output   (-> cipher-impl? cipher-ctx? bytes?)]
+   [ci-auth-tag     (-> cipher-impl? cipher-ctx? (or/c bytes? #f))])
   #:generics-prefix $)
 
 ;; Sends {ciper,plain}text to given output port.
@@ -263,6 +271,13 @@
    ;; ----
    (define (%to-write-prefixes self)
      (cons "pk-parameters" (cdr (super-to-write-prefixes self))))))
+
+;; type ParamValues
+;; - dsa: (p q g) : (values Nat Nat Nat)
+;; - dh: (p g q j seed pgen) : (values Nat Nat Nat/#f Nat/#f Bytes/#f Nat/#f)
+;; - ec: (curve-alias) : Symbol
+;; - eddsa: (curve) : (U 'ed25519 'ed448)
+;; - ecx: (curve) : (U 'x25519 'x448)
 
 (define (pk-p-generate-key pkp)
   ($pkp-generate-key (ctx-impl pkp) pkp))
@@ -315,12 +330,17 @@
    [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
    [pk-import-key       (-> pk-impl? pk-key? boolean? pk-key?)]
 
+   ;; type PKP <: (pk-parameters InnerParam)
+   ;; type InnerParam -- depends on impl
+   ;; type ParamValues -- depends on spec, not impl
    [pkp-generate-key    (-> pk-impl? pk-parameters? pk-key?)]
    [pkp-write-params    (-> pk-impl? pk-parameters? symbol? any/c)]
    [pkp-security-bits   (-> pk-impl? pk-parameters? (or/c nat? #f))]
    [pkp-param-values    (-> pk-impl? pk-parameters? any)] ;; result type varies
    [pkp-equal?          (-> pk-impl? pk-parameters? pk-parameters? boolean?)]
 
+   ;; type PKK <: (pk-key _ InnerKey _)
+   ;; type InnerKey
    [pkk-public-key      (-> pk-impl? pk-key? pk-key?)]
    [pkk-params          (-> pk-impl? pk-key? (or/c pk-parameters? #f))]
    [pkk-security-bits   (-> pk-impl? pk-key? (or/c nat? #f))]

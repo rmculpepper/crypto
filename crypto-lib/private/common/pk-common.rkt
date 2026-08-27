@@ -61,8 +61,7 @@
 ;; ============================================================
 ;; Base classes
 
-(struct pk-impl-base info-impl-base
-  ()
+(struct pk-impl-base info-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
@@ -282,6 +281,13 @@
              [pk*$ #:prefix %])
    #:import ([pk-impl$ #:super])
 
+   ;; type PKP <: (pk-parameters InnerParam)
+   ;; type InnerParam
+
+   ;; type PKK <: (pk-key _ InnerKey _)
+   ;; type InnerKey <: (keypair InnerParam InnerPub InnerPriv)
+   ;; type InnerPub, InnerPriv
+
    (define (%pkk-public-key self pkk)
      (match-define (pk-key impl (keypair param pub priv) private?) pkk)
      (if private? (pk-key impl (keypair param pub #f) #f) pkk))
@@ -307,6 +313,8 @@
              [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
+   ;; type InnerParam = Symbol, curve name
+
    (define (%pkp-param-values self pkp)
      (define curve-name (ctx-inner pkp))
      curve-name)
@@ -325,6 +333,9 @@
    #:export ([pk-impl$ #:prefix %]
              [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
+
+   ;; type InnerPub = Bytes
+   ;; type InnerPriv = Bytes
 
    (define (%pk-generate-params self config)
      (check-config config config:eddsa-keygen #:in self)
@@ -376,6 +387,9 @@
    #:export ([pk-impl$ #:prefix %]
              [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
+
+   ;; type InnerPub = Bytes
+   ;; type InnerPriv = Bytes
 
    (define (%pk-generate-params self config)
      (check-config config config:ecx-keygen #:in self)
