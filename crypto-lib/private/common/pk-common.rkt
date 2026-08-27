@@ -20,44 +20,6 @@
          curve-name->oid
          curve-oid->name)
 
-(define-interface pk*$
-  ([pk*-make-params
-    (unconstrained-domain-> (or/c pk-parameters? #f))]
-   [pk*-make-public-key
-    (unconstrained-domain-> (or/c pk-key? #f))]
-   [pk*-make-private-key
-    (unconstrained-domain-> (or/c pk-key? #f))]
-
-   [pkk*-sign
-    (-> pk*$? pk-key? bytes? (or/c digest-spec? 'none) pk-sign-pad/c
-        bytes?)]
-   [pkk*-verify
-    (-> pk*$? pk-key? bytes? (or/c digest-spec? 'none) pk-sign-pad/c bytes?
-        boolean?)]
-
-   [pkk*-encrypt
-    (-> pk*$? pk-key? bytes? pk-enc-pad/c
-        bytes?)]
-   [pkk*-decrypt
-    (-> pk*$? pk-key? bytes? pk-enc-pad/c
-        bytes?)]
-
-   [pkk*-compute-secret
-    (-> pk*$? pk-key? pk-key?
-        bytes?)]
-   [pkk*-import-for-key-agree
-    (-> pk*$? pk-key? bytes?
-        pk-key?)])
-  #:fallbacks
-  (let ()
-    (define (pk*-make-params self . _) #f)
-    (define (pk*-make-public-key self . _) #f)
-    (define (pk*-make-private-key self . _) #f)
-    (hasheq 'pk*-make-params pk*-make-params
-            'pk*-make-public-key pk*-make-public-key
-            'pk*-make-private-key pk*-make-private-key))
-  #:generics-prefix $)
-
 ;; ============================================================
 ;; Base classes
 
@@ -65,7 +27,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [simple-write$ #:prefix %])
    #:import ([simple-write$ #:super])
    (define-struct-abbrevs pk-impl-base)
@@ -100,9 +61,9 @@
      (match parsed
        [(list* (== ($get-spec self)) keytype vs)
         (case keytype
-          [(PARAMS) (apply $pk*-make-params self vs)]
-          [(PUBLIC) (apply $pk*-make-public-key self vs)]
-          [(SECRET) (apply $pk*-make-private-key self vs)])]
+          [(PARAMS) (apply $pk-make-params self vs)]
+          [(PUBLIC) (apply $pk-make-public-key self vs)]
+          [(SECRET) (apply $pk-make-private-key self vs)])]
        [_ #f]))
 
    ;; Import key from different impl, must be same pkspec
@@ -168,77 +129,6 @@
 
    (define (%pkk-equal-public? self pkk1 pkk2)
      (pk-compare-keys* pkk1 pkk2 'internal-public))
-
-   ;; ----
-
-   (define (%pkk-sign self pkk msg dspec0 pad)
-     (define dspec (or dspec0 'none))
-     (check-sign self pkk pad dspec)
-     (unless (pk-key-private? pkk)
-       (crypto-error "signing requires private key" #:in pkk))
-     (unless (eq? dspec 'none) (check-sign-msg-size self msg dspec))
-     ($pkk*-sign self pkk msg dspec pad))
-
-   (define (%pkk-verify self pkk msg dspec0 pad sig)
-     (define dspec (or dspec0 'none))
-     (check-sign self pkk pad dspec)
-     (unless (eq? dspec 'none) (check-sign-msg-size self msg dspec))
-     ($pkk*-verify self pkk msg dspec pad sig))
-
-   (define (check-sign self pad dspec)
-     (unless ($pk-can-sign? self pad dspec)
-       (unless ($pk-can-sign? self #f #f)
-         (crypto-error "sign/verify not supported" #:in self))
-       (unless ($pk-can-sign? self pad #f)
-         (crypto-error "sign/verify padding not supported\n  padding: ~e"
-                       pad #:in self))
-       (crypto-error "sign/verify digest not supported\n  padding: ~e\n  digest: ~e"
-                     pad dspec #:in self)))
-
-   (define (check-sign-msg-size self msg dspec)
-     (check-bytes "digest" msg (digest-spec-size dspec) #:for dspec #:in self))
-
-   ;; ----
-
-   (define (%pkk-encrypt self pkk buf pad)
-     (check-encrypt self pad)
-     ($pkk*-encrypt self pkk buf pad))
-   (define (%pkk-decrypt self pkk buf pad)
-     (check-encrypt self pad)
-     (unless (pk-key-private? pkk)
-       (crypto-error "decryption requires private key" #:in pkk))
-     ($pkk*-decrypt self pkk buf pad))
-
-   (define (check-encrypt self pad)
-     (unless ($pk-can-encrypt? self #f)
-       (crypto-error "encrypt/decrypt not supported" #:in self))
-     (unless ($pk-can-encrypt? self pad)
-       (crypto-error "encrypt/decrypt not supported\n  padding: ~e" #:in self)))
-
-   ;; ----
-
-   (define (%pkk-compute-secret self pkk peer)
-     (check-key-agree self)
-     (let ([peer (convert-peer-key self pkk peer)])
-       ($pkk*-compute-secret self pkk peer)))
-
-   (define (check-key-agree self)
-     (unless ($pk-can-key-agree? self)
-       (crypto-error "key agreement not supported" #:in self)))
-
-   (define (convert-peer-key self pkk peer)
-     (define (incompatible peer)
-       (crypto-error "peer key is not compatible\n  peer: ~e" peer #:in pkk))
-     (let ([peer (if (pk-key? peer) peer ($pkk*-import-for-key-agree self pkk peer))])
-       (unless (eq? ($get-spec peer) ($get-spec self))
-         (incompatible peer))
-       (let ([peer
-              (cond [(eq? (ctx-impl peer) self) peer]
-                    [($pk-import-key self peer #t) => values]
-                    [else (incompatible peer)])])
-         (unless ($pkk-equal-params? self pkk peer)
-           (incompatible peer))
-         peer)))
    ))
 
 (define (pk-k-equal-public? pkk1 pkk2)
@@ -277,8 +167,7 @@
 (struct keypair-pk-impl-base pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
    #:import ([pk-impl$ #:super])
 
    ;; type PKP <: (pk-parameters InnerParam)
@@ -310,7 +199,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    ;; type InnerParam = Symbol, curve name
@@ -319,7 +207,7 @@
      (define curve-name (ctx-inner pkp))
      curve-name)
 
-   (define (%pk*-make-params self curve)
+   (define (%pk-make-params self curve)
      (and ($curve-ok? self curve)
           (pk-parameters self curve)))
    ))
@@ -331,7 +219,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    ;; type InnerPub = Bytes
@@ -340,7 +227,7 @@
    (define (%pk-generate-params self config)
      (check-config config config:eddsa-keygen #:in self)
      (define curve (config-ref config 'curve))
-     (or ($pk*-make-params self curve)
+     (or ($pk-make-params self curve)
          (err/no-curve curve self)))
 
    (define (%pkk-write-key self pkk fmt)
@@ -350,7 +237,7 @@
                    (encode-priv-eddsa fmt curve pub priv))]
            [else (encode-pub-eddsa fmt curve pub)]))
 
-   (define (%pk*-make-public-key self curve qB)
+   (define (%pk-make-public-key self curve qB)
      (cond [($curve-ok? self curve)
             (define pub (eddsa-check-keys curve qB))
             (pk-key self (keypair curve pub #f) #f)]
@@ -385,7 +272,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    ;; type InnerPub = Bytes
@@ -394,7 +280,7 @@
    (define (%pk-generate-params self config)
      (check-config config config:ecx-keygen #:in self)
      (define curve (config-ref config 'curve))
-     (or ($pk*-make-params self curve)
+     (or ($pk-make-params self curve)
          (err/no-curve curve self)))
 
    (define (%pkk-write-key self pkk fmt)
@@ -402,15 +288,15 @@
      (cond [priv (encode-priv-ecx fmt curve pub priv)]
            [else (encode-pub-ecx fmt curve pub)]))
 
-   (define (%pk*-make-public-key self curve qB)
+   (define (%pk-make-public-key self curve qB)
      (cond [($curve-ok? curve)
             (define pub (ecx-check-keys curve  qB))
             (pk-key self (keypair curve qB #f) #f)]
            [else #f]))
 
-   (define (%pkk*-import-for-key-agree self pkk bs)
+   (define (%pkk-import-for-key-agree self pkk bs)
      (define curve (keypair-param (ctx-inner pkk)))
-     ($pk*-make-public-key self curve bs))
+     ($pk-make-public-key self curve bs))
    ))
 
 ;; length of public and private key components and derived secret

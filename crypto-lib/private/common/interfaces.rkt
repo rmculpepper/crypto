@@ -262,6 +262,14 @@
 (define pk-sign-pad/c (or/c #f 'pkcs1-v1.5 'pss 'pss*))
 (define pk-enc-pad/c (or/c #f 'pkcs1-v1.5 'oaep))
 
+;; types ParamValues, PubKeyValues, PrivKeyValues depend on spec, not impl:
+;; - rsa: () ; (n e : Nat) ; (d p q dp dq qInv : Nat) -- (allow #f for priv components?)
+;; - dsa: (p q g : Nat); (y : Nat) ; (x : Nat)
+;; - dh:  (p g : Nat, q j : Nat/#f, seed : Bytes/#f, pgen : Nat/#f) ; (y : Nat) ; (x : Nat)
+;; - ec:  (curve-alias : Symbol) ; (q : Bytes) ; (x : Nat)
+;; - eddsa: (curve : (U 'ed25519 'ed448)) ; (q : Bytes) ; (d : Bytes)
+;; - ecx: (curve : (U 'x25519 'x448)) ; (q : Bytes) ; (d : Bytes)
+
 (struct pk-parameters ctx ()
   #:properties
   (method-properties
@@ -271,13 +279,6 @@
    ;; ----
    (define (%to-write-prefixes self)
      (cons "pk-parameters" (cdr (super-to-write-prefixes self))))))
-
-;; type ParamValues
-;; - dsa: (p q g) : (values Nat Nat Nat)
-;; - dh: (p g q j seed pgen) : (values Nat Nat Nat/#f Nat/#f Bytes/#f Nat/#f)
-;; - ec: (curve-alias) : Symbol
-;; - eddsa: (curve) : (U 'ed25519 'ed448)
-;; - ecx: (curve) : (U 'x25519 'x448)
 
 (define (pk-p-generate-key pkp)
   ($pkp-generate-key (ctx-impl pkp) pkp))
@@ -330,13 +331,22 @@
    [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
    [pk-import-key       (-> pk-impl? pk-key? boolean? pk-key?)]
 
+   [pk-make-params
+    ;; PKImpl ParamValues... -> (U PKParameters #f)
+    (unconstrained-domain-> (or/c pk-parameters? #f))]
+   [pk-make-public-key
+    ;; PKImpl ParamValues... PubKeyValues... -> (U PKKey #f)
+    (unconstrained-domain-> (or/c pk-key? #f))]
+   [pk-make-private-key
+    ;; PKImpl ParamValues... PubKeyValues... PrivKeyValues... -> (U PKKey #f)
+    (unconstrained-domain-> (or/c pk-key? #f))]
+
    ;; type PKP <: (pk-parameters InnerParam)
    ;; type InnerParam -- depends on impl
-   ;; type ParamValues -- depends on spec, not impl
    [pkp-generate-key    (-> pk-impl? pk-parameters? pk-key?)]
    [pkp-write-params    (-> pk-impl? pk-parameters? symbol? any/c)]
    [pkp-security-bits   (-> pk-impl? pk-parameters? (or/c nat? #f))]
-   [pkp-param-values    (-> pk-impl? pk-parameters? any)] ;; result type varies
+   [pkp-param-values    (-> pk-impl? pk-parameters? any)] ;; _ -> ParamValues
    [pkp-equal?          (-> pk-impl? pk-parameters? pk-parameters? boolean?)]
 
    ;; type PKK <: (pk-key _ InnerKey _)
@@ -348,18 +358,44 @@
    [pkk-equal-public?   (-> pk-impl? pk-key? pk-key? boolean?)]
    [pkk-equal-params?   (-> pk-impl? pk-key? pk-key? boolean?)]
 
-   [pkk-sign            (-> pk-impl? pk-key? bytes?
-                            (or/c digest-spec? #f) pk-sign-pad/c
-                            bytes?)]
-   [pkk-verify          (-> pk-impl? pk-key? bytes?
-                            (or/c digest-spec? #f) pk-sign-pad/c bytes?
-                            boolean?)]
+   [pkk-sign
+    (->i ([self pk-impl?]
+          [pkk pk-key?] [msg bytes?] [dspec (or/c digest-spec? 'none)] [pad pk-sign-pad/c])
+         #:pre (self dspec pad) ($pk-can-sign? self pad dspec)
+         [_ bytes?])]
+   [pkk-verify
+    (->i ([self pk-impl?]
+          [pkk pk-key?] [msg bytes?] [dspec (or/c digest-spec? 'none)] [pad pk-sign-pad/c]
+          [sig bytes?])
+         #:pre (self dspec pad) ($pk-can-sign? self pad dspec)
+         [_ boolean?])]
    ;; In verify, if sig is not well-formed then just return #f, no error.
 
-   [pkk-encrypt         (-> pk-impl? pk-key? bytes? pk-enc-pad/c bytes?)]
-   [pkk-decrypt         (-> pk-impl? pk-key? bytes? pk-enc-pad/c bytes?)]
+   [pkk-encrypt
+    (->i ([self pk-impl?] [pkk pk-key?] [msg bytes?] [pad pk-enc-pad/c])
+         #:pre (self pad) ($pk-can-encrypt? self pad)
+         [_ bytes?])]
+   [pkk-decrypt
+    (->i ([self pk-impl?] [pkk pk-key?] [msg bytes?] [pad pk-enc-pad/c])
+         #:pre (self pad) ($pk-can-encrypt? self pad)
+         [_ bytes?])]
 
-   [pkk-compute-secret  (-> pk-impl? pk-key? (or/c bytes? pk-key?) bytes?)])
+   [pkk-compute-secret
+    (->i ([self pk-impl?] [pkk pk-key?] [peer (or/c bytes? pk-key?)])
+         #:pre (self) ($pk-can-key-agree? self)
+         ;; PRE: pkk, peer both belong to self, same spec, same params
+         [_ bytes?])]
+   [pkk-import-for-key-agree
+    (-> pk-impl? pk-key? bytes?
+        pk-key?)])
+  #:fallbacks
+  (let ()
+    (define (pk-make-params self . _) #f)
+    (define (pk-make-public-key self . _) #f)
+    (define (pk-make-private-key self . _) #f)
+    (hasheq 'pk-make-params pk-make-params
+            'pk-make-public-key pk-make-public-key
+            'pk-make-private-key pk-make-private-key))
   #:generics-prefix $)
 
 ;; ============================================================

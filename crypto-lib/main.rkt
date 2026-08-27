@@ -727,28 +727,87 @@
     (unless (digest-size di) (err/not-fixed-digest di #:in pkk))
     ($pkk-verify (ctx-impl pkk) pkk (digest di inp) dspec pad sig)))
 
+(define (do-sign pkk msg dspec0 pad)
+  (define impl (ctx-impl pkk))
+  (define dspec (or dspec0 'none))
+  (check-sign impl pkk pad dspec)
+  (unless (pk-key-private? pkk)
+    (crypto-error "signing requires private key" #:in pkk))
+  (unless (eq? dspec 'none) (check-sign-msg-size impl msg dspec))
+  ($pkk-sign impl pkk msg dspec pad))
+
+(define (do-verify pkk msg dspec0 pad sig)
+  (define impl (ctx-impl pkk))
+  (define dspec (or dspec0 'none))
+  (check-sign impl pkk pad dspec)
+  (unless (eq? dspec 'none) (check-sign-msg-size impl msg dspec))
+  ($pkk-verify impl pkk msg dspec pad sig))
+
+(define (check-sign impl pad dspec)
+  (unless ($pk-can-sign? impl pad dspec)
+    (unless ($pk-can-sign? impl #f #f)
+      (crypto-error "sign/verify not supported" #:in impl))
+    (unless ($pk-can-sign? impl pad #f)
+      (crypto-error "sign/verify padding not supported\n  padding: ~e"
+                    pad #:in impl))
+    (crypto-error "sign/verify digest not supported\n  padding: ~e\n  digest: ~e"
+                  pad dspec #:in impl)))
+
+(define (check-sign-msg-size impl msg dspec)
+  (check-bytes "digest" msg (digest-spec-size dspec) #:for dspec #:in impl))
+
 ;; ----------------------------------------
 
 (define (pk-encrypt pkk buf #:pad [pad #f])
   (with-crypto-entry 'pk-encrypt
-    ($pkk-encrypt (ctx-impl pkk) pkk buf pad)))
+    (define impl (ctx-impl pkk))
+    (check-encrypt impl pad)
+    ($pkk-encrypt impl pkk buf pad)))
 
 (define (pk-decrypt pkk buf #:pad [pad #f])
   (with-crypto-entry 'pk-decrypt
-    ($pkk-decrypt (ctx-impl pkk) pkk buf pad)))
+    (define impl (ctx-impl pkk))
+    (check-encrypt impl pad)
+    (unless (pk-key-private? pkk)
+      (crypto-error "decryption requires private key" #:in pkk))
+    ($pkk-decrypt impl pkk buf pad)))
+
+(define (check-encrypt impl pad)
+  (unless ($pk-can-encrypt? impl pad)
+    (unless ($pk-can-encrypt? impl #f)
+      (crypto-error "encrypt/decrypt not supported" #:in impl))
+    (crypto-error "encrypt/decrypt not supported\n  padding: ~e" #:in impl)))
 
 ;; ----------------------------------------
 
-(define (pk-derive-secret pkk peer-key)
+(define (pk-derive-secret pkk peer)
   (with-crypto-entry 'pk-derive-secret
-    ($pkk-compute-secret (ctx-impl pkk) pkk peer-key)))
+    (define impl (ctx-impl pkk))
+    (unless ($pk-can-key-agree? impl)
+      (crypto-error "key agreement not supported" #:in impl))
+    (let ([peer (convert-peer-key impl pkk peer)])
+      ($pkk-compute-secret impl pkk peer))))
+
+(define (convert-peer-key impl pkk peer0)
+  (define (incompatible peer)
+    (crypto-error "peer key is not compatible\n  peer: ~e" peer #:in pkk))
+  (define peer
+    (cond [(bytes? peer0) ($pkk-import-for-key-agree impl pkk peer0)]
+          [(eq? (ctx-impl peer0) impl) peer0]
+          [($pk-import-key impl peer0 #t) => values]
+          [else (incompatible peer0)]))
+  (unless (and (eq? (ctx-impl peer) impl)
+               (eq? ($get-spec peer) ($get-spec impl))
+               ($pkk-equal-params? impl pkk peer))
+    (incompatible peer))
+  peer)
 
 ;; ----------------------------------------
 
 (define (generate-private-key pk [config '()])
   (with-crypto-entry 'generate-private-key
     (cond [(pk-parameters? pk)
-           (check-config config '() "key generation from parameters")
+           (check-config config '() "key generation from parameters" #:in pk)
            ($pkp-generate-key (ctx-impl pk) pk)]
           [else
            (define pki (-get-pk-impl pk))
