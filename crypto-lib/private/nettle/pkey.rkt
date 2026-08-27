@@ -42,28 +42,7 @@
 
 ;; ============================================================
 
-(struct nettle-pk-impl-base pk-impl-base
-  (yarrow
-   )
-  #:properties
-  (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
-   #:import ([pk-impl$ #:super])
-   (define-struct-abbrevs nettle-pk-impl-base)
-
-   (define (%pkk-public-key self pkk)
-     (match-define (pk-key impl (keypair param pub priv) private?) pkk)
-     (if private? (pk-key impl (keypair param pub #f) #f) pkk))
-
-   (define (%pkk-params self pkk)
-     (cond [($pk-has-params? self)
-            (define param (keypair-param (ctx-inner pkk)))
-            (pk-parameters self param)]
-           [else (super-pkk-params self pkk)]))
-   ))
-
-;; ----------------------------------------
+(struct nettle-pk-impl-base pk-impl-base (yarrow))
 
 (define (get-random-ctx pki)
   (define y (nettle-pk-impl-base-yarrow pki))
@@ -95,8 +74,7 @@
 (struct nettle-rsa-impl nettle-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
    (define-struct-abbrevs nettle-rsa-impl)
 
    (define (%pk-can-sign? self pad dspec)
@@ -143,9 +121,7 @@
      (define pub (keypair-pub (ctx-inner pkk)))
      (mpz-bytes-length (rsa_public_key_struct-n pub) #f))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-public-key self n e)
+   (define (%pk-make-public-key self n e)
      (define pub (new-rsa_public_key))
      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
      (mpz_set (rsa_public_key_struct-e pub) (integer->mpz e))
@@ -153,7 +129,7 @@
        (crypto-error "bad public key" #:in self))
      (pk-key self (keypair #f pub #f) #f))
 
-   (define (%pk*-make-private-key self n e d p q dp dq qInv)
+   (define (%pk-make-private-key self n e d p q dp dq qInv)
      (define pub (new-rsa_public_key))
      (define priv (new-rsa_private_key))
      (mpz_set (rsa_public_key_struct-n pub) (integer->mpz n))
@@ -172,7 +148,7 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk digest digest-spec pad)
+   (define (%pkk-sign self pkk digest digest-spec pad)
      (match-define (keypair _ pub priv) (ctx-inner pkk))
      (define randctx (get-random-ctx self))
      (define sigz (new-mpz))
@@ -197,7 +173,7 @@
      (unless signed-ok? (crypto-error "signing failed" #:in pkk))
      (mpz->bin sigz (get-nbytes pkk)))
 
-   (define (%pkk*-verify self pkk digest digest-spec pad sig)
+   (define (%pkk-verify self pkk digest digest-spec pad sig)
      (match-define (keypair _ pub priv) (ctx-inner pkk))
      (define sigz (bin->mpz sig))
      (define verified-ok?
@@ -221,7 +197,7 @@
 
    ;; ----
 
-   (define (%pkk*-encrypt self pkk data pad)
+   (define (%pkk-encrypt self pkk data pad)
      (match-define (keypair _ pub _) (ctx-inner pkk))
      (case pad
        [(pkcs1-v1.5 #f)
@@ -231,7 +207,7 @@
         (mpz->bin enc-z (get-nbytes pkk))]
        [else (internal-error "bad pad: ~e" pad #:in pkk)]))
 
-   (define (%pkk*-decrypt self pkk data pad)
+   (define (%pkk-decrypt self pkk data pad)
      (match-define (keypair _ pub priv) (ctx-inner pkk))
      (case pad
        [(pkcs1-v1.5 #f)
@@ -269,8 +245,7 @@
 (struct nettle-dsa-impl nettle-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
    (define-struct-abbrevs nettle-dsa-impl)
 
    ;; ----
@@ -315,18 +290,16 @@
      (dsa/dh-security-bits (mpz_sizeinbase (dsa_params_struct-p params) 2)
                            (mpz_sizeinbase (dsa_params_struct-q params) 2)))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-params self p q g)
+   (define (%pk-make-params self p q g)
      (define params (make-params p q g))
      (pk-parameters self params))
 
-   (define (%pk*-make-public-key self p q g y)
+   (define (%pk-make-public-key self p q g y)
      (define params (make-params p q g))
      (define pub (integer->mpz y))
      (pk-key self (keypair params pub #f) #f))
 
-   (define (%pk*-make-private-key self p q g y x)
+   (define (%pk-make-private-key self p q g y x)
      (define params (make-params p q g))
      (define priv (integer->mpz x))
      (define pub (integer->mpz y))
@@ -341,14 +314,14 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk digest digest-spec pad)
+   (define (%pkk-sign self pkk digest digest-spec pad)
      (match-define (keypair params pub priv) (ctx-inner pkk))
      (define sig (new-dsa_signature))
      (or (nettle_dsa_sign params priv (get-random-ctx self) digest sig)
          (crypto-error "signing failed" #:in pkk))
      (dsa_signature->der sig))
 
-   (define (%pkk*-verify self pkk digest digest-spec pad sig-der)
+   (define (%pkk-verify self pkk digest digest-spec pad sig-der)
      (match-define (keypair params pub priv) (ctx-inner pkk))
      (define sig (der->dsa_signature sig-der))
      (and sig (nettle_dsa_verify params pub digest sig)))
@@ -360,12 +333,10 @@
 ;; On rejecting points not on curve as (untrusted) public keys:
 ;; nettle_ecc_point_set checks the point, indicates whether okay.
 
-
 (struct nettle-ec-impl nettle-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
 
    (define (%pk-generate-params self config)
      (check-config config config:ec-paramgen #:in self)
@@ -401,13 +372,11 @@
            [else
             (encode-pub-ec fmt curve-oid qB)]))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-params self curve-oid)
+   (define (%pk-make-params self curve-oid)
      (define ecc (curve-oid->ecc curve-oid))
      (pk-parameters self ecc))
 
-   (define (%pk*-make-public-key self curve-oid qB)
+   (define (%pk-make-public-key self curve-oid qB)
      (define ecc (curve-oid->ecc curve-oid))
      (cond [(and ecc (bytes->ec-point qB))
             => (lambda (x+y)
@@ -419,7 +388,7 @@
                  (pk-key self (keypair ecc pub #f) #f))]
            [else #f]))
 
-   (define (%pk*-make-private-key self curve-oid qB d)
+   (define (%pk-make-private-key self curve-oid qB d)
      (define ecc (curve-oid->ecc curve-oid))
      (cond [ecc
             (define priv (new-ecc_scalar ecc))
@@ -437,21 +406,21 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk digest digest-spec pad)
+   (define (%pkk-sign self pkk digest digest-spec pad)
      (match-define (keypair ecc pub priv) (ctx-inner pkk))
      (define randctx (get-random-ctx self))
      (define sig (new-dsa_signature))
      (nettle_ecdsa_sign priv randctx digest sig)
      (dsa_signature->der sig))
 
-   (define (%pkk*-verify self pkk digest digest-spec pad sig-der)
+   (define (%pkk-verify self pkk digest digest-spec pad sig-der)
      (match-define (keypair ecc pub priv) (ctx-inner pkk))
      (define sig (der->dsa_signature sig-der))
      (and sig (nettle_ecdsa_verify pub digest sig)))
 
    ;; ----
 
-   (define (%pkk*-compute-secret self pkk peer-pubkey)
+   (define (%pkk-compute-secret self pkk peer-pubkey)
      (match-define (keypair ecc pub priv) (ctx-inner pkk))
      (define peer-ecp (keypair-pub (ctx-inner peer-pubkey)))
      (define shared-ecp (new-ecc_point ecc))
@@ -462,10 +431,10 @@
      (define ecc-size (ceil/ (nettle_ecc_bit_size ecc) 8))
      (mpz->bytes x ecc-size #f #t))
 
-   (define (%pkk*-import-for-key-agree self pkk bs)
+   (define (%pkk-import-for-key-agree self pkk bs)
      (match-define (keypair ecc pub priv) (ctx-inner pkk))
      (define curve-oid (ecc->curve-oid ecc))
-     ($pk*-make-public-key self curve-oid bs))
+     ($pk-make-public-key self curve-oid bs))
    ))
 
 (define (ecc_point=? a b)
@@ -513,7 +482,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
    (define-struct-abbrevs nettle-eddsa-impl)
 
@@ -542,9 +510,7 @@
      (nettle_ed448_shake256_public_key pub priv)
      (pk-key self (keypair 'ed448 pub priv) #t))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      ;; public key might be missing, so recompute; if present, check
      (define (make-ed25519-private-key)
        (define priv (eddsa-check-keys curve #t dB qB))
@@ -565,7 +531,7 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk msg _dspec _pad)
+   (define (%pkk-sign self pkk msg _dspec _pad)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (match curve
        ['ed25519
@@ -577,7 +543,7 @@
         (nettle_ed448_shake256_sign pub priv (bytes-length msg) msg sig)
         sig]))
 
-   (define (%pkk*-verify self pkk msg _dspec _pad sig)
+   (define (%pkk-verify self pkk msg _dspec _pad sig)
      (match-define (keypair curve pub _) (ctx-inner pkk))
      (match curve
        ['ed25519
@@ -596,7 +562,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    (define (%curve-ok? self curve)
@@ -624,9 +589,7 @@
         (pk-key self (keypair curve pub priv) #t)]
        [else (internal-error "bad curve: ~e" curve #:in pkp)]))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (cond [($curve-ok? self curve)
             (case curve
               [(x25519)
@@ -645,7 +608,7 @@
 
    ;; ----
 
-   (define (%pkk*-compute-secret self pkk peer-pubkey)
+   (define (%pkk-compute-secret self pkk peer-pubkey)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (define peer (keypair-pub (ctx-inner peer-pubkey)))
      (case curve
@@ -658,7 +621,7 @@
         (nettle_curve448_mul secret priv peer)
         secret]))
 
-   (define (%pkk*-import-for-key-agree self pkk bs)
+   (define (%pkk-import-for-key-agree self pkk bs)
      (define curve (keypair-param (ctx-inner pkk)))
-     ($pk*-make-public-key self curve bs))
+     ($pk-make-public-key self curve bs))
    ))

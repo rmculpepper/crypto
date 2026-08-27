@@ -113,8 +113,7 @@
 (struct gcrypt-rsa-impl keypair-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
    (define-struct-abbrevs gcrypt-rsa-impl)
 
    (define (%pk-can-sign? self pad dspec)
@@ -176,13 +175,13 @@
    (define (%pkk-security-bits self pkk)
      (rsa-security-bits (gcry_pk_get_nbits (keypair-pub (ctx-inner pkk)))))
 
-   ;; ---- pk*
+   ;; ----
 
-   (define (%pk*-make-public-key self n e)
+   (define (%pk-make-public-key self n e)
      (define pub (make-rsa-public-key n e))
      (pk-key self (keypair #f pub #f) #f))
 
-   (define (%pk*-make-private-key self n e d p0 q0 dp dq qInv)
+   (define (%pk-make-private-key self n e d p0 q0 dp dq qInv)
      ;; gcrypt requires p < q; simpler to just always recompute u
      (define-values (p q) (if (< p0 q0) (values p0 q0) (values q0 p0)))
      (define u-mpi (gcry_mpi_new))
@@ -210,11 +209,11 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk digest digest-spec pad)
+   (define (%pkk-sign self pkk digest digest-spec pad)
      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
      (gcrypt-sign* pkk sign-unpack-sig-sexp))
 
-   (define (%pkk*-verify self pkk digest digest-spec pad sig)
+   (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
      (define sig-sexp (verify-make-sig-sexp sig))
      (gcrypt-verify* pkk data-sexp sig-sexp))
@@ -249,7 +248,7 @@
 
    ;; ----
 
-   (define (%pkk*-encrypt self pkk data pad)
+   (define (%pkk-encrypt self pkk data pad)
      (match-define (keypair _ pub _) (ctx-inner pkk))
      (when (zero? (bytes-length data))
        ;; gcrypt cannot encrypt the empty message, because
@@ -268,7 +267,7 @@
        (gcry_sexp_release enc-sexp)
        (gcry_sexp_release data-sexp)))
 
-   (define (%pkk*-decrypt self pkk data pad)
+   (define (%pkk-decrypt self pkk data pad)
      (match-define (keypair _ _ priv) (ctx-inner pkk))
      (define padding (check-enc-padding pad))
      (define enc-sexp (make-sexp `(enc-val (flags ,padding) (rsa (a ,data)))))
@@ -290,8 +289,7 @@
 (struct gcrypt-dsa-impl keypair-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
    (define-struct-abbrevs gcrypt-dsa-impl)
 
    ;; ----
@@ -301,7 +299,7 @@
      ;; so generate private key and extract params
      (define pkk (generate-key config self))
      (match ($pkk-write-key self pkk 'rkt-params)
-       [(list 'rkt 'params p q g) ($pk*-make-params p q g)]))
+       [(list 'rkt 'params p q g) ($pk-make-params p q g)]))
 
    (define (generate-key config [inval #f])
      (define-values (nbits qbits)
@@ -343,16 +341,16 @@
    (define (%pkk-security-bits self pkk)
      (dsa/dh-security-bits (gcry_pk_get_nbits (keypair-pub (ctx-inner pkk)))))
 
-   ;; ---- pk*
+   ;; ----
 
-   (define (%pk*-make-params self p q g)
+   (define (%pk-make-params self p q g)
      (pk-parameters self (list p q g)))
 
-   (define (%pk*-make-public-key self p q g y)
+   (define (%pk-make-public-key self p q g y)
      (define pub (make-dsa-public-key p q g y))
      (pk-key self (keypair (list p q g) pub #f) #f))
 
-   (define (%pk*-make-private-key self p q g y x)
+   (define (%pk-make-private-key self p q g y x)
      (define pub (make-dsa-public-key p q g y))
      (define priv (make-dsa-private-key p q g y x))
      (pk-key self (keypair (list p q g) pub priv) #t))
@@ -375,11 +373,11 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk digest digest-spec pad)
+   (define (%pkk-sign self pkk digest digest-spec pad)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
      (gcrypt-sign* pkk sign-unpack-sig-sexp))
 
-   (define (%pkk*-verify self pkk digest digest-spec pad sig)
+   (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
      (define sig-sexp (dsa/ecdsa-make-sig-sexp sig))
      (gcrypt-verify* pkk data-sexp sig-sexp))
@@ -393,8 +391,7 @@
 (struct gcrypt-ec-impl keypair-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
 
    (define (%pk-generate-params self config)
      (check-config config config:ec-paramgen #:in self)
@@ -438,12 +435,12 @@
    (define (sexp-get-curve sexp)
      (string->symbol (bytes->string/utf-8 (sexp-get-data sexp "ecc" "curve"))))
 
-   ;; ---- pk*
+   ;; ----
 
-   (define (%pk*-make-params self curve-oid)
+   (define (%pk-make-params self curve-oid)
      (curve->params self (curve-oid->name curve-oid)))
 
-   (define (%pk*-make-public-key self curve-oid qB)
+   (define (%pk-make-public-key self curve-oid qB)
      (define curve (curve-oid->name curve-oid))
      (cond [(curve->name-string curve)
             => (lambda (curve-name)
@@ -452,7 +449,7 @@
                  (pk-key self (keypair curve pub #f) #f))]
            [else #f]))
 
-   (define (%pk*-make-private-key self curve-oid qB d)
+   (define (%pk-make-private-key self curve-oid qB d)
      (define curve (curve-oid->name curve-oid))
      (cond [(curve->name-string curve)
             => (lambda (curve-name)
@@ -498,11 +495,11 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk digest digest-spec pad)
+   (define (%pkk-sign self pkk digest digest-spec pad)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
      (gcrypt-sign* pkk sign-unpack-sig-sexp))
 
-   (define (%pkk*-verify self pkk digest digest-spec pad sig)
+   (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
      (define sig-sexp (dsa/ecdsa-make-sig-sexp sig))
      (gcrypt-verify* pkk data-sexp sig-sexp))
@@ -514,7 +511,7 @@
 
    ;; ECDH support is not documented, but described in comments in
    ;; libgcrypt/cipher/ecc.c before ecc_{encrypt,decrypt}_raw.
-   (define (%pkk*-compute-secret self pkk peer-pubkey)
+   (define (%pkk-compute-secret self pkk peer-pubkey)
      (match-define (keypair _ pub priv) (ctx-inner pkk))
      (define peer (sexp-get-data (keypair-pub (ctx-inner peer-pubkey)) "ecc" "q"))
      (define dh-sexp (make-sexp `(enc-val (ecdh (e ,peer)))))
@@ -525,9 +522,9 @@
      (define shblen (bytes-length shb))
      (subbytes shb 1 (+ 1 (quotient shblen 2))))
 
-   (define (%pkk*-import-for-key-agree self pkk bs)
+   (define (%pkk-import-for-key-agree self pkk bs)
      (define curve-oid (sexp-get-curve-oid (keypair-pub (ctx-inner pkk))))
-     ($pk*-make-public-key self curve-oid bs))
+     ($pk-make-public-key self curve-oid bs))
    ))
 
 ;; ============================================================
@@ -537,14 +534,13 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
    (define-struct-abbrevs gcrypt-eddsa-impl)
 
    (define (%pk-generate-params self config)
      (check-config config config:eddsa-keygen #:in self)
      (define curve (config-ref config 'curve))
-     (or ($pk*-make-params self curve)
+     (or ($pk-make-params self curve)
          (err/no-curve curve self)))
 
    (define (%curve-ok? self curve)
@@ -575,20 +571,20 @@
             (let ([qB (sexp-get-data pub "ecc" "q")])
               (encode-pub-eddsa fmt curve qB))]))
 
-   ;; ---- pk*
+   ;; ----
 
    (define (check-curve curve)
      (match curve
        ['ed25519 (and ed25519-ok? "Ed25519")]
        ['ed448 (and ed448-ok? "Ed448")]))
 
-   (define (%pk*-make-public-key self curve qB)
+   (define (%pk-make-public-key self curve qB)
      (define curve-name (check-curve curve))
      (eddsa-check-keys curve #f qB #f)
      (define pub (make-public-sexp curve-name qB))
      (and curve-name (pk-key self (keypair curve pub #f) #f)))
 
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (define curve-name (check-curve curve))
      (eddsa-check-keys curve #t dB qB)
      ;; It doesn't seem to be possible to recover qB if missing, so just fail.
@@ -611,12 +607,12 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk digest digest-spec pad)
+   (define (%pkk-sign self pkk digest digest-spec pad)
      (define curve (keypair-param (ctx-inner pkk)))
      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
      (gcrypt-sign* pkk (make-sign-unpack-sig-sexp curve)))
 
-   (define (%pkk*-verify self pkk digest digest-spec pad sig)
+   (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define curve (keypair-param (ctx-inner pkk)))
      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
      (define sig-sexp (verify-make-sig-sexp sig curve))
@@ -656,7 +652,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    (define (%curve-ok? self curve)
@@ -681,9 +676,9 @@
        ['x448 (gcry_ecc_mul_point GCRY_ECC_CURVE448 pub priv #f)])
      pub)
 
-   ;; ---- pk*
+   ;; ----
 
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (cond [($curve-ok? curve)
             (define priv (ecx-check-keys curve #t dB qB))
             (ecx-clamp-secret! curve priv)
@@ -694,7 +689,7 @@
 
    ;; ----
 
-   (define (%pkk*-compute-secret self pkk peer-pubkey)
+   (define (%pkk-compute-secret self pkk peer-pubkey)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (define peer (keypair-pub (ctx-inner peer-pubkey)))
      (match curve

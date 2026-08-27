@@ -24,7 +24,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
    (define-struct-abbrevs sodium-eddsa-impl)
 
@@ -44,9 +43,7 @@
         (unless status (crypto-error "key generation failed"))
         (pk-key self (keypair 'ed25519 pub priv) #t)]))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      ;; libsodium calls the secret part of the key the "seed",
      ;; and seed_keypair can be used to recompute the public key.
      (case curve
@@ -63,7 +60,7 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk msg _dspec _pad)
+   (define (%pkk-sign self pkk msg _dspec _pad)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (match curve
        ['ed25519
@@ -72,7 +69,7 @@
         (unless s (crypto-error "failed"))
         sig]))
 
-   (define (%pkk*-verify self pkk msg _dspec _pad sig)
+   (define (%pkk-verify self pkk msg _dspec _pad sig)
      (match-define (keypair curve pub _) (ctx-inner pkk))
      (match curve
        ['ed25519
@@ -87,7 +84,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    (define (%curve-ok? self curve)
@@ -108,9 +104,7 @@
         (unless (zero? status) (crypto-error "key generation failed"))
         (pk-key self (keypair curve pub priv) #t)]))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (match curve
        ['x25519
         (ecx-check-keys curve qB dB)
@@ -122,7 +116,7 @@
 
    ;; ----
 
-   (define (%pkk*-compute-secret self pkk peer-pubkey)
+   (define (%pkk-compute-secret self pkk peer-pubkey)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (define peer (keypair-pub (ctx-inner peer-pubkey)))
      (match curve

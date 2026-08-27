@@ -277,8 +277,7 @@
 (struct libcrypto3-rsa-impl libcrypto3-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
    (define-struct-abbrevs libcrypto3-rsa-impl)
 
    ;; ---- pk-info
@@ -330,12 +329,10 @@
            [else
             (encode-pub-rsa fmt n e)]))
 
-   ;; ---- pkk*
-
-   (define (%pk*-make-public-key self n e)
+   (define (%pk-make-public-key self n e)
      (define evp (fromdata self #"RSA" 'public (make-fromdata-params n e #f #f #f #f #f #f)))
      (evp->public-key self evp))
-   (define (%pk*-make-private-key self n e d p q dp dq qInv)
+   (define (%pk-make-private-key self n e d p q dp dq qInv)
      (define evp (fromdata self #"RSA" 'private (make-fromdata-params n e d p q dp dq qInv)))
      (evp->private-key self evp))
 
@@ -351,10 +348,10 @@
        (#"rsa-coefficient1" ubignum ,qInv #:?)
        (#"rsa-derive-from-pq" uint ,(and derive? 1) #:?)))
 
-   (define (%pkk*-sign self pkk msg dspec pad)
+   (define (%pkk-sign self pkk msg dspec pad)
      (pkk-sign pkk msg (get-sign/verify-params self #t dspec pad)))
 
-   (define (%pkk*-verify self pkk msg dspec pad sig)
+   (define (%pkk-verify self pkk msg dspec pad sig)
      (pkk-sign pkk msg (get-sign/verify-params self #f dspec pad) sig))
 
    (define (get-sign/verify-params self sign? dspec pad)
@@ -373,10 +370,10 @@
           (#"saltlen" utf8-string ,(if sign? "digest" "auto")))]
        [else (err/bad-signature-pad self pad)]))
 
-   (define (%pkk*-encrypt self pkk msg pad)
+   (define (%pkk-encrypt self pkk msg pad)
      (pkk-encrypt pkk msg (get-encrypt/decrypt-params self #t pad)))
 
-   (define (%pkk*-decrypt self pkk msg pad)
+   (define (%pkk-decrypt self pkk msg pad)
      (pkk-decrypt pkk msg (get-encrypt/decrypt-params self #f pad)))
 
    (define (get-encrypt/decrypt-params self enc? pad)
@@ -392,8 +389,7 @@
 (struct libcrypto3-dsa-impl libcrypto3-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
 
    ;; ---- pk-impl
 
@@ -423,15 +419,13 @@
      (define g (HANDLEp (EVP_PKEY_get_bn_param/value pevp #"g")))
      (values p q g))
 
-   ;; ---- pkk*
-
-   (define (%pk*-make-params self p q g)
+   (define (%pk-make-params self p q g)
      (define evp (fromdata self #"DSA" 'params (make-fromdata-params p q g #f #f)))
      (evp->params self evp))
-   (define (%pk*-make-public-key self p q g y)
+   (define (%pk-make-public-key self p q g y)
      (define evp (fromdata self #"DSA" 'public (make-fromdata-params p q g y #f)))
      (evp->public-key self evp))
-   (define (%pk*-make-private-key self p q g y x)
+   (define (%pk-make-private-key self p q g y x)
      (define evp (fromdata self #"DSA" 'private (make-fromdata-params p q g y x)))
      (evp->private-key self evp))
 
@@ -442,10 +436,10 @@
        (#"pub" ubignum ,y #:?)
        (#"priv" ubignum ,x #:?)))
 
-   (define (%pkk*-sign self pkk msg dspec pad)
+   (define (%pkk-sign self pkk msg dspec pad)
      (pkk-sign pkk msg (get-sign/verify-params self #t dspec pad)))
 
-   (define (%pkk*-verify self pkk msg dspec pad sig)
+   (define (%pkk-verify self pkk msg dspec pad sig)
      (pkk-sign pkk msg (get-sign/verify-params self #f dspec pad) sig))
 
    (define (get-sign/verify-params self sign? dspec pad)
@@ -464,8 +458,7 @@
 (struct libcrypto3-dh-impl libcrypto3-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
 
    ;; ---- pk-impl
 
@@ -498,15 +491,13 @@
      (define pgen (NOERR (EVP_PKEY_get_bn_param/value pevp #"pcounter")))
      (values p g q j seed pgen))
 
-   ;; ---- pkk*
-
-   (define (%pk*-make-params self p g q j seed pgen)
+   (define (%pk-make-params self p g q j seed pgen)
      (define evp (fromdata self #"DH" 'params (make-fromdata-params p g q j seed pgen #f #f)))
      (evp->params self evp))
-   (define (%pk*-make-public-key self p g q j seed pgen y)
+   (define (%pk-make-public-key self p g q j seed pgen y)
      (define evp (fromdata self #"DH" 'public (make-fromdata-params p g q j seed pgen y #f)))
      (evp->public-key self evp))
-   (define (%pk*-make-private-key self p g q j seed pgen y x)
+   (define (%pk-make-private-key self p g q j seed pgen y x)
      (define evp (fromdata self #"DH" 'private (make-fromdata-params p g q j seed pgen y x)))
      (evp->private-key self evp))
 
@@ -520,7 +511,7 @@
        (#"pub" ubignum ,y #:?)
        (#"priv" ubignum ,x #:?)))
 
-   (define (%pkk*-compute-secret self pkk peer-pkk)
+   (define (%pkk-compute-secret self pkk peer-pkk)
      (define params `((#"pad" uint 1)))
      (pkk-compute-secret pkk peer-pkk params))
    ))
@@ -539,8 +530,7 @@
 (struct libcrypto3-ec-impl libcrypto3-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
 
    ;; ---- pk-impl
 
@@ -574,19 +564,17 @@
             (and curve-oid pub priv (encode-priv-ec fmt curve-oid pub priv))]
            [else (and curve-oid pub (encode-pub-ec fmt curve-oid pub))]))
 
-   ;; ---- pkk*
-
-   (define (%pk*-make-params self curve-oid)
+   (define (%pk-make-params self curve-oid)
      (define curve-lcname (curve-oid->lcname curve-oid))
      (and curve-lcname
           (let ([params (make-fromdata-params curve-lcname #f #f)])
             (evp->params self (fromdata self #"EC" 'params params)))))
-   (define (%pk*-make-public-key self curve-oid qB)
+   (define (%pk-make-public-key self curve-oid qB)
      (define curve-lcname (curve-oid->lcname curve-oid))
      (and curve-lcname
           (let ([params (make-fromdata-params curve-lcname qB #f)])
             (evp->public-key self (fromdata self #"EC" 'public params)))))
-   (define (%pk*-make-private-key self curve-oid qB x)
+   (define (%pk-make-private-key self curve-oid qB x)
      (define curve-lcname (curve-oid->lcname curve-oid))
      (and curve-lcname
           (let ([params (make-fromdata-params curve-lcname qB x)])
@@ -597,10 +585,10 @@
        (#"pub" octet-string ,qB #:?)
        (#"priv" ubignum ,x #:?)))
 
-   (define (%pkk*-sign self pkk msg dspec pad)
+   (define (%pkk-sign self pkk msg dspec pad)
      (pkk-sign pkk msg (get-sign/verify-params self #t dspec pad)))
 
-   (define (%pkk*-verify self pkk msg dspec pad sig)
+   (define (%pkk-verify self pkk msg dspec pad sig)
      (pkk-sign pkk msg (get-sign/verify-params self #f dspec pad) sig))
 
    (define (get-sign/verify-params self sign? dspec pad)
@@ -612,7 +600,7 @@
             `((#"digest" utf8-string ,dname))]
            [else '()]))
 
-   (define (%pkk*-compute-secret self pkk peer-pkk)
+   (define (%pkk-compute-secret self pkk peer-pkk)
      (pkk-compute-secret pkk peer-pkk '()))
    ))
 
@@ -622,8 +610,7 @@
 (struct libcrypto3-eddsa-impl libcrypto3-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
 
    ;; ---- pk-impl
 
@@ -640,7 +627,7 @@
 
    (define (%pk-generate-params self config)
      (define curve (check/ref-config '(curve) config config:eddsa-keygen #:in self))
-     (%pk*-make-params self curve))
+     (%pk-make-params self curve))
 
    (define (%pkp-param-values self pkp)
      (evp->curve (ctx-inner pkp)))
@@ -659,15 +646,13 @@
            [(EVP_PKEY_is_a evp "ED448") 'ed448]
            [else (internal-error "unknown EdDSA curve")]))
 
-   ;; ---- pkk*
-
-   (define (%pk*-make-params self curve)
+   (define (%pk-make-params self curve)
      (define evp (fromdata self (curve->keytype curve) 'params null))
      (evp->params self evp))
-   (define (%pk*-make-public-key self curve qB)
+   (define (%pk-make-public-key self curve qB)
      (define evp (fromdata self (curve->keytype curve) 'public (make-fromdata-params qB #f)))
      (evp->public-key self evp))
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (define evp (fromdata self (curve->keytype curve) 'private (make-fromdata-params qB dB)))
      (evp->private-key self evp))
 
@@ -680,7 +665,7 @@
        ['ed25519 #"ED25519"]
        ['ed448 #"ED448"]))
 
-   (define (%pkk*-sign self pkk msg _dspec _pad)
+   (define (%pkk-sign self pkk msg _dspec _pad)
      (define libctx (pk-libctx self))
      (define evp (ctx-inner pkk))
      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
@@ -692,7 +677,7 @@
      (define siglen2 (HANDLEp (EVP_DigestSign mdctx sigbuf siglen msg msglen)))
      (subbytes sigbuf 0 siglen2))
 
-   (define (%pkk*-verify self pkk msg _dspec _pad sig)
+   (define (%pkk-verify self pkk msg _dspec _pad sig)
      (define libctx (pk-libctx self))
      (define evp (ctx-inner pkk))
      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
@@ -707,8 +692,7 @@
 (struct libcrypto3-ecx-impl libcrypto3-pk-impl-base ()
   #:properties
   (method-properties
-   #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %])
+   #:export ([pk-impl$ #:prefix %])
 
    ;; ---- pk-impl
 
@@ -724,7 +708,7 @@
 
    (define (%pk-generate-params self config)
      (define curve (check/ref-config '(curve) config config:ecx-keygen #:in self))
-     (%pk*-make-params self curve))
+     (%pk-make-params self curve))
 
    (define (%pkp-param-values self pkp)
      (evp->curve (ctx-inner pkp)))
@@ -743,15 +727,13 @@
            [(EVP_PKEY_is_a evp "X448") 'x448]
            [else (internal-error "unknown ECX curve")]))
 
-   ;; ---- pkk*
-
-   (define (%pk*-make-params self curve)
+   (define (%pk-make-params self curve)
      (define evp (fromdata self (curve->keytype curve) 'params null))
      (evp->params self evp))
-   (define (%pk*-make-public-key self curve qB)
+   (define (%pk-make-public-key self curve qB)
      (define evp (fromdata self (curve->keytype curve) 'public (make-fromdata-params qB #f)))
      (evp->public-key self evp))
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (define evp (fromdata self (curve->keytype curve) 'private (make-fromdata-params qB dB)))
      (evp->private-key self evp))
 
@@ -764,12 +746,12 @@
        ['x25519 #"X25519"]
        ['x448 #"X448"]))
 
-   (define (%pkk*-compute-secret self pkk peer-pkk)
+   (define (%pkk-compute-secret self pkk peer-pkk)
      (pkk-compute-secret pkk peer-pkk null))
 
-   (define (%pkk*-import-for-key-agree self pkk peer-pubkey)
+   (define (%pkk-import-for-key-agree self pkk peer-pubkey)
      (define curve (evp->curve (ctx-inner pkk)))
-     ($pk*-make-public-key self curve peer-pubkey))
+     ($pk-make-public-key self curve peer-pubkey))
    ))
 
 ;; ============================================================

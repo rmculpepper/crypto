@@ -26,7 +26,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    (define (%curve-ok? self curve)
@@ -47,9 +46,7 @@
         (define pub (decaf_ed448_derive_public_key priv))
         (pk-key self (keypair curve pub priv) #t)]))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (match curve
        ['ed25519
         (define priv (eddsa-check-keys curve dB qB))
@@ -65,7 +62,7 @@
 
    ;; ----
 
-   (define (%pkk*-sign self pkk msg _dspec _pad)
+   (define (%pkk-sign self pkk msg _dspec _pad)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (match curve
        ['ed25519
@@ -73,7 +70,7 @@
        ['ed448
         (decaf_ed448_sign priv pub msg (bytes-length msg) 0)]))
 
-   (define (%pkk*-verify self pkk msg _dspec _pad sig)
+   (define (%pkk-verify self pkk msg _dspec _pad sig)
      (match-define (keypair curve pub _) (ctx-inner pkk))
      (match curve
        ['ed25519
@@ -91,7 +88,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
-             [pk*$ #:prefix %]
              [curve-ok$ #:prefix %])
 
    (define (%curve-ok? self curve)
@@ -114,9 +110,7 @@
         (define pub  (decaf_x448_derive_public_key priv))
         (pk-key self (keypair curve pub priv) #t)]))
 
-   ;; ---- pk*
-
-   (define (%pk*-make-private-key self curve qB dB)
+   (define (%pk-make-private-key self curve qB dB)
      (match curve
        ['x25519
         (define priv (ecx-check-keys curve dB qB))
@@ -132,7 +126,7 @@
 
    ;; ----
 
-   (define (%pkk*-compute-secret self pkk peer-pubkey)
+   (define (%pkk-compute-secret self pkk peer-pubkey)
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (define peer (keypair-pub (ctx-inner peer-pubkey)))
      (match curve
