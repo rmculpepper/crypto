@@ -66,12 +66,6 @@
           [(SECRET) (apply $pk-make-private-key self vs)])]
        [_ #f]))
 
-   ;; Import key from different impl, must be same pkspec
-   (define (%pk-import-key self pkk public?)
-     (define fmt (if public? 'internal-public 'internal))
-     (define datum ($pkk-write-key (ctx-impl pkk) pkk fmt))
-     ($pk-import-pk self datum))
-
    ;; ---- pkp
 
    ;; pkp-generate-key

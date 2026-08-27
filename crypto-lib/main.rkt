@@ -797,7 +797,7 @@
   (define peer
     (cond [(bytes? peer0) ($pkk-import-for-key-agree impl pkk peer0)]
           [(eq? (ctx-impl peer0) impl) peer0]
-          [($pk-import-key impl peer0 #t) => values]
+          [(pk-import-key impl peer0 #t) => values]
           [else (incompatible peer0)]))
   (unless (and (eq? (ctx-impl peer) impl)
                (eq? ($get-spec peer) ($get-spec impl))

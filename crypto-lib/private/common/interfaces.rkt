@@ -304,7 +304,6 @@
   #:predicate pk-impl?
   ([pk-generate-key     (-> pk-impl? config/c pk-key?)]
    [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
-   [pk-import-key       (-> pk-impl? pk-key? boolean? pk-key?)]
 
    [pk-make-params
     ;; PKImpl ParamValues... -> (U PKParameters #f)
@@ -372,6 +371,12 @@
             'pk-make-public-key pk-make-public-key
             'pk-make-private-key pk-make-private-key))
   #:generics-prefix $)
+
+;; Import key from different impl, must be same pkspec
+(define (pk-import-key pk pkk public?)
+  (define fmt (if public? 'internal-public 'internal))
+  (define datum ($pkk-write-key (ctx-impl pkk) pkk fmt))
+  ($pk-import-pk pk datum))
 
 (define (pk-compare-key-data pkk1 pkk2 fmt)
   (define internal1 ($pkk-write-key (ctx-impl pkk1) pkk1 fmt))
