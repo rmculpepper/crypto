@@ -11,7 +11,7 @@
          "ffi.rkt"
          "digest.rkt"
          "cipher.rkt"
-         #;"pkey.rkt"
+         "pkey.rkt"
          "kdf.rkt")
 (provide libcrypto-factory)
 
@@ -77,12 +77,9 @@
             OPENSSL_INFO_SEED_SOURCE
             OPENSSL_INFO_CPU_SETTINGS))]
     ;; Standard info
-
-    #;
     [(all-ec-curves)
      (sort (get-all-curve-names) string-ci<?
            #:key symbol->string #:cache-keys? #t)]
-
     [(all-eddsa-curves)
      '(ed25519 ed448)]
     [(all-ecx-curves)
@@ -107,6 +104,7 @@
    #:get-digest libcrypto3-fetch-digest
    #:get-cipher libcrypto3-fetch-cipher
    #:get-kdf libcrypto3-fetch-kdf
+   #:get-pk libcrypto3-fetch-pk
    ))
 
 (define libcrypto-factory

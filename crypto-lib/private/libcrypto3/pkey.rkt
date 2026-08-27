@@ -12,8 +12,10 @@
          "../common/pk-common.rkt"
          "../common/error.rkt"
          "../common/base256.rkt"
-         "ffi.rkt")
-(provide libcrypto3-fetch-pk)
+         "ffi.rkt"
+         "digest.rkt")
+(provide libcrypto3-fetch-pk
+         get-all-curve-names)
 
 (define (libcrypto3-fetch-pk factory info)
   (define spec ($get-spec info))
@@ -230,6 +232,9 @@
   (method-properties
    #:export ([pk-impl$ #:prefix %])
 
+   ;; type InnerParam = EVP_PKEY
+   ;; type InnerKey = EVP_PKEY
+
    ;; ---- pkp
 
    (define (%pkp-generate-key self pkp)
@@ -249,7 +254,6 @@
      (match-define (pk-key _ evp private?) pkk)
      (if private? (evp->public-key self (evp-copy self evp EVP_PKEY_PUBLIC_KEY)) pkk))
 
-   ;; XXXX!!!! not if param is curve name
    (define (%pkk-params self pkk)
      (evp->params self (evp-copy self (ctx-inner pkk) EVP_PKEY_KEY_PARAMETERS)))
 
@@ -275,6 +279,7 @@
   (method-properties
    #:export ([pk-impl$ #:prefix %]
              [pk*$ #:prefix %])
+   (define-struct-abbrevs libcrypto3-rsa-impl)
 
    ;; ---- pk-info
 
@@ -282,7 +287,7 @@
      (and (memq pad '(#f pkcs1-v1.5 pss pss*))
           (or (memq dspec signing-digests)
               (memq dspec '(md5 md4 md2)))
-          (and (send factory get-digest dspec) #t)))
+          (and ($fetch-digest (.factory self) dspec) #t)))
 
    (define (%pk-can-encrypt? self pad)
      (and (memq pad '(#f pkcs1-v1.5 oaep)) #t))
@@ -290,6 +295,7 @@
    ;; ---- pk-impl
 
    (define (%pk-generate-key self config)
+     (define libctx (pk-libctx self))
      (define-values (nbits e)
        (check/ref-config '(nbits e) config config:rsa-keygen #:in self))
      (cond [e
@@ -297,14 +303,14 @@
                             `((#"bits" uint ,nbits)
                               (#"e" uint ,e #:?))))
             (define keytype (nonmoving #"rsa"))
-            (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name (pk-libctx self) keytype #f)))
+            (define ctx (HANDLEp (EVP_PKEY_CTX_new_from_name libctx keytype #f)))
             (HANDLEp (EVP_PKEY_keygen_init ctx))
             (HANDLEp (EVP_PKEY_CTX_set_params ctx params))
             (define evp (HANDLEp (EVP_PKEY_generate ctx)))
             (void/reference-sink keytype)
             (evp->private-key self evp)]
            [else
-            (define evp (HANDLEp (EVP_PKEY_Q_keygen/RSA (get-libctx) #f nbits)))
+            (define evp (HANDLEp (EVP_PKEY_Q_keygen/RSA libctx #f nbits)))
             (evp->private-key self evp)]))
 
    (define (%pkk-write-key self pkk fmt)
@@ -399,10 +405,6 @@
          (#"qbits" uint ,qbits #:?)))
      (generate-params self #"DSA" params))
 
-   (define (%pkp-write-params self pkp fmt)
-     (define-values (p q g) (dsa-evp-get-params (ctx-inner pkp)))
-     (encode-params-dsa fmt p q g))
-
    (define (%pkp-param-values self pkp)
      (dsa-evp-get-params (ctx-inner pkp)))
 
@@ -475,12 +477,8 @@
                       (#"g" uint ,generator #:?)))
      (generate-params self #"DH" params))
 
-   (define (%pkp-write-params self pkp fmt)
-     (define-values (p g q j seed pgen) (dh-evp-get-params (ctx-inner pkp)))
-     (encode-params-dh fmt p g q j seed pgen))
-
    (define (%pkp-param-values self pkp)
-     (dh-evp-get-params (ctx-inner pevp)))
+     (dh-evp-get-params (ctx-inner pkp)))
 
    (define (%pkk-write-key self pkk fmt)
      (match-define (pk-key _ evp private?) pkk)
@@ -550,7 +548,7 @@
      (define curve (check/ref-config '(curve) config config:ec-paramgen #:in self))
      (define curve-lcname (curve-alias->lcname curve))
      (and curve-lcname
-          (let ([evp (HANDLEp (EVP_PKEY_Q_keygen/EC (get-libctx) #f curve-lcname)
+          (let ([evp (HANDLEp (EVP_PKEY_Q_keygen/EC (pk-libctx self) #f curve-lcname)
                               #:or-fail-with "key generation failed")])
             (evp->private-key self evp))))
 
@@ -561,14 +559,10 @@
           (let ([params `((#"group" utf8-string ,curve-lcname))])
             (evp->params self (fromdata self #"EC" 'params params)))))
 
-   (define (%pkp-write-params self pkp fmt)
-     (define curve-oid (%pkp-param-values self pkp))
-     (encode-params-ec fmt curve-oid))
-
    (define (%pkp-param-values self pkp)
      (define pevp (ctx-inner pkp))
-     (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value evp #"group")))
-     (and curve-lcname (curve-lcname->oid curve-lcname)))
+     (define curve-lcname (HANDLEp (EVP_PKEY_get_utf8_string_param/value pevp #"group")))
+     (curve-lcname->name curve-lcname))
 
    (define (%pkk-write-key self pkk fmt)
      (match-define (pk-key _ evp private?) pkk)
@@ -579,13 +573,6 @@
             (define priv (HANDLEp (EVP_PKEY_get_bn_param/value evp #"priv")))
             (and curve-oid pub priv (encode-priv-ec fmt curve-oid pub priv))]
            [else (and curve-oid pub (encode-pub-ec fmt curve-oid pub))]))
-
-   #;
-   (define (get-curve self pkp)
-     (define curve-lcname
-       (NOERR (EVP_PKEY_get_utf8_string_param/value pevp #"group")))
-     (cond [curve-lcname (curve-lcname->name curve-lcname)]
-           [else (internal-error "unable to fetch curve name")]))
 
    ;; ---- pkk*
 
@@ -605,7 +592,7 @@
           (let ([params (make-fromdata-params curve-lcname qB x)])
             (evp->private-key self (fromdata self #"EC" 'private params)))))
 
-   (define (make-fromdata-params curve-oid qB x)
+   (define (make-fromdata-params curve-lcname qB x)
      `((#"group" utf8-string ,curve-lcname)
        (#"pub" octet-string ,qB #:?)
        (#"priv" ubignum ,x #:?)))
@@ -617,7 +604,7 @@
      (pkk-sign pkk msg (get-sign/verify-params self #f dspec pad) sig))
 
    (define (get-sign/verify-params self sign? dspec pad)
-     (unless (eq? pad #f) (err/bad-signature-pad this pad))
+     (unless (eq? pad #f) (err/bad-signature-pad self pad))
      ;; ECDSA does not include the digest identity in the signature
      ;; calculation; this should only cause a length check.
      (cond [(memq dspec signing-digests)
@@ -653,11 +640,7 @@
 
    (define (%pk-generate-params self config)
      (define curve (check/ref-config '(curve) config config:eddsa-keygen #:in self))
-     (pk-parameters self curve))
-
-   (define (%pkp-write-params self pkp fmt)
-     (define curve (%pkp-param-values self pkp))
-     (encode-params-eddsa fmt curve))
+     (%pk*-make-params self curve))
 
    (define (%pkp-param-values self pkp)
      (evp->curve (ctx-inner pkp)))
@@ -679,7 +662,8 @@
    ;; ---- pkk*
 
    (define (%pk*-make-params self curve)
-     (pk-parameters self curve))
+     (define evp (fromdata self (curve->keytype curve) 'params null))
+     (evp->params self evp))
    (define (%pk*-make-public-key self curve qB)
      (define evp (fromdata self (curve->keytype curve) 'public (make-fromdata-params qB #f)))
      (evp->public-key self evp))
@@ -701,7 +685,7 @@
      (define evp (ctx-inner pkk))
      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
      (define params (make-param-array '()))
-     (HANDLEp (EVP_DigestSignInit_ex mdctx #f (get-libctx) #f evp params))
+     (HANDLEp (EVP_DigestSignInit_ex mdctx #f (pk-libctx self) #f evp params))
      (define msglen (bytes-length msg))
      (define siglen (HANDLEp (EVP_DigestSign mdctx #f 0 msg msglen)))
      (define sigbuf (make-bytes siglen))
@@ -713,7 +697,7 @@
      (define evp (ctx-inner pkk))
      (define mdctx (HANDLEp (EVP_MD_CTX_new)))
      (define params (make-param-array '()))
-     (HANDLEp (EVP_DigestVerifyInit_ex mdctx #f (get-libctx) #f evp params))
+     (HANDLEp (EVP_DigestVerifyInit_ex mdctx #f (pk-libctx self) #f evp params))
      (NOERR (EVP_DigestVerify mdctx sig (bytes-length sig) msg (bytes-length msg))))
    ))
 
@@ -740,10 +724,7 @@
 
    (define (%pk-generate-params self config)
      (define curve (check/ref-config '(curve) config config:ecx-keygen #:in self))
-     (pk-parameters self curve))
-
-   (define (%pkp-write-params self pkp fmt)
-     (encode-params-ecx fmt (evp->curve (ctx-inner pkp))))
+     (%pk*-make-params self curve))
 
    (define (%pkp-param-values self pkp)
      (evp->curve (ctx-inner pkp)))
@@ -765,7 +746,8 @@
    ;; ---- pkk*
 
    (define (%pk*-make-params self curve)
-     (pk-parameters self curve))
+     (define evp (fromdata self (curve->keytype curve) 'params null))
+     (evp->params self evp))
    (define (%pk*-make-public-key self curve qB)
      (define evp (fromdata self (curve->keytype curve) 'public (make-fromdata-params qB #f)))
      (evp->public-key self evp))
