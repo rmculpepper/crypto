@@ -69,7 +69,8 @@
    ;; Import key from different impl, must be same pkspec
    (define (%pk-import-key self pkk public?)
      (define fmt (if public? 'internal-public 'internal))
-     ($pk-import-pk self (pk-k-write-key pkk fmt)))
+     (define datum ($pkk-write-key (ctx-impl pkk) pkk fmt))
+     ($pk-import-pk self datum))
 
    ;; ---- pkp
 
@@ -103,7 +104,7 @@
       ($pkp-write-params self pkp 'rkt-params)))
 
    (define (%pkp-equal? self pkp1 pkp2)
-     (pk-compare-params* pkp1 pkp2))
+     (pk-compare-param-data pkp1 pkp2))
 
    ;; ---- pkk
 
@@ -125,40 +126,11 @@
          (parsed-pkey-security-bits ($pkk-write-key self pkk 'internal-public))))
 
    (define (%pkk-equal-params? self pkk1 pkk2)
-     (pk-compare-keys* pkk1 pkk2 'internal-params))
+     (pk-compare-key-data pkk1 pkk2 'internal-params))
 
    (define (%pkk-equal-public? self pkk1 pkk2)
-     (pk-compare-keys* pkk1 pkk2 'internal-public))
+     (pk-compare-key-data pkk1 pkk2 'internal-public))
    ))
-
-(define (pk-k-equal-public? pkk1 pkk2)
-  (if (eq? (ctx-impl pkk1) (ctx-impl pkk2))
-      ($pkk-equal-public? (ctx-impl pkk1) pkk1 pkk2)
-      (pk-compare-keys* pkk1 pkk2 'internal-public)))
-
-(define (pk-k-equal-params? pkk1 pkk2)
-  (if (eq? (ctx-impl pkk1) (ctx-impl pkk2))
-      ($pkk-equal-public? (ctx-impl pkk1) pkk1 pkk2)
-      (pk-compare-keys* pkk1 pkk2 'internal-params)))
-
-(define (pk-compare-params* obj1 obj2)
-  (define (to-internal obj)
-    (cond [(pk-key? obj) ($pkk-write-key (ctx-impl obj) obj 'internal-params)]
-          [(pk-parameters? obj) ($pkp-write-params (ctx-impl obj) obj 'internal-params)]))
-  (define internal1 (to-internal obj1))
-  (define internal2 (to-internal obj2))
-  (unless (and internal1 internal2)
-    (internal-error "failure comparing params\n  object 1: ~e\n  object 2: ~e" obj1 obj2))
-  (equal? internal1 internal2))
-
-(define (pk-compare-keys* pkk1 pkk2 fmt)
-  (define internal1 ($pkk-write-key (ctx-impl pkk1) pkk1 fmt))
-  (define internal2 ($pkk-write-key (ctx-impl pkk2) pkk2 fmt))
-  (unless (and internal1 internal2)
-    (internal-error "failure comparing keys\n  key 1: ~e\n  key 2: ~e" pkk1 pkk2))
-  (equal? internal1 internal2))
-
-
 
 ;; ============================================================
 

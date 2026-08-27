@@ -659,9 +659,12 @@
 ;; Are the *public parts* of the given keys equal?
 (define (public-key=? k1 . ks)
   (with-crypto-entry 'public-key=?
-    (define impl (ctx-impl k1))
-    (for/and ([k (in-list ks)])
-      ($pkk-equal-public? impl k1 k))))
+    (define impl1 (ctx-impl k1))
+    (for/and ([k2 (in-list ks)])
+      (define impl2 (ctx-impl k2))
+      (if (eq? impl1 impl2)
+          ($pkk-equal-public? impl1 k1 k2)
+          (pk-compare-key-data k1 k2 'internal-public)))))
 
 (define (pk-key->datum pkk fmt)
   (with-crypto-entry 'pk-key->datum

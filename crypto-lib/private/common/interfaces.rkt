@@ -280,15 +280,6 @@
    (define (%to-write-prefixes self)
      (cons "pk-parameters" (cdr (super-to-write-prefixes self))))))
 
-(define (pk-p-generate-key pkp)
-  ($pkp-generate-key (ctx-impl pkp) pkp))
-(define (pk-p-write-params pkp fmt)
-  ($pkp-write-params (ctx-impl pkp) pkp fmt))
-(define (pk-p-security-bits pkp)
-  ($pkp-security-bits (ctx-impl pkp) pkp))
-(define (pk-p-param-values pkp)
-  ($pkp-param-values (ctx-impl pkp) pkp))
-
 (struct pk-key ctx (private?)
   #:properties
   (method-properties
@@ -300,24 +291,8 @@
      (cons (if (.private? self) "private-key" "public-key")
            (cdr (super-to-write-prefixes self))))))
 
-(define (pk-k-public-key pkk)
-  ($pkk-public-key (ctx-impl pkk) pkk))
-(define (pk-k-params pkk)
-  ($pkk-params (ctx-impl pkk) pkk))
-(define (pk-k-security-bits pkk)
-  ($pkk-security-bits (ctx-impl pkk) pkk))
 (define (pk-k-write-key pkk fmt)
   ($pkk-write-key (ctx-impl pkk) pkk fmt))
-(define (pk-k-sign pkk msg dspec pad)
-  ($pkk-sign (ctx-impl pkk) pkk msg dspec pad))
-(define (pk-k-verify pkk msg dspec pad sig)
-  ($pkk-verify (ctx-impl pkk) pkk msg dspec pad sig))
-(define (pk-k-encrypt pkk msg pad)
-  ($pkk-encrypt (ctx-impl pkk) pkk msg pad))
-(define (pk-k-decrypt pkk msg pad)
-  ($pkk-decrypt (ctx-impl pkk) pkk msg pad))
-(define (pk-k-compute-secret pkk peer-pubkey)
-  ($pkk-compute-secret (ctx-impl pkk) pkk peer-pubkey))
 
 (define-interface pk-import$
   #:predicate pk-import?
@@ -342,12 +317,12 @@
     (unconstrained-domain-> (or/c pk-key? #f))]
 
    ;; type PKP <: (pk-parameters InnerParam)
-   ;; type InnerParam -- depends on impl
+   ;; type InnerParam
    [pkp-generate-key    (-> pk-impl? pk-parameters? pk-key?)]
    [pkp-write-params    (-> pk-impl? pk-parameters? symbol? any/c)]
    [pkp-security-bits   (-> pk-impl? pk-parameters? (or/c nat? #f))]
    [pkp-param-values    (-> pk-impl? pk-parameters? any)] ;; _ -> ParamValues
-   [pkp-equal?          (-> pk-impl? pk-parameters? pk-parameters? boolean?)]
+   [pkp-equal?          (-> pk-impl? pk-parameters? pk-parameters? boolean?)] ;; PRE: same impl
 
    ;; type PKK <: (pk-key _ InnerKey _)
    ;; type InnerKey
@@ -355,8 +330,8 @@
    [pkk-params          (-> pk-impl? pk-key? (or/c pk-parameters? #f))]
    [pkk-security-bits   (-> pk-impl? pk-key? (or/c nat? #f))]
    [pkk-write-key       (-> pk-impl? pk-key? symbol? any/c)]
-   [pkk-equal-public?   (-> pk-impl? pk-key? pk-key? boolean?)]
-   [pkk-equal-params?   (-> pk-impl? pk-key? pk-key? boolean?)]
+   [pkk-equal-public?   (-> pk-impl? pk-key? pk-key? boolean?)] ;; PRE: same impl
+   [pkk-equal-params?   (-> pk-impl? pk-key? pk-key? boolean?)] ;; PRE: same impl
 
    [pkk-sign
     (->i ([self pk-impl?]
@@ -397,6 +372,20 @@
             'pk-make-public-key pk-make-public-key
             'pk-make-private-key pk-make-private-key))
   #:generics-prefix $)
+
+(define (pk-compare-key-data pkk1 pkk2 fmt)
+  (define internal1 ($pkk-write-key (ctx-impl pkk1) pkk1 fmt))
+  (define internal2 ($pkk-write-key (ctx-impl pkk2) pkk2 fmt))
+  (unless (and internal1 internal2)
+    (internal-error "failure comparing keys\n  key 1: ~e\n  key 2: ~e" pkk1 pkk2))
+  (equal? internal1 internal2))
+
+(define (pk-compare-param-data pkp1 pkp2 fmt)
+  (define internal1 ($pkp-write-params (ctx-impl pkp1) pkp1 fmt))
+  (define internal2 ($pkp-write-params (ctx-impl pkp2) pkp2 fmt))
+  (unless (and internal1 internal2)
+    (internal-error "failure comparing params\n  params 1: ~e\n  params 2: ~e" pkp1 pkp2))
+  (equal? internal1 internal2))
 
 ;; ============================================================
 ;; KDFs
