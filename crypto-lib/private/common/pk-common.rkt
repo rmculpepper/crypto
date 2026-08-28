@@ -126,11 +126,11 @@
    #:export ([pk-impl$ #:prefix %])
    #:import ([pk-impl$ #:super])
 
-   ;; type PKP <: (pk-parameters InnerParam)
+   ;; type PKP = (pk-parameters InnerParam)
    ;; type InnerParam
 
-   ;; type PKK <: (pk-key _ InnerKey _)
-   ;; type InnerKey <: (keypair InnerParam InnerPub InnerPriv)
+   ;; type PKK = (pk-key _ InnerKey _)
+   ;; type InnerKey = (keypair InnerParam InnerPub InnerPriv)
    ;; type InnerPub, InnerPriv
 
    (define (%pkk-public-key self pkk)

@@ -220,7 +220,7 @@
 (define-interface digest-impl$
   #:super (impl$ digest-info$)
   #:predicate digest-impl?
-  (;; type Ctx <: (digest-ctx _ Any)
+  (;; type Ctx = (digest-ctx _ Any)
    [digest      (-> digest-impl? input/c maybe-key/c maybe-size/c config/c bytes?)]
    [di-new-ctx  (-> digest-impl? maybe-key/c config/c digest-ctx?)]
    [di-update   (-> digest-impl? digest-ctx? input/c void?)]
@@ -240,7 +240,7 @@
 (define-interface cipher-impl$
   #:super (impl$ cipher-info$)
   #:predicate cipher-impl?
-  (;; type Ctx <: (cipher-ctx _ Any)
+  (;; type Ctx = (cipher-ctx _ Any)
    [ci-new-ctx      (-> cipher-impl? key/c iv/c boolean?
                         cipher-pad/c (or/c nat? #f) boolean?
                         cipher-ctx?)]
@@ -307,7 +307,7 @@
     ;; PKImpl ParamValues... PubKeyValues... PrivKeyValues... -> (U PKKey #f)
     (unconstrained-domain-> (or/c pk-key? #f))]
 
-   ;; type PKP <: (pk-parameters InnerParam)
+   ;; type PKP = (pk-parameters InnerParam)
    ;; type InnerParam
    [pkp-generate-key    (-> pk-impl? pk-parameters? pk-key?)]
    [pkp-write-params    (-> pk-impl? pk-parameters? symbol? any/c)]
@@ -315,7 +315,7 @@
    [pkp-param-values    (-> pk-impl? pk-parameters? any)] ;; _ -> ParamValues
    [pkp-equal?          (-> pk-impl? pk-parameters? pk-parameters? boolean?)] ;; PRE: same impl
 
-   ;; type PKK <: (pk-key _ InnerKey _)
+   ;; type PKK = (pk-key _ InnerKey _)
    ;; type InnerKey
    [pkk-public-key      (-> pk-impl? pk-key? pk-key?)]
    [pkk-params          (-> pk-impl? pk-key? (or/c pk-parameters? #f))]

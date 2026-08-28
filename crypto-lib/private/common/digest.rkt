@@ -46,7 +46,7 @@
 
    ;; ---- digest-info
 
-   ;; type Ctx <: (common-digest-ctx _ inner.InnerCtx _)
+   ;; type Ctx = (common-digest-ctx _ inner.InnerCtx _)
 
    ;; use fallbacks for di-size, di-config-family, di-key-size-ok?
    (define (%di-size* self) ($di-size* (.info self)))
@@ -240,7 +240,7 @@
    #:export ([digest-inner-impl$ #:prefix %])
    (define-struct-abbrevs rkt-hmac-inner-impl)
 
-   ;; type InnerCtx <: (rkt-hmac-ictx _ _ di.Ctx)
+   ;; type InnerCtx = (rkt-hmac-ictx _ _ di.Ctx)
 
    (define (%dii-new-ctx1 self di key)
      (define block-size ($di-block-size (.di self)))
