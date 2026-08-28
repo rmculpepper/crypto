@@ -772,7 +772,7 @@
             (define Alen (min inlen (- suffix-size partlen0)))
             (bytes-copy! partial partlen0 in instart (+ instart Alen))
             (.partlen-set! self (+ partlen0 Alen))
-            ($uf-update next in (+ instart Alen) inend)]
+            ($uf-update self in (+ instart Alen) inend)]
            [else ;; partlen = suffix-size
             ;; How much of partial gets evicted?
             ;; Evict (total - suffix), up to suffix (length of partial).
