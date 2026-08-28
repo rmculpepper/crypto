@@ -95,7 +95,8 @@
          [_
           ;; No way to propagate nonstandard size to HMAC digest,
           ;; so fall back to Racket impl.
-          #f])]))
+          #f])]
+      [_ #f]))
   (make-digest info factory inner))
 
 ;; ------------------------------------------------------------
@@ -157,7 +158,7 @@
      outbuf)
 
    (define (%dii-new-ctx2 self di key0 config)
-     (match-define (libcrypto3-digest-inner-impl _ md size mac) self)
+     (match-define (libcrypto3-digest-inner-impl _ md mac size) self)
      (define key (or key0 #""))
      (define key? (not (zero? (bytes-length key))))
      (define-values (dsize params) (get-config-params self di key? config))
@@ -166,7 +167,7 @@
             (HANDLEp (EVP_MAC_init ic key (make-param-array params)))
             (values ic dsize)]
            [key?  ;; should be impossible
-            (internal-error "key not supported (no MAC impl)" #:for di)]
+            (internal-error "key not supported (no MAC impl)" #:in di)]
            [else
             (define ic (HANDLEp (EVP_MD_CTX_new)))
             (HANDLEp (EVP_DigestInit_ex2 ic md (make-param-array params)))

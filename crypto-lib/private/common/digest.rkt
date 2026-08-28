@@ -258,7 +258,7 @@
    (define (new-ctx* self ipad opad)
      (define block-size ($di-block-size (.di self)))
      (define dctx ($di-new-ctx (.di self) #f null))
-     ($di-update (.di self) dctx ipad 0 block-size)
+     ($di-update (.di self) dctx ipad)
      (rkt-hmac-ictx ipad opad dctx))
 
    (define (%dii-update self ic buf start end)
@@ -273,7 +273,7 @@
      (define mdbuf ($di-final (.di self) dctx #f))
      (define dctx2 ($di-new-ctx (.di self) #f null))
      ($di-update (.di self) dctx2 (list opad mdbuf))
-     ($di-final (.di self) size))
+     ($di-final (.di self) dctx2 size))
 
    (define (%dii-copy self ic)
      (match-define (rkt-hmac-ictx ipad opad dctx) ic)

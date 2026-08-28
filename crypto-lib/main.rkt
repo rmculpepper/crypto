@@ -212,7 +212,7 @@
 
 (define (digest-peek-final dctx #:size [size #f])
   (with-crypto-entry 'digest-peek-final
-    (define dctx2 ($di-copy (ctx-impl dctx)))
+    (define dctx2 ($di-copy (ctx-impl dctx) dctx))
     (and dctx2 ($di-final (ctx-impl dctx2) dctx2 size))))
 
 ;; ----
@@ -235,6 +235,8 @@
     ($digest hmacdi inp key #f null)))
 
 (define (-get-hmac-impl di)
+  (unless (digest-spec? `(hmac ,($get-spec di)))
+    (crypto-error "HMAC not supported" #:in di))
   (cond [(digest-impl? di)
          (parameterize ((crypto-factories ($get-factory di)))
            (-get-digest-impl `(hmac ,($get-spec di))))]

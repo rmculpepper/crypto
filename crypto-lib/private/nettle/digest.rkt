@@ -157,12 +157,12 @@
 
    (define (%dii-final self ic size)
      (define buf (make-bytes size))
-     ((.ctx_final self) ctx (bytes-length buf) buf)
+     ((.ctx_final self) ic (bytes-length buf) buf)
      buf)
 
    (define (%dii-copy self ic)
      (define ic2 (make-ctx (.ctx_size self)))
-     (memmove ic2 ctx (.ctx_size self))
+     (memmove ic2 ic (.ctx_size self))
      ic2)
    ))
 

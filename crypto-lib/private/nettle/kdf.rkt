@@ -31,7 +31,7 @@
 ;; not feasible (or at least not easy).
 
 (define (nettle-pbkdf2-inner-impl dspec)
-  (common-kdf-inner-impl
+  (make-kdf-inner-impl
    (lambda (kdfi key-size config pass salt)
      (define iters (check/ref-config '(iterations) config config:pbkdf2-kdf "PBKDF2"))
      (case dspec

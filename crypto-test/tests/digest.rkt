@@ -3,11 +3,10 @@
 
 #lang racket/base
 (require racket/match
-         racket/class
          racket/port
          racket/runtime-path
          crypto
-         crypto/private/common/catalog
+         crypto/private/common/interfaces
          checkers
          "util.rkt")
 (provide test-factory-digests
@@ -32,7 +31,7 @@
           (test-digest-kat dspec di)
           (test-digest-misc dspec di)
           (test-digest-methods-agree dspec di)
-          (when (digest-size di)
+          (when (digest-spec? `(hmac ,dspec))
             (test-hmac-methods-agree dspec di))))
       (void))))
 
@@ -76,7 +75,7 @@
            [msg (in-list messages)])
       ;; One-shot digest
       (define dgst (digest di msg #:key key #:size outlen #:config config))
-      (when (eq? (send di get-size*) 'va)
+      (when (eq? ($di-size* di) 'va)
         ;; One-shot early-var-length digest can use #:size argument.
         (check (digest di msg #:key key #:size VARLEN) #:is dgst))
       ;; Ctx with one update
@@ -139,14 +138,14 @@
 
 ;; digest-make-keys : DigestImpl -> (Listof Bytes/#f)
 (define (digest-make-keys di)
-  (append (if (send di key-size-ok? 0) (list #f) '())
-          (for/list ([keylen '(16 32)] #:when (send di key-size-ok? keylen))
+  (append (if ($di-key-size-ok? di 0) (list #f) '())
+          (for/list ([keylen '(16 32)] #:when ($di-key-size-ok? di keylen))
             (semirandom-bytes keylen))))
 
 (define VARLEN 24)
 
 (define (get-outlen+config di)
-  (case (send di get-size*)
+  (case ($di-size* di)
     [(va) (values #f `((size ,VARLEN)))]
     [(vz) (values VARLEN null)]
     [else (values #f null)]))
@@ -167,7 +166,7 @@
             (define dgst (check (digest di0 msg #:size outlen) #:values))
             (for ([di (in-list dis)])
               (check (digest di msg #:size outlen) #:is dgst))
-            (when (digest-size di0)
+            (when (digest-spec? `(hmac ,dspec))
               (define key (generate-hmac-key di0))
               (define tag (check (hmac di0 key msg) #:values))
               (for ([di (in-list dis)])
@@ -189,7 +188,7 @@
 
 (define (run-digest-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (send factory get-display-name)
+    (test #:name ($factory-display-name factory)
       (test-factory-digests factory)))
   (xtest-digests factories))
 

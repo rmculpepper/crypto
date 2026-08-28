@@ -24,10 +24,10 @@
      (and ec-ok? (nettle-ec-impl info factory (make-yarrow)))]
     [(eddsa)
      (and (or ed25519-ok? ed448-ok?)
-          (nettle-eddsa-impl info factory (make-yarrow)))]
+          (nettle-eddsa-impl info factory))]
     [(ecx)
      (and (or x25519-ok? x448-ok?)
-          (nettle-ecx-impl info factory (make-yarrow)))]
+          (nettle-ecx-impl info factory))]
     [else #f]))
 
 ;; ============================================================

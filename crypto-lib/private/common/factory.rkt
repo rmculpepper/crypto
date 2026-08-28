@@ -203,9 +203,10 @@
      (fetch self pkspec pk-spec->info $fi-pk))
 
    (define (fetch self spec spec->info inner-fetch)
-     (hash-ref! (.table self) spec
-                (lambda ()
-                  (inner-fetch (.inner self) self (spec->info spec)))))
+     (and (.ok? self)
+          (hash-ref! (.table self) spec
+                     (lambda ()
+                       (inner-fetch (.inner self) self (spec->info spec))))))
    ))
 
 ;; ============================================================
