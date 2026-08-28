@@ -22,7 +22,9 @@
          (struct-out oneshot-cipher-inner-impl)
          (struct-out multikeylen-cipher-impl)
          (interface-out cipher-inner-impl$)
-         (interface-out lowlevel-cipher-impl$))
+         (interface-out lowlevel-cipher-impl$)
+         pad-bytes/pkcs7
+         unpad-bytes/pkcs7)
 
 (define (make-cipher info factory inner/llci)
   (match inner/llci
