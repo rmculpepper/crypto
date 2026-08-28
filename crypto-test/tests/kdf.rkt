@@ -26,12 +26,12 @@
             (let ([salt (case ($kdf-salt-mode impl) [(req opt) salt] [else #f])])
               (check (kdf impl key salt config) #:with bytes?)))
           (match name
-            [(list 'pbkdf2 'hmac di)
-             (define dimpl (get-digest di factory))
-             (when dimpl
+            [(list 'pbkdf2 'hmac dspec)
+             (define hmaci (get-digest `(hmac ,dspec) factory))
+             (when hmaci
                (test #:name "pbkdf2"
                  (check (kdf impl key salt '((iterations 2000) (key-size 89)))
-                        #:is (rkt:pbkdf2-hmac dimpl key salt 2000 89))))]
+                        #:is (rkt:pbkdf2-hmac hmaci key salt 2000 89))))]
             [_ (void)])
           (define pwconfig (get-pwhash-config name))
           (when pwconfig

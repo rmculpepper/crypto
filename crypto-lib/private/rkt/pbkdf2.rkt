@@ -2,8 +2,8 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         "../common/common.rkt")
+(require brandx
+         crypto)
 (provide pbkdf2-hmac
          pbkdf2)
 
@@ -13,17 +13,9 @@
 
 ;; Performance: for nettle and gcrypt, about x6 or x7 slowdown
 
-(define (pbkdf2-hmac dimpl pass salt iterations key-size)
-  (define hlen (send dimpl get-size)) ;; (digest-size dimpl)
-  ;;(define (PRF text) (send dimpl hmac pass text))
-  (define outbuf (make-bytes hlen))
-  (define root-hctx (send dimpl new-hmac-ctx pass))
-  (define (PRF text)
-    ;; Use -copy, -update, -final! to avoid overhead from sync, state, etc
-    (define hctx (send root-hctx -copy))
-    (send hctx -update text 0 (bytes-length text))
-    (send hctx -final! outbuf)
-    outbuf)
+(define (pbkdf2-hmac hmaci pass salt iterations key-size)
+  (define hlen (digest-size hmaci))
+  (define (PRF text) (digest hmaci text #:key pass))
   (pbkdf2 PRF hlen pass salt iterations key-size))
 
 (define (pbkdf2 PRF hlen password salt iterations wantlen)
@@ -47,17 +39,8 @@
   (define resultbuf
     (apply bytes-append
            (for/list ([i (in-range 1 (add1 wantblocks))]) (F i))))
+  (subbytes resultbuf 0 wantlen))
 
-  (shrink-bytes resultbuf wantlen))
-
-#;
 (define (bytes-xor! dest src len)
   (for ([i (in-range len)])
     (bytes-set! dest i (bitwise-xor (bytes-ref dest i) (bytes-ref src i)))))
-
-(require racket/unsafe/ops)
-(define (bytes-xor! dest src len)
-  (for ([i (in-range len)])
-    (unsafe-bytes-set! dest i
-                       (unsafe-fxxor (unsafe-bytes-ref dest i)
-                                     (unsafe-bytes-ref src i)))))
