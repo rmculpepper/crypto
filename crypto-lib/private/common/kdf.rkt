@@ -143,8 +143,8 @@
   (method-properties
    #:export ([kdf-inner-impl$ #:prefix %])
    (define-struct-abbrevs hkdf-inner-impl)
-   (define (%kdfi-derive self kdfi key-size params pass salt)
-     (define info (check/ref-config '(info) params config:info-kdf "HKDF"))
+   (define (%kdfi-derive self kdfi key-size config pass salt)
+     (define info (check/ref-config '(info) config config:info-kdf #:in kdfi))
      (define (hmac-h key msg)
        ($digest (.hmacdi self) msg key #f null))
      (rkt:hkdf hmac-h salt info key-size pass))))
@@ -156,8 +156,8 @@
   (method-properties
    #:export ([kdf-inner-impl$ #:prefix %])
    (define-struct-abbrevs ans-x9.63-kdf-inner-impl)
-   (define (%kdfi-derive self kdfi key-size params pass _salt)
-     (define info (check/ref-config '(info) params config:info-kdf "ANS X9.63 KDF"))
+   (define (%kdfi-derive self kdfi key-size config pass _salt)
+     (define info (check/ref-config '(info) config config:info-kdf #:in kdfi))
      (define (H msg) ($digest (.di self) msg #f #f null))
      (rkt:ans-x9.63-kdf H info key-size pass))))
 
@@ -168,11 +168,9 @@
   #:properties
   (method-properties
    #:export ([kdf-inner-impl$ #:prefix %])
-   (define (%kdfi-derive self kdfi key-size params pass salt)
+   (define (%kdfi-derive self kdfi key-size config pass salt)
      (match-define (concat-kdf-inner-impl hmac? di) self)
-     (define info
-       (check/ref-config '(info) params config:info-kdf
-                         "NIST SP 800-56 One-Step KDF"))
+     (define info (check/ref-config '(info) config config:info-kdf #:in kdfi))
      (define H
        (if hmac?
            (lambda (msg) ($digest di msg salt #f null))
@@ -185,11 +183,9 @@
   #:properties
   (method-properties
    #:export ([kdf-inner-impl$ #:prefix %])
-   (define (%kdfi-derive self kdfi key-size params pass _salt)
+   (define (%kdfi-derive self kdfi key-size config pass _salt)
      (match-define (sp800-108-counter-hmac-kdf-inner-impl di) self)
-     (define info
-       (check/ref-config '(info) params config:info-kdf
-                         "NIST SP 800-108 Counter KDF"))
+     (define info (check/ref-config '(info) config config:info-kdf #:in kdfi))
      (define (prf seed msg) ($digest di msg seed #f null))
      (rkt:sp800-108-counter-kdf prf info key-size pass))))
 
@@ -199,11 +195,9 @@
   #:properties
   (method-properties
    #:export ([kdf-inner-impl$ #:prefix %])
-   (define (%kdfi-derive self kdfi key-size params pass salt)
+   (define (%kdfi-derive self kdfi key-size config pass salt)
      (match-define (sp800-108-feedback-hmac-kdf-inner-impl di) self)
-     (define info
-       (check/ref-config '(info) params config:info-kdf
-                         "NIST SP 800-108 Feedback KDF"))
+     (define info (check/ref-config '(info) config config:info-kdf #:in kdfi))
      (define ctr? #t) ;; FIXME, make configurable
      (define (prf seed msg) ($digest di msg seed #f null))
      (rkt:sp800-108-feedback-kdf prf ctr? info key-size salt pass))))
@@ -214,11 +208,9 @@
   #:properties
   (method-properties
    #:export ([kdf-inner-impl$ #:prefix %])
-   (define (%kdfi-derive self kdfi key-size params pass _salt)
+   (define (%kdfi-derive self kdfi key-size config pass _salt)
      (match-define (sp800-108-double-pipeline-hmac-kdf-inner-impl di) self)
-     (define info
-       (check/ref-config '(info) params config:info-kdf
-                         "NIST SP 800-108 Double-Pipeline KDF"))
+     (define info (check/ref-config '(info) config config:info-kdf #:in kdfi))
      (define ctr? #t) ;; FIXME, make configurable
      (define (prf seed msg) ($digest di msg seed #f null))
      (rkt:sp800-108-double-pipeline-kdf prf ctr? info key-size pass))))
@@ -228,7 +220,7 @@
 
 (define (kdf-pwhash-argon2 ki config pass)
   (define-values (m t p v)
-    (check/ref-config '(m t p v) config config:argon2-base "argon2"))
+    (check/ref-config '(m t p v) config config:argon2-base #:in ki))
   (define alg ($get-spec ki))
   (define salt (crypto-random-bytes 16))
   (define pwh ($kdf-derive ki 32 `((m ,m) (t ,t) (p ,p) (v ,v)) pass salt))
@@ -236,7 +228,7 @@
 
 (define (kdf-pwhash-scrypt ki config pass)
   (define-values (ln p r)
-    (check/ref-config '(ln p r) config config:scrypt-pwhash "scrypt"))
+    (check/ref-config '(ln p r) config config:scrypt-pwhash #:in ki))
   (define salt (crypto-random-bytes 16))
   (define pwh ($kdf-derive ki 32 `((N ,(expt 2 ln)) (r ,r) (p ,p)) pass salt))
   (encode-pwhash (hash '$id 'scrypt 'ln ln 'r r 'p p 'salt salt 'pwhash pwh)))
@@ -249,7 +241,7 @@
       [(sha512) 'pbkdf2-sha512]
       [else (crypto-error "PBKDF2 variant unsupported for password hashing" #:in ki)]))
   (define-values (iters)
-    (check/ref-config '(iterations) config config:pbkdf2-base "PBKDF2"))
+    (check/ref-config '(iterations) config config:pbkdf2-base #:in ki))
   (define salt (crypto-random-bytes 16))
   (define pwh ($kdf-derive ki 32 `((iterations ,iters)) pass salt))
   (encode-pwhash (hash '$id id 'rounds iters 'salt salt 'pwhash pwh)))
