@@ -11,7 +11,7 @@
          "error.rkt")
 (provide (contract-out
           [make-digest
-           (-> info? factory? (or/c digest-inner-impl? #f)
+           (-> digest-info? factory? (or/c digest-inner-impl? #f)
                (or/c digest-impl? #f))])
          (struct-out common-digest-impl)
          (interface-out digest-inner-impl$)
@@ -32,7 +32,7 @@
   (csize    ;; (U Nat #f) -- default/configured size; #f only if late-size ('vz)
    ))
 
-(struct common-digest-impl info-impl-base
+(struct common-digest-impl impl-base
   (inner    ;; DigestInnerImpl
    )
   #:properties
@@ -48,7 +48,7 @@
 
    ;; type Ctx = (common-digest-ctx _ inner.InnerCtx _)
 
-   ;; use fallbacks for di-size, di-config-family, di-key-size-ok?
+   ;; inherit di-size, di-key-size-ok?
    (define (%di-size* self) ($di-size* (.info self)))
    (define (%di-block-size self) ($di-block-size (.info self)))
    (define (%di-has-config? self) ($di-has-config? (.info self)))

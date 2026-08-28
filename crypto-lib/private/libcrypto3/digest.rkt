@@ -175,7 +175,7 @@
    ;; get-config-params : Boolean Config -> (values Nat/#f ParamAlist)
    ;; Return size only if set by config, but use size field in params.
    (define (get-config-params self di key? config)
-     (define config-family ($di-config-family di))
+     (define config-family (digest-spec-config-family ($get-spec di)))
      (case config-family
        [(cshake)
         (define-values (function custom)

@@ -23,7 +23,7 @@
 ;; ============================================================
 ;; Base classes
 
-(struct pk-impl-base info-impl-base ()
+(struct pk-impl-base impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]

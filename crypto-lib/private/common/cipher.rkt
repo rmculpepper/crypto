@@ -12,10 +12,10 @@
          "error.rkt")
 (provide (contract-out
           [make-cipher
-           (-> info? factory? (or/c cipher-inner-impl? lowlevel-cipher-impl? #f)
+           (-> cipher-info? factory? (or/c cipher-inner-impl? lowlevel-cipher-impl? #f)
                (or/c cipher-impl? #f))]
           [make-multikeylen-cipher
-           (-> info? factory? (listof (cons/c nat? (or/c lowlevel-cipher-impl? #f)))
+           (-> cipher-info? factory? (listof (cons/c nat? (or/c lowlevel-cipher-impl? #f)))
                (or/c cipher-impl? #f))])
          (struct-out cipher-impl-base)
          (struct-out common-cipher-impl)
@@ -47,7 +47,7 @@
 ;; ============================================================
 ;; Cipher
 
-(struct cipher-impl-base info-impl-base ()
+(struct cipher-impl-base impl-base ()
   #:properties
   (method-properties
    #:export ([cipher-impl$ #:prefix %]

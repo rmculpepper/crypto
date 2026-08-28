@@ -19,6 +19,10 @@
 
 ;; ============================================================
 
+;; info-base: Base struct for all "info" types.
+(struct info-base (spec)
+  #:property prop:auto-equal+hash (list (struct-field-index spec)))
+
 (define nat? exact-nonnegative-integer?)
 
 (define-interface simple-write$
@@ -34,14 +38,6 @@
                     (for/list ([prefix (in-list prefixes)])
                       (format "~a:" prefix)))
              ($to-write-string self)))
-  #:generics-prefix $)
-
-#;
-(define-interface custom-write$
-  (custom-write ;; X OutputPort Mode -> Void
-   )
-  #:derive-property prop:custom-write
-  (lambda (self out mode) ($custom-write self out mode))
   #:generics-prefix $)
 
 ;; ============================================================
@@ -77,30 +73,15 @@
              max)])))
 
 ;; ============================================================
-;; Info
-
-(define-interface has-spec$
-  #:predicate has-spec?
-  (get-spec)
-  #:generics-prefix $)
-
-(define-interface info$
-  #:super (has-spec$)
-  #:predicate info?
-  ())
-
-;; ============================================================
 ;; Digests
 
 (define-interface digest-info$
-  #:super (info$)
   #:predicate digest-info?
   (;; get-spec        ;; -> digest-spec?
    [di-size           (-> digest-info? (or/c nat? #f))] ;; #f for var/xof
    [di-size*          (-> digest-info? (or/c nat? 'va 'vz))]
    [di-block-size     (-> digest-info? nat?)]
    [di-has-config?    (-> digest-info? boolean?)]
-   [di-config-family  (-> digest-info? (or/c symbol? #f))]
    [di-key-sizes      (-> digest-info? size-set/c)]
    [di-key-size-ok?   (-> digest-info? nat? boolean?)]
    [di-security-strength  (-> digest-info? boolean? (or/c #f nat?))])
@@ -110,28 +91,19 @@
     (define (di-size self)
       (let ([size ($di-size* self)])
         (and (exact-integer? size) size)))
-    (define (di-config-family self)
-      (case ($get-spec self)
-        [(cshake128 cshake256) 'cshake]
-        [(blake2b blake2b-512 blake2b-384 blake2b-256 blake2b-160) 'blake2b]
-        [(blake2s blake2s-256 blake2s-224 blake2s-160 blake2s-128) 'blake2s]
-        [else #f]))
     (define (di-key-size-ok? self keysize)
       (size-set-contains? ($di-key-sizes self) keysize))
     (hasheq 'di-size di-size
-            'di-config-family di-config-family
             'di-key-size-ok? di-key-size-ok?))
   #:generics-prefix $)
 
-(struct info:digest
-  (spec size block-size config? key-sizes ci-secbits cr-secbits)
+(struct info:digest info-base
+  (size block-size config? key-sizes ci-secbits cr-secbits)
   #:properties
   (method-properties
    #:export ([digest-info$ #:prefix %]
              [simple-write$ #:prefix %])
    (define-struct-abbrevs info:digest)
-   ;; ----
-   (define (%get-spec self) (.spec self))
    ;; ----
    (define (%di-size* self) (.size self))
    (define (%di-block-size self) (.block-size self))
@@ -142,8 +114,7 @@
            [else (.ci-secbits self)]))
    ;; ----
    (define (%to-write-string self)
-     (format "info:digest:~s" (.spec self))))
-  #:property prop:auto-equal+hash (list (struct-field-index spec)))
+     (format "info:digest:~s" (.spec self)))))
 
 (define (dinfo spec size block-size
                [ci-secbits #f]
@@ -243,7 +214,7 @@
 
 (define known-simple-digests
   (for/hasheq ([di (in-list (get-simple-digest-infos))])
-    (values ($get-spec di) di)))
+    (values (info-base-spec di) di)))
 
 (begin
   (define (digest-spec-size ds)
@@ -252,6 +223,13 @@
     ($di-block-size (digest-spec->info ds #t)))
   (define (digest-spec-security-strength ds [cr? #t])
     ($di-security-strength (digest-spec->info ds #t) cr?)))
+
+(define (digest-spec-config-family dspec)
+  (case dspec
+    [(cshake128 cshake256) 'cshake]
+    [(blake2b blake2b-512 blake2b-384 blake2b-256 blake2b-160) 'blake2b]
+    [(blake2s blake2s-256 blake2s-224 blake2s-160 blake2s-128) 'blake2s]
+    [else #f]))
 
 (define (list-simple-digest-specs)
   (sort (hash-keys known-simple-digests) symbol<?))
@@ -315,7 +293,6 @@
   (and (memq x known-block-modes) #t))
 
 (define-interface cipher-info$
-  #:super (info$)
   #:predicate cipher-info?
   (;; get-spec        ;; -> cipher-spec?
    [ci-cipher-name    (-> cipher-info? symbol?)]
@@ -344,15 +321,15 @@
 ;; ------------------------------------------------------------
 ;; Block Ciphers
 
-(struct info:cipher:block
-  (spec bci mode)
+(struct info:cipher:block info-base
+  (bci  ;; BlockCipherInfo
+   mode ;; BlockMode (Symbol)
+   )
   #:properties
   (method-properties
    #:export ([cipher-info$ #:prefix %]
              [simple-write$ #:prefix %])
    (define-struct-abbrevs info:cipher:block)
-   ;; ----
-   (define (%get-spec self) (.spec self))
    ;; ----
    (define (%ci-cipher-name self)
      #;($bci-name (.bci self))
@@ -399,8 +376,7 @@
      (eq? ($ci-type self) 'block))
    ;; ----
    (define (%to-write-string self)
-     (format "info:cipher:~s" (.spec self))))
-  #:property prop:auto-equal+hash (list (struct-field-index spec)))
+     (format "info:cipher:~s" (.spec self)))))
 
 ;; ----------------------------------------
 ;; BlockMode
@@ -452,8 +428,7 @@
      (block-mode-block-size-ok? mode (.block-size self)))
    ;; ----
    (define (%to-write-string self)
-     (format "info:block-cipher:~s" (.name self))))
-  #:property prop:auto-equal+hash (list (struct-field-index name)))
+     (format "info:block-cipher:~s" (.name self)))))
 
 (define known-block-ciphers
   (let ()
@@ -492,14 +467,12 @@
 ;; ------------------------------------------------------------
 ;; Stream Ciphers
 
-(struct info:cipher:stream (spec chunk-size ivlen key-sizes auth-len)
+(struct info:cipher:stream info-base (chunk-size ivlen key-sizes auth-len)
   #:properties
   (method-properties
    #:export ([cipher-info$ #:prefix %]
              [simple-write$ #:prefix %])
    (define-struct-abbrevs info:cipher:stream)
-   ;; ----
-   (define (%get-spec self) (.spec self))
    ;; ----
    (define (%ci-cipher-name self) (car (.spec self)))
    (define (%ci-mode self) 'stream)
@@ -517,8 +490,7 @@
    (define (%ci-uses-padding? self) #f)
    ;; ----
    (define (%to-write-string self)
-     (format "info:cipher:~s" (.spec self))))
-  #:property prop:auto-equal+hash (list (struct-field-index spec)))
+     (format "info:cipher:~s" (.spec self)))))
 
 (define known-stream-ciphers
   (let ()
@@ -581,7 +553,6 @@
 ;; PK
 
 (define-interface pk-info$
-  #:super (info$)
   #:predicate pk-info?
   (;; get-spec          ;; -> pk-spec?
    [pk-can-sign?        (-> pk-info? any/c (or/c digest-spec? #f) boolean?)]
@@ -591,14 +562,12 @@
   ;; for can-{sign,encrypt}?: pad=#f means "at all?"
   #:generics-prefix $)
 
-(struct info:pk (spec)
+(struct info:pk info-base ()
   #:properties
   (method-properties
    #:export ([pk-info$ #:prefix %]
              [simple-write$ #:prefix %])
    (define-struct-abbrevs info:pk)
-   ;; ----
-   (define (%get-spec self) (.spec self))
    ;; ----
    (define (%pk-can-sign? self pad dspec)
      (case (.spec self)
@@ -619,8 +588,7 @@
      (and (memq (.spec self) '(dsa dh ec eddsa ecx)) #t))
    ;; ----
    (define (%to-write-string self)
-     (format "info:pk:~s" (.spec self))))
-  #:property prop:auto-equal+hash (list (struct-field-index spec)))
+     (format "info:pk:~s" (.spec self)))))
 
 (define (list-known-pks)
   '(rsa dsa dh ec eddsa ecx))
@@ -703,29 +671,25 @@
 ;; KDF info objects are not interned.
 
 (define-interface kdf-info$
-  #:super (info$)
   #:predicate kdf-info?
   (;; get-spec        ;; -> kdf-spec?
    [kdf-salt-mode     (-> kdf-info? (or/c 'req 'opt #f))]
    [kdf-salt-default  (-> kdf-info? (or/c bytes? #f))]) ;; only if mode='opt
   #:generics-prefix $)
 
-(struct info:kdf
-  (spec salt-mode salt-default)
+(struct info:kdf info-base
+  (salt-mode salt-default)
   #:properties
   (method-properties
    #:export ([kdf-info$ #:prefix %]
              [simple-write$ #:prefix %])
    (define-struct-abbrevs info:kdf)
    ;; ----
-   (define (%get-spec self) (.spec self))
-   ;; ----
    (define (%kdf-salt-mode self) (.salt-mode self))
    (define (%kdf-salt-default self) (.salt-default self))
    ;; ----
    (define (%to-write-string self)
-     (format "info:kdf:~s" (.spec self))))
-  #:property prop:auto-equal+hash (list (struct-field-index spec)))
+     (format "info:kdf:~s" (.spec self)))))
 
 (define (list-known-simple-kdfs)
   '(argon2d argon2i argon2id scrypt))

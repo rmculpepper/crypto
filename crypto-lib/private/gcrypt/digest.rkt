@@ -97,7 +97,7 @@
      (define ic
        (cond [(.hmac? self) (gcry_md_open (.md self) GCRY_MD_FLAG_HMAC)]
              [else (gcry_md_open (.md self) 0)]))
-     (case ($di-config-family ci)
+     (case (digest-spec-config-family ($get-spec ci))
        [(cshake)
         (define-values (function custom)
           (check/ref-config '(function custom) config config:cshake #:in ci))

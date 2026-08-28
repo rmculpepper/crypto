@@ -15,7 +15,7 @@
          (prefix-in rkt: "../rkt/kdf.rkt"))
 (provide (contract-out
           [make-kdf
-           (-> info? factory? (or/c kdf-inner-impl? #f)
+           (-> kdf-info? factory? (or/c kdf-inner-impl? #f)
                (or/c kdf-impl? #f))]
           [make-kdf-inner-impl
            (->* [(-> kdf-impl? nat? config/c bytes? bytes? bytes?)]
@@ -47,7 +47,7 @@
 ;; ============================================================
 ;; KDF and Password Hashing
 
-(struct common-kdf-impl info-impl-base
+(struct common-kdf-impl impl-base
   (inner    ;; KDFInnerImpl
    )
   #:properties

@@ -23,24 +23,26 @@
 ;; ============================================================
 
 (define (crypto-factory? x) (factory? x))
-
-;; ------------------------------------------------------------
-
-(define-interface has-info$
-  #:predicate has-info?
-  ([get-info    (-> has-info? info?)])
-  #:generics-prefix $)
-
-(define-interface has-factory$
-  #:predicate has-factory?
-  ([get-factory (-> has-factory? crypto-factory?)])
-  #:generics-prefix $)
+(define (impl? x) (impl-base? x))
+(define (info? x) (info-base? x))
 
 ;; ============================================================
 
-;; The ctx struct is the basis for all "context" types: digest-ctx,
-;; cipher-ctx, pk-key, pk-parameters. The inner field stores an "inner
-;; context" (ic) with an impl-specific type.
+;; impl-base: Base struct for all "implementation" types.
+(struct impl-base (info factory)
+  #:properties
+  (method-properties
+   #:export ([simple-write$ #:prefix %])
+   (define-struct-abbrevs impl-base)
+   ;; ----
+   (define (%to-write-string self)
+     (format "~s" ($get-spec self)))
+   (define (%to-write-prefixes self)
+     (list ($factory-name (.factory self))))))
+
+;; ctx: Base struct for all "context" types: digest-ctx, cipher-ctx,
+;; pk-key, pk-parameters. The inner field stores an "inner context"
+;; (ic) with an impl-specific type.
 
 ;; General invariant for impl interfaces below taking impl (self) and
 ;; context argument: impl field of context matches impl.
@@ -48,15 +50,8 @@
 (struct ctx (impl [inner #:mutable])
   #:properties
   (method-properties
-   #:export ([has-spec$ #:prefix %]
-             [has-info$ #:prefix %]
-             [has-factory$ #:prefix %]
-             [simple-write$ #:prefix %])
+   #:export ([simple-write$ #:prefix %])
    (define-struct-abbrevs ctx)
-   ;; ----
-   (define (%get-spec self) ($get-spec ($get-info self)))
-   (define (%get-info self) ($get-info (.impl self)))
-   (define (%get-factory self) ($get-factory (.impl self)))
    ;; ----
    (define (%to-write-string self)
      ($to-write-string (.impl self)))
@@ -64,6 +59,22 @@
      (cons "ctx" (cdr ($to-write-prefixes (.impl self)))))))
 
 ;; ----------------------------------------
+
+(define ($get-spec v)
+  (info-base-spec ($get-info v)))
+
+(define ($get-info v)
+  (match v
+    [(? info-base? v) v]
+    [(impl-base info _) info]
+    [(ctx (impl-base info _) _) info]))
+
+(define ($get-factory v)
+  (match v
+    [(impl-base _ factory) factory]
+    [(ctx (impl-base _ factory) _) factory]))
+
+;; ============================================================
 
 (struct state-ctx ctx (lock))
 (struct statelock (sema [state #:mutable] desc))
@@ -122,52 +133,6 @@
             (cdr ($to-write-prefixes (.impl self)))))))
 
 ;; ============================================================
-;; General Implementation & Contexts
-
-(define-interface impl$
-  #:super (info$ has-info$ has-factory$)
-  #:predicate impl?
-  ())
-
-;; ----------------------------------------
-
-(struct info-impl-base (info factory)
-  #:properties
-  (method-properties
-   #:export ([impl$ #:prefix %]
-             [simple-write$ #:prefix %])
-   (define-struct-abbrevs info-impl-base)
-   ;; ----
-   (define (%get-spec self) ($get-spec (.info self)))
-   (define (%get-info self) (.info self))
-   (define (%get-factory self) (.factory self))
-   ;; ----
-   (define (%to-write-string self)
-     (format "~s" ($get-spec self)))
-   (define (%to-write-prefixes self)
-     (list ($factory-name (.factory self))))))
-
-;; ----------------------------------------
-
-#;
-(define-interface clone$
-  (clone
-   prepare-clone   ;; -> (values (X ... -> Self) (Listof X) (Self -> Void))
-   )
-  #:fallbacks
-  (let ()
-    (define (clone self)
-      (define-values (maker args patchup) ($prepare-clone self))
-      (define copy (apply maker args))
-      (patchup copy)
-      copy)
-    (define (prepare-clone self)
-      (define (invalid . args) (error 'clone "invalid constructor"))
-      (values invalid null void))
-    (hasheq 'clone clone 'prepare-clone prepare-clone))
-  #:generics-prefix $)
-
-;; ============================================================
 ;; Inputs
 
 ;; An Input is one of
@@ -218,7 +183,7 @@
 ;; Digests
 
 (define-interface digest-impl$
-  #:super (impl$ digest-info$)
+  #:super (digest-info$)
   #:predicate digest-impl?
   (;; type Ctx = (digest-ctx _ Any)
    [digest      (-> digest-impl? input/c maybe-key/c maybe-size/c config/c bytes?)]
@@ -238,7 +203,7 @@
 (define cipher-pad/c boolean?)
 
 (define-interface cipher-impl$
-  #:super (impl$ cipher-info$)
+  #:super (cipher-info$)
   #:predicate cipher-impl?
   (;; type Ctx = (cipher-ctx _ Any)
    [ci-new-ctx      (-> cipher-impl? key/c iv/c boolean?
@@ -292,7 +257,7 @@
            (cdr (super-to-write-prefixes self))))))
 
 (define-interface pk-impl$
-  #:super (impl$ pk-info$)
+  #:super (pk-info$)
   #:predicate pk-impl?
   ([pk-generate-key     (-> pk-impl? config/c pk-key?)]
    [pk-generate-params  (-> pk-impl? config/c pk-parameters?)]
@@ -398,7 +363,7 @@
 ;; KDFs
 
 (define-interface kdf-impl$
-  #:super (impl$ kdf-info$)
+  #:super (kdf-info$)
   #:predicate kdf-impl?
   ([kdf-derive    (-> kdf-impl? (or/c nat? #f) config/c bytes? (or/c bytes? #f)
                       bytes?)]
