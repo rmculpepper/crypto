@@ -221,7 +221,7 @@
        (set-ctx-inner! cctx #f)))
 
    (define (%ci-get-output self cctx)
-     (get-output-bytes (common-cipher-ctx-out cctx)))
+     (get-output-bytes (common-cipher-ctx-out cctx) #t))
 
    (define (%ci-auth-tag self cctx)
      (cond [(cipher-ctx-encrypt? cctx)
