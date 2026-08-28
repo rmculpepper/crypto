@@ -2,12 +2,11 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
-(require racket/class
-         racket/match
+(require racket/match
          racket/runtime-path
          checkers
          crypto
-         crypto/private/common/catalog
+         crypto/private/common/interfaces
          (prefix-in rkt: crypto/private/rkt/pbkdf2)
          "util.rkt")
 (provide test-factory-kdfs
@@ -19,16 +18,16 @@
   (test #:name "kdf"
     (test-kdf-kat factory)
     (for ([name (list-known-kdfs)])
-      (define impl (send factory get-kdf name))
+      (define impl (get-kdf name factory))
       (when impl
         (test #:name (format "~s" name)
           (test #:name "as kdf"
             (define config (get-config name))
-            (let ([salt (case (send impl get-salt-mode) [(req opt) salt] [else #f])])
+            (let ([salt (case ($kdf-salt-mode impl) [(req opt) salt] [else #f])])
               (check (kdf impl key salt config) #:with bytes?)))
           (match name
             [(list 'pbkdf2 'hmac di)
-             (define dimpl (send factory get-digest di))
+             (define dimpl (get-digest di factory))
              (when dimpl
                (test #:name "pbkdf2"
                  (check (kdf impl key salt '((iterations 2000) (key-size 89)))
@@ -168,7 +167,7 @@
         (define cred0 (and pwconfig (pwhash kdfi0 key pwconfig)))
         (for ([kdfi (in-list (cdr kdfis))])
           (test #:name (format "~s (~s)" spec (length kdfis))
-            (let ([salt (case (send kdfi0 get-salt-mode) [(req opt) salt] [else #f])])
+            (let ([salt (case ($kdf-salt-mode kdfi0) [(req opt) salt] [else #f])])
               (define out (kdf kdfi0 key salt config))
               (for ([kdfi (in-list (cdr kdfis))])
                 (check (kdf kdfi key salt config) #:is out)))
@@ -183,7 +182,7 @@
 
 (define (run-kdf-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (send factory get-display-name)
+    (test #:name ($factory-display-name factory)
       (test-factory-kdfs factory)))
   (xtest-kdfs factories))
 

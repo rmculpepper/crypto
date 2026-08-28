@@ -36,11 +36,11 @@
        (define dname (check/get-digest-name dspec))
        (and evp dname (hkdf-inner-impl evp dname))]
       [(list 'concat dspec)
-       (define evp (fetch "SSDF"))
+       (define evp (fetch "SSKDF"))
        (define dname (check/get-digest-name dspec))
        (and evp dname (concat-inner-impl evp dname))]
       [(list 'concat 'hmac dspec)
-       (define evp (fetch "SSDF"))
+       (define evp (fetch "SSKDF"))
        (define dname (check/get-digest-name dspec))
        (and evp dname (concat-hmac-inner-impl evp dname))]
       [(list 'ans-x9.63 dspec)
@@ -116,7 +116,6 @@
      (define params
        `((#"digest" utf8-string ,dname)
          (#"key" octet-string ,pass)
-         (#"salt" octet-string ,salt)
          (#"info" octet-string ,info #:?)))
      (libcrypto3-do-kdf evp key-size params))))
 

@@ -18,7 +18,7 @@
            (-> kdf-info? factory? (or/c kdf-inner-impl? #f)
                (or/c kdf-impl? #f))]
           [make-kdf-inner-impl
-           (->* [(-> kdf-impl? nat? config/c bytes? bytes? bytes?)]
+           (->* [(-> kdf-impl? nat? config/c bytes? (or/c bytes? #f) bytes?)]
                 [(-> kdf-impl? config/c bytes? (or/c bytes? #f))
                  (-> kdf-impl? bytes? string? (or/c 'valid 'invalid 'fallback))]
                 kdf-inner-impl?)])
@@ -110,7 +110,7 @@
     (-> kdf-inner-impl? kdf-impl? config/c bytes?
         (or/c bytes? #f))]
    [kdfi-pwhash-verify
-    (-> kdf-inner-impl? kdf-impl? config/c string?
+    (-> kdf-inner-impl? kdf-impl? bytes? string?
         (or/c 'valid 'invalid 'fallback))])
   #:generics-prefix $)
 

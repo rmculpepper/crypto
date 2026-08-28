@@ -253,6 +253,7 @@
   (define (key-size key)
     (ceiling-align (add1 (bytes-length key))))
   (define (data-size type data)
+    (unless data (error 'make-param-array "missing data of type ~e" type))
     (match type
       [(or 'int 'uint) (compiler-sizeof 'int)]
       [(or 'long 'ulong) (compiler-sizeof 'long)]

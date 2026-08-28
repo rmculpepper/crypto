@@ -369,7 +369,7 @@
                       bytes?)]
    [pwhash        (-> kdf-impl? config/c bytes?
                       string?)]
-   [pwhash-verify (-> kdf-impl? config/c string?
+   [pwhash-verify (-> kdf-impl? bytes? string?
                       boolean?)])
   #:generics-prefix $)
 

@@ -256,21 +256,21 @@
         (and di (make-kdf (hkdf-inner-impl di)))]
        [(list 'concat dspec)
         (define di ($fetch-digest factory dspec))
-        (and di (make-kdf (concat-kdf-inner-impl di #f)))]
+        (and di (make-kdf (concat-kdf-inner-impl #f di)))]
        [(list 'concat 'hmac (? symbol? dspec))
         (define di ($fetch-digest factory `(hmac ,dspec)))
-        (and di (make-kdf (concat-kdf-inner-impl di #t)))]
+        (and di (make-kdf (concat-kdf-inner-impl #t di)))]
        [(list 'ans-x9.63 dspec)
         (define di ($fetch-digest factory dspec))
         (and di (make-kdf (ans-x9.63-kdf-inner-impl di)))]
        [(list 'sp800-108-counter 'hmac dspec)
-        (define di ($fetch-digest factory dspec))
+        (define di ($fetch-digest factory `(hmac ,dspec)))
         (and di (make-kdf (sp800-108-counter-hmac-kdf-inner-impl di)))]
        [(list 'sp800-108-feedback 'hmac dspec)
-        (define di ($fetch-digest factory dspec))
+        (define di ($fetch-digest factory `(hmac ,dspec)))
         (and di (make-kdf (sp800-108-feedback-hmac-kdf-inner-impl di)))]
        [(list 'sp800-108-double-pipeline 'hmac dspec)
-        (define di ($fetch-digest factory dspec))
+        (define di ($fetch-digest factory `(hmac ,dspec)))
         (and di (make-kdf (sp800-108-double-pipeline-hmac-kdf-inner-impl di)))]
        [_ #f]))
    ))
