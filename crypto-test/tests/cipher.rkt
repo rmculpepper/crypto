@@ -3,11 +3,10 @@
 
 #lang racket/base
 (require racket/match
-         racket/class
          racket/port
          racket/runtime-path
          crypto
-         crypto/private/common/catalog
+         crypto/private/common/interfaces
          checkers
          "util.rkt")
 (provide test-factory-ciphers
@@ -47,7 +46,7 @@
                [`((Count ,c) (Key ,(app hex->bytes key)) (IV ,(app hex->bytes iv))
                              (PT ,(app hex->bytes pt)) (AAD ,(app hex->bytes aad))
                              (CT ,(app hex->bytes ct)) (Tag ,(app hex->bytes tag)))
-                (when (send ci key-size-ok? (bytes-length key))
+                (when ($ci-key-size-ok? ci (bytes-length key))
                   (check (encrypt/auth ci key iv pt #:aad aad)
                          #:is (values ct tag)))])))))
      (test #:name "decrypt KAT"
@@ -58,7 +57,7 @@
                [`((Count ,c) (Key ,(app hex->bytes key)) (IV ,(app hex->bytes iv))
                              (CT ,(app hex->bytes ct)) (AAD ,(app hex->bytes aad))
                              (Tag ,(app hex->bytes tag)) ,result)
-                (when (send ci key-size-ok? (bytes-length key))
+                (when ($ci-key-size-ok? ci (bytes-length key))
                   (match result
                     [`(PT ,(app hex->bytes pt))
                      (check (decrypt/auth ci key iv ct #:aad aad #:auth-tag tag)
@@ -156,7 +155,7 @@
 (define (cipher-make-keys ci)
   ;; Don't use all cipher-keysizes, because some (eg, blowfish), have
   ;; many allowed key sizes.
-  (for/list ([keylen '(8 16 24 32 19 28)] #:when (send ci key-size-ok? keylen))
+  (for/list ([keylen '(8 16 24 32 19 28)] #:when ($ci-key-size-ok? ci keylen))
     (semirandom-bytes keylen)))
 
 ;; ============================================================
@@ -171,13 +170,13 @@
         (test #:name (format "~s (~s)" cspec (length cis))
           (define ci0 (car cis))
           (for ([keylen (in-list '(16 24 32))]
-                #:when (send ci0 key-size-ok? keylen))
+                #:when ($ci-key-size-ok? ci0 keylen))
             (define key (semirandom-bytes keylen))
             (define iv (generate-cipher-iv ci0))
             (for ([msg (in-list messages)])
               (define ct (encrypt ci0 key iv msg))
               (for ([ci (in-list cis)]
-                    #:when (send ci key-size-ok? keylen))
+                    #:when ($ci-key-size-ok? ci keylen))
                 (check (encrypt ci key iv msg) #:is ct)
                 (check (decrypt ci key iv ct) #:is msg)))))))))
 
@@ -199,7 +198,7 @@
 
 (define (run-cipher-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (send factory get-display-name)
+    (test #:name ($factory-display-name factory)
       (test-factory-ciphers factory)))
   (xtest-ciphers factories))
 

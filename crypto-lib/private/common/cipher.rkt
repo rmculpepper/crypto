@@ -213,7 +213,7 @@
         (close* self cctx))))
 
    (define (final* self cctx auth-tag)
-     ($cii-final (.inner self) (ctx-inner cctx) auth-tag))
+     ($cii-final (.inner self) (ctx-inner cctx) (or auth-tag #"")))
 
    (define (close* self cctx)
      (when (ctx-inner cctx)
@@ -256,7 +256,7 @@
     (-> cipher-inner-impl? ictx/c bytes? nat? nat?
         void?)]
    [cii-final
-    (-> cipher-inner-impl? ictx/c (or/c bytes? #f)
+    (-> cipher-inner-impl? ictx/c bytes?
         void?)]
    [cii-close
     (-> cipher-inner-impl? ictx/c

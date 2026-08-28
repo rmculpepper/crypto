@@ -353,7 +353,7 @@
 (define (encrypt-ctx? x)
   (and (cipher-ctx? x) (cipher-ctx-encrypt? x)))
 (define (decrypt-ctx? x)
-  (and (cipher-ctx? x) (cipher-ctx-encrypt? x)))
+  (and (cipher-ctx? x) (not (cipher-ctx-encrypt? x))))
 
 ;; make-{en,de}crypt-ctx : ... -> cipher-ctx
 ;; auth-tag-size : Nat/#f -- #f means default tag size for cipher
@@ -429,14 +429,14 @@
 
 (define (decrypt/auth ci key iv inp
                       #:pad [pad default-pad] #:aad [aad-inp null] #:auth-tag [auth-tag #f])
-  (with-crypto-entry 'decrypt
+  (with-crypto-entry 'decrypt/auth
     (let ([ci (-get-cipher-impl ci)])
       (define auth-len (and auth-tag (bytes-length auth-tag)))
       (define cctx (-decrypt-ctx ci key iv pad auth-len #f))
       (define impl (ctx-impl cctx))
       ($ci-update-aad impl cctx aad-inp)
       ($ci-update impl cctx inp)
-      ($ci-final impl cctx #f)
+      ($ci-final impl cctx auth-tag)
       ($ci-get-output impl cctx))))
 
 ;; ----
