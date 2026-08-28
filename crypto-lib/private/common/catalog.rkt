@@ -249,7 +249,7 @@
   (match spec
     [(list 'hmac (? basic-digest-spec? dspec))
      (define di (simple-digest-spec->info dspec))
-     (define any-sizes '#s(varsize 1 +inf.0 1))
+     (define any-sizes '#s(varsize 0 +inf.0 1))
      (define dsize ($di-size di))
      (define bsize ($di-block-size di))
      (dinfo spec dsize bsize #:k dsize #:ks any-sizes)]
