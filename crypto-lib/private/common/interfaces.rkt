@@ -24,7 +24,11 @@
 
 (define (crypto-factory? x) (factory? x))
 (define (impl? x) (impl-base? x))
-(define (info? x) (info-base? x))
+(define (info? x)
+  (or (digest-info? x)
+      (cipher-info? x)
+      (kdf-info? x)
+      (pk-info? x)))
 
 ;; ============================================================
 

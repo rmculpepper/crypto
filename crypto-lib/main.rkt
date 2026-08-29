@@ -61,9 +61,8 @@
 
 (define (to-info src0 [fail-ok? #f] #:lookup [lookup #f])
   (let loop ([src src0])
-    (cond [(info? src) src]
-          [(impl? src) ($get-info src)]
-          [(ctx? src) (loop (ctx-impl ctx))]
+    (cond [(info? src) src] ;; includes impls
+          [(ctx? src) (ctx-impl ctx)]
           [(and lookup (lookup src)) => values]
           [fail-ok? #f]
           [else (crypto-error "could not get info" #:for src0)])))
@@ -538,10 +537,10 @@
  (contract-out
   [pk-can-sign?
    (->* [(or/c pk-spec? pk-impl? pk-key?)]
-        [(or/c symbol? #f) (or/c symbol? #f)]
+        [(or/c sign-pad/c #f) (or/c digest-spec? 'none #f)]
         boolean?)]
   [pk-can-encrypt?
-   (->* [(or/c pk-spec? pk-impl? pk-key?)] [(or/c symbol? #f)] boolean?)]
+   (->* [(or/c pk-spec? pk-impl? pk-key?)] [(or/c encrypt-pad/c #f)] boolean?)]
   [pk-can-key-agree?
    (-> (or/c pk-spec? pk-impl? pk-key?) boolean?)]
   [pk-has-parameters?
@@ -700,21 +699,21 @@
 
 (define (pk-sign pkk msg #:digest [dspec #f] #:pad [pad #f])
   (with-crypto-entry 'pk-sign
-    ($pkk-sign (ctx-impl pkk) pkk msg dspec pad)))
+    (do-sign pkk msg dspec pad)))
 
 (define (pk-verify pkk msg sig #:digest [dspec #f] #:pad [pad #f])
   (with-crypto-entry 'pk-verify
-    ($pkk-verify (ctx-impl pkk) pkk msg dspec pad sig)))
+    (do-verify pkk msg dspec pad sig)))
 
 (define (pk-sign-digest pkk di dbuf #:pad [pad #f])
   (with-crypto-entry 'pk-sign-digest
     (define dspec (-get-digest-spec di))
-    ($pkk-sign (ctx-impl pkk) pkk dbuf di pad)))
+    (do-sign pkk dbuf dspec pad)))
 
 (define (pk-verify-digest pkk di dbuf sig #:pad [pad #f])
   (with-crypto-entry 'pk-verify-digest
     (define dspec (-get-digest-spec di))
-    ($pkk-verify (ctx-impl pkk) pkk dbuf di pad sig)))
+    (do-verify pkk dbuf dspec pad sig)))
 
 (define (digest/sign pkk di0 inp #:pad [pad #f])
   (with-crypto-entry 'digest/sign
@@ -722,7 +721,7 @@
     (define di (get-digest dspec (get-factory pkk)))
     (unless di (err/missing-digest dspec))
     (unless (digest-size di) (err/not-fixed-digest di #:in pkk))
-    ($pkk-sign (ctx-impl pkk) pkk (digest di inp) dspec pad)))
+    (do-sign pkk (digest di inp) dspec pad)))
 
 (define (digest/verify pkk di0 inp sig #:pad [pad #f])
   (with-crypto-entry 'digest/verify
@@ -730,12 +729,12 @@
     (define di (get-digest dspec (get-factory pkk)))
     (unless di (err/missing-digest dspec))
     (unless (digest-size di) (err/not-fixed-digest di #:in pkk))
-    ($pkk-verify (ctx-impl pkk) pkk (digest di inp) dspec pad sig)))
+    (do-verify pkk (digest di inp) dspec pad sig)))
 
 (define (do-sign pkk msg dspec0 pad)
   (define impl (ctx-impl pkk))
   (define dspec (or dspec0 'none))
-  (check-sign impl pkk pad dspec)
+  (check-sign impl pad dspec)
   (unless (pk-key-private? pkk)
     (crypto-error "signing requires private key" #:in pkk))
   (unless (eq? dspec 'none) (check-sign-msg-size impl msg dspec))
@@ -744,7 +743,7 @@
 (define (do-verify pkk msg dspec0 pad sig)
   (define impl (ctx-impl pkk))
   (define dspec (or dspec0 'none))
-  (check-sign impl pkk pad dspec)
+  (check-sign impl pad dspec)
   (unless (eq? dspec 'none) (check-sign-msg-size impl msg dspec))
   ($pkk-verify impl pkk msg dspec pad sig))
 

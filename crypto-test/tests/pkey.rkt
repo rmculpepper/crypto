@@ -3,11 +3,10 @@
 
 #lang racket/base
 (require racket/match
-         racket/class
          racket/port
          racket/runtime-path
          crypto
-         crypto/private/common/catalog
+         crypto/private/common/interfaces
          (only-in crypto/private/common/asn1 Dss-Sig-Value)
          (only-in crypto/private/common/pk-common curve-alias->oid)
          asn1
@@ -37,7 +36,7 @@
 
 ;; make-private-keyss : Symbol PKImpl -> (Listof (List PrivateKey PrivateKey))
 (define (make-private-keyss pkname pk)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (case pkname
     [(rsa)
      ;; 1024-bit key is too small for PSS with SHA512
@@ -52,17 +51,17 @@
        (define pkp (datum->pk-parameters pkpd 'rkt-params factory))
        (for/list ([i 2]) (generate-private-key pkp)))]
     [(ec)
-     (for/list ([curve (in-list (send factory info 'all-ec-curves))]
+     (for/list ([curve (in-list ($factory-info factory 'all-ec-curves))]
                 #:when (and (curve-alias->oid curve)
                             (not (memq curve bad-ec-curves))))
        (define pkp (generate-pk-parameters pk `((curve ,curve))))
        (for/list ([i 2]) (generate-private-key pkp)))]
     [(eddsa)
-     (for/list ([curve (in-list (send factory info 'all-eddsa-curves))])
+     (for/list ([curve (in-list ($factory-info factory 'all-eddsa-curves))])
        (define pkp (generate-pk-parameters pk `((curve ,curve))))
        (for/list ([i 2]) (generate-private-key pkp)))]
     [(ecx)
-     (for/list ([curve (in-list (send factory info 'all-ecx-curves))])
+     (for/list ([curve (in-list ($factory-info factory 'all-ecx-curves))])
        (define pkp (generate-pk-parameters pk `((curve ,curve))))
        (for/list ([i 2]) (generate-private-key pkp)))]))
 
@@ -73,7 +72,7 @@
 ;; ----------------------------------------
 
 (define (test-pk-datum pkname pk privss)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (test #:name "equality"
     (for ([privs (in-list privss)])
       (match-define (list priv1 priv2) privs)
@@ -153,7 +152,8 @@
          (kat-for-each "ecdh.rktd"
                        (lambda (datum) (test-ecdh-kat pk datum))))]
       [(eddsa)
-       (when (memq 'ed25519 (send (send pk get-factory) info 'all-eddsa-curves))
+       (define factory (get-factory pk))
+       (when (memq 'ed25519 ($factory-info factory 'all-eddsa-curves))
          (test #:name "ed25519"
            (kat-for-each "ed25519.rktd"
                          (lambda (datum) (test-ed25519-kat pk datum)))))]
@@ -167,7 +167,7 @@
   (void))
 
 (define (test-rsa-verify-pkcs1-kat pk datum)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (match datum
     [`(rsa-verify-pkcs1 ((n ,n)) ,@test-data)
      (for ([test-datum (in-list test-data)])
@@ -186,7 +186,7 @@
                    #:is expect-verify?))]))]))
 
 (define (test-rsa-verify-pss-kat pk datum)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (match datum
     [`(rsa-verify-pss ((n ,n) ,@_) ,@test-data)
      (for ([test-datum (in-list test-data)])
@@ -210,7 +210,7 @@
             (pss-test dspec e MsgH SH Result))]))]))
 
 (define (test-dsa1-kat pk datum)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (match datum
     [`(dsa ((P ,P) (Q ,Q) (G ,G) ,dspec) ,@test-data)
      (define di (get-digest dspec factory))
@@ -227,7 +227,7 @@
                    #:is #t)])))]))
 
 (define (test-dsa-kat pk datum)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (match datum
     [`(dsa ((P ,P) (Q ,Q) (G ,G) ,dspec) ,@test-data)
      (define di (get-digest dspec factory))
@@ -251,8 +251,8 @@
                      #:is expect-verify?))])))]))
 
 (define (test-ecdsa-kat pk datum)
-  (define factory (send pk get-factory))
-  (define factory-curves (send factory info 'all-ec-curves))
+  (define factory (get-factory pk))
+  (define factory-curves ($factory-info factory 'all-ec-curves))
   (match datum
     [`(ecdsa ,curve ,dspec ,@test-data)
      (define curve-oid (curve-alias->oid curve))
@@ -272,8 +272,8 @@
                      #:is expect-verify?)]))))]))
 
 (define (test-ed25519-kat pk datum)
-  (define factory (send pk get-factory))
-  (define factory-name (send factory get-name))
+  (define factory (get-factory pk))
+  (define factory-name ($factory-name factory))
   (match datum
     [`(ed25519 (sk ,(app hex->bytes skd)) (pk ,(app hex->bytes pkd))
                (msg ,(app hex->bytes msg)) (sig ,(app hex->bytes sig)))
@@ -292,7 +292,7 @@
          (check (pk-verify pub msg* sig) #:is #f)))]))
 
 (define (test-ecdh-kat pk datum)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (match datum
     [`(ecdh ,curve ,@test-data)
      (define curve-oid (curve-alias->oid curve))
@@ -311,11 +311,11 @@
             (check (pk-derive-secret priv pub) #:is (hex->bytes ZH))])))]))
 
 (define (test-ecx-kat pk datum)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (match datum
     [`(,curve (d ,(app hex->bytes d)) (peerq ,(app hex->bytes peerq))
               (derive ,(app hex->bytes derive)))
-     (when (memq curve (send factory info 'all-ecx-curves))
+     (when (memq curve ($factory-info factory 'all-ecx-curves))
        (define priv-datum `(ecx private ,curve #f ,d))
        (define priv (check (datum->pk-key priv-datum 'rkt-private factory) #:values))
        (check (pk-derive-secret priv peerq) #:is derive))]))
@@ -348,7 +348,7 @@
        (test-pk-sign/nodigest pk privss))]))
 
 (define (test-pk-sign/digest pk privss pad)
-  (define factory (send pk get-factory))
+  (define factory (get-factory pk))
   (for ([dspec (in-list all-digest-specs)])
     (define di (get-digest dspec factory))
     (when (and di (digest-size di) (pk-can-sign? pk pad dspec))
@@ -426,7 +426,7 @@
 
 (define (test-pk-encrypt pkspec pk privss)
   (for ([pad (case pkspec [(rsa) '(pkcs1-v1.5 oaep)] [else '(#f)])])
-    (when (send pk can-encrypt? pad)
+    (when (pk-can-encrypt? pk pad)
       (test #:name (format "encrypt w/ pad=~e" pad)
         (for ([privs (in-list privss)])
           ;; Assume priv1 != priv2
@@ -532,7 +532,7 @@
                        (eprintf "failed to convert ~e to ~e\n~s\n~e\n\n" priv pk
                                 (exn-message e) priv-datum))
                      #f)])
-    (datum->pk-key priv-datum 'rkt-private (send pk get-factory))))
+    (datum->pk-key priv-datum 'rkt-private (get-factory pk))))
 
 ;; filter2 : (Listof X) (Listof Y) (X -> Bool) -> (values (Listof X) (Listof Y))
 (define (filter2 xs ys ok?)
@@ -550,8 +550,8 @@
         [iB (in-naturals)]
         #:when (and (ok-pk? pkB) (not (= iA iB))))
     (test #:name (format "~a to ~a"
-                         (send (send pkA get-factory) get-display-name)
-                         (send (send pkB get-factory) get-display-name))
+                         ($factory-display-name (get-factory pkA))
+                         ($factory-display-name (get-factory pkB)))
       (for ([privsA (in-list privssA)]
             [privsB (in-list privssB)])
         (match-define (list privA1 privA2) privsA)
@@ -580,13 +580,13 @@
 (define (xtest-pk-sign/digest pkspec pks privsss pad)
   (for ([dspec (in-list all-digest-specs)])
     (define (ok-pk? pk)
-      (define di (get-digest dspec (send pk get-factory)))
+      (define di (get-digest dspec (get-factory pk)))
       (and di (digest-size di) (pk-can-sign? pk pad dspec)))
     (test #:name (format "w/ digest=~e" dspec)
       (call/cross-test
        pks privsss ok-pk?
        (lambda (pkA privA1 privA2 pkB privB1 privB2)
-         (define diA (get-digest dspec (send pkA get-factory)))
+         (define diA (get-digest dspec (get-factory pkA)))
          (define pubB1 (pk-key->public-only-key privB1))
          (define pubB2 (pk-key->public-only-key privB2))
          (test-pk-sign/digest1 privA1 pubB1 privA2 pubB2 pad dspec diA))))))
@@ -605,7 +605,7 @@
   (case pkspec
     [(rsa)
      (for ([pad (in-list '(pkcs1-v1.5 oaep))])
-       (define (ok-pk? pk) (send pk can-encrypt? pad))
+       (define (ok-pk? pk) (pk-can-encrypt? pk pad))
        (test #:name (format "encrypt w/ pad=~e" pad)
          (call/cross-test
           pks privsss ok-pk?
@@ -629,7 +629,7 @@
 
 (define (run-pk-tests factories)
   (for ([factory (in-list factories)])
-    (test #:name (send factory get-display-name)
+    (test #:name ($factory-display-name factory)
       (test-factory-pks factory)))
   (xtest-pks factories))
 
