@@ -745,8 +745,8 @@
      (generate-key self curve))
 
    (define (generate-key self curve)
-     (define keytype (curve->keytype curve))
      (define libctx (pk-libctx self))
+     (define keytype (curve->keytype curve))
      (define evp (HANDLEp (EVP_PKEY_Q_keygen/none libctx #f keytype)))
      (evp->private-key self evp))
 

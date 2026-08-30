@@ -349,7 +349,8 @@
 
 (define (test-pk-sign/digest pk privss pad)
   (define factory (get-factory pk))
-  (for ([dspec (in-list all-digest-specs)])
+  (for ([dspec (in-list all-digest-specs)]
+        #:when (basic-digest-spec? dspec))
     (define di (get-digest dspec factory))
     (when (and di (digest-size di) (pk-can-sign? pk pad dspec))
       (test #:name (format "w/ digest=~e" dspec)

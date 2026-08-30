@@ -555,7 +555,7 @@
 (define-interface pk-info$
   #:predicate pk-info?
   (;; get-spec          ;; -> pk-spec?
-   [pk-can-sign?        (-> pk-info? any/c (or/c digest-spec? #f) boolean?)]
+   [pk-can-sign?        (-> pk-info? any/c (or/c digest-spec? 'none #f) boolean?)]
    [pk-can-encrypt?     (-> pk-info? any/c boolean?)]
    [pk-can-key-agree?   (-> pk-info? boolean?)]
    [pk-has-params?      (-> pk-info? boolean?)])

@@ -976,7 +976,7 @@
   (_fun #:varargs-after 3
         [libctx : _OSSL_LIB_CTX]
         [propq : #;const _string]
-        [type : #;const _bytes] ;; x25519, x448, ed25519, ed448, sm2
+        [type : #;const _bytes/nul-terminated] ;; x25519, x448, ed25519, ed448, sm2
         -> _EVP_PKEY/null)
   #:c-id EVP_PKEY_Q_keygen
   #:wrap (allocator EVP_PKEY_free))
