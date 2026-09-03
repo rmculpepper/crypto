@@ -195,7 +195,7 @@
 
    (define (%pk-make-public-key self curve qB)
      (cond [($curve-ok? self curve)
-            (define pub (eddsa-check-keys curve qB))
+            (define pub (eddsa-check-keys curve #f qB))
             (pk-key self (keypair curve pub #f) #f)]
            [else #f]))
    ))
@@ -245,8 +245,8 @@
            [else (encode-pub-ecx fmt curve pub)]))
 
    (define (%pk-make-public-key self curve qB)
-     (cond [($curve-ok? curve)
-            (define pub (ecx-check-keys curve  qB))
+     (cond [($curve-ok? self curve)
+            (define pub (ecx-check-keys curve #f qB))
             (pk-key self (keypair curve qB #f) #f)]
            [else #f]))
 
