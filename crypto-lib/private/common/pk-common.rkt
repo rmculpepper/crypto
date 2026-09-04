@@ -35,9 +35,19 @@
 
    ;; ---- pk-info
 
-   ;; Implementations vary so much, must override.
-   (define (%pk-can-sign? self pad dspec) #f)
-   (define (%pk-can-encrypt? self pad) #f)
+   (define (%pk-can-sign? self pad dspec)
+     (case ($get-spec self)
+       [(rsa)
+        ;; implementations vary so much, must override
+        #f]
+       [else ($pk-can-sign? (.info self) pad dspec)]))
+
+   (define (%pk-can-encrypt? self pad)
+     (case ($get-spec self)
+       [(rsa)
+        ;; implementations vary so much, must override
+        #f]
+       [else ($pk-can-encrypt? (.info self) pad)]))
 
    (define (%pk-can-key-agree? self)
      ($pk-can-key-agree? (.info self)))

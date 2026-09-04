@@ -597,13 +597,13 @@
                (define pub (make-bytes X25519_KEY_SIZE))
                (nettle_curve25519_mul_g pub priv)
                (check-recomputed-qB pub qB)
-               (pk-key self (keypair curve priv pub) #t)]
+               (pk-key self (keypair curve pub priv) #t)]
               [(x448)
                (define priv (ecx-check-keys curve #t dB qB))
                (define pub (make-bytes X448_KEY_SIZE))
                (nettle_curve448_mul_g pub priv)
                (check-recomputed-qB pub qB)
-               (pk-key self (keypair curve priv pub) #t)])]
+               (pk-key self (keypair curve pub priv) #t)])]
            [else #f]))
 
    ;; ----

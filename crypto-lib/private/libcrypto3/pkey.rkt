@@ -423,11 +423,6 @@
   (method-properties
    #:export ([pk-impl$ #:prefix %])
 
-   ;; ---- pk-info
-
-   (define (%pk-can-sign? self pad dspec)
-     (eq? pad #f))
-
    ;; ---- pk-impl
 
    (define (%pk-generate-params self config)
@@ -569,11 +564,6 @@
   (method-properties
    #:export ([pk-impl$ #:prefix %])
 
-   ;; ---- pk-info
-
-   (define (%pk-can-sign? self pad dspec)
-     (eq? pad #f))
-
    ;; ---- pk-impl
 
    (define (%pk-generate-key self config)
@@ -653,11 +643,6 @@
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %])
-
-   ;; ---- pk-info
-
-   (define (%pk-can-sign? self pad dspec)
-     (and (eq? pad #f) (memq dspec '(#f none)) #t))
 
    ;; ---- pk-impl
 

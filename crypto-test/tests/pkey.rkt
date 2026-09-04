@@ -579,7 +579,8 @@
        (xtest-pk-sign/nodigest pkspec pks privsss))]))
 
 (define (xtest-pk-sign/digest pkspec pks privsss pad)
-  (for ([dspec (in-list all-digest-specs)])
+  (for ([dspec (in-list all-digest-specs)]
+        #:when (basic-digest-spec? dspec))
     (define (ok-pk? pk)
       (define di (get-digest dspec (get-factory pk)))
       (and di (digest-size di) (pk-can-sign? pk pad dspec)))
