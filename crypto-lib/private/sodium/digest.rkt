@@ -199,7 +199,8 @@
 
    (define (%dii-final self ic size)
      (define buf (make-bytes size))
-     ((.ctx_final self) ic buf size))
+     ((.ctx_final self) ic buf size)
+     buf)
 
    (define (%dii-copy self ic)
      (copy-ctx ic (.ctx_size self)))
@@ -214,7 +215,7 @@
 
 (define (sodium-shake256-inner-impl)
   (sodium-xof-inner-impl crypto_xof_shake256
-                         (crypto_xof_shake128_statebytes)
-                         crypto_xof_shake128_init
-                         crypto_xof_shake128_update
-                         crypto_xof_shake128_squeeze))
+                         (crypto_xof_shake256_statebytes)
+                         crypto_xof_shake256_init
+                         crypto_xof_shake256_update
+                         crypto_xof_shake256_squeeze))
