@@ -13,7 +13,8 @@
   (for/first ([rec (in-list cipher-records)]
               #:when (equal? (aeadcipher-spec rec) spec))
     (define inner (sodium-cipher-inner-impl rec))
-    (make-cipher info factory inner)))
+    (define keylen (aeadcipher-keysize rec))
+    (make-multikeylen-cipher info factory (list (cons keylen inner)))))
 
 ;; ----------------------------------------
 
