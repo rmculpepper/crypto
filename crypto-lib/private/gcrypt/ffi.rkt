@@ -289,7 +289,7 @@
   #:wrap (deallocator))
 
 (define-gcrypt gcry_kdf_open
-  (_fun [hd : (_ptr o _gcry_kdf_hd)]
+  (_fun [hd : (_ptr o _gcry_kdf_hd/null)]
         [algo : _int]
         [subalgo : _int]
         [params : (_list i _ulong)]

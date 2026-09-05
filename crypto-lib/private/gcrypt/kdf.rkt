@@ -27,7 +27,7 @@
      (match (assq dspec digests)
        [(list _ algid blocksize hmac-algid)
         (and hmac-algid (gcry_md_test_algo algid)
-             (make-kdf info (gcrypt-hkdf-inner-impl hmac-algid)))]
+             (make-kdf info factory (gcrypt-hkdf-inner-impl hmac-algid)))]
        [#f #f])]
     [_ #f]))
 
@@ -94,7 +94,7 @@
 (define (gcrypt-hkdf-inner-impl mac-algo)
   (make-kdf-inner-impl
    (lambda (kdfi key-size config pass salt)
-     (define info (check/ref-config '(info key-size) config config:info-kdf #:in kdfi))
+     (define info (check/ref-config '(info) config config:info-kdf #:in kdfi))
      ;; Note: requires non-empty pass
      (gcrypt-kdf GCRY_KDF_HKDF mac-algo
                  #:length key-size
