@@ -15,8 +15,8 @@
   (define spec ($get-spec info))
   (define inner
     (match spec
-      ['shake128 (nettle-shake128-inner-impl)]
-      ['shake256 (nettle-shake256-inner-impl)]
+      ['shake128 (and shake128-ok? (nettle-shake128-inner-impl))]
+      ['shake256 (and shake256-ok? (nettle-shake256-inner-impl))]
       [(? symbol? dspec)
        (let ([nh (lookup-nh dspec)])
          (and nh (nettle-digest-inner-impl nh)))]
