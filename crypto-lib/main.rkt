@@ -5,6 +5,7 @@
 (require racket/contract/base
          racket/match
          racket/random
+         racket/string
          "private/common/interfaces.rkt"
          "private/common/catalog.rkt"
          "private/common/common.rkt"
@@ -359,18 +360,47 @@
 (define (make-encrypt-ctx ci key iv #:pad [pad? #t]
                           #:auth-size [auth-size #f] #:auth-attached? [auth-attached? #t])
   (with-crypto-entry 'make-encrypt-ctx
-    (-encrypt-ctx ci key iv pad? auth-size auth-attached?)))
+    (-cipher-ctx #t ci key iv pad? auth-size auth-attached?)))
 (define (make-decrypt-ctx ci key iv #:pad [pad? #t]
                           #:auth-size [auth-size #f] #:auth-attached? [auth-attached? #t])
   (with-crypto-entry 'make-decrypt-ctx
-    (-decrypt-ctx ci key iv pad? auth-size auth-attached?)))
+    (-cipher-ctx #f ci key iv pad? auth-size auth-attached?)))
 
-(define (-encrypt-ctx ci key iv pad auth-size auth-attached?)
-  (let ([ci (-get-cipher-impl ci)])
-    ($ci-new-ctx ci key (or iv #"") #t pad auth-size auth-attached?)))
-(define (-decrypt-ctx ci key iv pad auth-size auth-attached?)
-  (let ([ci (-get-cipher-impl ci)])
-    ($ci-new-ctx ci key (or iv #"") #f pad auth-size auth-attached?)))
+(define (-cipher-ctx enc? ci0 key iv0 pad0 auth-size0 auth-attached?)
+  (define ci (-get-cipher-impl ci0))
+  (define iv (or iv0 #""))
+  (define auth-size (or auth-size0 ($ci-auth-size ci)))
+  (check-cipher-key-size ci (bytes-length key))
+  (check-cipher-iv-size ci (bytes-length iv))
+  (check-cipher-auth-size ci auth-size)
+  (define pad? (and pad0 ($ci-uses-padding? ci)))
+  ($ci-new-ctx ci key iv enc? pad? auth-size auth-attached?))
+
+(define (check-cipher-key-size ci size)
+  (unless ($ci-key-size-ok? ci size)
+    (define impl-limit? ($ci-key-size-ok? ($get-info ci) size))
+    (crypto-error
+     "bad key size for cipher~a\n  expected: ~a bytes\n  given: ~s bytes"
+     (if impl-limit? ";\n key sizes limited by implementation" "")
+     (match ($ci-key-sizes ci)
+       [(? list? allowed)
+        (string-join (map number->string allowed) ", ")]
+       [(varsize min max step)
+        (format "from ~a to ~a in multiples of ~a" min max step)])
+     size #:in ci)))
+
+(define (check-cipher-iv-size ci iv-size)
+  (unless ($ci-iv-size-ok? ci iv-size)
+    (crypto-error
+     "bad IV size for cipher\n  expected: ~s bytes\n  given: ~s bytes"
+     ($ci-iv-size ci) iv-size #:in ci)))
+
+(define (check-cipher-auth-size ci auth-size)
+  (unless ($ci-auth-size-ok? ci auth-size)
+    (crypto-error "bad authentication tag size\n  given: ~a bytes"
+                  auth-size #:in ci)))
+
+;; ----
 
 (define (cipher-update-aad cctx inp)
   (with-crypto-entry 'cipher-update-aad
@@ -396,7 +426,7 @@
                  #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'encrypt
     (let ([ci (-get-cipher-impl ci)])
-      (define cctx (-encrypt-ctx ci key iv pad auth-size #t))
+      (define cctx (-cipher-ctx #t ci key iv pad auth-size #t))
       (define impl (ctx-impl cctx))
       ($ci-update-aad impl cctx aad-inp)
       ($ci-update impl cctx inp)
@@ -407,7 +437,7 @@
                  #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'decrypt
     (let ([ci (-get-cipher-impl ci)])
-      (define cctx (-decrypt-ctx ci key iv pad auth-size #t))
+      (define cctx (-cipher-ctx #f ci key iv pad auth-size #t))
       (define impl (ctx-impl cctx))
       ($ci-update-aad impl cctx aad-inp)
       ($ci-update impl cctx inp)
@@ -418,7 +448,7 @@
                       #:pad [pad default-pad] #:aad [aad-inp null] #:auth-size [auth-size #f])
   (with-crypto-entry 'encrypt/auth
     (let ([ci (-get-cipher-impl ci)])
-      (define cctx (-encrypt-ctx ci key iv pad auth-size #f))
+      (define cctx (-cipher-ctx #t ci key iv pad auth-size #f))
       (define impl (ctx-impl cctx))
       ($ci-update-aad impl cctx aad-inp)
       ($ci-update impl cctx inp)
@@ -431,7 +461,7 @@
   (with-crypto-entry 'decrypt/auth
     (let ([ci (-get-cipher-impl ci)])
       (define auth-len (and auth-tag (bytes-length auth-tag)))
-      (define cctx (-decrypt-ctx ci key iv pad auth-len #f))
+      (define cctx (-cipher-ctx #f ci key iv pad auth-len #f))
       (define impl (ctx-impl cctx))
       ($ci-update-aad impl cctx aad-inp)
       ($ci-update impl cctx inp)

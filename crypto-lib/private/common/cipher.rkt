@@ -128,42 +128,15 @@
 
    ;; ---- cipher-impl
 
-   (define (%ci-new-ctx self key iv enc? pad? auth-len0 attached-tag?)
-     (check-key-size self (bytes-length key))
-     (check-iv-size self (bytes-length (or iv #"")))
-     (define auth-len (or auth-len0 ($ci-auth-size self)))
-     (check-auth-size self auth-len)
-     (let ([pad? (and pad? ($ci-uses-padding? self))])
-       (define out (open-output-bytes))
-       (define auth-tag-box (box #f))
-       (define ic ($cii-new-ctx (.inner self) self
-                                key iv enc? pad? auth-len attached-tag?
-                                out auth-tag-box))
-       (define init-state (if ($ci-aead? self) 'aad 'open))
-       (common-cipher-ctx self ic (make-statelock init-state cipher-state-desc)
-                          enc? pad? auth-len attached-tag? out auth-tag-box)))
-
-   (define (check-key-size self size)
-     (unless ($ci-key-size-ok? self size)
-       (crypto-error
-        "bad key size for cipher\n  expected: ~s bytes\n  given: ~s bytes"
-        (match ($ci-key-sizes self)
-          [(? list? allowed)
-           (string-join (map number->string allowed) ", ")]
-          [(varsize min max step)
-           (format "from ~a to ~a in multiples of ~a" min max step)])
-        size #:in self)))
-
-   (define (check-iv-size self iv-size)
-     (unless ($ci-iv-size-ok? self iv-size)
-       (crypto-error
-        "bad IV size for cipher\n  expected: ~s bytes\n  given: ~s bytes"
-        ($ci-iv-size self) iv-size #:in self)))
-
-   (define (check-auth-size self auth-size)
-     (unless ($ci-auth-size-ok? self auth-size)
-       (crypto-error "bad authentication tag size\n  given: ~a bytes"
-                     auth-size #:in self)))
+   (define (%ci-new-ctx self key iv enc? pad? auth-len attached-tag?)
+     (define out (open-output-bytes))
+     (define auth-tag-box (box #f))
+     (define ic ($cii-new-ctx (.inner self) self
+                              key iv enc? pad? auth-len attached-tag?
+                              out auth-tag-box))
+     (define init-state (if ($ci-aead? self) 'aad 'open))
+     (common-cipher-ctx self ic (make-statelock init-state cipher-state-desc)
+                        enc? pad? auth-len attached-tag? out auth-tag-box))
 
    (define (%ci-update-aad self cctx src)
      (unless (null? src)
