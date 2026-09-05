@@ -211,7 +211,7 @@
 
    (define (%pkk-sign self pkk digest digest-spec pad)
      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
-     (gcrypt-sign* pkk sign-unpack-sig-sexp))
+     (gcrypt-sign* pkk data-sexp sign-unpack-sig-sexp))
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
@@ -375,7 +375,7 @@
 
    (define (%pkk-sign self pkk digest digest-spec pad)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
-     (gcrypt-sign* pkk sign-unpack-sig-sexp))
+     (gcrypt-sign* pkk data-sexp sign-unpack-sig-sexp))
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
@@ -497,7 +497,7 @@
 
    (define (%pkk-sign self pkk digest digest-spec pad)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
-     (gcrypt-sign* pkk sign-unpack-sig-sexp))
+     (gcrypt-sign* pkk data-sexp sign-unpack-sig-sexp))
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
@@ -578,6 +578,9 @@
        ['ed25519 (and ed25519-ok? "Ed25519")]
        ['ed448 (and ed448-ok? "Ed448")]))
 
+   (define (%pk-make-params self curve)
+     (pk-parameters self curve))
+
    (define (%pk-make-public-key self curve qB)
      (define curve-name (check-curve curve))
      (eddsa-check-keys curve #f qB #f)
@@ -607,10 +610,16 @@
 
    ;; ----
 
+   (define (%pkp-param-values self pkp)
+     (define curve-name (ctx-inner pkp))
+     curve-name)
+
+   ;; ----
+
    (define (%pkk-sign self pkk digest digest-spec pad)
      (define curve (keypair-param (ctx-inner pkk)))
      (define data-sexp (sign-make-data-sexp digest digest-spec pad))
-     (gcrypt-sign* pkk (make-sign-unpack-sig-sexp curve)))
+     (gcrypt-sign* pkk data-sexp (make-sign-unpack-sig-sexp curve)))
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define curve (keypair-param (ctx-inner pkk)))
