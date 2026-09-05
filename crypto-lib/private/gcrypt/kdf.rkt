@@ -34,13 +34,13 @@
 ;; ----------------------------------------
 
 (define (gcrypt-pbkdf2-inner-impl md)
-  (common-kdf-inner-impl
+  (make-kdf-inner-impl
    (lambda (kdfi key-size config pass salt)
      (define iters (check/ref-config '(iterations) config config:pbkdf2-kdf #:in kdfi))
      (gcry_kdf_derive pass GCRY_KDF_PBKDF2 md salt iters key-size))))
 
 (define (gcrypt-scrypt-inner-impl)
-  (common-kdf-inner-impl
+  (make-kdf-inner-impl
    (lambda (kdfi key-size config pass salt)
      (define-values (N ln p r)
        (check/ref-config '(N ln p r) config config:scrypt-kdf #:in kdfi))
@@ -71,7 +71,7 @@
   outbuf)
 
 (define (gcrypt-argon2-inner-impl)
-  (common-kdf-inner-impl
+  (make-kdf-inner-impl
    (lambda (kdfi key-size config pass salt)
      (define-values (t m p v)
        (check/ref-config '(t m p v) config config:argon2-kdf #:in kdfi))
@@ -92,7 +92,7 @@
                  #:ad #""))))
 
 (define (gcrypt-hkdf-inner-impl mac-algo)
-  (common-kdf-inner-impl
+  (make-kdf-inner-impl
    (lambda (kdfi key-size config pass salt)
      (define info (check/ref-config '(info key-size) config config:info-kdf #:in kdfi))
      ;; Note: requires non-empty pass

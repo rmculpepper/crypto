@@ -19,7 +19,7 @@
                (or/c kdf-impl? #f))]
           [make-kdf-inner-impl
            (->* [(-> kdf-impl? nat? config/c bytes? (or/c bytes? #f) bytes?)]
-                [(-> kdf-impl? config/c bytes? (or/c bytes? #f))
+                [(-> kdf-impl? config/c bytes? (or/c string? #f))
                  (-> kdf-impl? bytes? string? (or/c 'valid 'invalid 'fallback))]
                 kdf-inner-impl?)])
          (struct-out common-kdf-impl)
@@ -108,7 +108,7 @@
         bytes?)]
    [kdfi-pwhash
     (-> kdf-inner-impl? kdf-impl? config/c bytes?
-        (or/c bytes? #f))]
+        (or/c string? #f))]
    [kdfi-pwhash-verify
     (-> kdf-inner-impl? kdf-impl? bytes? string?
         (or/c 'valid 'invalid 'fallback))])
