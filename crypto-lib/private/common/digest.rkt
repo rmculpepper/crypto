@@ -87,12 +87,8 @@
      (di-update* self dctx src)
      (di-final* self dctx size))
 
-   (define (%di-new-ctx self key config)
-     (when key
-       (define keysize (bytes-length key))
-       (unless ($di-key-size-ok? self keysize)
-         (crypto-error "bad key size\n  given: ~s bytes"
-                       keysize #:in self)))
+   (define (%di-new-ctx self key0 config)
+     (define key (check-key self key0)) ;; if digest allows keys, #f => #""
      (define lock (make-statelock 'open))
      (cond [(null? config)
             (define ic ($dii-new-ctx1 (.inner self) self key))
@@ -101,6 +97,14 @@
             (define-values (ic csize)
               ($dii-new-ctx2 (.inner self) self key config))
             (common-digest-ctx self ic lock (or csize ($di-size self)))]))
+
+   (define (check-key self key)
+     (when key
+       (define keysize (bytes-length key))
+       (unless ($di-key-size-ok? self keysize)
+         (crypto-error "bad key size\n  given: ~s bytes"
+                       keysize #:in self)))
+     (if key key (if ($di-key-size-ok? self 0) #"" #f)))
 
    (define (%di-update self dctx src)
      (call-with-state

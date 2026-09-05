@@ -53,8 +53,7 @@
     [(? list? ss)
      (and (member n ss) #t)]
     [(varsize min max step)
-     (and (<= min n max) (zero? (remainder (- n min) step)))]
-    [#f #f]))
+     (and (<= min n max) (zero? (remainder (- n min) step)))]))
 
 (define (size-set->list ss)
   (match ss
@@ -82,7 +81,7 @@
    [di-size*          (-> digest-info? (or/c nat? 'va 'vz))]
    [di-block-size     (-> digest-info? nat?)]
    [di-has-config?    (-> digest-info? boolean?)]
-   [di-key-sizes      (-> digest-info? size-set/c)]
+   [di-key-sizes      (-> digest-info? size-set/c)] ;; if nonempty, #f => #""
    [di-key-size-ok?   (-> digest-info? nat? boolean?)]
    [di-security-strength  (-> digest-info? boolean? (or/c #f nat?))])
   ;; size 'va = variable, required early (before processing); 'vz = required late
@@ -119,7 +118,7 @@
 (define (dinfo spec size block-size
                [ci-secbits #f]
                [cr-secbits (and ci-secbits (quotient ci-secbits 2))]
-               #:k [key-size #f] #:ks [key-sizes '(0)] #:c? [config? #f])
+               #:k [key-size #f] #:ks [key-sizes '()] #:c? [config? #f])
   (info:digest spec size block-size config? key-sizes cr-secbits ci-secbits))
 
 ;; A DigestSpec is one of
