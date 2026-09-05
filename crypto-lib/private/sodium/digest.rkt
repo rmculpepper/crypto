@@ -58,18 +58,26 @@
      outbuf)
 
    (define (%dii-new-ctx2 self di key config)
-     (unless (null? config) (check-config config null #:in di #:impl-limit? #t))
+     (define-values (salt custom)
+       (check/ref-config '(salt custom) config config:blake2b #:in di))
+     (define keylen (bytes-length key))
      (define size ($di-size di))
      (define ic (make-ctx (crypto_generichash_blake2b_statebytes)))
-     (crypto_generichash_blake2b_init ic (or key #"") size)
+     (cond [(and (zero? (bytes-length salt))
+                 (zero? (bytes-length custom)))
+            (crypto_generichash_blake2b_init ic key keylen size)]
+           [else
+            (define salt* (make-sized-copy salt crypto_generichash_blake2b_SALTBYTES))
+            (define custom* (make-sized-copy custom crypto_generichash_blake2b_PERSONALBYTES))
+            (crypto_generichash_blake2b_init_salt_personal ic key keylen salt* custom*)])
      (values ic size))
 
    (define (%dii-update self ic buf start end)
-     (crypto_generichash_blake2b_update ctx (ptr-add buf start) (- end start)))
+     (crypto_generichash_blake2b_update ic (ptr-add buf start) (- end start)))
 
    (define (%dii-final self ic size)
      (define buf (make-bytes size))
-     (crypto_generichash_blake2b_final ctx buf)
+     (crypto_generichash_blake2b_final ic buf size)
      buf)
 
    (define (%dii-copy self ic)
@@ -137,7 +145,9 @@
    ;; no digest-buffer; sodium function does not take keylen arg
 
    (define (%dii-new-ctx1 self di key)
-     (make-ctx (.ctx_size self) (.ctx_init self)))
+     (define ic (make-ctx (.ctx_size self)))
+     ((.ctx_init self) ic key (bytes-length key))
+     ic)
 
    (define (%dii-update self ic buf start end)
      ((.ctx_update self) ic (ptr-add buf start) (- end start)))

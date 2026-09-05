@@ -60,7 +60,7 @@
 ;; make-sized-copy : Nat Bytes -> Bytes[size]
 ;; Returns a fresh copy of buf extended or truncated to size.
 (define (make-sized-copy size buf)
-  (define copy (make-bytes size))
+  (define copy (make-bytes size #x00))
   (bytes-copy! copy 0 buf 0 (min (bytes-length buf) size))
   copy)
 

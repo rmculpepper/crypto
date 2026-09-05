@@ -37,7 +37,7 @@
      (define config-spec (get-config-spec ($get-spec di)))
      (define-values (dsize salt custom)
        (check/ref-config '(size salt custom) config config-spec #:in di))
-     (define p (make-blake2s-param (or dsize ($di-size self)) (bytes-length key) salt custom))
+     (define p (make-blake2s-param (or dsize ($di-size di)) (bytes-length key) salt custom))
      (blake2s_init_param ic p)
      (unless (zero? (bytes-length key))
        (define blocklen 64)

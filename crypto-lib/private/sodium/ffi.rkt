@@ -62,31 +62,39 @@
   #:fail (lambda () (lambda () crypto_generichash_blake2b_STATEBYTES)))
 
 (define-na crypto_generichash_blake2b
-  (_fun (out : _bytes) (_size = (bytes-length out))
-        (in : _bytes)  (_ullong = (bytes-length in))
-        (key : _bytes) (_size = (bytes-length key))
+  (_fun (out : _pointer)
+        (outlen : _size)
+        (in : _pointer)
+        (inlen : _ullong)
+        (key : _pointer)
+        (keylen : _size)
         -> _int))
 
 (define-na crypto_generichash_blake2b_salt_personal
-  (_fun (out : _bytes) (_size = (bytes-length out))
-        (in : _bytes)  (_ullong = (bytes-length in))
-        (key : _bytes) (_size = (bytes-length key))
-        (salt : _bytes)
-        (pers : _bytes)
+  (_fun (out : _pointer)
+        (outlen : _size)
+        (in : _pointer)
+        (inlen : _ullong)
+        (key : _pointer)
+        (keylen : _size)
+        (salt : _pointer)
+        (pers : _pointer)
         -> _int))
 
 (define-na crypto_generichash_blake2b_init
   (_fun (state : _pointer)
-        (key : _bytes) (_size = (bytes-length key))
+        (key : _pointer)
+        (keylen : _size)
         (outlen : _size)
         -> _int))
 
 (define-na crypto_generichash_blake2b_init_salt_personal
   (_fun (state : _pointer)
-        (key : _bytes) (_size = (bytes-length key))
+        (key : _pointer)
+        (keylen : _size)
         (outlen : _size)
-        (salt : _bytes)
-        (pers : _bytes)
+        (salt : _pointer)
+        (pers : _pointer)
         -> _int))
 
 (define-na crypto_generichash_blake2b_update
@@ -98,7 +106,8 @@
 
 (define-na crypto_generichash_blake2b_final
   (_fun (state : _pointer)
-        (out : _bytes) (_size = (bytes-length out))
+        (out : _pointer)
+        (outlen : _size)
         -> _int)
   #:fail (lambda () #f))
 
