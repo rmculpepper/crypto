@@ -109,7 +109,11 @@
         (unless (null? config) (check-config config null #:in ci #:impl-limit? #t))]
        [else
         (unless (null? config) (check-config config null #:in ci))])
-     (when key (gcry_md_setkey ic key (bytes-length key)))
+     (when key
+       ;; HMAC requires call to setkey; zero-length ok (docs say no, but works).
+       ;; Blake2 setkey with zero-length key produces garbage; avoid.
+       (when (or (.hmac? self) (not (zero? (bytes-length key))))
+         (gcry_md_setkey ic key (bytes-length key))))
      (values ic #f))
 
    (define (%dii-update self ic buf start end)
