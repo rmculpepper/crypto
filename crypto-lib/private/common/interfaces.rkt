@@ -247,7 +247,7 @@
    (define-struct-abbrevs pk-parameters)
    ;; ----
    (define (%to-write-prefixes self)
-     (cons "pk-parameters" (cdr (super-to-write-prefixes self))))))
+     (cons "pk-parameters" (cddr (super-to-write-prefixes self))))))
 
 (struct pk-key ctx (private?)
   #:properties
@@ -258,7 +258,7 @@
    ;; ----
    (define (%to-write-prefixes self)
      (cons (if (.private? self) "private-key" "public-key")
-           (cdr (super-to-write-prefixes self))))))
+           (cddr (super-to-write-prefixes self))))))
 
 (define-interface pk-impl$
   #:super (pk-info$)
