@@ -111,7 +111,7 @@
         (define pub (make-bytes crypto_scalarmult_curve25519_BYTES))
         (crypto_scalarmult_curve25519_base pub priv)
         (when qB (check-recomputed-qB pub qB))
-        (pk-key self (keypair curve priv pub) #t)]))
+        (pk-key self (keypair curve pub priv) #t)]))
 
    ;; ----
 

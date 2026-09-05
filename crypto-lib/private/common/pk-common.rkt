@@ -261,7 +261,7 @@
    (define (%pk-make-public-key self curve qB)
      (cond [($curve-ok? self curve)
             (define pub (ecx-check-keys curve #f qB))
-            (pk-key self (keypair curve qB #f) #f)]
+            (pk-key self (keypair curve pub #f) #f)]
            [else #f]))
 
    (define (%pkk-import-for-key-agree self pkk bs)
