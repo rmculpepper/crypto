@@ -68,7 +68,6 @@
 
 (define (gcrypt-verify* pkk data-sexp sig-sexp)
   (match-define (keypair _ pub priv) (ctx-inner pkk))
-  (define sig-sexp (gcry_pk_sign data-sexp priv))
   (begin0 (gcry_pk_verify sig-sexp data-sexp pub)
     (gcry_sexp_release sig-sexp)
     (gcry_sexp_release data-sexp)))
@@ -99,13 +98,13 @@
                    (hasheq 'r (base256->unsigned sig-r-data)
                            's (base256->unsigned sig-s-data))))
 
-(define (dsa/ecdsa-make-sig-sexp sig-der)
+(define (dsa/ecdsa-make-sig-sexp dsa/ecdsa sig-der)
   (match (with-handlers ([exn:fail:asn1? void])
            (bytes->asn1/DER DSA-Sig-Val sig-der))
     [(hash-table ['r (? exact-nonnegative-integer? r)]
                  ['s (? exact-nonnegative-integer? s)])
-     (make-sexp `(sig-val (ecdsa (r ,(unsigned->base256 r))
-                                 (s ,(unsigned->base256 s)))))]
+     (make-sexp `(sig-val (,dsa/ecdsa (r ,(unsigned->base256 r))
+                                      (s ,(unsigned->base256 s)))))]
     [_ #f]))
 
 ;; ============================================================
@@ -330,7 +329,7 @@
    ;; ----
 
    (define (%pkk-write-key self pkk fmt)
-     (match-define (keypair #f pub priv) (ctx-inner pkk))
+     (match-define (keypair _ pub priv) (ctx-inner pkk))
      (cond [priv
             (define vs (sexp-get-ints priv "dsa" '("p" "q" "g" "y" "x")))
             (apply encode-priv-dsa fmt vs)]
@@ -379,8 +378,8 @@
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
-     (define sig-sexp (dsa/ecdsa-make-sig-sexp sig))
-     (gcrypt-verify* pkk data-sexp sig-sexp))
+     (define sig-sexp (dsa/ecdsa-make-sig-sexp 'dsa sig))
+     (and sig-sexp (gcrypt-verify* pkk data-sexp sig-sexp)))
 
    (define (sign-unpack-sig-sexp sig-sexp)
      (unpack-sig-sexp sig-sexp "dsa"))
@@ -501,8 +500,8 @@
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
      (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
-     (define sig-sexp (dsa/ecdsa-make-sig-sexp sig))
-     (gcrypt-verify* pkk data-sexp sig-sexp))
+     (define sig-sexp (dsa/ecdsa-make-sig-sexp 'ecdsa sig))
+     (and sig-sexp (gcrypt-verify* pkk data-sexp sig-sexp)))
 
    (define (sign-unpack-sig-sexp sig-sexp)
      (unpack-sig-sexp sig-sexp "ecdsa"))
@@ -657,7 +656,7 @@
 
 ;; ============================================================
 
-(struct gcrypt-ecx-impl keypair-pk-impl-base ()
+(struct gcrypt-ecx-impl ecx-impl-base ()
   #:properties
   (method-properties
    #:export ([pk-impl$ #:prefix %]
@@ -688,7 +687,7 @@
    ;; ----
 
    (define (%pk-make-private-key self curve qB dB)
-     (cond [($curve-ok? curve)
+     (cond [($curve-ok? self curve)
             (define priv (ecx-check-keys curve #t dB qB))
             (ecx-clamp-secret! curve priv)
             (define pub (compute-pub curve priv))

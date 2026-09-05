@@ -13,8 +13,8 @@
 
 (define (sodium-fetch-pk factory info)
   (case ($get-spec info)
-    [(eddsa) (sodium-eddsa-impl)]
-    [(ecx) (sodium-ecx-impl)]
+    [(eddsa) (sodium-eddsa-impl info factory)]
+    [(ecx) (sodium-ecx-impl info factory)]
     [else #f]))
 
 ;; ============================================================
