@@ -17,10 +17,8 @@
     [(ecx) (decaf-ecx-impl info factory)]
     [else #f]))
 
-(struct keypair (param pub priv))
-
 ;; ============================================================
-;; Ed25519
+;; EdDSA
 
 (struct decaf-eddsa-impl eddsa-impl-base ()
   #:properties
@@ -49,12 +47,12 @@
    (define (%pk-make-private-key self curve qB dB)
      (match curve
        ['ed25519
-        (define priv (eddsa-check-keys curve dB qB))
+        (define priv (eddsa-check-keys curve #t dB qB))
         (define pub (decaf_ed25519_derive_public_key priv))
         (when qB (check-recomputed-qB pub qB))
         (pk-key self (keypair curve pub priv) #t)]
        ['ed448
-        (define priv (eddsa-check-keys curve dB qB))
+        (define priv (eddsa-check-keys curve #t dB qB))
         (define pub (decaf_ed448_derive_public_key priv))
         (when qB (check-recomputed-qB pub qB))
         (pk-key self (keypair curve pub priv) #t)]
@@ -82,7 +80,7 @@
    ))
 
 ;; ============================================================
-;; X25519
+;; ECX
 
 (struct decaf-ecx-impl ecx-impl-base ()
   #:properties
@@ -113,15 +111,15 @@
    (define (%pk-make-private-key self curve qB dB)
      (match curve
        ['x25519
-        (define priv (ecx-check-keys curve dB qB))
+        (define priv (ecx-check-keys curve #t dB qB))
         (define pub  (decaf_x25519_derive_public_key priv))
         (when qB (check-recomputed-qB pub qB))
-        (pk-key self (keypair curve priv pub) #t)]
+        (pk-key self (keypair curve pub priv) #t)]
        ['x448
-        (define priv (ecx-check-keys curve dB qB))
+        (define priv (ecx-check-keys curve #t dB qB))
         (define pub  (decaf_x448_derive_public_key priv))
         (when qB (check-recomputed-qB pub qB))
-        (pk-key self (keypair curve priv pub) #t)]
+        (pk-key self (keypair curve pub priv) #t)]
        [_ #f]))
 
    ;; ----

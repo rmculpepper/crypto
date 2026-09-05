@@ -107,7 +107,6 @@
    (define (%pk-make-private-key self curve qB dB)
      (match curve
        ['x25519
-        (ecx-check-keys curve qB dB)
         (define priv (ecx-check-keys curve #t dB qB))
         (define pub (make-bytes crypto_scalarmult_curve25519_BYTES))
         (crypto_scalarmult_curve25519_base pub priv)

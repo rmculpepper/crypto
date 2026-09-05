@@ -220,6 +220,10 @@
   (eddsa/ecx-check-keys curve private? k1 k2 (eddsa-keylen curve)))
 
 (define (eddsa/ecx-check-keys curve private? k1 k2 len)
+  (unless (symbol? curve)
+    (raise-argument-error 'eddsa/ecx-check-keys "symbol?" curve))
+  (unless (boolean? private?)
+    (raise-argument-error 'eddsa/ecx-check-keys "boolean?" private?))
   (define what1 (if private? "private" "public"))
   (define what2 (if private? "public" "private"))
   (unless (bytes? k1)
