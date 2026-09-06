@@ -80,6 +80,8 @@
              cipher-impl? cipher-ctx?
              pk-impl? pk-parameters? pk-key?)
        crypto-factory?)]
+  [factory-name
+   (-> crypto-factory? symbol?)]
   [factory-version
    (-> crypto-factory? (or/c (listof exact-nonnegative-integer?) #f))]
   [factory-print-info
@@ -126,6 +128,9 @@
   (with-crypto-entry 'get-kdf
     (for/or ([f (in-list (coerce-list factory/s))])
       ($fetch-kdf f kdfspec))))
+
+(define (factory-name factory)
+  ($factory-name factory))
 
 (define (factory-print-info factory)
   ($factory-print factory)
