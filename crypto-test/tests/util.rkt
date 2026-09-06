@@ -2,6 +2,8 @@
 ;; SPDX-License-Identifier: Apache-2.0
 
 #lang racket/base
+(require crypto
+         crypto/all)
 (provide (all-defined-out))
 
 ;; let's not exhaust our entropy pool on testing
@@ -22,3 +24,12 @@
     (for ([i (in-range len)])
       (bytes-set! bs i (+ 65 (random 26))))
     bs))
+
+;; ----------------------------------------
+
+(define (names->factories factory-names)
+  (cond [(pair? factory-names)
+         (define fnames (map string->symbol factory-names))
+         (filter (lambda (f) (memq (factory-name f) fnames))
+                 all-factories)]
+        [else all-factories]))

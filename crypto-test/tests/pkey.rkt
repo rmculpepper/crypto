@@ -629,17 +629,23 @@
 
 ;; ============================================================
 
-(define (run-pk-tests factories)
+(define (run-pk-tests factories [xtest? #t])
   (for ([factory (in-list factories)])
     (test #:name ($factory-display-name factory)
       (test-factory-pks factory)))
-  (xtest-pks factories))
+  (when xtest? (xtest-pks factories)))
 
 (module+ test
   (require crypto/all)
   (run-pk-tests all-factories))
 
 (module+ main
-  (require crypto/all)
-  (run-tests (lambda () (run-pk-tests all-factories))
-             #:progress? #t))
+  (require racket/cmdline)
+  (define xtest? #t)
+  (command-line
+   #:once-any
+   [("-x" "--no-xtest") "Do not run cross-tests" (set! xtest? #f)]
+   #:args factory-names
+   (define factories (names->factories factory-names))
+   (run-tests (lambda () (run-pk-tests factories xtest?))
+              #:progress? #t)))

@@ -54,14 +54,8 @@
     only-algos
     "Only the given algorithm types"
     (set! algos (map string->symbol (string-split only-algos ",")))]
-   #:args factories
-   (let ([fnames (map string->symbol factories)])
-     (define factories
-       (cond [(pair? fnames)
-              (filter (lambda (f) (memq (send f get-name) fnames))
-                      all-factories)]
-             [else all-factories]))
-     (test-all factories algos))))
+   #:args factory-names
+   (test-all (names->factories factory-names) algos)))
 
 (module+ test
   ;; Tests are run by specific modules, eg digest.rkt.
