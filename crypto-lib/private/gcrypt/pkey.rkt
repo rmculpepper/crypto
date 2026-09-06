@@ -72,18 +72,22 @@
     (gcry_sexp_release sig-sexp)
     (gcry_sexp_release data-sexp)))
 
-(define (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk)
-  (when pad (internal-error "bad signature pad: ~e" pad))
-  ;; When the digest is larger than the bits of the EC field, it must be
+(define (dsa/ecdsa-make-data-sexp pkk dsa? msg)
+  ;; When the digest is larger than the bits of the field, it must be
   ;; truncated, but gcrypt cannot truncate externally-created digest.
   ;; (See comment before _gcry_dsa_normalize_hash in libgcrypt source.)
+  (define pub (keypair-pub (ctx-inner pkk)))
   (define qbits
-    (let ([pub (keypair-pub (ctx-inner pkk))])
-      (gcry_pk_get_nbits pub)))
-  (define digest* (if (> (* 8 (bytes-length digest)) qbits)
-                      (subbytes digest 0 (quotient (+ qbits 7) 8))
-                      digest))
-  (make-sexp `(data (flags raw) (value ,digest*))))
+    (cond [dsa? (integer-length (sexp-get-int pub "dsa" "q"))]
+          [else (gcry_pk_get_nbits pub)]))
+  (define msglen (bytes-length msg))
+  (define msg*
+    (cond [(> (* 8 (bytes-length msg)) qbits)
+           (unless (zero? (remainder qbits 8))
+             (internal-error "bad qbits: ~e" qbits #:in pkk))
+           (subbytes msg 0 (quotient qbits 8))]
+          [else msg]))
+  (make-sexp `(data (flags raw) (value ,msg*))))
 
 (define (unpack-sig-sexp sig-sexp label)
   (define sig-part (gcry_sexp_find_token sig-sexp label))
@@ -373,12 +377,14 @@
    ;; ----
 
    (define (%pkk-sign self pkk digest digest-spec pad)
-     (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
+     (define data-sexp (dsa/ecdsa-make-data-sexp pkk #t digest))
      (gcrypt-sign* pkk data-sexp sign-unpack-sig-sexp))
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
-     (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
+     (define data-sexp (dsa/ecdsa-make-data-sexp pkk #t digest))
      (define sig-sexp (dsa/ecdsa-make-sig-sexp 'dsa sig))
+     (unless sig-sexp
+       (eprintf "** failed to create sig-sexp\n"))
      (and sig-sexp (gcrypt-verify* pkk data-sexp sig-sexp)))
 
    (define (sign-unpack-sig-sexp sig-sexp)
@@ -495,11 +501,11 @@
    ;; ----
 
    (define (%pkk-sign self pkk digest digest-spec pad)
-     (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
+     (define data-sexp (dsa/ecdsa-make-data-sexp pkk #f digest))
      (gcrypt-sign* pkk data-sexp sign-unpack-sig-sexp))
 
    (define (%pkk-verify self pkk digest digest-spec pad sig)
-     (define data-sexp (dsa/ecdsa-make-data-sexp digest digest-spec pad pkk))
+     (define data-sexp (dsa/ecdsa-make-data-sexp pkk #f digest))
      (define sig-sexp (dsa/ecdsa-make-sig-sexp 'ecdsa sig))
      (and sig-sexp (gcrypt-verify* pkk data-sexp sig-sexp)))
 
@@ -688,7 +694,7 @@
 
    (define (%pk-make-private-key self curve qB dB)
      (cond [($curve-ok? self curve)
-            (define priv (ecx-check-keys curve #t dB qB))
+            (define priv (bytes-copy (ecx-check-keys curve #t dB qB)))
             (ecx-clamp-secret! curve priv)
             (define pub (compute-pub curve priv))
             (when qB (check-recomputed-qB pub qB))
