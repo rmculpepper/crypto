@@ -13,10 +13,10 @@
 
 ;; Cooperate with `raco distribute`.
 (define-runtime-path libdecaf-so
-  '(so "libdecaf"))
+  '(so "libdecaf" ("0" #f)))
 
 (define-values (libdecaf decaf-load-error)
-  (ffi-lib-or-why-not libdecaf-so '(#f)))
+  (ffi-lib-or-why-not libdecaf-so '("0" #f)))
 
 (define-ffi-definer define-decaf libdecaf
   #:default-make-fail make-not-available)

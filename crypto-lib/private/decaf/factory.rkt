@@ -15,7 +15,7 @@
   (case key
     [(all-ec-curves) '()]
     [(all-eddsa-curves) (if decaf-is-ok? '(ed25519 ed448) '())]
-    [(all-ecx-curves) (if decaf-is-ok? '(x25519 x448) '())]
+    [(all-ecx-curves) (if decaf-is-ok? '(#;x25519 x448) '())]
     [else #f]))
 
 (define decaf-factory

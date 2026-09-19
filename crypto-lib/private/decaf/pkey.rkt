@@ -82,6 +82,10 @@
 ;; ============================================================
 ;; ECX
 
+;; libdecaf's X25519 function seems to be broken (tested up to 1.0.3)
+;; See https://sourceforge.net/p/ed448goldilocks/tickets/19/
+;; So disable X25519 support.
+
 (struct decaf-ecx-impl ecx-impl-base ()
   #:properties
   (method-properties
@@ -90,7 +94,7 @@
 
    (define (%curve-ok? self curve)
      (match curve
-       ['x25519 #t]
+       ['x25519 #f] ;; broken; see note above
        ['x448 #t]
        [_ #f]))
 
@@ -99,6 +103,7 @@
    (define (%pkp-generate-key self pkp)
      (define curve ($pkp-param-values self pkp))
      (match curve
+       #;
        ['x25519
         (define priv (crypto-random-bytes DECAF_X25519_PRIVATE_BYTES))
         (define pub  (decaf_x25519_derive_public_key priv))
@@ -110,6 +115,7 @@
 
    (define (%pk-make-private-key self curve qB dB)
      (match curve
+       #;
        ['x25519
         (define priv (ecx-check-keys curve #t dB qB))
         (define pub  (decaf_x25519_derive_public_key priv))
@@ -128,6 +134,7 @@
      (match-define (keypair curve pub priv) (ctx-inner pkk))
      (define peer (keypair-pub (ctx-inner peer-pubkey)))
      (match curve
+       #;
        ['x25519
         (or (decaf_x25519 peer priv)
             (crypto-error "operation failed" #:in pkk))]

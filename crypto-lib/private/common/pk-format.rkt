@@ -816,7 +816,7 @@
 
 (define (encode-priv-ecx fmt curve qB dB)
   (case fmt
-    [(internal internal-private) (ok-private 'ecx qB dB)]
+    [(internal internal-private) (ok-private 'ecx curve qB dB)]
     [(PrivateKeyInfo OneAsymmetricKey)
      ;; actually use OneAsymmetricKey format
      (asn1->bytes/DER OneAsymmetricKey
